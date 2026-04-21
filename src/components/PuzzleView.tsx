@@ -1,238 +1,225 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { useRoute } from "preact-iso";
-import type { AnswerLetter } from "../engine/types.ts";
+import type { AnswerLetter, Marks } from "../engine/types.ts";
+import { LETTERS } from "../engine/types.ts";
 import { allPuzzles } from "../puzzles/index.ts";
 import { validate } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
+import type { QuestionState } from "../lib/store.ts";
 import { encodeState, getShareUrl } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 
-type OptionMark = "unmarked" | "incorrect" | "correct";
+const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
-interface QuestionState {
-	marks: [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
+function StateDisplay({
+  questionStates,
+  puzzleId,
+}: {
+  questionStates: QuestionState[];
+  puzzleId: string;
+}) {
+  const markSets = questionStates.map((q) => q.marks);
+  const stateStr = encodeState(markSets);
+  const url = getShareUrl(puzzleId, markSets);
+
+  function handleCopy() {
+    navigator.clipboard.writeText(url);
+  }
+
+  return (
+    <div class="state-display">
+      <code class="state-code">{stateStr}</code>
+      <button class="state-copy" onClick={handleCopy} title="Copy link">
+        copy link
+      </button>
+    </div>
+  );
 }
 
-const LETTERS: AnswerLetter[] = ["A", "B", "C", "D", "E"];
-const FRESH_MARKS: QuestionState["marks"] = [
-	"unmarked",
-	"unmarked",
-	"unmarked",
-	"unmarked",
-	"unmarked",
-];
-
 function cloneStates(qs: QuestionState[]): QuestionState[] {
-	return qs.map((q) => ({ marks: [...q.marks] as QuestionState["marks"] }));
+  return qs.map((q) => ({ marks: [...q.marks] as Marks }));
 }
 
 export function PuzzleView() {
-	const { params } = useRoute();
-	const puzzle = allPuzzles.find((p) => p.id === params.id);
-	const s = t();
+  const { params } = useRoute();
+  const puzzle = allPuzzles.find((p) => p.id === params.id);
+  const s = t();
 
-	const [questions, setQuestions] = useState<QuestionState[]>([]);
-	const [validity, setValidity] = useState<
-		("neutral" | "valid" | "invalid")[]
-	>([]);
-	const [hintText, setHintText] = useState<string | null>(null);
-	const hintRef = useRef<{ steps: string[]; step: number } | null>(null);
+  const [questions, setQuestions] = useState<QuestionState[]>([]);
+  const [validity, setValidity] = useState<("neutral" | "valid" | "invalid")[]>([]);
+  const [hintText, setHintText] = useState<string | null>(null);
+  const hintRef = useRef<{ steps: string[]; step: number } | null>(null);
 
-	const historyRef = useRef<QuestionState[][]>([]);
-	const historyIdxRef = useRef(-1);
+  const historyRef = useRef<QuestionState[][]>([]);
+  const historyIdxRef = useRef(-1);
 
-	function pushHistory(qs: QuestionState[]) {
-		const h = historyRef.current;
-		const idx = historyIdxRef.current;
-		historyRef.current = h.slice(0, idx + 1);
-		historyRef.current.push(cloneStates(qs));
-		historyIdxRef.current = historyRef.current.length - 1;
-	}
+  function pushHistory(qs: QuestionState[]) {
+    const h = historyRef.current;
+    const idx = historyIdxRef.current;
+    historyRef.current = h.slice(0, idx + 1);
+    historyRef.current.push(cloneStates(qs));
+    historyIdxRef.current = historyRef.current.length - 1;
+  }
 
-	useEffect(() => {
-		if (!puzzle) return;
-		const saved = loadState(puzzle.id);
-		const initial: QuestionState[] = saved
-			? saved.questions
-			: puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as QuestionState["marks"] }));
-		setQuestions(initial);
-		historyRef.current = [cloneStates(initial)];
-		historyIdxRef.current = 0;
-	}, [puzzle]);
+  useEffect(() => {
+    if (!puzzle) return;
+    const saved = loadState(puzzle.id);
+    const initial: QuestionState[] = saved
+      ? saved.questions
+      : puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+    setQuestions(initial);
+    historyRef.current = [cloneStates(initial)];
+    historyIdxRef.current = 0;
+  }, [puzzle]);
 
-	const revalidate = useCallback(
-		(qs: QuestionState[]) => {
-			if (!puzzle) return;
-			const answers: (AnswerLetter | null)[] = qs.map((q) => {
-				const idx = q.marks.indexOf("correct");
-				return idx >= 0 ? LETTERS[idx] : null;
-			});
-			const result = validate(puzzle, answers);
-			setValidity(result);
+  const revalidate = useCallback(
+    (qs: QuestionState[]) => {
+      if (!puzzle) return;
+      const answers: (AnswerLetter | null)[] = qs.map((q) => {
+        const idx = q.marks.indexOf("correct");
+        return idx >= 0 ? LETTERS[idx] : null;
+      });
+      const result = validate(puzzle, answers);
+      setValidity(result);
 
-			const completed = result.every((v) => v === "valid");
-			saveState(puzzle.id, { questions: qs, completed });
-		},
-		[puzzle],
-	);
+      const completed = result.every((v) => v === "valid");
+      saveState(puzzle.id, { questions: qs, completed });
+    },
+    [puzzle],
+  );
 
-	useEffect(() => {
-		if (questions.length > 0) revalidate(questions);
-	}, [questions, revalidate]);
+  useEffect(() => {
+    if (questions.length > 0) revalidate(questions);
+  }, [questions, revalidate]);
 
-	if (!puzzle) {
-		return (
-			<div class="not-found">
-				<h1>?</h1>
-				<p>Puzzle not found</p>
-				<a href="/">Back to puzzles</a>
-			</div>
-		);
-	}
+  if (!puzzle) {
+    return (
+      <div class="not-found">
+        <h1>?</h1>
+        <p>Puzzle not found</p>
+        <a href="/">Back to puzzles</a>
+      </div>
+    );
+  }
 
-function StateDisplay({
-	questionStates,
-	puzzleId,
-}: {
-	questionStates: QuestionState[];
-	puzzleId: string;
-}) {
-	const markSets = questionStates.map((q) => q.marks);
-	const stateStr = encodeState(markSets);
-	const url = getShareUrl(puzzleId, markSets);
+  const completed = validity.length > 0 && validity.every((v) => v === "valid");
+  const canUndo = historyIdxRef.current > 0;
+  const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
-	function handleCopy() {
-		navigator.clipboard.writeText(url);
-	}
+  function applyChange(next: QuestionState[]) {
+    pushHistory(next);
+    setQuestions(next);
+    setHintText(null);
+    hintRef.current = null;
+  }
 
-	return (
-		<div class="state-display">
-			<code class="state-code">{stateStr}</code>
-			<button class="state-copy" onClick={handleCopy} title="Copy link">
-				copy link
-			</button>
-		</div>
-	);
-}
+  function handleOptionClick(questionIdx: number, optionIdx: number) {
+    const next = cloneStates(questions);
+    const q = next[questionIdx];
+    const current = q.marks[optionIdx];
 
-	const completed =
-		validity.length > 0 && validity.every((v) => v === "valid");
-	const canUndo = historyIdxRef.current > 0;
-	const canRedo = historyIdxRef.current < historyRef.current.length - 1;
+    if (current === "unmarked") {
+      q.marks[optionIdx] = "incorrect";
+    } else if (current === "incorrect") {
+      const existingCorrect = q.marks.indexOf("correct");
+      if (existingCorrect >= 0) q.marks[existingCorrect] = "unmarked";
+      q.marks[optionIdx] = "correct";
+    } else {
+      q.marks[optionIdx] = "unmarked";
+    }
 
-	function applyChange(next: QuestionState[]) {
-		pushHistory(next);
-		setQuestions(next);
-		setHintText(null);
-		hintRef.current = null;
-	}
+    applyChange(next);
+  }
 
-	function handleOptionClick(questionIdx: number, optionIdx: number) {
-		const next = cloneStates(questions);
-		const q = next[questionIdx];
-		const current = q.marks[optionIdx];
+  function handleUndo() {
+    if (!canUndo) return;
+    historyIdxRef.current--;
+    setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+  }
 
-		if (current === "unmarked") {
-			q.marks[optionIdx] = "incorrect";
-		} else if (current === "incorrect") {
-			const existingCorrect = q.marks.indexOf("correct");
-			if (existingCorrect >= 0) q.marks[existingCorrect] = "unmarked";
-			q.marks[optionIdx] = "correct";
-		} else {
-			q.marks[optionIdx] = "unmarked";
-		}
+  function handleRedo() {
+    if (!canRedo) return;
+    historyIdxRef.current++;
+    setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+  }
 
-		applyChange(next);
-	}
+  function handleReset() {
+    if (!puzzle) return;
+    const fresh = puzzle.questions.map(() => ({
+      marks: [...FRESH_MARKS] as Marks,
+    }));
+    applyChange(fresh);
+  }
 
-	function handleUndo() {
-		if (!canUndo) return;
-		historyIdxRef.current--;
-		setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
-	}
+  function handleHint() {
+    if (!puzzle) return;
 
-	function handleRedo() {
-		if (!canRedo) return;
-		historyIdxRef.current++;
-		setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
-	}
+    // If already showing a hint, advance to next step
+    if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
+      hintRef.current.step++;
+      setHintText(hintRef.current.steps[hintRef.current.step]);
+      return;
+    }
 
-	function handleReset() {
-		const fresh = puzzle!.questions.map(() => ({
-			marks: [...FRESH_MARKS] as QuestionState["marks"],
-		}));
-		applyChange(fresh);
-	}
+    // Otherwise get a new hint
+    const markSets = questions.map((q) => q.marks);
+    const result = findHint(puzzle, markSets);
+    if (result) {
+      hintRef.current = { steps: result.steps, step: 0 };
+      setHintText(result.steps[0]);
+    } else {
+      hintRef.current = null;
+      setHintText(null);
+    }
+  }
 
-	function handleHint() {
-		if (!puzzle) return;
-
-		// If already showing a hint, advance to next step
-		if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
-			hintRef.current.step++;
-			setHintText(hintRef.current.steps[hintRef.current.step]);
-			return;
-		}
-
-		// Otherwise get a new hint
-		const markSets = questions.map((q) => q.marks);
-		const result = findHint(puzzle, markSets);
-		if (result) {
-			hintRef.current = { steps: result.steps, step: 0 };
-			setHintText(result.steps[0]);
-		} else {
-			hintRef.current = null;
-			setHintText(null);
-		}
-	}
-
-	return (
-		<>
-			<header class="app-header">
-				<h1>
-					<a href="/">{s.app.title}</a>
-				</h1>
-			</header>
-			<div class="puzzle-header">
-				<h2>{puzzle.title}</h2>
-				<div class="puzzle-actions">
-					<button onClick={handleUndo} disabled={!canUndo}>
-						{s.puzzle.undo}
-					</button>
-					<button onClick={handleRedo} disabled={!canRedo}>
-						{s.puzzle.redo}
-					</button>
-					<button onClick={handleHint}>{s.puzzle.hint}</button>
-					<button onClick={handleReset}>{s.puzzle.reset}</button>
-					<a href="/">{s.puzzle.back}</a>
-				</div>
-				<StateDisplay questionStates={questions} puzzleId={puzzle.id} />
-			</div>
-			<div class={puzzle.difficulty >= 4 ? "questions-grid" : ""}>
-				{puzzle.questions.map((qDef, qi) => (
-					<QuestionRow
-						key={qDef.text}
-						index={qi}
-						question={qDef}
-						marks={questions[qi]?.marks ?? FRESH_MARKS}
-						validity={validity[qi] ?? "neutral"}
-						onOptionClick={(oi) => handleOptionClick(qi, oi)}
-					/>
-				))}
-			</div>
-			{hintText && !completed && (
-				<div class="puzzle-hint">
-					{hintText}
-					{hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
-						<button class="hint-more" onClick={handleHint}>more</button>
-					)}
-				</div>
-			)}
-			{completed && (
-				<div class="puzzle-complete">{s.puzzle.solved}</div>
-			)}
-		</>
-	);
+  return (
+    <>
+      <header class="app-header">
+        <h1>
+          <a href="/">{s.app.title}</a>
+        </h1>
+      </header>
+      <div class="puzzle-header">
+        <h2>{puzzle.title}</h2>
+        <div class="puzzle-actions">
+          <button onClick={handleUndo} disabled={!canUndo}>
+            {s.puzzle.undo}
+          </button>
+          <button onClick={handleRedo} disabled={!canRedo}>
+            {s.puzzle.redo}
+          </button>
+          <button onClick={handleHint}>{s.puzzle.hint}</button>
+          <button onClick={handleReset}>{s.puzzle.reset}</button>
+          <a href="/">{s.puzzle.back}</a>
+        </div>
+        <StateDisplay questionStates={questions} puzzleId={puzzle.id} />
+      </div>
+      <div class={puzzle.difficulty >= 4 ? "questions-grid" : ""}>
+        {puzzle.questions.map((qDef, qi) => (
+          <QuestionRow
+            key={qDef.text}
+            index={qi}
+            question={qDef}
+            marks={questions[qi]?.marks ?? FRESH_MARKS}
+            validity={validity[qi] ?? "neutral"}
+            onOptionClick={(oi) => handleOptionClick(qi, oi)}
+          />
+        ))}
+      </div>
+      {hintText && !completed && (
+        <div class="puzzle-hint">
+          {hintText}
+          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
+            <button class="hint-more" onClick={handleHint}>
+              more
+            </button>
+          )}
+        </div>
+      )}
+      {completed && <div class="puzzle-complete">{s.puzzle.solved}</div>}
+    </>
+  );
 }

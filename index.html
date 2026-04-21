@@ -7,6 +7,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#6366f1" />
     <title>Self-referential quiz</title>
+    <script>
+      var t = localStorage.getItem("selfrefquiz:theme");
+      if (t) document.documentElement.setAttribute("data-theme", t);
+    </script>
   </head>
   <body>
     <div id="app"></div>

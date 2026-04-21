@@ -1,42 +1,47 @@
-type OptionMark = "unmarked" | "incorrect" | "correct";
+import type { Marks } from "../engine/types.ts";
 
-interface QuestionState {
-	marks: [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
+export interface QuestionState {
+  marks: Marks;
 }
 
-interface SavedState {
-	questions: QuestionState[];
-	completed: boolean;
+export interface SavedState {
+  questions: QuestionState[];
+  completed: boolean;
 }
 
 const PREFIX = "selfrefquiz:puzzle:";
 
 export function loadState(puzzleId: string): SavedState | null {
-	try {
-		const raw = localStorage.getItem(PREFIX + puzzleId);
-		if (!raw) return null;
-		const parsed: unknown = JSON.parse(raw);
-		if (parsed && typeof parsed === "object" && "questions" in parsed) {
-			return parsed as SavedState; // oxlint-disable-line typescript/no-unsafe-type-assertion
-		}
-		return null;
-	} catch {
-		return null;
-	}
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      parsed &&
+      typeof parsed === "object" &&
+      "questions" in parsed &&
+      Array.isArray((parsed as SavedState).questions) // oxlint-disable-line typescript/no-unsafe-type-assertion
+    ) {
+      return parsed as SavedState; // oxlint-disable-line typescript/no-unsafe-type-assertion
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export function saveState(puzzleId: string, state: SavedState) {
-	try {
-		localStorage.setItem(PREFIX + puzzleId, JSON.stringify(state));
-	} catch {
-		// storage full or unavailable
-	}
+  try {
+    localStorage.setItem(PREFIX + puzzleId, JSON.stringify(state));
+  } catch {
+    // storage full or unavailable
+  }
 }
 
 export function clearState(puzzleId: string) {
-	try {
-		localStorage.removeItem(PREFIX + puzzleId);
-	} catch {
-		// ignore
-	}
+  try {
+    localStorage.removeItem(PREFIX + puzzleId);
+  } catch {
+    // ignore
+  }
 }
