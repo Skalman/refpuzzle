@@ -7,102 +7,90 @@ export const level5: Puzzle[] = [
     difficulty: 5,
     questions: [
       {
+        text: "Which is the first question with answer E?",
+        options: [{ label: "2" }, { label: "8" }, { label: "7" }, { label: "12" }, { label: "10" }],
+        rule: { type: "first_with_answer", answer: "E" },
+      },
+      {
+        text: "What is the answer to question #10?",
+        options: [{ label: "A" }, { label: "C" }, { label: "E" }, { label: "B" }, { label: "D" }],
+        rule: { type: "answer_of_question", questionIndex: 9 },
+      },
+      {
+        text: "How many questions have answer A?",
+        options: [{ label: "12" }, { label: "5" }, { label: "4" }, { label: "7" }, { label: "3" }],
+        rule: { type: "count_answer", answer: "A" },
+      },
+      {
+        text: "What is the answer to question #6?",
+        options: [{ label: "A" }, { label: "B" }, { label: "D" }, { label: "E" }, { label: "C" }],
+        rule: { type: "answer_of_question", questionIndex: 5 },
+      },
+      {
+        text: "How many questions have answer C?",
+        options: [{ label: "5" }, { label: "0" }, { label: "10" }, { label: "4" }, { label: "1" }],
+        rule: { type: "count_answer", answer: "C" },
+      },
+      {
+        text: "How many questions after #3 have answer A?",
+        options: [{ label: "1" }, { label: "7" }, { label: "2" }, { label: "5" }, { label: "0" }],
+        rule: { type: "count_answer_after", answer: "A", afterIndex: 2 },
+      },
+      {
         text: "Which statement is the only true statement?",
         options: [
           {
-            label: "How many questions have a vowel as the answer? 1",
-            claim: { type: "count_vowel_answers_equals", value: 1 },
+            label: "How many questions have answer B? 0",
+            claim: { type: "count_answer_equals", answer: "B", value: 0 },
           },
           {
-            label: "How many questions before #10 have answer B? 5",
-            claim: { type: "count_answer_before_equals", answer: "B", beforeIndex: 9, value: 5 },
+            label: "How many questions have a vowel as the answer? 6",
+            claim: { type: "count_vowel_answers_equals", value: 6 },
           },
           {
-            label: "How many questions before #8 have answer A? 1",
-            claim: { type: "count_answer_before_equals", answer: "A", beforeIndex: 7, value: 1 },
+            label: "How many questions have a consonant as the answer? 6",
+            claim: { type: "count_consonant_answers_equals", value: 6 },
           },
           {
-            label: "How many questions before #10 have answer E? 2",
-            claim: { type: "count_answer_before_equals", answer: "E", beforeIndex: 9, value: 2 },
+            label: "How many questions have a vowel as the answer? 9",
+            claim: { type: "count_vowel_answers_equals", value: 9 },
           },
           {
-            label: "How many questions have a consonant as the answer? 8",
-            claim: { type: "count_consonant_answers_equals", value: 8 },
+            label: "How many questions before #11 have answer C? 0",
+            claim: { type: "count_answer_before_equals", answer: "C", beforeIndex: 10, value: 0 },
           },
         ],
         rule: { type: "only_true_statement" },
       },
       {
-        text: "What is the answer to question #11?",
-        options: [{ label: "E" }, { label: "D" }, { label: "A" }, { label: "C" }, { label: "B" }],
-        rule: { type: "answer_of_question", questionIndex: 10 },
+        text: "How many letters away is the answer to this question from the answer to question #11?",
+        options: [{ label: "1" }, { label: "4" }, { label: "2" }, { label: "0" }, { label: "3" }],
+        rule: { type: "letter_distance", otherQuestionIndex: 10 },
       },
       {
-        text: "Which is the last question with answer A?",
-        options: [{ label: "3" }, { label: "8" }, { label: "1" }, { label: "5" }, { label: "7" }],
-        rule: { type: "last_with_answer", answer: "A" },
+        text: "What is the answer to question #8?",
+        options: [{ label: "D" }, { label: "C" }, { label: "A" }, { label: "B" }, { label: "E" }],
+        rule: { type: "answer_of_question", questionIndex: 7 },
       },
       {
-        text: "Which is the next question that has the same answer as this one?",
-        options: [
-          { label: "4" },
-          { label: "None" },
-          { label: "10" },
-          { label: "7" },
-          { label: "8" },
-        ],
-        rule: { type: "next_same_answer" },
-      },
-      {
-        text: "What is the answer to question #10?",
-        options: [{ label: "A" }, { label: "B" }, { label: "D" }, { label: "E" }, { label: "C" }],
-        rule: { type: "answer_of_question", questionIndex: 9 },
-      },
-      {
-        text: "How many letters away is the answer to this question from the answer to question #9?",
-        options: [{ label: "0" }, { label: "3" }, { label: "4" }, { label: "1" }, { label: "2" }],
-        rule: { type: "letter_distance", otherQuestionIndex: 8 },
+        text: "How many questions have a consonant as the answer?",
+        options: [{ label: "10" }, { label: "0" }, { label: "12" }, { label: "4" }, { label: "1" }],
+        rule: { type: "count_consonant_answers" },
       },
       {
         text: "What is the answer to question #1?",
-        options: [{ label: "A" }, { label: "E" }, { label: "D" }, { label: "C" }, { label: "B" }],
+        options: [{ label: "B" }, { label: "E" }, { label: "C" }, { label: "A" }, { label: "D" }],
         rule: { type: "answer_of_question", questionIndex: 0 },
       },
       {
-        text: "Which is the last question with answer C?",
-        options: [{ label: "8" }, { label: "1" }, { label: "12" }, { label: "4" }, { label: "3" }],
-        rule: { type: "last_with_answer", answer: "C" },
-      },
-      {
-        text: "What is the answer to question #4?",
-        options: [{ label: "E" }, { label: "A" }, { label: "C" }, { label: "B" }, { label: "D" }],
-        rule: { type: "answer_of_question", questionIndex: 3 },
-      },
-      {
-        text: "How many questions have answer E?",
-        options: [{ label: "7" }, { label: "1" }, { label: "9" }, { label: "5" }, { label: "10" }],
-        rule: { type: "count_answer", answer: "E" },
-      },
-      {
-        text: "Which is the previous question that has the same answer as this one?",
-        options: [{ label: "10" }, { label: "8" }, { label: "3" }, { label: "7" }, { label: "5" }],
-        rule: { type: "previous_same_answer" },
-      },
-      {
-        text: "Which is the closest question before #6 that has answer D?",
-        options: [
-          { label: "3" },
-          { label: "4" },
-          { label: "None" },
-          { label: "5" },
-          { label: "1" },
-        ],
-        rule: { type: "closest_before", beforeIndex: 5, answer: "D" },
+        text: "The answer to this question is the same as the answer to question?",
+        options: [{ label: "3" }, { label: "12" }, { label: "9" }, { label: "6" }, { label: "2" }],
+        rule: { type: "same_answer_as" },
       },
     ],
   },
 ];
 
 export const level5Solutions = [
-  ["C", "B", "A", "D", "B", "B", "D", "B", "E", "B", "D", "B"],
+  ["A", "E", "E", "E", "E", "C", "A", "D", "A", "D", "D", "E"],
 ] as const;

@@ -1,8 +1,10 @@
-import type { AnswerLetter, Puzzle, FlatPuzzle } from "../src/engine/types.ts";
+import type { AnswerLetter, Puzzle, FlatPuzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, flattenPuzzle } from "../src/engine/types.ts";
 import { evaluate, evaluateClaim } from "../src/engine/evaluators.ts";
+import { findHint, findActionFast } from "../src/engine/hints.ts";
 import { solve } from "../src/generator/solver.ts";
 import { allPuzzles } from "../src/puzzles/index.ts";
+import { encodeState, decodeState } from "../src/lib/share.ts";
 
 let passed = 0;
 let failed = 0;
@@ -478,6 +480,278 @@ function testSolverEdgeCases() {
 }
 
 // ════════════════════════════════════════════════
+// Hint engine tests
+// ════════════════════════════════════════════════
+
+function freshMarks(n: number): Marks[] {
+	return Array.from({ length: n }, () =>
+		["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks,
+	);
+}
+
+function setCorrect(marks: Marks[], qi: number, letter: AnswerLetter) {
+	const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+	for (let i = 0; i < 5; i++) marks[qi][i] = "incorrect";
+	marks[qi][L2I[letter]] = "correct";
+}
+
+function setEliminated(marks: Marks[], qi: number, letter: AnswerLetter) {
+	const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+	marks[qi][L2I[letter]] = "incorrect";
+}
+
+function testHints() {
+	console.log("Hint engine tests...");
+
+	// ── Contradiction: answer_of_question says Q1=B but Q1 is marked C ──
+	const contradictionPuzzle: Puzzle = {
+		id: "h1",
+		title: "H1",
+		difficulty: 1,
+		questions: [
+			{
+				text: "Q1",
+				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_is_self" },
+			},
+			{
+				text: "Q2",
+				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_of_question", questionIndex: 0 },
+			},
+		],
+	};
+	{
+		const marks = freshMarks(2);
+		setCorrect(marks, 0, "C");
+		setCorrect(marks, 1, "B"); // claims Q1=B, but Q1=C
+		const hint = findHint(contradictionPuzzle, marks);
+		assert(hint != null, "contradiction hint: hint returned");
+		assert(
+			hint!.action?.type === "contradiction",
+			`contradiction hint: action type is contradiction (got ${hint!.action?.type})`,
+		);
+	}
+
+	// ── Forced: answer_of_question when target is known ──
+	{
+		const marks = freshMarks(2);
+		setCorrect(marks, 0, "C"); // Q1 = C, so Q2 must be C
+		const hint = findHint(contradictionPuzzle, marks);
+		assert(hint != null, "forced hint: hint returned");
+		assert(
+			hint!.action?.type === "force",
+			`forced hint: action type is force (got ${hint!.action?.type})`,
+		);
+		assert(
+			hint!.action?.type === "force" && hint!.action.letter === "C",
+			"forced hint: forces letter C",
+		);
+	}
+
+	// ── Forced by elimination: only one option left ──
+	{
+		const marks = freshMarks(2);
+		setEliminated(marks, 0, "A");
+		setEliminated(marks, 0, "B");
+		setEliminated(marks, 0, "C");
+		setEliminated(marks, 0, "D");
+		// Only E remains for Q1
+		const hint = findHint(contradictionPuzzle, marks);
+		assert(hint != null, "forced-by-elim hint: hint returned");
+		assert(
+			hint!.action?.type === "force" && hint!.action.letter === "E",
+			"forced-by-elim hint: forces letter E",
+		);
+	}
+
+	// ── Elimination: count_answer bounds ──
+	const countPuzzle: Puzzle = {
+		id: "h2",
+		title: "H2",
+		difficulty: 1,
+		questions: [
+			{
+				text: "Q1",
+				options: [{ label: "0" }, { label: "1" }, { label: "2" }, { label: "3" }, { label: "4" }],
+				rule: { type: "count_answer", answer: "A" },
+			},
+			{
+				text: "Q2",
+				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_is_self" },
+			},
+			{
+				text: "Q3",
+				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_is_self" },
+			},
+		],
+	};
+	{
+		// Q2=A, Q3=A → count(A)>=2. Options "0" and "1" should be eliminable.
+		const marks = freshMarks(3);
+		setCorrect(marks, 1, "A");
+		setCorrect(marks, 2, "A");
+		const hint = findHint(countPuzzle, marks);
+		assert(hint != null, "elimination hint: hint returned");
+		assert(
+			hint!.action?.type === "eliminate" || hint!.action?.type === "force",
+			`elimination hint: action is eliminate or force (got ${hint!.action?.type})`,
+		);
+	}
+
+	// ── Forced counting: all questions answered → count is determined ──
+	{
+		const marks = freshMarks(3);
+		setCorrect(marks, 1, "B");
+		setCorrect(marks, 2, "C");
+		// No A's at all (except possibly Q1). Count of A in [Q1,Q2,Q3] includes Q1.
+		// Q2=B, Q3=C → if Q1 is not A, count(A)=0 (option A="0")
+		// If Q1=A, count(A)=1 (option B="1")
+		// Hint should find a forced or elimination based on count bounds
+		const hint = findHint(countPuzzle, marks);
+		assert(hint != null, "count forced hint: hint returned");
+	}
+
+	// ── Look-ahead: assumption leads to contradiction ──
+	const lookaheadPuzzle: Puzzle = {
+		id: "h3",
+		title: "H3",
+		difficulty: 1,
+		questions: [
+			{
+				text: "Q1",
+				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_of_question", questionIndex: 1 },
+			},
+			{
+				text: "Q2",
+				options: [{ label: "B" }, { label: "A" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				rule: { type: "answer_of_question", questionIndex: 0 },
+			},
+		],
+	};
+	{
+		// Q1 options: A→A, B→B, C→C, D→D, E→E (standard)
+		// Q2 options: A→B, B→A, C→C, D→D, E→E
+		// If Q1=A → Q2 must be A → but Q2 option A="B" → Q1 must be B → contradiction
+		// So Q1=A should be eliminable via look-ahead
+		const marks = freshMarks(2);
+		const hint = findHint(lookaheadPuzzle, marks);
+		assert(hint != null, "lookahead hint: hint returned");
+		assert(hint!.steps.length >= 2, "lookahead hint: has progressive steps");
+	}
+
+	// ── Hint on fully correct puzzle returns null action ──
+	{
+		const marks = freshMarks(2);
+		setCorrect(marks, 0, "C");
+		setCorrect(marks, 1, "C");
+		// Both answer_is_self → always valid
+		const allSelfPuzzle: Puzzle = {
+			id: "h4",
+			title: "H4",
+			difficulty: 1,
+			questions: [
+				{
+					text: "Q1",
+					options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+					rule: { type: "answer_is_self" },
+				},
+				{
+					text: "Q2",
+					options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+					rule: { type: "answer_is_self" },
+				},
+			],
+		};
+		const hint = findHint(allSelfPuzzle, marks);
+		// All answered and valid → fallback hint with no action
+		assert(hint != null, "solved puzzle: still returns a hint object");
+		assert(hint!.action == null, "solved puzzle: no action needed");
+	}
+
+	// ── Hints on generated puzzles: verify solvable from blank ──
+	// Mirrors checkSolvable: try findActionFast first, then findHint
+	for (const puzzle of allPuzzles.slice(0, 3)) {
+		const n = puzzle.questions.length;
+		const marks = freshMarks(n);
+		const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+		let steps = 0;
+		let stuck = false;
+
+		while (!answers.every((a) => a != null) && steps < n * 15) {
+			let action: { type: string; questionIndex: number; letter?: AnswerLetter; optionIndex?: number } | undefined;
+
+			const fast = findActionFast(puzzle, answers, marks, n);
+			if (fast) {
+				action = fast;
+			} else {
+				const hint = findHint(puzzle, marks);
+				if (!hint?.action) { stuck = true; break; }
+				action = hint.action;
+			}
+
+			if (action.type === "force" && action.letter) {
+				const oi = LETTERS.indexOf(action.letter);
+				for (let j = 0; j < 5; j++) marks[action.questionIndex][j] = "incorrect";
+				marks[action.questionIndex][oi] = "correct";
+				answers[action.questionIndex] = action.letter;
+			} else if (action.type === "eliminate" && action.optionIndex != null) {
+				marks[action.questionIndex][action.optionIndex] = "incorrect";
+			}
+			steps++;
+		}
+
+		if (!stuck && answers.every((a) => a != null)) {
+			const solutions = solve(puzzle, undefined, 2);
+			assert(
+				solutions.length === 1 && JSON.stringify(answers) === JSON.stringify(solutions[0]),
+				`${puzzle.id}: hint engine solves to the unique solution`,
+			);
+		} else {
+			assert(false, `${puzzle.id}: hint engine got stuck after ${steps} steps`);
+		}
+	}
+}
+
+// ════════════════════════════════════════════════
+// Share encode/decode roundtrip tests
+// ════════════════════════════════════════════════
+
+function testShare() {
+	console.log("Share encode/decode tests...");
+
+	const marks: Marks[] = [
+		["correct", "incorrect", "unmarked", "unmarked", "unmarked"],
+		["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"],
+		["incorrect", "incorrect", "incorrect", "incorrect", "correct"],
+	];
+
+	const encoded = encodeState(marks);
+	const decoded = decodeState(encoded);
+	assert(decoded != null, "decode: returns non-null");
+	assertEq(decoded, marks, "decode: roundtrip matches original");
+
+	// All unmarked
+	const allBlank: Marks[] = [
+		["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"],
+	];
+	assertEq(decodeState(encodeState(allBlank)), allBlank, "decode: all-blank roundtrip");
+
+	// All correct
+	const allCorrect: Marks[] = [
+		["correct", "correct", "correct", "correct", "correct"],
+	];
+	assertEq(decodeState(encodeState(allCorrect)), allCorrect, "decode: all-correct roundtrip");
+
+	// Invalid input
+	assert(decodeState("") === null, "decode: empty string returns null");
+	assert(decodeState("XYZ") === null, "decode: invalid chars returns null");
+}
+
+// ════════════════════════════════════════════════
 // Run all
 // ════════════════════════════════════════════════
 
@@ -485,6 +759,8 @@ testEvaluators();
 testSolver();
 testSolverEdgeCases();
 testGeneratedPuzzles();
+testHints();
+testShare();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

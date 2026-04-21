@@ -35,7 +35,7 @@ export function solve(
   return solveFp(flattenPuzzle(puzzle), fixedAnswers, maxSolutions);
 }
 
-const GLOBAL_IDS: Set<RuleTypeId> = new Set([
+const SOLVER_GLOBAL_IDS: Set<RuleTypeId> = new Set([
   RT_COUNT_ANSWER,
   RT_COUNT_VOWEL,
   RT_COUNT_CONSONANT,
@@ -67,8 +67,8 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
     // Most-referenced questions first (they unlock answer_of_question chains)
     if (refCount[b] !== refCount[a]) return refCount[b] - refCount[a];
     // Non-global rules before global (global needs all answers)
-    const aGlobal = GLOBAL_IDS.has(fp.rules[a].t) ? 1 : 0;
-    const bGlobal = GLOBAL_IDS.has(fp.rules[b].t) ? 1 : 0;
+    const aGlobal = SOLVER_GLOBAL_IDS.has(fp.rules[a].t) ? 1 : 0;
+    const bGlobal = SOLVER_GLOBAL_IDS.has(fp.rules[b].t) ? 1 : 0;
     return aGlobal - bGlobal;
   });
 
@@ -223,7 +223,7 @@ function checkRule(
   // Forward checking for counting rules
   if (r.t === RT_COUNT_ANSWER || r.t === RT_COUNT_ANSWER_BEFORE || r.t === RT_COUNT_ANSWER_AFTER) {
     const optVal = fp.optionNums[i][letterIdx(answers[i]!)];
-    if (optVal !== optVal) return false; // NaN
+    if (Number.isNaN(optVal)) return false;
 
     let rangeStart: number;
     let rangeEnd: number;
@@ -250,7 +250,7 @@ function checkRule(
 
   if (r.t === RT_COUNT_VOWEL || r.t === RT_COUNT_CONSONANT) {
     const optVal = fp.optionNums[i][letterIdx(answers[i]!)];
-    if (optVal !== optVal) return false; // NaN
+    if (Number.isNaN(optVal)) return false;
     const isVowel = r.t === RT_COUNT_VOWEL;
     let count = 0;
     let remaining = 0;

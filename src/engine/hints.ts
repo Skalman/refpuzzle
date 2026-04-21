@@ -1,10 +1,11 @@
 import type { AnswerLetter, Puzzle, FlatPuzzle, ValidationRule, Marks } from "./types.ts";
 import {
   LETTERS,
+  VOWELS,
   L2I,
   NONE,
   letterIdx,
-  flattenPuzzle,
+  getFlatPuzzle,
   RT_COUNT_ANSWER,
   RT_COUNT_ANSWER_BEFORE,
   RT_COUNT_ANSWER_AFTER,
@@ -20,7 +21,6 @@ import {
   RT_UNIQUE,
   RT_SAME_AS,
 } from "./types.ts";
-const VOWELS = new Set<AnswerLetter>(["A", "E"]);
 
 type Action =
   | { type: "force"; questionIndex: number; letter: AnswerLetter }
@@ -442,12 +442,16 @@ function findForced(
     const rule = puzzle.questions[qi].rule;
     if (rule.type === "answer_of_question" && answers[rule.questionIndex] != null) {
       const target = answers[rule.questionIndex]!;
-      return hintSteps(
-        qi,
-        `${Q(qi)} can be determined now.`,
-        `${Q(qi)} asks for ${Q(rule.questionIndex)}'s answer — ${Q(rule.questionIndex)} is ${target}, so ${Q(qi)} must be ${target}.`,
-        { type: "force", questionIndex: qi, letter: target },
-      );
+      const oi = puzzle.questions[qi].options.findIndex((o) => o.label === target);
+      if (oi >= 0) {
+        const letter = LETTERS[oi];
+        return hintSteps(
+          qi,
+          `${Q(qi)} can be determined now.`,
+          `${Q(qi)} asks for ${Q(rule.questionIndex)}'s answer — ${Q(rule.questionIndex)} is ${target}, so ${Q(qi)} must be ${letter}.`,
+          { type: "force", questionIndex: qi, letter },
+        );
+      }
     }
 
     // Forced by reverse answer_of_question (some other answered question references this one)
@@ -750,13 +754,8 @@ export function findActionFast(
   markSets: Marks[],
   n: number,
 ): Action {
-  const fp =
-    _fpCache?.p === puzzle ? _fpCache.fp : (_fpCache = { p: puzzle, fp: flattenPuzzle(puzzle) }).fp;
-  return findActionFp(fp, answers, markSets, n);
+  return findActionFp(getFlatPuzzle(puzzle), answers, markSets, n);
 }
-
-// Cache FlatPuzzle to avoid re-flattening on every call for the same puzzle
-let _fpCache: { p: Puzzle; fp: FlatPuzzle } | null = null;
 
 function findActionFp(
   fp: FlatPuzzle,
@@ -860,7 +859,12 @@ function findActionFp(
     }
 
     if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null) {
-      return { type: "force", questionIndex: qi, letter: answers[r.questionIndex]! };
+      const target = answers[r.questionIndex]!;
+      for (let oi = 0; oi < 5; oi++) {
+        if (fp.optionLabels[qi][oi] === target) {
+          return { type: "force", questionIndex: qi, letter: LETTERS[oi] };
+        }
+      }
     }
 
     // Reverse answer_of_question
@@ -904,7 +908,7 @@ function findActionFp(
       if (pred && r.t !== RT_MOST_COMMON_COUNT) {
         const [from, to] = countRange2(r, n);
         const cr = countMatching(answers, pred, from, to);
-        if (on === on && (cr.count > on || cr.count + cr.remaining < on)) {
+        if (!Number.isNaN(on) && (cr.count > on || cr.count + cr.remaining < on)) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
@@ -1046,7 +1050,7 @@ function findLookahead(
   return null;
 }
 
-// Reusable scratch arrays to avoid allocation in the hot loop
+// Scratch arrays reused across traceAssumption calls (not safe for recursive/concurrent use)
 let scratchAns: (AnswerLetter | null)[] = [];
 let scratchMarks: Marks[] = [];
 

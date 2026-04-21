@@ -7,53 +7,53 @@ export const level3: Puzzle[] = [
     difficulty: 3,
     questions: [
       {
+        text: "Which is the closest question before #6 that has answer C?",
+        options: [
+          { label: "2" },
+          { label: "3" },
+          { label: "None" },
+          { label: "1" },
+          { label: "4" },
+        ],
+        rule: { type: "closest_before", beforeIndex: 5, answer: "C" },
+      },
+      {
         text: "Which is the least common answer?",
         options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
         rule: { type: "least_common_answer" },
       },
       {
-        text: "Which is the last question with answer A?",
-        options: [{ label: "8" }, { label: "5" }, { label: "4" }, { label: "2" }, { label: "3" }],
-        rule: { type: "last_with_answer", answer: "A" },
+        text: "What is the answer to question #7?",
+        options: [{ label: "E" }, { label: "D" }, { label: "A" }, { label: "C" }, { label: "B" }],
+        rule: { type: "answer_of_question", questionIndex: 6 },
       },
       {
-        text: "What is the answer to question #4?",
-        options: [{ label: "A" }, { label: "D" }, { label: "E" }, { label: "B" }, { label: "C" }],
-        rule: { type: "answer_of_question", questionIndex: 3 },
+        text: "How many questions have answer E?",
+        options: [{ label: "1" }, { label: "2" }, { label: "3" }, { label: "6" }, { label: "5" }],
+        rule: { type: "count_answer", answer: "E" },
       },
       {
-        text: "The answer to this question is the same as the answer to question?",
-        options: [{ label: "3" }, { label: "5" }, { label: "6" }, { label: "8" }, { label: "4" }],
-        rule: { type: "same_answer_as" },
-      },
-      {
-        text: "How many questions have answer D?",
-        options: [{ label: "3" }, { label: "1" }, { label: "2" }, { label: "4" }, { label: "0" }],
-        rule: { type: "count_answer", answer: "D" },
+        text: "Which is the closest question after #2 that has answer A?",
+        options: [{ label: "7" }, { label: "5" }, { label: "6" }, { label: "8" }, { label: "4" }],
+        rule: { type: "closest_after", afterIndex: 1, answer: "A" },
       },
       {
         text: "What is the answer to question #5?",
-        options: [{ label: "D" }, { label: "B" }, { label: "A" }, { label: "E" }, { label: "C" }],
+        options: [{ label: "D" }, { label: "E" }, { label: "C" }, { label: "A" }, { label: "B" }],
         rule: { type: "answer_of_question", questionIndex: 4 },
       },
       {
-        text: "What is the answer to question #2?",
-        options: [{ label: "A" }, { label: "E" }, { label: "B" }, { label: "D" }, { label: "C" }],
-        rule: { type: "answer_of_question", questionIndex: 1 },
+        text: "How many questions have answer C?",
+        options: [{ label: "3" }, { label: "4" }, { label: "0" }, { label: "1" }, { label: "7" }],
+        rule: { type: "count_answer", answer: "C" },
       },
       {
-        text: "Which is the last question with answer E?",
-        options: [
-          { label: "None" },
-          { label: "3" },
-          { label: "7" },
-          { label: "1" },
-          { label: "6" },
-        ],
-        rule: { type: "last_with_answer", answer: "E" },
+        text: "Which is the last question with answer C?",
+        options: [{ label: "8" }, { label: "6" }, { label: "3" }, { label: "2" }, { label: "7" }],
+        rule: { type: "last_with_answer", answer: "C" },
       },
     ],
   },
 ];
 
-export const level3Solutions = [["D", "C", "A", "A", "B", "B", "E", "C"]] as const;
+export const level3Solutions = [["A", "C", "B", "A", "E", "B", "D", "D"]] as const;

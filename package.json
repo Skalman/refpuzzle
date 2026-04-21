@@ -13,16 +13,13 @@
     "generate": "node --experimental-strip-types scripts/generate-puzzles.ts",
     "test": "node --experimental-strip-types scripts/test.ts",
     "bench": "vite build --config scripts/vite-bench.config.ts && node dist-scripts/bench.js",
-    "bench:profile": "vite build --config scripts/vite-bench.config.ts && node --prof dist-scripts/bench.js && node --prof-process isolate-*.log && rm isolate-*.log",
-    "e2e": "playwright test --project=chromium",
-    "e2e:headed": "playwright test --headed"
+    "bench:profile": "vite build --config scripts/vite-bench.config.ts && node --prof dist-scripts/bench.js && node --prof-process isolate-*.log && rm isolate-*.log"
   },
   "dependencies": {
     "preact": "^10.28.4",
     "preact-iso": "^2.11.1"
   },
   "devDependencies": {
-    "@playwright/test": "^1.58.2",
     "@preact/preset-vite": "^2.10.3",
     "@types/node": "^24.12.0",
     "oxfmt": "^0.45.0",

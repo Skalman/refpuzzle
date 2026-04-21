@@ -1,4 +1,5 @@
 export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
+export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
 export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
 
@@ -199,6 +200,15 @@ const GLOBAL_RULE_IDS = new Set<RuleTypeId>([
   RT_LAST_WITH,
   RT_SAME_AS,
 ]);
+
+let _fpCache: { puzzle: Puzzle; fp: FlatPuzzle } | null = null;
+
+export function getFlatPuzzle(puzzle: Puzzle): FlatPuzzle {
+  if (_fpCache && _fpCache.puzzle === puzzle) return _fpCache.fp;
+  const fp = flattenPuzzle(puzzle);
+  _fpCache = { puzzle, fp };
+  return fp;
+}
 
 export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
   const n = puzzle.questions.length;

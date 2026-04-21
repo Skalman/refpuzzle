@@ -7,7 +7,7 @@ import { validate } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import { encodeState, getShareUrl } from "../lib/share.ts";
+import { encodeState, decodeState, getShareUrl } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 
@@ -65,10 +65,25 @@ export function PuzzleView() {
 
   useEffect(() => {
     if (!puzzle) return;
-    const saved = loadState(puzzle.id);
-    const initial: QuestionState[] = saved
-      ? saved.questions
-      : puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+    const n = puzzle.questions.length;
+    let initial: QuestionState[] | null = null;
+
+    const hash = window.location.hash.slice(1);
+    if (hash) {
+      const decoded = decodeState(hash);
+      if (decoded && decoded.length === n) {
+        initial = decoded.map((marks) => ({ marks }));
+        history.replaceState(null, "", window.location.pathname);
+      }
+    }
+
+    if (!initial) {
+      const saved = loadState(puzzle.id);
+      initial = saved
+        ? saved.questions
+        : puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+    }
+
     setQuestions(initial);
     historyRef.current = [cloneStates(initial)];
     historyIdxRef.current = 0;
@@ -137,12 +152,16 @@ export function PuzzleView() {
     if (!canUndo) return;
     historyIdxRef.current--;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+    setHintText(null);
+    hintRef.current = null;
   }
 
   function handleRedo() {
     if (!canRedo) return;
     historyIdxRef.current++;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+    setHintText(null);
+    hintRef.current = null;
   }
 
   function handleReset() {

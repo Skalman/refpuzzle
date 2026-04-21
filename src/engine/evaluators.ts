@@ -1,6 +1,7 @@
 import type { AnswerLetter, FlatPuzzle, FlatRule, Claim } from "./types.ts";
 import {
   LETTERS,
+  VOWELS,
   NONE,
   letterIdx,
   RT_COUNT_ANSWER,
@@ -28,8 +29,6 @@ import {
   RT_LETTER_DIST,
   RT_TRUE_STMT,
 } from "./types.ts";
-
-const VOWELS: Set<string> = new Set(["A", "E"]);
 
 // Reusable scratch for letter frequency counts (avoids allocation in hot path)
 const _counts = [0, 0, 0, 0, 0];
