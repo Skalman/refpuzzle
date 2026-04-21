@@ -10,6 +10,7 @@ import type { QuestionState } from "../lib/store.ts";
 import { encodeState, decodeState, getShareUrl } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
+import { Logo } from "./Logo.tsx";
 
 const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
@@ -42,6 +43,89 @@ function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
 }
 
+interface MoveInfo {
+  label: string;
+  qi: number;
+  oi: number;
+}
+
+function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
+  // Prioritize: correct > incorrect > undo
+  let best: MoveInfo | null = null;
+  let bestPriority = -1;
+  for (let qi = 0; qi < prev.length; qi++) {
+    for (let oi = 0; oi < 5; oi++) {
+      const p = prev[qi].marks[oi];
+      const n = next[qi].marks[oi];
+      if (p === n) continue;
+      const letter = LETTERS[oi];
+      let label: string;
+      let priority: number;
+      if (n === "correct") {
+        label = `Q${qi + 1}=${letter} \u2705`;
+        priority = 2;
+      } else if (n === "incorrect") {
+        label = `Q${qi + 1} ${letter} \u274C`;
+        priority = 1;
+      } else {
+        label = `Q${qi + 1} ${letter} undo`;
+        priority = 0;
+      }
+      if (priority > bestPriority) {
+        best = { label, qi, oi };
+        bestPriority = priority;
+      }
+    }
+  }
+  if (!best) {
+    // No diff at all — this is a checkpoint
+    return { label: "\u{1F4CC}", qi: -1, oi: -1 };
+  }
+  if (bestPriority === 0) {
+    const allUnmarked = next.every((q) => q.marks.every((m) => m === "unmarked"));
+    if (allUnmarked) return { label: "reset", qi: -1, oi: -1 };
+  }
+  return best;
+}
+
+function HistoryStrip({
+  history,
+  currentIdx,
+  onJump,
+}: {
+  history: QuestionState[][];
+  currentIdx: number;
+  onJump: (idx: number) => void;
+}) {
+  if (history.length <= 1) return null;
+
+  const moves: MoveInfo[] = [];
+  for (let i = 1; i < history.length; i++) {
+    moves.push(describeDiff(history[i - 1], history[i]));
+  }
+
+  return (
+    <div class="history-strip">
+      <button
+        class={`history-step ${currentIdx === 0 ? "current" : ""}`}
+        onClick={() => onJump(0)}
+      >
+        start
+      </button>
+      {moves.map((move, i) => (
+        <button
+          key={`${move.qi}-${move.oi}-${move.label}`}
+          class={`history-step ${i + 1 === currentIdx ? "current" : ""} ${i + 1 > currentIdx ? "future" : ""} ${move.label === "\u{1F4CC}" ? "checkpoint" : ""}`}
+          onClick={() => onJump(i + 1)}
+          title={move.label}
+        >
+          {move.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function PuzzleView() {
   const { params } = useRoute();
   const puzzle = allPuzzles.find((p) => p.id === params.id);
@@ -54,13 +138,31 @@ export function PuzzleView() {
 
   const historyRef = useRef<QuestionState[][]>([]);
   const historyIdxRef = useRef(-1);
+  const [_historyVersion, setHistoryVersion] = useState(0);
 
   function pushHistory(qs: QuestionState[]) {
     const h = historyRef.current;
     const idx = historyIdxRef.current;
+    // Truncate any future entries
     historyRef.current = h.slice(0, idx + 1);
-    historyRef.current.push(cloneStates(qs));
+
+    // If this move touches the same Q+option as the last move, replace it
+    const cloned = cloneStates(qs);
+    if (historyRef.current.length >= 2) {
+      const prev = historyRef.current[historyRef.current.length - 2];
+      const last = historyRef.current[historyRef.current.length - 1];
+      const lastDiff = describeDiff(prev, last);
+      const newDiff = describeDiff(last, cloned);
+      if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
+        historyRef.current[historyRef.current.length - 1] = cloned;
+        setHistoryVersion((v) => v + 1);
+        return;
+      }
+    }
+
+    historyRef.current.push(cloned);
     historyIdxRef.current = historyRef.current.length - 1;
+    setHistoryVersion((v) => v + 1);
   }
 
   useEffect(() => {
@@ -154,6 +256,7 @@ export function PuzzleView() {
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
     hintRef.current = null;
+    setHistoryVersion((v) => v + 1);
   }
 
   function handleRedo() {
@@ -162,6 +265,20 @@ export function PuzzleView() {
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
     hintRef.current = null;
+    setHistoryVersion((v) => v + 1);
+  }
+
+  function handleJumpTo(idx: number) {
+    if (idx < 0 || idx >= historyRef.current.length) return;
+    historyIdxRef.current = idx;
+    setQuestions(cloneStates(historyRef.current[idx]));
+    setHintText(null);
+    hintRef.current = null;
+    setHistoryVersion((v) => v + 1);
+  }
+
+  function handleCheckpoint() {
+    pushHistory(cloneStates(questions));
   }
 
   function handleReset() {
@@ -198,23 +315,12 @@ export function PuzzleView() {
     <>
       <header class="app-header">
         <h1>
-          <a href="/">{s.app.title}</a>
+          <a href="/"><Logo />{s.app.title}</a>
         </h1>
       </header>
       <div class="puzzle-header">
         <h2>{puzzle.title}</h2>
-        <div class="puzzle-actions">
-          <button onClick={handleUndo} disabled={!canUndo}>
-            {s.puzzle.undo}
-          </button>
-          <button onClick={handleRedo} disabled={!canRedo}>
-            {s.puzzle.redo}
-          </button>
-          <button onClick={handleHint}>{s.puzzle.hint}</button>
-          <button onClick={handleReset}>{s.puzzle.reset}</button>
-          <a href="/">{s.puzzle.back}</a>
-        </div>
-        <StateDisplay questionStates={questions} puzzleId={puzzle.id} />
+        <a href="/">{s.puzzle.back}</a>
       </div>
       <div class={puzzle.difficulty >= 4 ? "questions-grid" : ""}>
         {puzzle.questions.map((qDef, qi) => (
@@ -228,6 +334,7 @@ export function PuzzleView() {
           />
         ))}
       </div>
+      {completed && <div class="puzzle-complete">{s.puzzle.solved}</div>}
       {hintText && !completed && (
         <div class="puzzle-hint">
           {hintText}
@@ -238,7 +345,25 @@ export function PuzzleView() {
           )}
         </div>
       )}
-      {completed && <div class="puzzle-complete">{s.puzzle.solved}</div>}
+      <div class="puzzle-controls">
+        <div class="puzzle-actions">
+          <button onClick={handleUndo} disabled={!canUndo}>
+            {s.puzzle.undo}
+          </button>
+          <button onClick={handleRedo} disabled={!canRedo}>
+            {s.puzzle.redo}
+          </button>
+          <button onClick={handleCheckpoint}>Checkpoint</button>
+          <button onClick={handleHint}>{s.puzzle.hint}</button>
+          <button onClick={handleReset}>{s.puzzle.reset}</button>
+        </div>
+        <HistoryStrip
+          history={historyRef.current}
+          currentIdx={historyIdxRef.current}
+          onJump={handleJumpTo}
+        />
+        <StateDisplay questionStates={questions} puzzleId={puzzle.id} />
+      </div>
     </>
   );
 }

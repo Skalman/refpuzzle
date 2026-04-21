@@ -1,9 +1,9 @@
 export default {
   app: {
-    title: "Self-referential quiz",
+    title: "Refpuzzle",
   },
   puzzleList: {
-    subtitle: "Self-Referential Logic Puzzles",
+    subtitle: "Self-referential logic puzzles",
     questions: "questions",
     solved: "Solved",
   },
@@ -42,6 +42,6 @@ export default {
     ],
     whatIs: "What is a self-referential quiz?",
     description:
-      "A self-referential quiz is a type of quiz where the questions refer to the quiz itself or other questions within the same quiz. The answers often depend on the content or structure of the quiz, making it a meta-puzzle. Solving the quiz usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the quiz.",
+      "A self-referential puzzle is a type of puzzle where the questions refer to the puzzle itself or other questions within the same puzzle. The answers often depend on the content or structure of the puzzle, making it a meta-puzzle. Solving the puzzle usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the puzzle.",
   },
 } as const;

@@ -1,4 +1,5 @@
 import { t } from "../i18n/index.ts";
+import { Logo } from "./Logo.tsx";
 
 export function About() {
   const s = t();
@@ -6,7 +7,7 @@ export function About() {
     <>
       <header class="app-header">
         <h1>
-          <a href="/">{s.app.title}</a>
+          <a href="/"><Logo />{s.app.title}</a>
         </h1>
       </header>
       <div class="about">

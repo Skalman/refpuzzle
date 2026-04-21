@@ -1,15 +1,17 @@
 import { t } from "../i18n/index.ts";
 import { allPuzzles } from "../puzzles/index.ts";
 import { loadState } from "../lib/store.ts";
+import { Logo } from "./Logo.tsx";
 
 const stars = (n: number) => "\u2605".repeat(n) + "\u2606".repeat(5 - n);
+
 
 export function PuzzleList() {
   const s = t();
   return (
     <>
       <header class="app-header">
-        <h1>{s.app.title}</h1>
+        <h1><Logo />{s.app.title}</h1>
         <div class="header-actions">
           <a href="/about">{s.about.title}</a>
           <ThemeToggle />
@@ -41,13 +43,13 @@ function ThemeToggle() {
     const current = html.getAttribute("data-theme");
     if (current === "dark") {
       html.setAttribute("data-theme", "light");
-      localStorage.setItem("selfrefquiz:theme", "light");
+      localStorage.setItem("refpuzzle:theme", "light");
     } else if (current === "light") {
       html.removeAttribute("data-theme");
-      localStorage.removeItem("selfrefquiz:theme");
+      localStorage.removeItem("refpuzzle:theme");
     } else {
       html.setAttribute("data-theme", "dark");
-      localStorage.setItem("selfrefquiz:theme", "dark");
+      localStorage.setItem("refpuzzle:theme", "dark");
     }
   }
 

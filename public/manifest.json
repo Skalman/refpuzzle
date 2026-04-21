@@ -1,13 +1,13 @@
 {
-  "name": "Self-referential quiz",
-  "short_name": "Self-ref quiz",
+  "name": "Refpuzzle",
+  "short_name": "Refpuzzle",
   "start_url": "/",
   "display": "standalone",
   "theme_color": "#6366f1",
   "background_color": "#f8f9fa",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/logo.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     }

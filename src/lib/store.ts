@@ -9,7 +9,7 @@ export interface SavedState {
   completed: boolean;
 }
 
-const PREFIX = "selfrefquiz:puzzle:";
+const PREFIX = "refpuzzle:puzzle:";
 
 const VALID_MARKS: ReadonlySet<string> = new Set(["unmarked", "incorrect", "correct"]);
 
