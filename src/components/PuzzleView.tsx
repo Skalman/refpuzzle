@@ -362,7 +362,7 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       <div class="puzzle-controls">
         <button class="toolbar-icon-btn" onClick={handleUndo} disabled={!canUndo} title={s.puzzle.undo}>&#x21A9;</button>
         <button class="toolbar-icon-btn" onClick={handleRedo} disabled={!canRedo} title={s.puzzle.redo}>&#x21AA;</button>
-        <button class="toolbar-icon-btn" onClick={handleSave} title="Checkpoint">&#x1F4CC;</button>
+        <button class="toolbar-accent-btn" onClick={handleSave}>&#x1F4CC; Checkpoint</button>
         <span class="controls-spacer"></span>
         <button class="toolbar-accent-btn" onClick={handleHint} title={s.puzzle.hint}>&#x1F4A1; {s.puzzle.hint}</button>
         <button class="toolbar-accent-btn" onClick={handleShare} title={s.puzzle.share}>{s.puzzle.share}</button>
