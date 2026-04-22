@@ -1,5 +1,5 @@
 import { useRef, useEffect } from "preact/hooks";
-import logoSvg from "../../public/logo.svg?raw";
+import logoSvg from "../assets/logo.svg?raw";
 
 export function Logo() {
   const ref = useRef<HTMLSpanElement>(null);
