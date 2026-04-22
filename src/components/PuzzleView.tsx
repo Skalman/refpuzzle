@@ -1,43 +1,17 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { useRoute } from "preact-iso";
-import type { AnswerLetter, Marks } from "../engine/types.ts";
+import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
-import { allPuzzles } from "../puzzles/index.ts";
 import { validate } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import { encodeState, decodeState, getShareUrl } from "../lib/share.ts";
+import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { Logo } from "./Logo.tsx";
 
 const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
-function StateDisplay({
-  questionStates,
-  puzzleId,
-}: {
-  questionStates: QuestionState[];
-  puzzleId: string;
-}) {
-  const markSets = questionStates.map((q) => q.marks);
-  const stateStr = encodeState(markSets);
-  const url = getShareUrl(puzzleId, markSets);
-
-  function handleCopy() {
-    navigator.clipboard.writeText(url);
-  }
-
-  return (
-    <div class="state-display">
-      <code class="state-code">{stateStr}</code>
-      <button class="state-copy" onClick={handleCopy} title="Copy link">
-        copy link
-      </button>
-    </div>
-  );
-}
+const stars = (n: number) => "\u2605".repeat(n) + "\u2606".repeat(5 - n);
 
 function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
@@ -50,7 +24,6 @@ interface MoveInfo {
 }
 
 function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
-  // Prioritize: correct > incorrect > undo
   let best: MoveInfo | null = null;
   let bestPriority = -1;
   for (let qi = 0; qi < prev.length; qi++) {
@@ -78,7 +51,6 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
     }
   }
   if (!best) {
-    // No diff at all — this is a checkpoint
     return { label: "\u{1F4CC}", qi: -1, oi: -1 };
   }
   if (bestPriority === 0) {
@@ -126,9 +98,25 @@ function HistoryStrip({
   );
 }
 
-export function PuzzleView() {
-  const { params } = useRoute();
-  const puzzle = allPuzzles.find((p) => p.id === params.id);
+function Toast({ message, onDone }: { message: string; onDone: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onDone, 2000);
+    return () => clearTimeout(timer);
+  }, [onDone]);
+
+  return <div class="toast">{message}</div>;
+}
+
+interface PuzzleViewProps {
+  puzzle: Puzzle;
+  dateStr: string;
+  level: number;
+  initialHash?: string | null;
+  onNextPuzzle: () => void;
+  onCompleted: () => void;
+}
+
+export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, onCompleted }: PuzzleViewProps) {
   const s = t();
 
   const [questions, setQuestions] = useState<QuestionState[]>([]);
@@ -140,13 +128,15 @@ export function PuzzleView() {
   const historyIdxRef = useRef(-1);
   const [_historyVersion, setHistoryVersion] = useState(0);
 
+  const [showHistory, setShowHistory] = useState(false);
+  const [resetPending, setResetPending] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   function pushHistory(qs: QuestionState[]) {
     const h = historyRef.current;
     const idx = historyIdxRef.current;
-    // Truncate any future entries
     historyRef.current = h.slice(0, idx + 1);
 
-    // If this move touches the same Q+option as the last move, replace it
     const cloned = cloneStates(qs);
     if (historyRef.current.length >= 2) {
       const prev = historyRef.current[historyRef.current.length - 2];
@@ -166,34 +156,28 @@ export function PuzzleView() {
   }
 
   useEffect(() => {
-    if (!puzzle) return;
     const n = puzzle.questions.length;
-    let initial: QuestionState[] | null = null;
 
-    const hash = window.location.hash.slice(1);
-    if (hash) {
-      const decoded = decodeState(hash);
-      if (decoded && decoded.length === n) {
-        initial = decoded.map((marks) => ({ marks }));
-        history.replaceState(null, "", window.location.pathname);
-      }
+    // Check for shared state hash, then localStorage
+    const saved = initialHash
+      ? decodeShareHash(initialHash, n)
+      : loadState(puzzle.id);
+
+    if (saved && saved.history.length > 0) {
+      historyRef.current = saved.history;
+      historyIdxRef.current = saved.historyIdx;
+      setQuestions(saved.questions);
+      return;
     }
 
-    if (!initial) {
-      const saved = loadState(puzzle.id);
-      initial = saved
-        ? saved.questions
-        : puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
-    }
-
-    setQuestions(initial);
-    historyRef.current = [cloneStates(initial)];
+    const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+    setQuestions(blank);
+    historyRef.current = [cloneStates(blank)];
     historyIdxRef.current = 0;
-  }, [puzzle]);
+  }, [puzzle, initialHash]);
 
   const revalidate = useCallback(
     (qs: QuestionState[]) => {
-      if (!puzzle) return;
       const answers: (AnswerLetter | null)[] = qs.map((q) => {
         const idx = q.marks.indexOf("correct");
         return idx >= 0 ? LETTERS[idx] : null;
@@ -201,25 +185,23 @@ export function PuzzleView() {
       const result = validate(puzzle, answers);
       setValidity(result);
 
-      const completed = result.every((v) => v === "valid");
-      saveState(puzzle.id, { questions: qs, completed });
+      const isCompleted = result.every((v) => v === "valid");
+      saveState(puzzle.id, {
+        questions: qs,
+        completed: isCompleted,
+        history: historyRef.current,
+        historyIdx: historyIdxRef.current,
+      });
+      if (isCompleted) {
+        onCompleted();
+      }
     },
-    [puzzle],
+    [puzzle, onCompleted],
   );
 
   useEffect(() => {
     if (questions.length > 0) revalidate(questions);
   }, [questions, revalidate]);
-
-  if (!puzzle) {
-    return (
-      <div class="not-found">
-        <h1>?</h1>
-        <p>Puzzle not found</p>
-        <a href="/">Back to puzzles</a>
-      </div>
-    );
-  }
 
   const completed = validity.length > 0 && validity.every((v) => v === "valid");
   const canUndo = historyIdxRef.current > 0;
@@ -248,6 +230,7 @@ export function PuzzleView() {
     }
 
     applyChange(next);
+    setResetPending(false);
   }
 
   function handleUndo() {
@@ -277,12 +260,16 @@ export function PuzzleView() {
     setHistoryVersion((v) => v + 1);
   }
 
-  function handleCheckpoint() {
+  function handleSave() {
     pushHistory(cloneStates(questions));
   }
 
   function handleReset() {
-    if (!puzzle) return;
+    if (!resetPending) {
+      setResetPending(true);
+      return;
+    }
+    setResetPending(false);
     const fresh = puzzle.questions.map(() => ({
       marks: [...FRESH_MARKS] as Marks,
     }));
@@ -290,16 +277,12 @@ export function PuzzleView() {
   }
 
   function handleHint() {
-    if (!puzzle) return;
-
-    // If already showing a hint, advance to next step
     if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
       return;
     }
 
-    // Otherwise get a new hint
     const markSets = questions.map((q) => q.marks);
     const result = findHint(puzzle, markSets);
     if (result) {
@@ -311,18 +294,81 @@ export function PuzzleView() {
     }
   }
 
+  async function handleShare() {
+    const hasProgress = questions.some((q) => q.marks.some((m) => m !== "unmarked"));
+    const url = hasProgress
+      ? getShareUrl(dateStr, level, {
+          questions,
+          completed,
+          history: historyRef.current,
+          historyIdx: historyIdxRef.current,
+        })
+      : getPuzzleUrl(dateStr, level);
+
+    const ok = await sharePuzzleLink(url, `${puzzle.title} - Refpuzzle`);
+    if (ok) {
+      setToastMessage(s.puzzle.linkCopied);
+    }
+  }
+
+  // Clear reset pending after timeout
+  useEffect(() => {
+    if (!resetPending) return undefined;
+    const timer = setTimeout(() => setResetPending(false), 3000);
+    return () => clearTimeout(timer);
+  }, [resetPending]);
+
   return (
-    <>
-      <header class="app-header">
-        <h1>
-          <a href="/"><Logo />{s.app.title}</a>
-        </h1>
-      </header>
-      <div class="puzzle-header">
-        <h2>{puzzle.title}</h2>
-        <a href="/">{s.puzzle.back}</a>
+    <div class="puzzle-view">
+      {/* Puzzle header with title, stars, and primary controls */}
+      <div class="puzzle-toolbar">
+        <div class="puzzle-toolbar-left">
+          <button
+            class="toolbar-icon-btn"
+            onClick={handleUndo}
+            disabled={!canUndo}
+            aria-label={s.puzzle.undo}
+            title={s.puzzle.undo}
+          >
+            &#x21A9;
+          </button>
+          <button
+            class="toolbar-icon-btn"
+            onClick={handleRedo}
+            disabled={!canRedo}
+            aria-label={s.puzzle.redo}
+            title={s.puzzle.redo}
+          >
+            &#x21AA;
+          </button>
+        </div>
+
+        <div class="puzzle-toolbar-center">
+          <h2 class="puzzle-title">
+            {puzzle.title}
+            <span class="puzzle-stars" title={`Difficulty ${puzzle.difficulty}/5`}>
+              {stars(puzzle.difficulty)}
+            </span>
+          </h2>
+        </div>
+
+        <div class="puzzle-toolbar-right">
+          <button class="toolbar-accent-btn" onClick={handleHint} title={s.puzzle.hint}>
+            <span class="btn-icon">&#x1F4A1;</span> {s.puzzle.hint}
+          </button>
+          <button
+            class="toolbar-icon-btn"
+            onClick={handleShare}
+            aria-label={s.puzzle.share}
+            title={s.puzzle.share}
+          >
+            &#x2197;
+          </button>
+        </div>
       </div>
-      <div class={puzzle.difficulty >= 4 ? "questions-grid" : ""}>
+
+      {/* Questions */}
+      <div class={puzzle.difficulty >= 3 ? "questions-grid" : ""}>
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
             key={qDef.text}
@@ -334,7 +380,8 @@ export function PuzzleView() {
           />
         ))}
       </div>
-      {completed && <div class="puzzle-complete">{s.puzzle.solved}</div>}
+
+      {/* Hint display */}
       {hintText && !completed && (
         <div class="puzzle-hint">
           {hintText}
@@ -345,25 +392,47 @@ export function PuzzleView() {
           )}
         </div>
       )}
-      <div class="puzzle-controls">
-        <div class="puzzle-actions">
-          <button onClick={handleUndo} disabled={!canUndo}>
-            {s.puzzle.undo}
+
+      {/* Completion banner */}
+      {completed && (
+        <div class="puzzle-complete">
+          <span>{s.puzzle.solved}</span>
+          <button class="next-puzzle-btn" onClick={onNextPuzzle}>
+            {s.puzzle.nextPuzzle} &rarr;
           </button>
-          <button onClick={handleRedo} disabled={!canRedo}>
-            {s.puzzle.redo}
-          </button>
-          <button onClick={handleCheckpoint}>Checkpoint</button>
-          <button onClick={handleHint}>{s.puzzle.hint}</button>
-          <button onClick={handleReset}>{s.puzzle.reset}</button>
         </div>
+      )}
+
+      {/* Secondary controls */}
+      <div class="puzzle-secondary-controls">
+        <button class="secondary-btn" onClick={handleSave} title={s.puzzle.save}>
+          &#x1F4CC; {s.puzzle.save}
+        </button>
+        <button
+          class={`secondary-btn ${resetPending ? "reset-confirm" : ""}`}
+          onClick={handleReset}
+        >
+          {resetPending ? s.puzzle.resetConfirm : s.puzzle.reset}
+        </button>
+        <button
+          class="secondary-btn"
+          onClick={() => setShowHistory((v) => !v)}
+        >
+          {s.puzzle.history} {showHistory ? "\u25B2" : "\u25BC"}
+        </button>
+      </div>
+
+      {/* Collapsible history strip */}
+      {showHistory && (
         <HistoryStrip
           history={historyRef.current}
           currentIdx={historyIdxRef.current}
           onJump={handleJumpTo}
         />
-        <StateDisplay questionStates={questions} puzzleId={puzzle.id} />
-      </div>
-    </>
+      )}
+
+      {/* Toast notification */}
+      {toastMessage && <Toast message={toastMessage} onDone={() => setToastMessage(null)} />}
+    </div>
   );
 }

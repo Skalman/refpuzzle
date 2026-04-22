@@ -323,12 +323,10 @@ a:hover {
 }
 
 .tab-label {
-  display: block;
   font-size: 0.8rem;
 }
 
 .tab-count {
-  display: block;
   font-size: 0.65rem;
   opacity: 0.7;
 }
@@ -865,13 +863,12 @@ a:hover {
   text-decoration: underline;
 }
 
-.tab-solved {
-  border-color: var(--valid) !important;
-}
-
 .tab-check {
   color: var(--valid);
-  font-size: 0.8em;
+}
+
+.tab-started-dot {
+  color: var(--accent);
 }
 
 .loading {

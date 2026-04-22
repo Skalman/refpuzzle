@@ -1,19 +1,13 @@
 import type { Puzzle } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const CACHE = new Map<string, Record<string, Puzzle> | null>();
+const YEAR_CACHE = new Map<string, Record<string, Record<string, Puzzle>> | null>();
 
 export function todayDateStr(): string {
   const now = new Date();
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
   return `${now.getFullYear()}-${mm}-${dd}`;
-}
-
-export function dateToPath(dateStr: string): string {
-  const year = dateStr.slice(0, 4);
-  const mmdd = dateStr.slice(5, 7) + dateStr.slice(8, 10);
-  return `/puzzles/daily/${year}/${mmdd}.json`;
 }
 
 export function dayNumber(dateStr: string): number {
@@ -23,7 +17,8 @@ export function dayNumber(dateStr: string): number {
 }
 
 export function isValidDate(dateStr: string): boolean {
-  return dayNumber(dateStr) >= 1 && dayNumber(dateStr) <= 1000;
+  const d = dayNumber(dateStr);
+  return d >= 1 && d <= 1461;
 }
 
 export function dateStrFromOffset(daysAgo: number): string {
@@ -34,21 +29,29 @@ export function dateStrFromOffset(daysAgo: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
-  if (CACHE.has(dateStr)) return CACHE.get(dateStr)!;
+async function fetchYear(year: string): Promise<Record<string, Record<string, Puzzle>> | null> {
+  if (YEAR_CACHE.has(year)) return YEAR_CACHE.get(year)!;
   try {
-    const resp = await fetch(dateToPath(dateStr));
+    const resp = await fetch(`/puzzles/daily/${year}.json`);
     if (!resp.ok) {
-      CACHE.set(dateStr, null);
+      YEAR_CACHE.set(year, null);
       return null;
     }
-    const data: Record<string, Puzzle> = await resp.json(); // eslint-disable-line
-    CACHE.set(dateStr, data);
+    const data: Record<string, Record<string, Puzzle>> = await resp.json(); // eslint-disable-line
+    YEAR_CACHE.set(year, data);
     return data;
   } catch {
-    CACHE.set(dateStr, null);
+    YEAR_CACHE.set(year, null);
     return null;
   }
+}
+
+export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
+  const year = dateStr.slice(0, 4);
+  const mmdd = dateStr.slice(5, 7) + dateStr.slice(8, 10);
+  const yearData = await fetchYear(year);
+  if (!yearData) return null;
+  return yearData[mmdd] ?? null;
 }
 
 export function puzzleId(dateStr: string, level: number): string {

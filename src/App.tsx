@@ -133,13 +133,26 @@ function AppHeader({ onHelp }: { onHelp: () => void }) {
 }
 
 function DailyPage() {
+  const dateStr = todayDateStr();
+  return <DayView dateStr={dateStr} />;
+}
+
+function DayView({ dateStr }: { dateStr: string }) {
   const s = t();
   const [showHelp, setShowHelp] = useState(false);
-  const [dateStr] = useState(todayDateStr);
-  const [activeLevel, setActiveLevel] = useState(1);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [puzzleVersion, setPuzzleVersion] = useState(0);
+  const [_puzzleVersion, setPuzzleVersion] = useState(0);
+
+  const params = new URLSearchParams(window.location.search);
+  const hashLevel = Number(params.get("l")) || 0;
+  const initialHash = window.location.hash.slice(1) || null;
+  const [activeLevel, setActiveLevel] = useState(hashLevel >= 1 && hashLevel <= 5 ? hashLevel : 1);
+
+  const selectLevel = useCallback((level: number) => {
+    setActiveLevel(level);
+    window.history.replaceState(null, "", `/day/${dateStr}?l=${level}`);
+  }, [dateStr]);
 
   useEffect(() => {
     setLoading(true);
@@ -156,29 +169,35 @@ function DailyPage() {
   }
 
   const handleNextLevel = useCallback(() => {
-    if (activeLevel < 5) setActiveLevel(activeLevel + 1);
-  }, [activeLevel]);
+    if (activeLevel < 5) selectLevel(activeLevel + 1);
+  }, [activeLevel, selectLevel]);
+
+  const isToday = dateStr === todayDateStr();
 
   return (
     <>
       <AppHeader onHelp={() => setShowHelp(true)} />
-      <OnboardingBanner />
+      {isToday && <OnboardingBanner />}
 
       <div class="daily-header">
+        {!isToday && <a href="/history" class="back-link">&larr; History</a>}
         <span class="daily-date">Day #{dayNumber(dateStr)} &mdash; {dateStr}</span>
       </div>
 
       <div class="difficulty-tabs">
         {[1, 2, 3, 4, 5].map((level) => {
-          const solved = loadState(puzzleId(dateStr, level))?.completed;
+          const state = loadState(puzzleId(dateStr, level));
+          const solved = !!state?.completed;
+          const started = !!state && !solved;
           return (
             <button
               key={level}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""}`}
-              onClick={() => setActiveLevel(level)}
+              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}`}
+              onClick={() => selectLevel(level)}
             >
+              {solved && <span class="tab-check">&#10003; </span>}
+              {started && <span class="tab-started-dot">&#8226; </span>}
               <span class="tab-label">{s.difficulty[level]}</span>
-              {solved && <span class="tab-check"> &#10003;</span>}
             </button>
           );
         })}
@@ -187,14 +206,16 @@ function DailyPage() {
       {loading && <div class="loading">Loading...</div>}
 
       {!loading && !currentPuzzle && (
-        <div class="loading">No puzzle available for today.</div>
+        <div class="loading">No puzzle available for this date.</div>
       )}
 
       {!loading && currentPuzzle && (
         <PuzzleView
-          key={`${pid}-${puzzleVersion}`}
+          key={pid}
           puzzle={currentPuzzle}
-          initialHash={null}
+          dateStr={dateStr}
+          level={activeLevel}
+          initialHash={hashLevel === activeLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
           onCompleted={() => setPuzzleVersion((v) => v + 1)}
         />
@@ -225,9 +246,23 @@ function HistoryPage() {
         <div class="history-list">
           {dates.map((dateStr) => {
             const isCurrent = dateStr === today;
-            const solvedLevels = [1, 2, 3, 4, 5].filter(
-              (l) => loadState(puzzleId(dateStr, l))?.completed,
-            );
+            const levels = [1, 2, 3, 4, 5].map((l) => {
+              const state = loadState(puzzleId(dateStr, l));
+              return { level: l, started: !!state, completed: !!state?.completed };
+            });
+            const solved = levels.filter((l) => l.completed);
+            const started = levels.filter((l) => l.started && !l.completed);
+            let status: string;
+            if (solved.length === 5) {
+              status = "All solved!";
+            } else if (solved.length > 0 || started.length > 0) {
+              const parts: string[] = [];
+              if (solved.length > 0) parts.push("✓ " + solved.map((l) => s.difficulty[l.level]).join(", "));
+              if (started.length > 0) parts.push("• " + started.map((l) => s.difficulty[l.level]).join(", "));
+              status = parts.join("  ");
+            } else {
+              status = "Not started";
+            }
             return (
               <a
                 key={dateStr}
@@ -238,88 +273,12 @@ function HistoryPage() {
                   {isCurrent ? "Today" : dateStr}
                   <span class="history-day"> Day #{dayNumber(dateStr)}</span>
                 </span>
-                <span class="history-progress">
-                  {solvedLevels.length > 0
-                    ? solvedLevels.map((l) => s.difficulty[l]).join(", ")
-                    : "Not started"}
-                </span>
+                <span class="history-progress">{status}</span>
               </a>
             );
           })}
         </div>
       </div>
-
-      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
-    </>
-  );
-}
-
-function DayPage({ dateStr }: { dateStr: string }) {
-  const s = t();
-  const [showHelp, setShowHelp] = useState(false);
-  const [activeLevel, setActiveLevel] = useState(1);
-  const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [puzzleVersion, setPuzzleVersion] = useState(0);
-
-  useEffect(() => {
-    setLoading(true);
-    fetchDaily(dateStr).then((data) => {
-      setPuzzles(data);
-      setLoading(false);
-    });
-  }, [dateStr]);
-
-  const currentPuzzle = puzzles?.[`level-${activeLevel}`] ?? null;
-  const pid = puzzleId(dateStr, activeLevel);
-  if (currentPuzzle) {
-    currentPuzzle.id = pid;
-  }
-
-  const handleNextLevel = useCallback(() => {
-    if (activeLevel < 5) setActiveLevel(activeLevel + 1);
-  }, [activeLevel]);
-
-  return (
-    <>
-      <AppHeader onHelp={() => setShowHelp(true)} />
-
-      <div class="daily-header">
-        <a href="/history" class="back-link">&larr; History</a>
-        <span class="daily-date">Day #{dayNumber(dateStr)} &mdash; {dateStr}</span>
-      </div>
-
-      <div class="difficulty-tabs">
-        {[1, 2, 3, 4, 5].map((level) => {
-          const solved = loadState(puzzleId(dateStr, level))?.completed;
-          return (
-            <button
-              key={level}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""}`}
-              onClick={() => setActiveLevel(level)}
-            >
-              <span class="tab-label">{s.difficulty[level]}</span>
-              {solved && <span class="tab-check"> &#10003;</span>}
-            </button>
-          );
-        })}
-      </div>
-
-      {loading && <div class="loading">Loading...</div>}
-
-      {!loading && !currentPuzzle && (
-        <div class="loading">No puzzle available for this date.</div>
-      )}
-
-      {!loading && currentPuzzle && (
-        <PuzzleView
-          key={`${pid}-${puzzleVersion}`}
-          puzzle={currentPuzzle}
-          initialHash={null}
-          onNextPuzzle={handleNextLevel}
-          onCompleted={() => setPuzzleVersion((v) => v + 1)}
-        />
-      )}
 
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
     </>
@@ -338,7 +297,7 @@ function DayRoute() {
       </div>
     );
   }
-  return <DayPage dateStr={dateStr} />;
+  return <DayView dateStr={dateStr} />;
 }
 
 function NotFound() {
