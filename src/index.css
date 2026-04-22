@@ -97,7 +97,7 @@ a:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .app-header h1 {
@@ -131,6 +131,28 @@ a:hover {
   gap: 0.5rem;
 }
 
+/* ── Help button ── */
+.help-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 1.75rem;
+  height: 1.75rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.help-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent);
+}
+
 /* ── Theme toggle ── */
 .theme-toggle {
   background: none;
@@ -147,90 +169,351 @@ a:hover {
   background: var(--bg-hover);
 }
 
-/* ── Puzzle list ── */
-.puzzle-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-}
-
-.puzzle-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
+/* ── Onboarding banner ── */
+.onboarding-banner {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
   border-radius: 8px;
-  padding: 1rem;
-  text-decoration: none;
-  color: var(--text);
-  transition:
-    border-color 0.15s,
-    box-shadow 0.15s;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
 }
 
-.puzzle-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 2px 8px var(--accent-soft);
-  text-decoration: none;
+.onboarding-content {
+  font-size: 0.85rem;
 }
 
-.puzzle-card .title {
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
-.puzzle-card .meta {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.puzzle-card .difficulty {
+.onboarding-content strong {
+  display: block;
+  margin-bottom: 0.35rem;
   color: var(--accent);
 }
 
-.puzzle-card .status {
-  font-size: 0.75rem;
-  margin-top: 0.5rem;
+.onboarding-content ul {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.onboarding-dismiss {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.onboarding-dismiss:hover {
+  opacity: 0.9;
+}
+
+/* ── Help panel ── */
+.help-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.help-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: var(--text);
+}
+
+.help-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.help-panel-header h3 {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.help-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0.25rem;
+}
+
+.help-close:hover {
+  color: var(--text);
+}
+
+.help-panel ol,
+.help-panel ul {
+  margin: 0 0 0.75rem 1.25rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+.help-panel h4 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.5rem;
+}
+
+.help-panel p {
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 0.5rem;
+}
+
+/* ── Difficulty tabs (segmented control) ── */
+.difficulty-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 0.5rem;
+  background: var(--border);
+  border-radius: 8px;
+  padding: 2px;
+  overflow-x: auto;
+}
+
+.difficulty-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  text-align: center;
+  transition: all 0.15s;
+  min-width: 0;
+}
+
+.difficulty-tab:hover {
+  background: var(--bg-hover);
+}
+
+.difficulty-tab.active {
+  background: var(--bg-surface);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab-label {
+  display: block;
+  font-size: 0.8rem;
+}
+
+.tab-count {
+  display: block;
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
+/* ── Puzzle selector (compact list) ── */
+.puzzle-selector {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.puzzle-selector-item {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text);
+  text-align: left;
+  white-space: nowrap;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.puzzle-selector-item:hover {
+  border-color: var(--accent);
+}
+
+.puzzle-selector-item.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.puzzle-selector-item.solved {
+  border-left: 3px solid var(--valid);
+}
+
+.puzzle-selector-title {
+  font-size: 0.8rem;
+}
+
+.puzzle-selector-meta {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+}
+
+.puzzle-selector-solved {
   color: var(--valid);
   font-weight: 600;
 }
 
 /* ── Puzzle view ── */
-.puzzle-header {
+.puzzle-view {
+  position: relative;
+}
+
+/* ── Puzzle toolbar (header with controls) ── */
+.puzzle-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1rem;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
-.puzzle-header h2 {
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.puzzle-actions {
+.puzzle-toolbar-left,
+.puzzle-toolbar-right {
   display: flex;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
 }
 
-.puzzle-actions button {
+.puzzle-toolbar-center {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+.puzzle-title {
+  font-size: 1rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.puzzle-stars {
+  font-size: 0.75rem;
+  color: var(--accent);
+  letter-spacing: 1px;
+}
+
+/* ── Toolbar icon buttons ── */
+.toolbar-icon-btn {
   background: none;
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.25rem 0.75rem;
+  width: 2rem;
+  height: 2rem;
   cursor: pointer;
   color: var(--text-muted);
+  font-size: 0.9rem;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toolbar-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.toolbar-icon-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* ── Toolbar accent button (Hint) ── */
+.toolbar-accent-btn {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 0.3rem 0.6rem;
+  cursor: pointer;
+  color: var(--accent);
   font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.toolbar-accent-btn:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.btn-icon {
+  font-size: 0.85rem;
+}
+
+/* ── Secondary controls ── */
+.puzzle-secondary-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.secondary-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.25rem 0.6rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.75rem;
   font-family: inherit;
 }
 
-.puzzle-actions button:hover:not(:disabled) {
+.secondary-btn:hover {
   background: var(--bg-hover);
 }
 
-.puzzle-actions button:disabled {
-  opacity: 0.3;
-  cursor: default;
+.secondary-btn.reset-confirm {
+  border-color: var(--invalid);
+  color: var(--invalid);
+  background: var(--invalid-soft);
+  font-weight: 600;
 }
 
 /* ── History strip ── */
@@ -238,7 +521,7 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
-  margin-bottom: 0.75rem;
+  margin-top: 0.5rem;
   padding: 0.4rem 0;
 }
 
@@ -272,13 +555,6 @@ a:hover {
 .history-step.checkpoint {
   border-color: var(--valid);
   box-shadow: 0 0 0 1px var(--valid);
-}
-
-/* ── Puzzle controls (below puzzle) ── */
-.puzzle-controls {
-  margin-top: 1rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border);
 }
 
 /* ── Questions grid (2-column for hard+expert) ── */
@@ -399,64 +675,6 @@ a:hover {
   border-color: var(--valid);
 }
 
-/* ── About page ── */
-.about {
-  max-width: 600px;
-}
-
-.about h2 {
-  font-size: 1.2rem;
-  margin: 1.5rem 0 0.5rem;
-}
-
-.about h2:first-child {
-  margin-top: 0;
-}
-
-.about p {
-  margin-bottom: 0.75rem;
-  line-height: 1.6;
-  color: var(--text-muted);
-}
-
-.about ol,
-.about ul {
-  margin: 0 0 0.75rem 1.25rem;
-  color: var(--text-muted);
-  line-height: 1.6;
-}
-
-/* ── State display ── */
-.state-display {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-.state-code {
-  font-family: monospace;
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  user-select: all;
-  letter-spacing: 0.1em;
-}
-
-.state-copy {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 0.1rem 0.4rem;
-  cursor: pointer;
-  font-family: inherit;
-}
-
-.state-copy:hover {
-  background: var(--bg-hover);
-}
-
 /* ── Hint ── */
 .puzzle-hint {
   padding: 0.6rem 1rem;
@@ -501,7 +719,10 @@ a:hover {
 }
 
 .puzzle-complete {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
   padding: 1rem;
   margin-top: 1rem;
   background: var(--valid-soft);
@@ -510,6 +731,61 @@ a:hover {
   font-weight: 600;
   color: var(--valid);
   animation: glow-pulse 2s ease-in-out infinite;
+  flex-wrap: wrap;
+}
+
+.next-puzzle-btn {
+  background: var(--valid);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.next-puzzle-btn:hover {
+  opacity: 0.9;
+}
+
+/* ── Toast notification ── */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(1rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.toast {
+  position: fixed;
+  bottom: 1.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  z-index: 200;
+  animation: toast-in 0.2s ease-out, toast-out 0.3s ease-in 1.7s forwards;
+  pointer-events: none;
 }
 
 /* ── 404 ── */
@@ -538,4 +814,123 @@ a:hover {
     font-size: 0.75rem;
     padding: 0.15rem 0.4rem;
   }
+
+  .puzzle-toolbar {
+    gap: 0.25rem;
+  }
+
+  .puzzle-title {
+    font-size: 0.9rem;
+  }
+
+  .difficulty-tabs {
+    gap: 1px;
+  }
+
+  .difficulty-tab {
+    padding: 0.3rem 0.25rem;
+  }
+
+  .tab-label {
+    font-size: 0.7rem;
+  }
+
+  .tab-count {
+    font-size: 0.6rem;
+  }
+}
+
+/* ── Daily puzzle header ── */
+.daily-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.5rem 1rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.daily-date {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.back-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.tab-solved {
+  border-color: var(--valid) !important;
+}
+
+.tab-check {
+  color: var(--valid);
+  font-size: 0.8em;
+}
+
+.loading {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+
+/* ── History page ── */
+.history-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+.history-page h2 {
+  margin-bottom: 1rem;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.15s;
+}
+
+.history-item:hover {
+  background: var(--bg-hover);
+}
+
+.history-today {
+  border-color: var(--accent);
+  border-width: 2px;
+}
+
+.history-date {
+  font-weight: 600;
+}
+
+.history-day {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: 0.5rem;
+}
+
+.history-progress {
+  color: var(--text-muted);
+  font-size: 0.85rem;
 }

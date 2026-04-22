@@ -170,7 +170,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   }
 
   // 3. Build and validate puzzle
-  const finalRules = rules as ValidationRule[];
+  const finalRules: ValidationRule[] = rules.filter((r): r is ValidationRule => r !== null);
   const questions: QuestionDef[] = finalRules.map((rule, i) => ({
     text: questionText(rule),
     options: engineerOptions(rule, i, solution, n, rng),
@@ -238,7 +238,7 @@ function makeRule(
   type: ValidationRule["type"],
   qi: number,
   n: number,
-  solution: AnswerLetter[],
+  _solution: AnswerLetter[],
   assigned: Set<number>,
   rng: RNG,
 ): ValidationRule | null {
