@@ -369,6 +369,7 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
         <button
           class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
           onClick={handleReset}
+          disabled={historyRef.current.length <= 1}
         >
           {resetPending ? s.puzzle.resetConfirm : s.puzzle.reset}
         </button>
