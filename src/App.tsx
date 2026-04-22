@@ -225,7 +225,7 @@ function DayView({ dateStr }: { dateStr: string }) {
           level={activeLevel}
           initialHash={hashLevel === activeLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
-          onCompleted={() => setPuzzleVersion((v) => v + 1)}
+          onChanged={() => setPuzzleVersion((v) => v + 1)}
         />
       )}
 

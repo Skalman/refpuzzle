@@ -112,10 +112,10 @@ interface PuzzleViewProps {
   level: number;
   initialHash?: string | null;
   onNextPuzzle: () => void;
-  onCompleted: () => void;
+  onChanged: () => void;
 }
 
-export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, onCompleted }: PuzzleViewProps) {
+export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, onChanged }: PuzzleViewProps) {
   const s = t();
 
   const [questions, setQuestions] = useState<QuestionState[]>([]);
@@ -196,11 +196,9 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
         history: historyRef.current,
         historyIdx: historyIdxRef.current,
       });
-      if (isCompleted) {
-        onCompleted();
-      }
+      onChanged();
     },
-    [puzzle, onCompleted],
+    [puzzle, onChanged],
   );
 
   useEffect(() => {

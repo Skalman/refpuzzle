@@ -129,7 +129,11 @@ export function loadState(puzzleId: string): SavedState | null {
 
 export function saveState(puzzleId: string, state: SavedState) {
   try {
-    localStorage.setItem(PREFIX + puzzleId, encodeHistory(state));
+    if (state.history.length <= 1 && !state.completed) {
+      localStorage.removeItem(PREFIX + puzzleId);
+    } else {
+      localStorage.setItem(PREFIX + puzzleId, encodeHistory(state));
+    }
   } catch {
     // storage full or unavailable
   }
