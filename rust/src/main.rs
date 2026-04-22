@@ -1,4 +1,5 @@
 mod assemble;
+mod construct;
 mod difficulty;
 mod evaluate;
 mod hints;
@@ -6,7 +7,6 @@ mod rng;
 mod solver;
 mod types;
 
-use assemble::{generate, GenerateResult};
 use difficulty::PROFILES;
 use rng::Rng;
 use serde_json::{json, Value};
@@ -46,7 +46,7 @@ fn main() {
                 let mut pass = 0u32;
                 for s in 0..200u32 {
                     let mut rng = Rng::new(s);
-                    let ok = generate(prof, &mut rng, 500).is_some();
+                    let ok = assemble::generate(prof, &mut rng, 500).is_some();
                     results.push(if ok { 1 } else { 0 });
                     if ok { pass += 1; }
                 }
@@ -88,13 +88,13 @@ fn main() {
         .collect();
 
     use rayon::prelude::*;
-    let results: Vec<(usize, Option<GenerateResult>)> = puzzle_seeds
+    let results: Vec<(usize, Option<construct::GenerateResult>)> = puzzle_seeds
         .par_iter()
         .enumerate()
         .map(|(idx, seeds)| {
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) = generate(profile, &mut rng, max_attempts) {
+                if let Some(r) = construct::generate(profile, &mut rng, max_attempts) {
                     return (idx, Some(r));
                 }
             }
@@ -129,7 +129,7 @@ fn main() {
     println!("{}", serde_json::to_string_pretty(&results).unwrap());
 }
 
-fn result_to_json(result: &GenerateResult, profile: &difficulty::DifficultyProfile, idx: usize) -> Value {
+fn result_to_json(result: &construct::GenerateResult, profile: &difficulty::DifficultyProfile, idx: usize) -> Value {
     let n = result.n;
     let questions: Vec<Value> = (0..n)
         .map(|qi| {
