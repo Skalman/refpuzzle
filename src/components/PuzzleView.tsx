@@ -142,7 +142,13 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       const lastDiff = describeDiff(prev, last);
       const newDiff = describeDiff(last, cloned);
       if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
-        historyRef.current[historyRef.current.length - 1] = cloned;
+        const merged = describeDiff(prev, cloned);
+        if (merged.qi < 0) {
+          historyRef.current.pop();
+          historyIdxRef.current = historyRef.current.length - 1;
+        } else {
+          historyRef.current[historyRef.current.length - 1] = cloned;
+        }
         setHistoryVersion((v) => v + 1);
         return;
       }
