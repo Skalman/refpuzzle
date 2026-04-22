@@ -1,7 +1,11 @@
 use crate::evaluate::evaluate;
 use crate::types::*;
 
-pub fn solve(fp: &FlatPuzzle, fixed: Option<&[Option<Answer>; MAX_N]>, max_solutions: usize) -> Vec<[Answer; MAX_N]> {
+pub fn solve(
+    fp: &FlatPuzzle,
+    fixed: Option<&[Option<Answer>; MAX_N]>,
+    max_solutions: usize,
+) -> Vec<[Answer; MAX_N]> {
     let n = fp.n;
     let default_fixed = [None; MAX_N];
     let fixed = fixed.unwrap_or(&default_fixed);
@@ -42,13 +46,11 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
     indices[..n].sort_by(|&a, &b| {
         let a = a as usize;
         let b = b as usize;
-        ref_count[b]
-            .cmp(&ref_count[a])
-            .then_with(|| {
-                let a_global = fp.rules[a].is_solver_global() as u8;
-                let b_global = fp.rules[b].is_solver_global() as u8;
-                a_global.cmp(&b_global)
-            })
+        ref_count[b].cmp(&ref_count[a]).then_with(|| {
+            let a_global = fp.rules[a].is_solver_global() as u8;
+            let b_global = fp.rules[b].is_solver_global() as u8;
+            a_global.cmp(&b_global)
+        })
     });
 
     indices
@@ -130,7 +132,18 @@ fn search(
         current[qi] = Some(letter);
         *assigned_bits |= bit;
         if !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
-            search(fp, fixed, solutions, current, order, all_bits, assigned_bits, range_masks, depth + 1, max_solutions);
+            search(
+                fp,
+                fixed,
+                solutions,
+                current,
+                order,
+                all_bits,
+                assigned_bits,
+                range_masks,
+                depth + 1,
+                max_solutions,
+            );
         }
         current[qi] = None;
         *assigned_bits &= !bit;
@@ -141,7 +154,18 @@ fn search(
         current[qi] = Some(letter);
         *assigned_bits |= bit;
         if !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
-            search(fp, fixed, solutions, current, order, all_bits, assigned_bits, range_masks, depth + 1, max_solutions);
+            search(
+                fp,
+                fixed,
+                solutions,
+                current,
+                order,
+                all_bits,
+                assigned_bits,
+                range_masks,
+                depth + 1,
+                max_solutions,
+            );
             if solutions.len() >= max_solutions {
                 current[qi] = None;
                 *assigned_bits &= !bit;
@@ -273,7 +297,12 @@ fn check_rule(
     false
 }
 
-fn can_fully_evaluate_local(r: &Rule, assigned: u16, range_masks: &[u16; MAX_N], qi: usize) -> bool {
+fn can_fully_evaluate_local(
+    r: &Rule,
+    assigned: u16,
+    range_masks: &[u16; MAX_N],
+    qi: usize,
+) -> bool {
     match *r {
         Rule::AnswerIsSelf => true,
         Rule::PrevSame => {
@@ -284,9 +313,9 @@ fn can_fully_evaluate_local(r: &Rule, assigned: u16, range_masks: &[u16; MAX_N],
             (assigned & mask) == mask
         }
         Rule::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
-        Rule::LetterDist { other_question_index } => {
-            (assigned & (1 << other_question_index)) != 0
-        }
+        Rule::LetterDist {
+            other_question_index,
+        } => (assigned & (1 << other_question_index)) != 0,
         Rule::NextSame
         | Rule::ClosestAfter { .. }
         | Rule::ClosestBefore { .. }

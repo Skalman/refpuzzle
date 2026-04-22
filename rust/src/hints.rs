@@ -2,9 +2,18 @@ use crate::types::*;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Action {
-    Force { qi: usize, answer: Answer },
-    Eliminate { qi: usize, oi: usize },
-    Contradiction { #[allow(dead_code)] qi: usize },
+    Force {
+        qi: usize,
+        answer: Answer,
+    },
+    Eliminate {
+        qi: usize,
+        oi: usize,
+    },
+    Contradiction {
+        #[allow(dead_code)]
+        qi: usize,
+    },
 }
 
 pub fn apply_action(
@@ -89,7 +98,12 @@ fn count_range(r: &Rule, n: usize) -> (usize, usize) {
     }
 }
 
-fn count_answer_simple(answers: &[Option<Answer>; MAX_N], target: Answer, from: usize, to: usize) -> i16 {
+fn count_answer_simple(
+    answers: &[Option<Answer>; MAX_N],
+    target: Answer,
+    from: usize,
+    to: usize,
+) -> i16 {
     let mut c: i16 = 0;
     for i in from..to {
         if answers[i] == Some(target) {
@@ -127,7 +141,11 @@ pub fn find_action_fast(
             }
             Rule::CountVowel | Rule::CountConsonant => {
                 if on != NAN_VAL {
-                    let pred = if matches!(*r, Rule::CountVowel) { CountPred::IsVowel } else { CountPred::IsConsonant };
+                    let pred = if matches!(*r, Rule::CountVowel) {
+                        CountPred::IsVowel
+                    } else {
+                        CountPred::IsConsonant
+                    };
                     let cr = count_matching(answers, pred, 0, n);
                     if cr.count > on || cr.count + cr.remaining < on {
                         return Some(Action::Contradiction { qi });
@@ -142,7 +160,9 @@ pub fn find_action_fast(
                     }
                 }
             }
-            Rule::LetterDist { other_question_index } => {
+            Rule::LetterDist {
+                other_question_index,
+            } => {
                 if let Some(other) = answers[other_question_index as usize] {
                     let dist = (ai as i16 - other.idx() as i16).abs();
                     if dist != on {
@@ -229,49 +249,70 @@ pub fn find_action_fast(
 
     // ── Forced values ──
     for qi in 0..n {
-        if answers[qi].is_some() { continue; }
+        if answers[qi].is_some() {
+            continue;
+        }
         let r = &fp.rules[qi];
 
         if remaining_count(eliminated[qi]) == 1 {
             let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
-            return Some(Action::Force { qi, answer: LETTERS[oi as usize] });
+            return Some(Action::Force {
+                qi,
+                answer: LETTERS[oi as usize],
+            });
         }
 
         if let Rule::AnswerOf { question_index } = *r {
             if let Some(target) = answers[question_index as usize] {
                 for oi in 0..5usize {
                     if fp.option_answers[qi][oi] == target as u8 {
-                        return Some(Action::Force { qi, answer: LETTERS[oi] });
+                        return Some(Action::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        });
                     }
                 }
             }
         }
 
         for other in 0..n {
-            let Some(other_ans) = answers[other] else { continue };
+            let Some(other_ans) = answers[other] else {
+                continue;
+            };
             if let Rule::AnswerOf { question_index } = fp.rules[other] {
                 if question_index as usize == qi {
                     let implied = fp.option_answers[other][other_ans.idx()];
                     if implied <= 4 {
-                        return Some(Action::Force { qi, answer: LETTERS[implied as usize] });
+                        return Some(Action::Force {
+                            qi,
+                            answer: LETTERS[implied as usize],
+                        });
                     }
                 }
             }
             if let Rule::SameAs = fp.rules[other] {
                 let target_q = fp.option_nums[other][other_ans.idx()] - 1;
                 if target_q >= 0 && target_q as usize == qi {
-                    return Some(Action::Force { qi, answer: other_ans });
+                    return Some(Action::Force {
+                        qi,
+                        answer: other_ans,
+                    });
                 }
             }
         }
 
-        if let Rule::LetterDist { other_question_index } = *r {
+        if let Rule::LetterDist {
+            other_question_index,
+        } = *r
+        {
             if let Some(other_ans) = answers[other_question_index as usize] {
                 let other_idx = other_ans.idx();
                 let mut valid_count = 0u8;
                 let mut valid_letter = Answer::A;
                 for oi in 0..5usize {
-                    if (eliminated[qi] >> oi) & 1 == 1 { continue; }
+                    if (eliminated[qi] >> oi) & 1 == 1 {
+                        continue;
+                    }
                     let dist = (oi as i16 - other_idx as i16).abs();
                     if dist == fp.option_nums[qi][oi] {
                         valid_count += 1;
@@ -279,7 +320,10 @@ pub fn find_action_fast(
                     }
                 }
                 if valid_count == 1 {
-                    return Some(Action::Force { qi, answer: valid_letter });
+                    return Some(Action::Force {
+                        qi,
+                        answer: valid_letter,
+                    });
                 }
             }
         }
@@ -289,9 +333,14 @@ pub fn find_action_fast(
             let cr = count_matching(answers, pred, from, to);
             if cr.remaining == 0 {
                 for oi in 0..5usize {
-                    if (eliminated[qi] >> oi) & 1 == 1 { continue; }
+                    if (eliminated[qi] >> oi) & 1 == 1 {
+                        continue;
+                    }
                     if fp.option_nums[qi][oi] == cr.count {
-                        return Some(Action::Force { qi, answer: LETTERS[oi] });
+                        return Some(Action::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        });
                     }
                 }
             }
@@ -300,11 +349,15 @@ pub fn find_action_fast(
 
     // ── Eliminations ──
     for qi in 0..n {
-        if answers[qi].is_some() { continue; }
+        if answers[qi].is_some() {
+            continue;
+        }
         let r = &fp.rules[qi];
 
         for oi in 0..5usize {
-            if (eliminated[qi] >> oi) & 1 == 1 { continue; }
+            if (eliminated[qi] >> oi) & 1 == 1 {
+                continue;
+            }
             let on = fp.option_nums[qi][oi];
 
             match *r {
@@ -321,7 +374,11 @@ pub fn find_action_fast(
                 }
                 Rule::CountVowel | Rule::CountConsonant => {
                     if on != NAN_VAL {
-                        let pred = if matches!(*r, Rule::CountVowel) { CountPred::IsVowel } else { CountPred::IsConsonant };
+                        let pred = if matches!(*r, Rule::CountVowel) {
+                            CountPred::IsVowel
+                        } else {
+                            CountPred::IsConsonant
+                        };
                         let cr = count_matching(answers, pred, 0, n);
                         if cr.count > on || cr.count + cr.remaining < on {
                             return Some(Action::Eliminate { qi, oi });
@@ -336,7 +393,9 @@ pub fn find_action_fast(
                         }
                     }
                 }
-                Rule::LetterDist { other_question_index } => {
+                Rule::LetterDist {
+                    other_question_index,
+                } => {
                     if let Some(other) = answers[other_question_index as usize] {
                         let dist = (oi as i16 - other.idx() as i16).abs();
                         if dist != on {
@@ -417,11 +476,18 @@ pub fn find_lookahead_action(
 ) -> Option<Action> {
     let n = fp.n;
     for qi in 0..n {
-        if answers[qi].is_some() { continue; }
+        if answers[qi].is_some() {
+            continue;
+        }
         for oi in 0..5u8 {
-            if (eliminated[qi] >> oi) & 1 == 1 { continue; }
+            if (eliminated[qi] >> oi) & 1 == 1 {
+                continue;
+            }
             if trace_leads_to_contradiction(fp, answers, eliminated, qi, oi) {
-                return Some(Action::Eliminate { qi, oi: oi as usize });
+                return Some(Action::Eliminate {
+                    qi,
+                    oi: oi as usize,
+                });
             }
         }
     }

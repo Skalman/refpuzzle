@@ -147,11 +147,26 @@ impl Rule {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Claim {
     None,
-    CountAnswerEquals { answer: Answer, value: u8 },
-    CountConsonantEquals { value: u8 },
-    CountVowelEquals { value: u8 },
-    CountAnswerAfterEquals { answer: Answer, after_index: u8, value: u8 },
-    CountAnswerBeforeEquals { answer: Answer, before_index: u8, value: u8 },
+    CountAnswerEquals {
+        answer: Answer,
+        value: u8,
+    },
+    CountConsonantEquals {
+        value: u8,
+    },
+    CountVowelEquals {
+        value: u8,
+    },
+    CountAnswerAfterEquals {
+        answer: Answer,
+        after_index: u8,
+        value: u8,
+    },
+    CountAnswerBeforeEquals {
+        answer: Answer,
+        before_index: u8,
+        value: u8,
+    },
 }
 
 #[derive(Clone)]

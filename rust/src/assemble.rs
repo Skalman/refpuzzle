@@ -1,18 +1,16 @@
 use crate::difficulty::DifficultyProfile;
-use crate::evaluate::{evaluate, evaluate_claim};
-use crate::hints::{apply_action, find_action_fast, find_lookahead_action};
+use crate::gen_common::{
+    GenerateResult, build_flat_puzzle, check_structural, count_letter, letter_counts,
+    validate_and_check,
+};
 use crate::rng::Rng;
-use crate::solver::solve;
 use crate::types::*;
 
-pub struct GenerateResult {
-    pub rules: [Rule; MAX_N],
-    pub solution: [Answer; MAX_N],
-    pub fp: FlatPuzzle,
-    pub n: usize,
-}
-
-pub fn generate(profile: &DifficultyProfile, rng: &mut Rng, max_attempts: usize) -> Option<GenerateResult> {
+pub fn generate(
+    profile: &DifficultyProfile,
+    rng: &mut Rng,
+    max_attempts: usize,
+) -> Option<GenerateResult> {
     for _ in 0..max_attempts {
         if let Some(result) = try_generate(profile, rng) {
             return Some(result);
@@ -42,29 +40,9 @@ fn try_generate(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateRe
         }
     }
 
-    for i in 0..n {
-        for j in (i + 1)..n {
-            if rules[i] == rules[j] {
-                return None;
-            }
-        }
-    }
-
     let fp = build_flat_puzzle(&rules, &solution, n, rng)?;
 
-    let opt_solution = to_optional(&solution, n);
-    for i in 0..n {
-        if !evaluate(&fp, i, solution[i], &opt_solution) {
-            return None;
-        }
-    }
-
-    let solutions = solve(&fp, None, 2);
-    if solutions.len() != 1 {
-        return None;
-    }
-
-    if !check_solvable(&fp) {
+    if !validate_and_check(&rules, &solution, &fp, n) {
         return None;
     }
 
@@ -74,14 +52,6 @@ fn try_generate(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateRe
         fp,
         n,
     })
-}
-
-fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
-    let mut arr = [None; MAX_N];
-    for i in 0..n {
-        arr[i] = Some(sol[i]);
-    }
-    arr
 }
 
 // ── Step 1: Pick question types ──
@@ -101,6 +71,31 @@ fn pick_types(profile: &DifficultyProfile, n: usize, rng: &mut Rng) -> [RuleKind
         types[type_len] = RuleKind::CountAnswer;
         type_len += 1;
         counts[kind_idx(RuleKind::CountAnswer)] = 1;
+    }
+
+    // Seed positional rules (lookahead entry points)
+    let positional_kinds = [
+        RuleKind::FirstWith,
+        RuleKind::LastWith,
+        RuleKind::ClosestAfter,
+        RuleKind::ClosestBefore,
+    ];
+    let mut avail_pos = [RuleKind::FirstWith; 4];
+    let mut avail_pos_len = 0;
+    for &k in &positional_kinds {
+        if allowed.contains(&k) {
+            avail_pos[avail_pos_len] = k;
+            avail_pos_len += 1;
+        }
+    }
+    if avail_pos_len > 0 {
+        let seed_count = 2.min(n / 4);
+        for _ in 0..seed_count {
+            let k = rng.pick(&avail_pos[..avail_pos_len]);
+            types[type_len] = k;
+            type_len += 1;
+            counts[kind_idx(k)] += 1;
+        }
     }
 
     if allowed.contains(&RuleKind::AnswerOf) {
@@ -229,51 +224,6 @@ fn assign_params(kinds: &[RuleKind; MAX_N], n: usize, rules: &mut [Rule; MAX_N],
 
 // ── Step 3: Shape solution ──
 
-fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
-    match *rule {
-        Rule::OnlySame => {
-            let mut matches = 0;
-            for i in 0..n {
-                if i != qi && sol[i] == sol[qi] {
-                    matches += 1;
-                }
-            }
-            matches == 1
-        }
-        Rule::ConsecIdent => {
-            let mut pairs = 0;
-            for i in 0..n.saturating_sub(1) {
-                if sol[i] == sol[i + 1] {
-                    pairs += 1;
-                }
-            }
-            pairs == 1
-        }
-        Rule::OnlyOdd { answer } => {
-            let mut matches = 0;
-            for i in 0..n {
-                if (i + 1) % 2 == 1 && sol[i] == answer {
-                    matches += 1;
-                }
-            }
-            matches == 1
-        }
-        Rule::Unique => count_letter(sol, sol[qi], n) == 1,
-        Rule::EqualCount { answer } => {
-            let ref_count = count_letter(sol, answer, n);
-            let mut has_match = false;
-            for &l in &LETTERS {
-                if l != answer && count_letter(sol, l, n) == ref_count {
-                    has_match = true;
-                    break;
-                }
-            }
-            has_match
-        }
-        _ => true,
-    }
-}
-
 fn shape_solution(
     rules: &[Rule; MAX_N],
     sol: &mut [Answer; MAX_N],
@@ -310,7 +260,7 @@ fn shape_solution(
                 let mut best = Answer::A;
                 let mut best_count = n as i32;
                 for &l in &LETTERS {
-                    let c = counts[l.idx()] as i32;
+                    let c = counts[l.idx()];
                     if c < best_count {
                         best_count = c;
                         best = l;
@@ -455,7 +405,9 @@ fn shape_solution(
             }
             Rule::EqualCount { answer } => {
                 let ref_count = count_letter(sol, answer, n);
-                let has_match = LETTERS.iter().any(|&l| l != answer && count_letter(sol, l, n) == ref_count);
+                let has_match = LETTERS
+                    .iter()
+                    .any(|&l| l != answer && count_letter(sol, l, n) == ref_count);
                 if has_match {
                     continue;
                 }
@@ -465,7 +417,7 @@ fn shape_solution(
                     if l == answer {
                         continue;
                     }
-                    let diff = (count_letter(sol, l, n) as i32 - ref_count as i32).abs();
+                    let diff = (count_letter(sol, l, n) - ref_count).abs();
                     if diff < closest_diff {
                         closest_diff = diff;
                         closest = l;
@@ -532,577 +484,30 @@ fn compute_constrained_answer(
         Rule::MostCommon => {
             let counts = letter_counts(solution, n);
             let max = counts.iter().copied().max().unwrap_or(0);
-            for i in 0..5 {
-                if counts[i] == max {
-                    return Some(LETTERS[i]);
-                }
-            }
-            None
+            LETTERS.iter().copied().find(|l| counts[l.idx()] == max)
         }
         Rule::LeastCommon => {
             let counts = letter_counts(solution, n);
             let min = counts.iter().copied().min().unwrap_or(0);
-            for i in 0..5 {
-                if counts[i] == min {
-                    return Some(LETTERS[i]);
-                }
-            }
-            None
+            LETTERS.iter().copied().find(|l| counts[l.idx()] == min)
         }
         Rule::Unique => {
             if count_letter(solution, solution[qi], n) == 1 {
                 return Some(solution[qi]);
             }
-            for &l in &LETTERS {
-                if count_letter(solution, l, n) == 1 {
-                    return Some(l);
-                }
-            }
-            None
+            LETTERS
+                .iter()
+                .copied()
+                .find(|&l| count_letter(solution, l, n) == 1)
         }
         Rule::EqualCount { answer } => {
             let ref_count = count_letter(solution, answer, n);
-            for &l in &LETTERS {
-                if l != answer && count_letter(solution, l, n) == ref_count {
-                    return Some(l);
-                }
-            }
-            None
+            LETTERS
+                .iter()
+                .copied()
+                .find(|&l| l != answer && count_letter(solution, l, n) == ref_count)
         }
         Rule::AnswerIsSelf => Some(solution[qi]),
         _ => None,
     }
-}
-
-// ── Build FlatPuzzle with options ──
-
-fn build_flat_puzzle(
-    rules: &[Rule; MAX_N],
-    solution: &[Answer; MAX_N],
-    n: usize,
-    rng: &mut Rng,
-) -> Option<FlatPuzzle> {
-    let mut option_nums = [[NAN_VAL; 5]; MAX_N];
-    let mut option_answers = [[0xFFu8; 5]; MAX_N];
-    let mut option_claims = [[Claim::None; 5]; MAX_N];
-
-    for qi in 0..n {
-        let rule = &rules[qi];
-        let correct_oi = solution[qi].idx();
-
-        if rule.is_constrained() {
-            // Options are A-E
-            for oi in 0..5 {
-                option_answers[qi][oi] = oi as u8;
-            }
-            continue;
-        }
-
-        if matches!(rule, Rule::TrueStmt) {
-            build_claims(qi, solution, n, rng, &mut option_claims[qi], &mut option_nums[qi]);
-            continue;
-        }
-
-        // Compute correct value
-        let correct_val = compute_value(rule, qi, solution, n);
-
-        // Place correct value
-        match *rule {
-            Rule::AnswerOf { question_index } => {
-                option_answers[qi][correct_oi] = solution[question_index as usize] as u8;
-                // Distractors: other 4 letters
-                let correct_answer = solution[question_index as usize];
-                let mut pool = [Answer::A; 4];
-                let mut plen = 0;
-                for &l in &LETTERS {
-                    if l != correct_answer {
-                        pool[plen] = l;
-                        plen += 1;
-                    }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_answers[qi][oi] = pool[di] as u8;
-                        di += 1;
-                    }
-                }
-            }
-            Rule::ConsecIdent => {
-                option_nums[qi][correct_oi] = correct_val;
-                // Distractors
-                let distractors = pair_distractors(correct_val, n, rng);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_nums[qi][oi] = distractors[di];
-                        di += 1;
-                    }
-                }
-            }
-            Rule::LetterDist { .. } => {
-                option_nums[qi][correct_oi] = correct_val;
-                let mut pool = [0i16; 4];
-                let mut plen = 0;
-                for v in 0..5i16 {
-                    if v != correct_val {
-                        pool[plen] = v;
-                        plen += 1;
-                    }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_nums[qi][oi] = pool[di];
-                        di += 1;
-                    }
-                }
-            }
-            _ if is_counting_type(rule) => {
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = count_distractors(correct_val as i32, count_max(rule, n) as i32, rng);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_nums[qi][oi] = distractors[di];
-                        di += 1;
-                    }
-                }
-            }
-            _ => {
-                // Positional rules
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, n, rule, rng);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_nums[qi][oi] = distractors[di];
-                        di += 1;
-                    }
-                }
-            }
-        }
-    }
-
-    let (affected_by, global_indices) = FlatPuzzle::build_deps(rules, n);
-
-    Some(FlatPuzzle {
-        rules: *rules,
-        option_nums,
-        option_answers,
-        option_claims,
-        affected_by,
-        global_indices,
-        n,
-    })
-}
-
-fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) -> i16 {
-    match *rule {
-        Rule::AnswerOf { question_index } => sol[question_index as usize] as i16,
-        Rule::CountAnswer { answer } => count_letter(sol, answer, n) as i16,
-        Rule::CountAnswerBefore { answer, before_index } => {
-            let mut c = 0i16;
-            for i in 0..before_index as usize {
-                if sol[i] == answer { c += 1; }
-            }
-            c
-        }
-        Rule::CountAnswerAfter { answer, after_index } => {
-            let mut c = 0i16;
-            for i in (after_index as usize + 1)..n {
-                if sol[i] == answer { c += 1; }
-            }
-            c
-        }
-        Rule::CountVowel => {
-            let mut c = 0i16;
-            for i in 0..n {
-                if sol[i].is_vowel() { c += 1; }
-            }
-            c
-        }
-        Rule::CountConsonant => {
-            let mut c = 0i16;
-            for i in 0..n {
-                if !sol[i].is_vowel() { c += 1; }
-            }
-            c
-        }
-        Rule::MostCommonCount => {
-            let counts = letter_counts(sol, n);
-            *counts.iter().max().unwrap_or(&0) as i16
-        }
-        Rule::ClosestAfter { after_index, answer } => {
-            for i in (after_index as usize + 1)..n {
-                if sol[i] == answer { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::ClosestBefore { before_index, answer } => {
-            for i in (0..before_index as usize).rev() {
-                if sol[i] == answer { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::FirstWith { answer } => {
-            for i in 0..n {
-                if sol[i] == answer { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::LastWith { answer } => {
-            for i in (0..n).rev() {
-                if sol[i] == answer { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::PrevSame => {
-            for i in (0..qi).rev() {
-                if sol[i] == sol[qi] { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::NextSame => {
-            for i in (qi + 1)..n {
-                if sol[i] == sol[qi] { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::OnlySame => {
-            for i in 0..n {
-                if i != qi && sol[i] == sol[qi] { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::SameAs => {
-            for i in 0..n {
-                if i != qi && sol[i] == sol[qi] { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::OnlyOdd { answer } => {
-            for i in 0..n {
-                if (i + 1) % 2 == 1 && sol[i] == answer { return (i as i16) + 1; }
-            }
-            NONE_VAL
-        }
-        Rule::ConsecIdent => {
-            for i in 0..n.saturating_sub(1) {
-                if sol[i] == sol[i + 1] { return i as i16; }
-            }
-            NONE_VAL
-        }
-        Rule::LetterDist { other_question_index } => {
-            (sol[qi].idx() as i16 - sol[other_question_index as usize].idx() as i16).abs()
-        }
-        _ => NAN_VAL,
-    }
-}
-
-// ── Distractor generation ──
-
-fn is_counting_type(rule: &Rule) -> bool {
-    matches!(
-        rule,
-        Rule::CountAnswer { .. }
-            | Rule::CountAnswerBefore { .. }
-            | Rule::CountAnswerAfter { .. }
-            | Rule::CountVowel
-            | Rule::CountConsonant
-            | Rule::MostCommonCount
-    )
-}
-
-fn count_max(rule: &Rule, n: usize) -> usize {
-    match *rule {
-        Rule::CountAnswerBefore { before_index, .. } => before_index as usize,
-        Rule::CountAnswerAfter { after_index, .. } => n - after_index as usize - 1,
-        _ => n,
-    }
-}
-
-fn count_distractors(correct: i32, max: i32, rng: &mut Rng) -> [i16; 4] {
-    let upper = max.max(4);
-    let mut pool = [0i16; 32];
-    let mut plen = 0;
-    for i in 0..=upper {
-        if i != correct {
-            pool[plen] = i as i16;
-            plen += 1;
-        }
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
-    result
-}
-
-fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) -> [i16; 4] {
-    let mut min_pos: i16 = 1;
-    let mut max_pos = n as i16;
-
-    match *rule {
-        Rule::ClosestAfter { after_index, .. } => min_pos = after_index as i16 + 2,
-        Rule::ClosestBefore { before_index, .. } => max_pos = before_index as i16,
-        Rule::CountAnswerAfter { after_index, .. } => min_pos = after_index as i16 + 2,
-        Rule::CountAnswerBefore { before_index, .. } => max_pos = before_index as i16,
-        _ => {}
-    }
-
-    let mut pool = [0i16; 20];
-    let mut plen = 0;
-    for i in min_pos..=max_pos {
-        if i != correct {
-            pool[plen] = i;
-            plen += 1;
-        }
-    }
-    if correct != NONE_VAL {
-        pool[plen] = NONE_VAL;
-        plen += 1;
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
-    result
-}
-
-fn pair_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
-    let mut pool = [0i16; 16];
-    let mut plen = 0;
-    for i in 0..n.saturating_sub(1) {
-        let v = i as i16;
-        if v != correct {
-            pool[plen] = v;
-            plen += 1;
-        }
-    }
-    if correct != NONE_VAL {
-        pool[plen] = NONE_VAL;
-        plen += 1;
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
-    result
-}
-
-// ── Claims for only_true_statement ──
-
-fn build_claims(
-    qi: usize,
-    solution: &[Answer; MAX_N],
-    n: usize,
-    rng: &mut Rng,
-    claims: &mut [Claim; 5],
-    nums: &mut [i16; 5],
-) {
-    let target_oi = solution[qi].idx();
-    let opt_sol = {
-        let mut arr = [None; MAX_N];
-        for i in 0..n {
-            arr[i] = Some(solution[i]);
-        }
-        arr
-    };
-
-    let true_claim = make_true_claim(solution, n, rng);
-    claims[target_oi] = true_claim;
-    nums[target_oi] = NAN_VAL; // claims don't have numeric values
-
-    for oi in 0..5 {
-        if oi == target_oi {
-            continue;
-        }
-        let mut found = false;
-        for _ in 0..30 {
-            let fc = make_false_claim(solution, n, rng, &opt_sol);
-            if fc != claims[target_oi] && (0..oi).all(|j| j == target_oi || claims[j] != fc) {
-                claims[oi] = fc;
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            claims[oi] = make_false_claim(solution, n, rng, &opt_sol);
-        }
-        nums[oi] = NAN_VAL;
-    }
-}
-
-fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
-    let claim_type = rng.int(0, 4);
-    match claim_type {
-        0 => {
-            let answer = rng.pick(&LETTERS);
-            let value = count_letter(sol, answer, n);
-            Claim::CountAnswerEquals {
-                answer,
-                value: value as u8,
-            }
-        }
-        1 => {
-            let mut c = 0u8;
-            for i in 0..n {
-                if !sol[i].is_vowel() {
-                    c += 1;
-                }
-            }
-            Claim::CountConsonantEquals { value: c }
-        }
-        2 => {
-            let mut c = 0u8;
-            for i in 0..n {
-                if sol[i].is_vowel() {
-                    c += 1;
-                }
-            }
-            Claim::CountVowelEquals { value: c }
-        }
-        3 => {
-            let answer = rng.pick(&LETTERS);
-            let after_index = rng.int(0, n as i32 - 2) as u8;
-            let mut c = 0u8;
-            for i in (after_index as usize + 1)..n {
-                if sol[i] == answer {
-                    c += 1;
-                }
-            }
-            Claim::CountAnswerAfterEquals {
-                answer,
-                after_index,
-                value: c,
-            }
-        }
-        _ => {
-            let answer = rng.pick(&LETTERS);
-            let before_index = rng.int(1, n as i32 - 1) as u8;
-            let mut c = 0u8;
-            for i in 0..before_index as usize {
-                if sol[i] == answer {
-                    c += 1;
-                }
-            }
-            Claim::CountAnswerBeforeEquals {
-                answer,
-                before_index,
-                value: c,
-            }
-        }
-    }
-}
-
-fn make_false_claim(
-    sol: &[Answer; MAX_N],
-    n: usize,
-    rng: &mut Rng,
-    opt_sol: &[Option<Answer>; MAX_N],
-) -> Claim {
-    for _ in 0..30 {
-        let base = make_true_claim(sol, n, rng);
-        let offset = rng.pick(&[-2i8, -1, 1, 2]);
-        let base_value = match base {
-            Claim::CountAnswerEquals { value, .. } => value as i8,
-            Claim::CountConsonantEquals { value } => value as i8,
-            Claim::CountVowelEquals { value } => value as i8,
-            Claim::CountAnswerAfterEquals { value, .. } => value as i8,
-            Claim::CountAnswerBeforeEquals { value, .. } => value as i8,
-            Claim::None => continue,
-        };
-        let new_val = base_value + offset;
-        if new_val < 0 || new_val > n as i8 {
-            continue;
-        }
-        let false_claim = set_claim_value(base, new_val as u8);
-        if !evaluate_claim(&false_claim, opt_sol, n) {
-            return false_claim;
-        }
-    }
-    Claim::CountAnswerEquals {
-        answer: Answer::A,
-        value: n as u8 + 1,
-    }
-}
-
-fn set_claim_value(claim: Claim, value: u8) -> Claim {
-    match claim {
-        Claim::CountAnswerEquals { answer, .. } => Claim::CountAnswerEquals { answer, value },
-        Claim::CountConsonantEquals { .. } => Claim::CountConsonantEquals { value },
-        Claim::CountVowelEquals { .. } => Claim::CountVowelEquals { value },
-        Claim::CountAnswerAfterEquals {
-            answer,
-            after_index,
-            ..
-        } => Claim::CountAnswerAfterEquals {
-            answer,
-            after_index,
-            value,
-        },
-        Claim::CountAnswerBeforeEquals {
-            answer,
-            before_index,
-            ..
-        } => Claim::CountAnswerBeforeEquals {
-            answer,
-            before_index,
-            value,
-        },
-        Claim::None => Claim::None,
-    }
-}
-
-// ── Solvability check ──
-
-fn check_solvable(fp: &FlatPuzzle) -> bool {
-    let n = fp.n;
-    let mut answers = [None; MAX_N];
-    let mut eliminated = [0u8; MAX_N];
-
-    for _ in 0..n * 15 {
-        if (0..n).all(|i| answers[i].is_some()) {
-            return true;
-        }
-
-        if let Some(action) = find_action_fast(fp, &answers, &eliminated) {
-            apply_action(&action, &mut answers, &mut eliminated);
-            continue;
-        }
-
-        if let Some(action) = find_lookahead_action(fp, &answers, &eliminated) {
-            apply_action(&action, &mut answers, &mut eliminated);
-            continue;
-        }
-
-        return false;
-    }
-    false
-}
-
-// ── Helpers ──
-
-fn letter_counts(sol: &[Answer; MAX_N], n: usize) -> [i32; 5] {
-    let mut counts = [0i32; 5];
-    for i in 0..n {
-        counts[sol[i].idx()] += 1;
-    }
-    counts
-}
-
-fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
-    let mut c = 0i32;
-    for i in 0..n {
-        if sol[i] == letter {
-            c += 1;
-        }
-    }
-    c
 }

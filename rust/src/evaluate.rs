@@ -77,7 +77,10 @@ pub fn evaluate(
             max == on
         }
 
-        Rule::ClosestAfter { after_index, answer } => {
+        Rule::ClosestAfter {
+            after_index,
+            answer,
+        } => {
             for i in (after_index as usize + 1)..n {
                 if answers[i] == Some(answer) {
                     return (i as i16 + 1) == on;

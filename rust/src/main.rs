@@ -2,14 +2,16 @@ mod assemble;
 mod construct;
 mod difficulty;
 mod evaluate;
+mod gen_common;
 mod hints;
 mod rng;
 mod solver;
 mod types;
 
 use difficulty::PROFILES;
+use gen_common::GenerateResult;
 use rng::Rng;
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use types::*;
 
@@ -48,14 +50,18 @@ fn main() {
                     let mut rng = Rng::new(s);
                     let ok = assemble::generate(prof, &mut rng, 500).is_some();
                     results.push(if ok { 1 } else { 0 });
-                    if ok { pass += 1; }
+                    if ok {
+                        pass += 1;
+                    }
                 }
                 eprintln!("Rust pass={pass} fail={}", 200 - pass);
                 println!("{:?}", results);
                 return;
             }
             "--help" | "-h" => {
-                eprintln!("Usage: logiquiz-gen [--level 1-5] [--count N] [--seed S] [--attempts A]");
+                eprintln!(
+                    "Usage: logiquiz-gen [--level 1-5] [--count N] [--seed S] [--attempts A]"
+                );
                 return;
             }
             _ => {
@@ -88,7 +94,7 @@ fn main() {
         .collect();
 
     use rayon::prelude::*;
-    let results: Vec<(usize, Option<construct::GenerateResult>)> = puzzle_seeds
+    let results: Vec<(usize, Option<GenerateResult>)> = puzzle_seeds
         .par_iter()
         .enumerate()
         .map(|(idx, seeds)| {
@@ -103,11 +109,9 @@ fn main() {
         .collect();
 
     let mut json_results: Vec<Value> = Vec::new();
-    let mut ok = 0;
     for (idx, result) in &results {
         match result {
             Some(r) => {
-                ok += 1;
                 json_results.push(result_to_json(r, profile, *idx));
             }
             None => {
@@ -129,7 +133,11 @@ fn main() {
     println!("{}", serde_json::to_string_pretty(&results).unwrap());
 }
 
-fn result_to_json(result: &construct::GenerateResult, profile: &difficulty::DifficultyProfile, idx: usize) -> Value {
+fn result_to_json(
+    result: &GenerateResult,
+    profile: &difficulty::DifficultyProfile,
+    idx: usize,
+) -> Value {
     let n = result.n;
     let questions: Vec<Value> = (0..n)
         .map(|qi| {
@@ -203,14 +211,20 @@ fn question_text(rule: &Rule) -> String {
         Rule::CountAnswer { answer } => {
             format!("How many questions have answer {}?", answer.as_char())
         }
-        Rule::CountAnswerBefore { answer, before_index } => {
+        Rule::CountAnswerBefore {
+            answer,
+            before_index,
+        } => {
             format!(
                 "How many questions before #{} have answer {}?",
                 before_index + 1,
                 answer.as_char()
             )
         }
-        Rule::CountAnswerAfter { answer, after_index } => {
+        Rule::CountAnswerAfter {
+            answer,
+            after_index,
+        } => {
             format!(
                 "How many questions after #{} have answer {}?",
                 after_index + 1,
@@ -220,14 +234,20 @@ fn question_text(rule: &Rule) -> String {
         Rule::CountVowel => "How many questions have a vowel as the answer?".into(),
         Rule::CountConsonant => "How many questions have a consonant as the answer?".into(),
         Rule::MostCommonCount => "How many times does the most common answer occur?".into(),
-        Rule::ClosestAfter { after_index, answer } => {
+        Rule::ClosestAfter {
+            after_index,
+            answer,
+        } => {
             format!(
                 "Which is the closest question after #{} that has answer {}?",
                 after_index + 1,
                 answer.as_char()
             )
         }
-        Rule::ClosestBefore { before_index, answer } => {
+        Rule::ClosestBefore {
+            before_index,
+            answer,
+        } => {
             format!(
                 "Which is the closest question before #{} that has answer {}?",
                 before_index + 1,
@@ -249,15 +269,9 @@ fn question_text(rule: &Rule) -> String {
         Rule::PrevSame => {
             "Which is the previous question that has the same answer as this one?".into()
         }
-        Rule::NextSame => {
-            "Which is the next question that has the same answer as this one?".into()
-        }
-        Rule::OnlySame => {
-            "The only other question with the same answer as this one is?".into()
-        }
-        Rule::SameAs => {
-            "The answer to this question is the same as the answer to question?".into()
-        }
+        Rule::NextSame => "Which is the next question that has the same answer as this one?".into(),
+        Rule::OnlySame => "The only other question with the same answer as this one is?".into(),
+        Rule::SameAs => "The answer to this question is the same as the answer to question?".into(),
         Rule::OnlyOdd { answer } => {
             format!(
                 "The only odd-numbered question with answer {} is?",
@@ -280,7 +294,9 @@ fn question_text(rule: &Rule) -> String {
             )
         }
         Rule::AnswerIsSelf => "What is the answer to this question?".into(),
-        Rule::LetterDist { other_question_index } => {
+        Rule::LetterDist {
+            other_question_index,
+        } => {
             format!(
                 "How many letters away is the answer to this question from the answer to question #{}?",
                 other_question_index + 1
@@ -307,12 +323,13 @@ fn claim_label_str(claim: &Claim) -> String {
             )
         }
         Claim::CountVowelEquals { value } => {
-            format!(
-                "How many questions have a vowel as the answer? {}",
-                value
-            )
+            format!("How many questions have a vowel as the answer? {}", value)
         }
-        Claim::CountAnswerAfterEquals { answer, after_index, value } => {
+        Claim::CountAnswerAfterEquals {
+            answer,
+            after_index,
+            value,
+        } => {
             format!(
                 "How many questions after #{} have answer {}? {}",
                 after_index + 1,
@@ -320,7 +337,11 @@ fn claim_label_str(claim: &Claim) -> String {
                 value
             )
         }
-        Claim::CountAnswerBeforeEquals { answer, before_index, value } => {
+        Claim::CountAnswerBeforeEquals {
+            answer,
+            before_index,
+            value,
+        } => {
             format!(
                 "How many questions before #{} have answer {}? {}",
                 before_index + 1,
@@ -337,12 +358,18 @@ fn rule_to_json(rule: &Rule) -> Value {
             "type": "count_answer",
             "answer": answer.as_char().to_string()
         }),
-        Rule::CountAnswerBefore { answer, before_index } => json!({
+        Rule::CountAnswerBefore {
+            answer,
+            before_index,
+        } => json!({
             "type": "count_answer_before",
             "answer": answer.as_char().to_string(),
             "beforeIndex": before_index
         }),
-        Rule::CountAnswerAfter { answer, after_index } => json!({
+        Rule::CountAnswerAfter {
+            answer,
+            after_index,
+        } => json!({
             "type": "count_answer_after",
             "answer": answer.as_char().to_string(),
             "afterIndex": after_index
@@ -350,12 +377,18 @@ fn rule_to_json(rule: &Rule) -> Value {
         Rule::CountVowel => json!({ "type": "count_vowel_answers" }),
         Rule::CountConsonant => json!({ "type": "count_consonant_answers" }),
         Rule::MostCommonCount => json!({ "type": "most_common_count" }),
-        Rule::ClosestAfter { after_index, answer } => json!({
+        Rule::ClosestAfter {
+            after_index,
+            answer,
+        } => json!({
             "type": "closest_after",
             "afterIndex": after_index,
             "answer": answer.as_char().to_string()
         }),
-        Rule::ClosestBefore { before_index, answer } => json!({
+        Rule::ClosestBefore {
+            before_index,
+            answer,
+        } => json!({
             "type": "closest_before",
             "beforeIndex": before_index,
             "answer": answer.as_char().to_string()
@@ -389,7 +422,9 @@ fn rule_to_json(rule: &Rule) -> Value {
             "answer": answer.as_char().to_string()
         }),
         Rule::AnswerIsSelf => json!({ "type": "answer_is_self" }),
-        Rule::LetterDist { other_question_index } => json!({
+        Rule::LetterDist {
+            other_question_index,
+        } => json!({
             "type": "letter_distance",
             "otherQuestionIndex": other_question_index
         }),
@@ -413,13 +448,21 @@ fn claim_to_json(claim: &Claim) -> Value {
             "type": "count_vowel_answers_equals",
             "value": value
         }),
-        Claim::CountAnswerAfterEquals { answer, after_index, value } => json!({
+        Claim::CountAnswerAfterEquals {
+            answer,
+            after_index,
+            value,
+        } => json!({
             "type": "count_answer_after_equals",
             "answer": answer.as_char().to_string(),
             "afterIndex": after_index,
             "value": value
         }),
-        Claim::CountAnswerBeforeEquals { answer, before_index, value } => json!({
+        Claim::CountAnswerBeforeEquals {
+            answer,
+            before_index,
+            value,
+        } => json!({
             "type": "count_answer_before_equals",
             "answer": answer.as_char().to_string(),
             "beforeIndex": before_index,
