@@ -15,24 +15,32 @@ import { t } from "./i18n/index.ts";
 import { Logo } from "./components/Logo.tsx";
 
 function ThemeToggle() {
+  const [icon, setIcon] = useState(() => {
+    const theme = document.documentElement.getAttribute("data-theme");
+    return theme === "dark" ? "\u{1F319}" : theme === "light" ? "☀️" : "\u{1F310}";
+  });
+
   function cycle() {
     const html = document.documentElement;
     const current = html.getAttribute("data-theme");
     if (current === "dark") {
       html.setAttribute("data-theme", "light");
       localStorage.setItem("refpuzzle:theme", "light");
+      setIcon("☀️");
     } else if (current === "light") {
       html.removeAttribute("data-theme");
       localStorage.removeItem("refpuzzle:theme");
+      setIcon("\u{1F310}");
     } else {
       html.setAttribute("data-theme", "dark");
       localStorage.setItem("refpuzzle:theme", "dark");
+      setIcon("\u{1F319}");
     }
   }
 
   return (
     <button class="theme-toggle" onClick={cycle} aria-label="Toggle theme">
-      theme
+      {icon}
     </button>
   );
 }

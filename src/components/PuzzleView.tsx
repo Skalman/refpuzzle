@@ -11,7 +11,6 @@ import { QuestionRow } from "./QuestionRow.tsx";
 
 const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
-const stars = (n: number) => "\u2605".repeat(n) + "\u2606".repeat(5 - n);
 
 function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
@@ -128,7 +127,6 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
   const historyIdxRef = useRef(-1);
   const [_historyVersion, setHistoryVersion] = useState(0);
 
-  const [showHistory, setShowHistory] = useState(false);
   const [resetPending, setResetPending] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -273,7 +271,11 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
     const fresh = puzzle.questions.map(() => ({
       marks: [...FRESH_MARKS] as Marks,
     }));
-    applyChange(fresh);
+    historyRef.current = [cloneStates(fresh)];
+    historyIdxRef.current = 0;
+    setQuestions(fresh);
+    setHintText(null);
+    hintRef.current = null;
   }
 
   function handleHint() {
@@ -320,53 +322,6 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
 
   return (
     <div class="puzzle-view">
-      {/* Puzzle header with title, stars, and primary controls */}
-      <div class="puzzle-toolbar">
-        <div class="puzzle-toolbar-left">
-          <button
-            class="toolbar-icon-btn"
-            onClick={handleUndo}
-            disabled={!canUndo}
-            aria-label={s.puzzle.undo}
-            title={s.puzzle.undo}
-          >
-            &#x21A9;
-          </button>
-          <button
-            class="toolbar-icon-btn"
-            onClick={handleRedo}
-            disabled={!canRedo}
-            aria-label={s.puzzle.redo}
-            title={s.puzzle.redo}
-          >
-            &#x21AA;
-          </button>
-        </div>
-
-        <div class="puzzle-toolbar-center">
-          <h2 class="puzzle-title">
-            {puzzle.title}
-            <span class="puzzle-stars" title={`Difficulty ${puzzle.difficulty}/5`}>
-              {stars(puzzle.difficulty)}
-            </span>
-          </h2>
-        </div>
-
-        <div class="puzzle-toolbar-right">
-          <button class="toolbar-accent-btn" onClick={handleHint} title={s.puzzle.hint}>
-            <span class="btn-icon">&#x1F4A1;</span> {s.puzzle.hint}
-          </button>
-          <button
-            class="toolbar-icon-btn"
-            onClick={handleShare}
-            aria-label={s.puzzle.share}
-            title={s.puzzle.share}
-          >
-            &#x2197;
-          </button>
-        </div>
-      </div>
-
       {/* Questions */}
       <div class={puzzle.difficulty >= 3 ? "questions-grid" : ""}>
         {puzzle.questions.map((qDef, qi) => (
@@ -403,27 +358,24 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
         </div>
       )}
 
-      {/* Secondary controls */}
-      <div class="puzzle-secondary-controls">
-        <button class="secondary-btn" onClick={handleSave} title={s.puzzle.save}>
-          &#x1F4CC; {s.puzzle.save}
-        </button>
+      {/* Controls */}
+      <div class="puzzle-controls">
+        <button class="toolbar-icon-btn" onClick={handleUndo} disabled={!canUndo} title={s.puzzle.undo}>&#x21A9;</button>
+        <button class="toolbar-icon-btn" onClick={handleRedo} disabled={!canRedo} title={s.puzzle.redo}>&#x21AA;</button>
+        <button class="toolbar-icon-btn" onClick={handleSave} title="Checkpoint">&#x1F4CC;</button>
+        <span class="controls-spacer"></span>
+        <button class="toolbar-accent-btn" onClick={handleHint} title={s.puzzle.hint}>&#x1F4A1; {s.puzzle.hint}</button>
+        <button class="toolbar-accent-btn" onClick={handleShare} title={s.puzzle.share}>{s.puzzle.share}</button>
         <button
-          class={`secondary-btn ${resetPending ? "reset-confirm" : ""}`}
+          class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
           onClick={handleReset}
         >
           {resetPending ? s.puzzle.resetConfirm : s.puzzle.reset}
         </button>
-        <button
-          class="secondary-btn"
-          onClick={() => setShowHistory((v) => !v)}
-        >
-          {s.puzzle.history} {showHistory ? "\u25B2" : "\u25BC"}
-        </button>
       </div>
 
-      {/* Collapsible history strip */}
-      {showHistory && (
+      
+      {historyRef.current.length > 1 && (
         <HistoryStrip
           history={historyRef.current}
           currentIdx={historyIdxRef.current}
