@@ -506,12 +506,38 @@ a:hover {
   border-radius: 6px 0 0 6px;
 }
 
+.split-btn-wrapper {
+  position: relative;
+}
+
 .split-btn .split-btn-drop {
   border-radius: 0 6px 6px 0;
   padding-left: 0.3rem;
   padding-right: 0.3rem;
   border-left: 1px solid var(--border);
   font-size: 0.6rem;
+}
+
+.split-btn-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 10;
+}
+
+.split-btn-menu:hover {
+  background: var(--bg-hover);
 }
 
 /* ── Secondary controls ── */

@@ -176,6 +176,14 @@ export function PuzzleView({
   const [_historyVersion, setHistoryVersion] = useState(0);
 
   const [resetPending, setResetPending] = useState(false);
+  const [shareMenu, setShareMenu] = useState(false);
+
+  useEffect(() => {
+    if (!shareMenu) return undefined;
+    const close = () => setShareMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [shareMenu]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   function pushHistory(qs: QuestionState[]) {
@@ -473,12 +481,19 @@ export function PuzzleView({
           &#x1F4A1; {s.puzzle.hint}
         </button>
         <span class="split-btn">
-          <button class="toolbar-accent-btn" onClick={handleSharePuzzle} title={s.puzzle.sharePuzzle}>
+          <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
             {s.puzzle.share}
           </button>
-          <button class="toolbar-accent-btn split-btn-drop" onClick={handleShareProgress} title={s.puzzle.shareProgress}>
-            &#9662;
-          </button>
+          <span class="split-btn-wrapper">
+            <button class="toolbar-accent-btn split-btn-drop" onClick={(e) => { e.stopPropagation(); setShareMenu((v) => !v); }}>
+              &#9662;
+            </button>
+            {shareMenu && (
+              <button class="split-btn-menu" onClick={() => { setShareMenu(false); handleShareProgress(); }}>
+                {s.puzzle.shareProgress}
+              </button>
+            )}
+          </span>
         </span>
         <button
           class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
