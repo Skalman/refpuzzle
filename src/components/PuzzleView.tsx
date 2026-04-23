@@ -5,12 +5,22 @@ import { validate } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
+import {
+  decodeShareHash,
+  getShareUrl,
+  getPuzzleUrl,
+  sharePuzzleLink,
+} from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 
-const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
-
+const FRESH_MARKS: Marks = [
+  "unmarked",
+  "unmarked",
+  "unmarked",
+  "unmarked",
+  "unmarked",
+];
 
 function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
@@ -53,7 +63,9 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
     return { label: "\u{1F4CC}", qi: -1, oi: -1 };
   }
   if (bestPriority === 0) {
-    const allUnmarked = next.every((q) => q.marks.every((m) => m === "unmarked"));
+    const allUnmarked = next.every((q) =>
+      q.marks.every((m) => m === "unmarked"),
+    );
     if (allUnmarked) return { label: "reset", qi: -1, oi: -1 };
   }
   return best;
@@ -85,7 +97,8 @@ function HistoryStrip({
       </button>
       {moves.map((move, i) => (
         <button
-          key={`${move.qi}-${move.oi}-${move.label}`}
+          // oxlint-disable-next-line react/no-array-index-key
+          key={i}
           class={`history-step ${i + 1 === currentIdx ? "current" : ""} ${i + 1 > currentIdx ? "future" : ""} ${move.label === "\u{1F4CC}" ? "checkpoint" : ""}`}
           onClick={() => onJump(i + 1)}
           title={move.label}
@@ -115,11 +128,20 @@ interface PuzzleViewProps {
   onChanged: () => void;
 }
 
-export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, onChanged }: PuzzleViewProps) {
+export function PuzzleView({
+  puzzle,
+  dateStr,
+  level,
+  initialHash,
+  onNextPuzzle,
+  onChanged,
+}: PuzzleViewProps) {
   const s = t();
 
   const [questions, setQuestions] = useState<QuestionState[]>([]);
-  const [validity, setValidity] = useState<("neutral" | "valid" | "invalid")[]>([]);
+  const [validity, setValidity] = useState<("neutral" | "valid" | "invalid")[]>(
+    [],
+  );
   const [hintText, setHintText] = useState<string | null>(null);
   const hintRef = useRef<{ steps: string[]; step: number } | null>(null);
 
@@ -141,7 +163,11 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       const last = historyRef.current[historyRef.current.length - 1];
       const lastDiff = describeDiff(prev, last);
       const newDiff = describeDiff(last, cloned);
-      if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
+      if (
+        lastDiff.qi >= 0 &&
+        lastDiff.qi === newDiff.qi &&
+        lastDiff.oi === newDiff.oi
+      ) {
         const merged = describeDiff(prev, cloned);
         if (merged.qi < 0) {
           historyRef.current.pop();
@@ -174,7 +200,9 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       return;
     }
 
-    const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+    const blank = puzzle.questions.map(() => ({
+      marks: [...FRESH_MARKS] as Marks,
+    }));
     setQuestions(blank);
     historyRef.current = [cloneStates(blank)];
     historyIdxRef.current = 0;
@@ -283,7 +311,10 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
   }
 
   function handleHint() {
-    if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
+    if (
+      hintRef.current &&
+      hintRef.current.step < hintRef.current.steps.length - 1
+    ) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
       return;
@@ -301,7 +332,9 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
   }
 
   async function handleShare() {
-    const hasProgress = questions.some((q) => q.marks.some((m) => m !== "unmarked"));
+    const hasProgress = questions.some((q) =>
+      q.marks.some((m) => m !== "unmarked"),
+    );
     const url = hasProgress
       ? getShareUrl(dateStr, level, {
           questions,
@@ -344,11 +377,12 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       {hintText && !completed && (
         <div class="puzzle-hint">
           {hintText}
-          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
-            <button class="hint-more" onClick={handleHint}>
-              more
-            </button>
-          )}
+          {hintRef.current &&
+            hintRef.current.step < hintRef.current.steps.length - 1 && (
+              <button class="hint-more" onClick={handleHint}>
+                more
+              </button>
+            )}
         </div>
       )}
 
@@ -364,12 +398,40 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
 
       {/* Controls */}
       <div class="puzzle-controls">
-        <button class="toolbar-icon-btn" onClick={handleUndo} disabled={!canUndo} title={s.puzzle.undo}>&#x21A9;</button>
-        <button class="toolbar-icon-btn" onClick={handleRedo} disabled={!canRedo} title={s.puzzle.redo}>&#x21AA;</button>
-        <button class="toolbar-accent-btn" onClick={handleSave}>&#x1F4CC; Checkpoint</button>
+        <button
+          class="toolbar-icon-btn"
+          onClick={handleUndo}
+          disabled={!canUndo}
+          title={s.puzzle.undo}
+        >
+          &#x21A9;
+        </button>
+        <button
+          class="toolbar-icon-btn"
+          onClick={handleRedo}
+          disabled={!canRedo}
+          title={s.puzzle.redo}
+        >
+          &#x21AA;
+        </button>
+        <button class="toolbar-accent-btn" onClick={handleSave}>
+          &#x1F4CC; Checkpoint
+        </button>
         <span class="controls-spacer"></span>
-        <button class="toolbar-accent-btn" onClick={handleHint} title={s.puzzle.hint}>&#x1F4A1; {s.puzzle.hint}</button>
-        <button class="toolbar-accent-btn" onClick={handleShare} title={s.puzzle.share}>{s.puzzle.share}</button>
+        <button
+          class="toolbar-accent-btn"
+          onClick={handleHint}
+          title={s.puzzle.hint}
+        >
+          &#x1F4A1; {s.puzzle.hint}
+        </button>
+        <button
+          class="toolbar-accent-btn"
+          onClick={handleShare}
+          title={s.puzzle.share}
+        >
+          {s.puzzle.share}
+        </button>
         <button
           class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
           onClick={handleReset}
@@ -379,7 +441,6 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
         </button>
       </div>
 
-      
       {historyRef.current.length > 1 && (
         <HistoryStrip
           history={historyRef.current}
@@ -389,7 +450,9 @@ export function PuzzleView({ puzzle, dateStr, level, initialHash, onNextPuzzle, 
       )}
 
       {/* Toast notification */}
-      {toastMessage && <Toast message={toastMessage} onDone={() => setToastMessage(null)} />}
+      {toastMessage && (
+        <Toast message={toastMessage} onDone={() => setToastMessage(null)} />
+      )}
     </div>
   );
 }
