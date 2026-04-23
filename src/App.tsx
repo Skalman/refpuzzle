@@ -107,19 +107,21 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
         </ol>
         <h4>{s.help.whatIs}</h4>
         <p>{s.help.description}</p>
+        <p class="help-credit">
+          Inspired by <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">Logiquiz</a>
+        </p>
       </div>
     </div>
   );
 }
 
 function AppHeader({ onHelp }: { onHelp: () => void }) {
-  const s = t();
   return (
     <header class="app-header">
       <h1>
-        <a href="/" style={{ textDecoration: "none", color: "inherit" }}>
+        <a href="/" class="app-title-link">
           <Logo />
-          {s.app.title}
+          <span class="app-title"><span class="app-title-ref">Ref</span>puzzle</span>
         </a>
       </h1>
       <div class="header-actions">
@@ -207,7 +209,7 @@ function DayView({ dateStr }: { dateStr: string }) {
               onClick={() => selectLevel(level)}
             >
               {solved && <span class="tab-check">&#10003; </span>}
-              {started && <span class="tab-started-dot">&#8226; </span>}
+              {started && !solved && <span class="tab-started-dot">&#8226; </span>}
               <span class="tab-label">{s.difficulty[level]}</span>
             </button>
           );
@@ -233,6 +235,48 @@ function DayView({ dateStr }: { dateStr: string }) {
       )}
 
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+
+      <div class="inline-help">
+        <h4>{s.help.whatIs}</h4>
+        <p>{s.help.description}</p>
+        <h4>{s.help.title}</h4>
+        <ol>
+          {s.help.howToPlaySteps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+      </div>
+
+      {puzzles && (
+        <button class="print-btn" onClick={() => window.print()}>&#x1F5A8; Print all puzzles</button>
+      )}
+
+      {puzzles && (
+        <div class="print-only">
+          <h1>Refpuzzle &mdash; Day #{dayNumber(dateStr)} &mdash; {dateStr}</h1>
+          {[1, 2, 3, 4, 5].map((lvl) => {
+            const p = puzzles[`level-${lvl}`];
+            if (!p) return null;
+            return (
+              <div key={lvl} class="print-puzzle">
+                <h2>{s.difficulty[lvl]} ({p.questions.length} questions)</h2>
+                {p.questions.map((q, qi) => (
+                  <div key={q.text} class="print-question">
+                    <div class="print-question-text">{qi + 1}. {q.text}</div>
+                    <div class={`print-options ${q.options.some((o) => o.label.length > 12) ? "print-options-long" : ""}`}>
+                      {q.options.map((opt, oi) => (
+                        <span key={opt.label} class="print-option">
+                          {String.fromCharCode(65 + oi)}. {opt.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </>
   );
 }

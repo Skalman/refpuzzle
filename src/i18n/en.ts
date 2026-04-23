@@ -48,14 +48,14 @@ export default {
     ],
     howToSolve: "How to Solve",
     howToSolveSteps: [
-      "Start by reading through all the questions to get a sense of the quiz structure",
+      "Start by reading through all the questions to get a sense of the puzzle structure",
       "Look for alternatives that are obviously incorrect and mark them as such",
       "Solve questions that seem straightforward or that give clues about multiple other questions",
       "Keep track of potential answers for each question as you go along",
       "Revisit previous questions as new information becomes available",
       "The game ends when all the questions are logically correct (green bar)",
     ],
-    whatIs: "What is a self-referential quiz?",
+    whatIs: "What is a self-referential puzzle?",
     description:
       "A self-referential puzzle is a type of puzzle where the questions refer to the puzzle itself or other questions within the same puzzle. The answers often depend on the content or structure of the puzzle, making it a meta-puzzle. Solving the puzzle usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the puzzle.",
   },
@@ -69,14 +69,14 @@ export default {
     ],
     howToSolve: "How to Solve",
     howToSolveSteps: [
-      "Start by reading through all the questions to get a sense of the quiz structure",
+      "Start by reading through all the questions to get a sense of the puzzle structure",
       "Look for alternatives that are obviously incorrect and mark them as such",
       "Solve questions that seem straightforward or that give clues about multiple other questions",
       "Keep track of potential answers for each question as you go along",
       "Revisit previous questions as new information becomes available",
       "The game ends when all the questions are logically correct (green bar)",
     ],
-    whatIs: "What is a self-referential quiz?",
+    whatIs: "What is a self-referential puzzle?",
     description:
       "A self-referential puzzle is a type of puzzle where the questions refer to the puzzle itself or other questions within the same puzzle. The answers often depend on the content or structure of the puzzle, making it a meta-puzzle. Solving the puzzle usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the puzzle.",
   },
