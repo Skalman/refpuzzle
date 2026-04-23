@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import { validate } from "../engine/validate.ts";
+import type { Validity } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
@@ -27,9 +28,11 @@ function cloneStates(qs: QuestionState[]): QuestionState[] {
 }
 
 interface MoveInfo {
-  label: string;
+  text: string;
+  icon: string;
   qi: number;
   oi: number;
+  hint?: number;
 }
 
 function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
@@ -41,32 +44,36 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
       const n = next[qi].marks[oi];
       if (p === n) continue;
       const letter = LETTERS[oi];
-      let label: string;
       let priority: number;
+      let text: string;
+      let icon: string;
       if (n === "correct") {
-        label = `Q${qi + 1}=${letter} \u2705`;
+        text = `Q${qi + 1}=${letter}`;
+        icon = "\u2705";
         priority = 2;
       } else if (n === "incorrect") {
-        label = `Q${qi + 1} ${letter} \u274C`;
+        text = `Q${qi + 1} ${letter}`;
+        icon = "\u274C";
         priority = 1;
       } else {
-        label = `Q${qi + 1} ${letter} undo`;
+        text = `Q${qi + 1} ${letter}`;
+        icon = "\u21A9";
         priority = 0;
       }
       if (priority > bestPriority) {
-        best = { label, qi, oi };
+        best = { text, icon, qi, oi };
         bestPriority = priority;
       }
     }
   }
   if (!best) {
-    return { label: "\u{1F4CC}", qi: -1, oi: -1 };
+    return { text: "", icon: "\u{1F4CC}", qi: -1, oi: -1 };
   }
   if (bestPriority === 0) {
     const allUnmarked = next.every((q) =>
       q.marks.every((m) => m === "unmarked"),
     );
-    if (allUnmarked) return { label: "reset", qi: -1, oi: -1 };
+    if (allUnmarked) return { text: "reset", icon: "", qi: -1, oi: -1 };
   }
   return best;
 }
@@ -74,10 +81,12 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
 function HistoryStrip({
   history,
   currentIdx,
+  hints,
   onJump,
 }: {
   history: QuestionState[][];
   currentIdx: number;
+  hints: Map<number, number>;
   onJump: (idx: number) => void;
 }) {
   if (history.length <= 1) return null;
@@ -85,6 +94,11 @@ function HistoryStrip({
   const moves: MoveInfo[] = [];
   for (let i = 1; i < history.length; i++) {
     moves.push(describeDiff(history[i - 1], history[i]));
+  }
+
+  let lastCp = -1;
+  for (let i = Math.min(currentIdx - 1, moves.length - 1); i >= 0; i--) {
+    if (moves[i].qi < 0 && moves[i].icon) { lastCp = i; break; }
   }
 
   return (
@@ -95,17 +109,24 @@ function HistoryStrip({
       >
         start
       </button>
-      {moves.map((move, i) => (
-        <button
+      {moves.map((move, i) => {
+        const stepIdx = i + 1;
+        const hintLevel = hints.get(stepIdx);
+        const isCheckpoint = move.qi < 0 && move.icon;
+        return (
           // oxlint-disable-next-line react/no-array-index-key
-          key={i}
-          class={`history-step ${i + 1 === currentIdx ? "current" : ""} ${i + 1 > currentIdx ? "future" : ""} ${move.label === "\u{1F4CC}" ? "checkpoint" : ""}`}
-          onClick={() => onJump(i + 1)}
-          title={move.label}
-        >
-          {move.label}
-        </button>
-      ))}
+          <span key={i} class="history-entry">
+            <button
+              class={`history-step ${stepIdx === currentIdx ? "current" : ""} ${stepIdx > currentIdx ? "future" : ""} ${isCheckpoint && i === lastCp ? "checkpoint" : ""} ${isCheckpoint && i !== lastCp ? "checkpoint-old" : ""}`}
+              onClick={() => onJump(stepIdx)}
+              title={move.text}
+            >
+              {move.icon && <span class="history-icon">{move.icon} </span>}{move.text}
+            </button>
+            {hintLevel != null && <span class="history-hint">💡{hintLevel}</span>}
+          </span>
+        );
+      })}
     </div>
   );
 }
@@ -138,8 +159,13 @@ export function PuzzleView({
 }: PuzzleViewProps) {
   const s = t();
 
-  const [questions, setQuestions] = useState<QuestionState[]>([]);
-  const [validity, setValidity] = useState<("neutral" | "valid" | "invalid")[]>(
+  const [questions, setQuestionsRaw] = useState<QuestionState[]>([]);
+  const questionsRef = useRef<QuestionState[]>([]);
+  function setQuestions(qs: QuestionState[]) {
+    questionsRef.current = qs;
+    setQuestionsRaw(qs);
+  }
+  const [validity, setValidity] = useState<Validity[]>(
     [],
   );
   const [hintText, setHintText] = useState<string | null>(null);
@@ -185,6 +211,13 @@ export function PuzzleView({
     setHistoryVersion((v) => v + 1);
   }
 
+  const hintMarkers = useRef<Map<number, number>>(new Map());
+
+  function pushHintMarker(hintLevel: number) {
+    hintMarkers.current.set(historyIdxRef.current, hintLevel);
+    setHistoryVersion((v) => v + 1);
+  }
+
   useEffect(() => {
     const n = puzzle.questions.length;
 
@@ -196,6 +229,7 @@ export function PuzzleView({
     if (saved && saved.history.length > 0) {
       historyRef.current = saved.history;
       historyIdxRef.current = saved.historyIdx;
+      hintMarkers.current = saved.hints;
       setQuestions(saved.questions);
       return;
     }
@@ -214,7 +248,7 @@ export function PuzzleView({
         const idx = q.marks.indexOf("correct");
         return idx >= 0 ? LETTERS[idx] : null;
       });
-      const result = validate(puzzle, answers);
+      const result = validate(puzzle, answers, qs.map((q) => q.marks));
       setValidity(result);
 
       const isCompleted = result.every((v) => v === "valid");
@@ -223,6 +257,7 @@ export function PuzzleView({
         completed: isCompleted,
         history: historyRef.current,
         historyIdx: historyIdxRef.current,
+        hints: hintMarkers.current,
       });
       onChanged();
     },
@@ -245,7 +280,7 @@ export function PuzzleView({
   }
 
   function handleOptionClick(questionIdx: number, optionIdx: number) {
-    const next = cloneStates(questions);
+    const next = cloneStates(questionsRef.current);
     const q = next[questionIdx];
     const current = q.marks[optionIdx];
 
@@ -291,6 +326,10 @@ export function PuzzleView({
   }
 
   function handleSave() {
+    if (historyRef.current.length <= 1) return;
+    const prev = historyRef.current[historyIdxRef.current - 1];
+    const curr = historyRef.current[historyIdxRef.current];
+    if (prev && describeDiff(prev, curr).qi < 0) return;
     pushHistory(cloneStates(questions));
   }
 
@@ -317,14 +356,16 @@ export function PuzzleView({
     ) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
+      pushHintMarker(hintRef.current.step + 1);
       return;
     }
 
-    const markSets = questions.map((q) => q.marks);
+    const markSets = questionsRef.current.map((q) => q.marks);
     const result = findHint(puzzle, markSets);
     if (result) {
       hintRef.current = { steps: result.steps, step: 0 };
       setHintText(result.steps[0]);
+      pushHintMarker(1);
     } else {
       hintRef.current = null;
       setHintText(null);
@@ -341,6 +382,7 @@ export function PuzzleView({
           completed,
           history: historyRef.current,
           historyIdx: historyIdxRef.current,
+          hints: hintMarkers.current,
         })
       : getPuzzleUrl(dateStr, level);
 
@@ -362,7 +404,10 @@ export function PuzzleView({
   return (
     <div class="puzzle-view">
       {/* Questions */}
-      <div class={puzzle.difficulty >= 3 ? "questions-grid" : ""}>
+      <div
+        class={puzzle.difficulty >= 3 ? "questions-grid" : ""}
+        style={puzzle.difficulty >= 3 ? { gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)` } : undefined}
+      >
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
             key={qDef.text}
@@ -392,9 +437,11 @@ export function PuzzleView({
       {completed && (
         <div class="puzzle-complete">
           <span>{s.puzzle.solved}</span>
-          <button class="next-puzzle-btn" onClick={onNextPuzzle}>
-            {s.puzzle.nextPuzzle} &rarr;
-          </button>
+          {level < 5 && (
+            <button class="next-puzzle-btn" onClick={onNextPuzzle}>
+              {s.puzzle.nextPuzzle} &rarr;
+            </button>
+          )}
         </div>
       )}
 
@@ -447,6 +494,7 @@ export function PuzzleView({
         <HistoryStrip
           history={historyRef.current}
           currentIdx={historyIdxRef.current}
+          hints={hintMarkers.current}
           onJump={handleJumpTo}
         />
       )}

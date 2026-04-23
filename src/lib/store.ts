@@ -9,6 +9,7 @@ export interface SavedState {
   completed: boolean;
   history: QuestionState[][];
   historyIdx: number;
+  hints: Map<number, number>;
 }
 
 const PREFIX = "refpuzzle:puzzle:";
@@ -62,6 +63,8 @@ export function encodeHistory(state: SavedState): string {
     let action = diffAction(state.history[i - 1], state.history[i]);
     if (i === state.historyIdx) action = `_${action}`;
     actions.push(action);
+    const hintLevel = state.hints.get(i);
+    if (hintLevel != null) actions.push(`h${hintLevel}`);
   }
 
   // If current is at position 0 (no actions taken yet) or at the end
@@ -84,12 +87,19 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
   const history: QuestionState[][] = [];
   const current = Array.from({ length: n }, () => ({ marks: [...FRESH_MARKS] as Marks }));
   history.push(cloneStates(current));
+  const hints = new Map<number, number>();
 
   let historyIdx = 0;
 
   for (const token of actions) {
     if (token === "" || token === "_") {
       historyIdx = history.length - 1;
+      continue;
+    }
+    // Hint marker: h1, h2, h3, h4
+    const hintMatch = /^h([1-4])$/.exec(token);
+    if (hintMatch) {
+      hints.set(history.length - 1, Number(hintMatch[1]));
       continue;
     }
     const isCurrent = token.startsWith("_");
@@ -107,6 +117,7 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
     completed,
     history,
     historyIdx,
+    hints,
   };
 }
 
