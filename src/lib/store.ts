@@ -110,18 +110,21 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
   };
 }
 
-export function loadState(puzzleId: string): SavedState | null {
+export function hasState(puzzleId: string): { started: boolean; completed: boolean } {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return { started: false, completed: false };
+    return { started: true, completed: raw.startsWith("x.") || raw === "x" };
+  } catch {
+    return { started: false, completed: false };
+  }
+}
+
+export function loadState(puzzleId: string, n: number): SavedState | null {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return null;
-    let maxQ = 0;
-    for (const token of raw.split(".")) {
-      const clean = token.replace(/^[_-]/, "");
-      if (clean === "x" || clean === "cp" || clean === "") continue;
-      const q = Number(clean.replace(/[a-eA-E]$/, ""));
-      if (q > maxQ) maxQ = q;
-    }
-    return decodeHistory(raw, Math.max(maxQ, 4));
+    return decodeHistory(raw, n);
   } catch {
     return null;
   }

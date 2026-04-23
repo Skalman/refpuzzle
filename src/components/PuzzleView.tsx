@@ -191,7 +191,7 @@ export function PuzzleView({
     // Check for shared state hash, then localStorage
     const saved = initialHash
       ? decodeShareHash(initialHash, n)
-      : loadState(puzzle.id);
+      : loadState(puzzle.id, n);
 
     if (saved && saved.history.length > 0) {
       historyRef.current = saved.history;
@@ -356,6 +356,8 @@ export function PuzzleView({
     const timer = setTimeout(() => setResetPending(false), 3000);
     return () => clearTimeout(timer);
   }, [resetPending]);
+
+  if (questions.length === 0) return null;
 
   return (
     <div class="puzzle-view">

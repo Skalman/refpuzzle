@@ -1,6 +1,6 @@
 import { t } from "../i18n/index.ts";
 import { allPuzzles } from "../puzzles/index.ts";
-import { loadState } from "../lib/store.ts";
+import { hasState } from "../lib/store.ts";
 import { Logo } from "./Logo.tsx";
 
 const stars = (n: number) => "\u2605".repeat(n) + "\u2606".repeat(5 - n);
@@ -20,7 +20,7 @@ export function PuzzleList() {
       <p style={{ color: "var(--text-muted)", marginBottom: "1rem" }}>{s.puzzleList.subtitle}</p>
       <div class="puzzle-grid">
         {allPuzzles.map((p) => {
-          const state = loadState(p.id);
+          const state = hasState(p.id);
           return (
             <a key={p.id} href={`/puzzle/${p.id}`} class="puzzle-card">
               <div class="title">{p.title}</div>
@@ -28,7 +28,7 @@ export function PuzzleList() {
                 <span class="difficulty">{stars(p.difficulty)}</span> {p.questions.length}{" "}
                 {s.puzzleList.questions}
               </div>
-              {state?.completed && <div class="status">{s.puzzleList.solved}</div>}
+              {state.completed && <div class="status">{s.puzzleList.solved}</div>}
             </a>
           );
         })}

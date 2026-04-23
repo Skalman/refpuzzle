@@ -10,7 +10,7 @@ import {
   dateStrFromOffset,
   puzzleId,
 } from "./puzzles/daily.ts";
-import { loadState } from "./lib/store.ts";
+import { hasState } from "./lib/store.ts";
 import { t } from "./i18n/index.ts";
 import { Logo } from "./components/Logo.tsx";
 
@@ -176,6 +176,10 @@ function DayView({ dateStr }: { dateStr: string }) {
     currentPuzzle.id = pid;
   }
 
+  const handleChanged = useCallback(() => {
+    setPuzzleVersion((v) => v + 1);
+  }, []);
+
   const handleNextLevel = useCallback(() => {
     if (activeLevel < 5) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
@@ -194,9 +198,8 @@ function DayView({ dateStr }: { dateStr: string }) {
 
       <div class="difficulty-tabs">
         {[1, 2, 3, 4, 5].map((level) => {
-          const state = loadState(puzzleId(dateStr, level));
-          const solved = !!state?.completed;
-          const started = !!state && !solved;
+          const state = hasState(puzzleId(dateStr, level));
+          const { started, completed: solved } = state;
           return (
             <button
               key={level}
@@ -225,7 +228,7 @@ function DayView({ dateStr }: { dateStr: string }) {
           level={activeLevel}
           initialHash={hashLevel === activeLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
-          onChanged={() => setPuzzleVersion((v) => v + 1)}
+          onChanged={handleChanged}
         />
       )}
 
@@ -255,8 +258,8 @@ function HistoryPage() {
           {dates.map((dateStr) => {
             const isCurrent = dateStr === today;
             const levels = [1, 2, 3, 4, 5].map((l) => {
-              const state = loadState(puzzleId(dateStr, l));
-              return { level: l, started: !!state, completed: !!state?.completed };
+              const { started, completed } = hasState(puzzleId(dateStr, l));
+              return { level: l, started, completed };
             });
             const solved = levels.filter((l) => l.completed);
             const started = levels.filter((l) => l.started && !l.completed);
