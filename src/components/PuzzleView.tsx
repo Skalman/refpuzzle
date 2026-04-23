@@ -372,24 +372,22 @@ export function PuzzleView({
     }
   }
 
-  async function handleShare() {
-    const hasProgress = questions.some((q) =>
-      q.marks.some((m) => m !== "unmarked"),
-    );
-    const url = hasProgress
-      ? getShareUrl(dateStr, level, {
-          questions,
-          completed,
-          history: historyRef.current,
-          historyIdx: historyIdxRef.current,
-          hints: hintMarkers.current,
-        })
-      : getPuzzleUrl(dateStr, level);
+  async function handleSharePuzzle() {
+    const url = getPuzzleUrl(dateStr, level);
+    const ok = await sharePuzzleLink(url, `Refpuzzle Day #${dateStr}`);
+    if (ok) setToastMessage(s.puzzle.linkCopied);
+  }
 
-    const ok = await sharePuzzleLink(url, `${puzzle.title} - Refpuzzle`);
-    if (ok) {
-      setToastMessage(s.puzzle.linkCopied);
-    }
+  async function handleShareProgress() {
+    const url = getShareUrl(dateStr, level, {
+      questions,
+      completed,
+      history: historyRef.current,
+      historyIdx: historyIdxRef.current,
+      hints: hintMarkers.current,
+    });
+    const ok = await sharePuzzleLink(url, `Refpuzzle Day #${dateStr}`);
+    if (ok) setToastMessage(s.puzzle.linkCopied);
   }
 
   // Clear reset pending after timeout
@@ -474,13 +472,14 @@ export function PuzzleView({
         >
           &#x1F4A1; {s.puzzle.hint}
         </button>
-        <button
-          class="toolbar-accent-btn"
-          onClick={handleShare}
-          title={s.puzzle.share}
-        >
-          {s.puzzle.share}
-        </button>
+        <span class="split-btn">
+          <button class="toolbar-accent-btn" onClick={handleSharePuzzle} title={s.puzzle.sharePuzzle}>
+            {s.puzzle.share}
+          </button>
+          <button class="toolbar-accent-btn split-btn-drop" onClick={handleShareProgress} title={s.puzzle.shareProgress}>
+            &#9662;
+          </button>
+        </span>
         <button
           class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
           onClick={handleReset}

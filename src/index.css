@@ -496,6 +496,24 @@ a:hover {
   font-size: 0.85rem;
 }
 
+/* ── Split button ── */
+.split-btn {
+  display: inline-flex;
+  align-items: stretch;
+}
+
+.split-btn .toolbar-accent-btn {
+  border-radius: 6px 0 0 6px;
+}
+
+.split-btn .split-btn-drop {
+  border-radius: 0 6px 6px 0;
+  padding-left: 0.3rem;
+  padding-right: 0.3rem;
+  border-left: 1px solid var(--border);
+  font-size: 0.6rem;
+}
+
 /* ── Secondary controls ── */
 .puzzle-secondary-controls {
   display: flex;
