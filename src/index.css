@@ -78,7 +78,7 @@ body {
 }
 
 .page {
-  max-width: 800px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 1rem;
 }
@@ -101,28 +101,38 @@ a:hover {
 }
 
 .app-header h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  color: var(--accent);
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin: 0;
 }
 
-.app-header h1 a {
+.app-title-link {
   color: inherit;
   text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.app-title {
+  letter-spacing: -0.02em;
+}
+
+.app-title-ref {
+  font-weight: 800;
+  color: var(--accent);
 }
 
 .app-logo {
   display: inline-block;
-  width: 2em;
-  height: 2em;
-  vertical-align: -0.4em;
-  margin-right: 0.4em;
+  width: 1.4em;
+  height: 1.4em;
 }
 
 .app-logo svg {
   width: 100%;
   height: 100%;
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 .header-actions {
@@ -464,23 +474,22 @@ a:hover {
 
 /* ── Toolbar accent button (Hint) ── */
 .toolbar-accent-btn {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
+  background: none;
+  border: none;
   border-radius: 6px;
   padding: 0.3rem 0.6rem;
   cursor: pointer;
-  color: var(--accent);
+  color: var(--text-muted);
   font-size: 0.8rem;
   font-family: inherit;
-  font-weight: 600;
   display: flex;
   align-items: center;
   gap: 0.25rem;
 }
 
 .toolbar-accent-btn:hover {
-  background: var(--accent);
-  color: white;
+  background: var(--bg-hover);
+  color: var(--text);
 }
 
 .btn-icon {
@@ -539,6 +548,11 @@ a:hover {
   white-space: nowrap;
 }
 
+.history-icon {
+  font-size: 0.45rem;
+  baseline-shift: center;
+}
+
 .history-step:hover {
   background: var(--bg-hover);
 }
@@ -556,51 +570,94 @@ a:hover {
 
 .history-step.checkpoint {
   border-color: var(--valid);
-  box-shadow: 0 0 0 1px var(--valid);
 }
 
-/* ── Questions grid (2-column for hard+expert) ── */
+.history-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.history-hint {
+  font-size: 0.55rem;
+  opacity: 0.7;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}
+
+.history-step.checkpoint-old {
+  border-color: var(--border);
+}
+
+/* ── Questions grid (2-column for medium+) ── */
 .questions-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  grid-auto-flow: column;
   gap: 0 1.5rem;
 }
 
 @media (max-width: 768px) {
   .questions-grid {
-    grid-template-columns: 1fr;
+    display: block;
   }
 }
 
 /* ── Question rows ── */
 .question-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
   border-bottom: 1px solid var(--border);
   padding: 0.5rem 0;
-  gap: 0;
+}
+
+.question-row > .validity-bar {
+  grid-row: 1 / -1;
+}
+
+.question-row > .question-header {
+  grid-column: 2;
+}
+
+.question-row > .question-options {
+  grid-column: 2;
+  align-self: start;
+}
+
+.questions-grid .question-row {
+  grid-row: span 2;
+  grid-template-rows: subgrid;
 }
 
 .validity-bar {
-  width: 4px;
+  width: 0;
   align-self: stretch;
-  border-radius: 2px;
   flex-shrink: 0;
   margin-right: 0.5rem;
+  border-left: 3px solid transparent;
 }
 
 .validity-bar.neutral {
-  background: var(--neutral-bar);
+  border-left-color: var(--neutral-bar);
+  border-left-style: solid;
 }
 .validity-bar.valid {
-  background: var(--valid);
+  border-left-width: 4px;
+  border-left-color: var(--valid);
+  border-left-style: solid;
+}
+.validity-bar.pending {
+  border-left-width: 4px;
+  border-left-color: #f59e0b;
+  border-left-style: dotted;
 }
 .validity-bar.invalid {
-  background: var(--invalid);
-}
-
-.question-body {
-  flex: 1;
-  min-width: 0;
+  border-left-width: 4px;
+  border-left-color: var(--invalid);
+  border-left-style: double;
 }
 
 .question-header {
@@ -622,8 +679,12 @@ a:hover {
 
 .question-options {
   display: flex;
-  flex-wrap: wrap;
   gap: 4px;
+}
+
+.question-options > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .question-options.options-vertical {
@@ -641,7 +702,7 @@ a:hover {
   font-family: inherit;
   cursor: pointer;
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.45em;
   transition: all 0.1s;
   padding: 0.2rem 0.5rem;
@@ -662,9 +723,26 @@ a:hover {
   opacity: 0.45;
 }
 
+.option-btn.implied {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.option-btn:disabled {
+  cursor: not-allowed;
+}
+
 .option-btn.correct {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+.option-indicator {
+  font-size: 0.6em;
+}
+
+.option-indicator {
+  align-self: center;
 }
 
 .option-indicator.invisible {
@@ -738,7 +816,7 @@ a:hover {
 
 .next-puzzle-btn {
   background: var(--valid);
-  color: white;
+  color: var(--bg);
   border: none;
   border-radius: 6px;
   padding: 0.4rem 0.85rem;
@@ -947,4 +1025,111 @@ a:hover {
 .history-progress {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+.help-credit {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.help-credit a {
+  color: var(--accent);
+}
+
+/* ── Inline help ── */
+.inline-help {
+  max-width: 600px;
+  margin: 2rem auto 0;
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.inline-help h4 {
+  color: var(--text);
+  font-size: 0.85rem;
+  margin: 0.8rem 0 0.3rem;
+}
+
+.inline-help p {
+  margin: 0 0 0.5rem;
+}
+
+.inline-help ol {
+  margin: 0;
+  padding-left: 1.5rem;
+}
+
+/* ── Print button ── */
+.print-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.5rem;
+  margin: 1rem auto;
+  display: block;
+}
+
+/* ── Print layout ── */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .print-only, .print-only * {
+    visibility: visible;
+  }
+  .print-only {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 1rem;
+    font-size: 11pt;
+    color: #000;
+    background: #fff;
+  }
+  .print-only h1 {
+    font-size: 14pt;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid #000;
+    padding-bottom: 0.3rem;
+  }
+  .print-puzzle {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+  }
+  .print-puzzle h2 {
+    font-size: 12pt;
+    margin-bottom: 0.3rem;
+  }
+  .print-question {
+    margin-bottom: 0.4rem;
+  }
+  .print-question-text {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+  .print-options {
+    display: flex;
+    flex-wrap: wrap;
+    padding-left: 1.2em;
+  }
+  .print-option {
+    flex: 1 1 0;
+    min-width: 5em;
+  }
+  .print-options.print-options-long {
+    flex-direction: column;
+    gap: 0.1em;
+  }
 }
