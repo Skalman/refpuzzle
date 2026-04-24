@@ -7,12 +7,13 @@ interface Props {
   question: QuestionDef;
   marks: Marks;
   validity: Validity;
+  disabled?: boolean;
   onOptionClick: (optionIndex: number) => void;
 }
 
 const LONG_THRESHOLD = 12;
 
-export function QuestionRow({ index, question, marks, validity, onOptionClick }: Props) {
+export function QuestionRow({ index, question, marks, validity, disabled, onOptionClick }: Props) {
   const isLong = question.options.some((o) => o.label.length > LONG_THRESHOLD);
   const hasCorrect = marks.indexOf("correct") >= 0;
 
@@ -31,7 +32,7 @@ export function QuestionRow({ index, question, marks, validity, onOptionClick }:
             label={opt.label}
             mark={marks[oi]}
             implied={hasCorrect && marks[oi] === "unmarked"}
-            disabled={hasCorrect && marks[oi] !== "correct"}
+            disabled={disabled || (hasCorrect && marks[oi] !== "correct")}
             onClick={() => onOptionClick(oi)}
           />
         ))}

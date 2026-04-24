@@ -170,6 +170,7 @@ a:hover {
   border-radius: 50%;
   width: 2rem;
   height: 2rem;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -487,9 +488,14 @@ a:hover {
   gap: 0.25rem;
 }
 
-.toolbar-accent-btn:hover {
+.toolbar-accent-btn:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+.toolbar-accent-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 .btn-icon {
@@ -515,7 +521,6 @@ a:hover {
   padding-left: 0.3rem;
   padding-right: 0.3rem;
   border-left: 1px solid var(--border);
-  font-size: 0.6rem;
 }
 
 .split-btn-menu {
@@ -538,6 +543,28 @@ a:hover {
 
 .split-btn-menu:hover {
   background: var(--bg-hover);
+}
+
+.share-toast {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  background: var(--text);
+  color: var(--bg);
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+  z-index: 10;
+  pointer-events: none;
+  animation: toast-fade 2s ease-out forwards;
+}
+
+@keyframes toast-fade {
+  0%, 70% { opacity: 1; }
+  100% { opacity: 0; }
 }
 
 /* ── Secondary controls ── */
@@ -593,8 +620,8 @@ a:hover {
 }
 
 .history-icon {
-  font-size: 0.45rem;
-  baseline-shift: center;
+  display: inline-flex;
+  vertical-align: middle;
 }
 
 .history-step:hover {
@@ -633,6 +660,15 @@ a:hover {
 
 .history-step.checkpoint-old {
   border-color: var(--border);
+}
+
+.history-step.completed-step {
+  border-color: var(--valid);
+  color: var(--valid);
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
 }
 
 /* ── Questions grid (2-column for medium+) ── */
@@ -764,11 +800,22 @@ a:hover {
 }
 
 .option-btn.incorrect {
+  border-color: transparent;
+}
+
+.option-btn.incorrect .option-text {
   opacity: 0.45;
 }
 
 .option-btn.implied {
+  border-color: transparent;
+}
+
+.option-btn.implied .option-text {
   opacity: 0.45;
+}
+
+.option-btn.implied {
   cursor: not-allowed;
 }
 
@@ -787,11 +834,29 @@ a:hover {
 
 .option-indicator {
   align-self: center;
+  display: inline-flex;
+  width: 1.4em;
+  flex-shrink: 0;
+  line-height: 0;
 }
 
-.option-indicator.invisible {
-  visibility: hidden;
+.option-indicator-spacer {
+  display: inline-block;
+  width: 1.4em;
 }
+
+.icon-correct {
+  color: var(--valid);
+}
+
+.icon-incorrect {
+  color: var(--invalid);
+}
+
+.icon-neutral {
+  color: var(--neutral-bar);
+}
+
 
 .option-btn.revealed {
   background: var(--valid-soft);
