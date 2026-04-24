@@ -1,14 +1,5 @@
-/* ── Print button ── */
-.print-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  font-size: 0.8rem;
-  font-family: inherit;
-  padding: 0.5rem;
-  margin: 1rem auto;
-  display: block;
+.file-input {
+  display: none;
 }
 
 /* ── Print layout ── */
