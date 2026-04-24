@@ -61,7 +61,11 @@
   border-radius: 6px;
   text-decoration: none;
 
-  &:hover { background: var(--bg-hover); color: var(--text); text-decoration: none; }
+  &:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+    text-decoration: none;
+  }
 }
 
 .more-btn {
@@ -90,7 +94,9 @@
   color: var(--accent);
   text-decoration: none;
   font-size: 0.85rem;
-  &:hover { text-decoration: underline; }
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 /* ── Difficulty tabs ── */
@@ -118,7 +124,9 @@
   transition: all 0.15s;
   white-space: nowrap;
 
-  &:hover { background: var(--bg-hover); }
+  &:hover {
+    background: var(--bg-hover);
+  }
 
   &.active {
     background: var(--bg-surface);
@@ -128,10 +136,22 @@
   }
 }
 
-.tab-label { font-size: 0.8rem; }
-.tab-count { font-size: 0.65rem; opacity: 0.7; }
-.tab-check { color: var(--valid); display: inline-flex; vertical-align: middle; margin-right: 0.25em; }
-.tab-started-dot { color: var(--accent); }
+.tab-label {
+  font-size: 0.8rem;
+}
+.tab-count {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+.tab-check {
+  color: var(--valid);
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0.25em;
+}
+.tab-started-dot {
+  color: var(--accent);
+}
 
 /* ── Questions grid (2-column for medium+) ── */
 .questions-grid {
@@ -150,9 +170,14 @@
 .not-found {
   text-align: center;
   padding-top: 4rem;
-  & h1 { font-size: 3rem; opacity: 0.2; }
-  & p { margin: 1rem 0; color: var(--text-muted); }
+  & h1 {
+    font-size: 3rem;
+    opacity: 0.2;
+  }
+  & p {
+    margin: 1rem 0;
+    color: var(--text-muted);
+  }
 }
 
 /* ── Responsive ── */
-

@@ -24,12 +24,28 @@
   color: var(--text-muted);
   white-space: nowrap;
 
-  &:hover:not(:disabled) { background: var(--bg-hover); }
-  &:disabled { cursor: default; opacity: 0.7; }
-  &.current { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-  &.future { opacity: 0.35; }
-  &.checkpoint { border-color: var(--valid); }
-  &.checkpoint-old { border-color: var(--border); }
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+  &:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  &.current {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+    font-weight: 600;
+  }
+  &.future {
+    opacity: 0.35;
+  }
+  &.checkpoint {
+    border-color: var(--valid);
+  }
+  &.checkpoint-old {
+    border-color: var(--border);
+  }
 
   &.completed-step {
     border-color: var(--valid);

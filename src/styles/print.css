@@ -8,9 +8,14 @@
 }
 
 @media print {
-  body * { visibility: hidden; }
+  body * {
+    visibility: hidden;
+  }
 
-  .print-only, .print-only * { visibility: visible; }
+  .print-only,
+  .print-only * {
+    visibility: visible;
+  }
 
   .print-only {
     display: block;
@@ -34,7 +39,10 @@
   .print-puzzle {
     page-break-inside: avoid;
     margin-bottom: 1rem;
-    & h2 { font-size: 12pt; margin-bottom: 0.3rem; }
+    & h2 {
+      font-size: 12pt;
+      margin-bottom: 0.3rem;
+    }
   }
 
   .print-question {

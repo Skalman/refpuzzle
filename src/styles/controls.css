@@ -63,7 +63,9 @@
 
   &.reset-confirm {
     color: var(--invalid);
-    &:hover { color: var(--invalid); }
+    &:hover {
+      color: var(--invalid);
+    }
   }
 }
 
@@ -105,9 +107,15 @@
   display: block;
   width: 100%;
 
-  &:hover { background: var(--bg-hover); }
-  &:first-child { border-radius: 6px 6px 0 0; }
-  &:last-child { border-radius: 0 0 6px 6px; }
+  &:hover {
+    background: var(--bg-hover);
+  }
+  &:first-child {
+    border-radius: 6px 6px 0 0;
+  }
+  &:last-child {
+    border-radius: 0 0 6px 6px;
+  }
 }
 
 /* ── Split button ── */
@@ -148,7 +156,9 @@
   box-shadow: var(--dropdown-shadow);
   z-index: 10;
 
-  &:hover { background: var(--bg-hover); }
+  &:hover {
+    background: var(--bg-hover);
+  }
 }
 
 /* ── Share toast ── */
@@ -170,8 +180,13 @@
 }
 
 @keyframes toast-fade {
-  0%, 70% { opacity: 1; }
-  100% { opacity: 0; }
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
 
 /* ── Puzzle controls bar ── */

@@ -61,7 +61,15 @@
 }
 
 /* ── Shared icon colors ── */
-.icon-correct { color: var(--valid); }
-.icon-incorrect { color: var(--invalid); }
-.icon-neutral { color: var(--neutral-bar); }
-.icon-hint { color: var(--pending); }
+.icon-correct {
+  color: var(--valid);
+}
+.icon-incorrect {
+  color: var(--invalid);
+}
+.icon-neutral {
+  color: var(--neutral-bar);
+}
+.icon-hint {
+  color: var(--pending);
+}

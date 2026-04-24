@@ -8,13 +8,21 @@
  * ≥1200px :root 18px
  */
 
-.show-mobile { display: none !important; }
+.show-mobile {
+  display: none !important;
+}
 
 @media (max-width: 768px) {
-  .hide-mobile { display: none !important; }
-  .show-mobile { display: block !important; }
+  .hide-mobile {
+    display: none !important;
+  }
+  .show-mobile {
+    display: block !important;
+  }
 
-  .questions-grid { display: block; }
+  .questions-grid {
+    display: block;
+  }
   .questions-grid .question-row {
     grid-row: auto;
     grid-template-rows: auto auto;
@@ -22,17 +30,25 @@
 }
 
 @media (max-width: 420px) {
-  :root { font-size: 15px; }
+  :root {
+    font-size: 15px;
+  }
 }
 
 @media (max-width: 390px) {
-  :root { font-size: 14px; }
+  :root {
+    font-size: 14px;
+  }
 }
 
 @media (max-width: 360px) {
-  :root { font-size: 13px; }
+  :root {
+    font-size: 13px;
+  }
 }
 
 @media (min-width: 1200px) {
-  :root { font-size: 18px; }
+  :root {
+    font-size: 18px;
+  }
 }

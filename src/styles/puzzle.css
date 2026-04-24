@@ -11,9 +11,16 @@
   border-bottom: 1px solid var(--border);
   padding: 0.5rem 0;
 
-  & > .validity-bar { grid-row: 1 / -1; }
-  & > .question-header { grid-column: 2; }
-  & > .question-options { grid-column: 2; align-self: start; }
+  & > .validity-bar {
+    grid-row: 1 / -1;
+  }
+  & > .question-header {
+    grid-column: 2;
+  }
+  & > .question-options {
+    grid-column: 2;
+    align-self: start;
+  }
 }
 
 /* ── Validity bar (colorblind-accessible styles) ── */
@@ -24,10 +31,20 @@
   margin-right: 0.5rem;
   background: transparent;
 
-  &.neutral { background: linear-gradient(to right, var(--neutral-bar) 3px, transparent 3px); }
-  &.valid { background: var(--valid); }
-  &.pending { border-left: 4px dotted var(--pending); width: 0; }
-  &.invalid { border-left: 4px double var(--invalid); width: 0; }
+  &.neutral {
+    background: linear-gradient(to right, var(--neutral-bar) 3px, transparent 3px);
+  }
+  &.valid {
+    background: var(--valid);
+  }
+  &.pending {
+    border-left: 4px dotted var(--pending);
+    width: 0;
+  }
+  &.invalid {
+    border-left: 4px double var(--invalid);
+    width: 0;
+  }
 }
 
 .question-header {
@@ -52,7 +69,9 @@
   display: flex;
   gap: 4px;
 
-  & > * { flex: 1 1 0; }
+  & > * {
+    flex: 1 1 0;
+  }
 
   &.options-vertical {
     flex-direction: column;
@@ -80,20 +99,28 @@
   text-align: left;
   white-space: nowrap;
 
-  &:hover:not(:disabled) { background: var(--bg-hover); }
-  &:disabled { cursor: not-allowed; }
+  &:hover:not(:disabled) {
+    background: var(--bg-hover);
+  }
+  &:disabled {
+    cursor: not-allowed;
+  }
 
   &.incorrect {
     border-color: transparent;
     background: var(--invalid-soft);
-    & .option-text { opacity: 0.45; }
+    & .option-text {
+      opacity: 0.45;
+    }
   }
 
   &.implied {
     border-color: transparent;
     background: var(--invalid-soft);
     cursor: not-allowed;
-    & .option-text { opacity: 0.45; }
+    & .option-text {
+      opacity: 0.45;
+    }
   }
 
   &.correct {
@@ -155,13 +182,21 @@
   font-family: inherit;
   flex-shrink: 0;
 
-  &:hover { background: var(--accent); color: white; }
+  &:hover {
+    background: var(--accent);
+    color: white;
+  }
 }
 
 /* ── Completion ── */
 @keyframes glow-pulse {
-  0%, 100% { box-shadow: 0 0 8px var(--valid-soft); }
-  50% { box-shadow: 0 0 20px var(--valid-soft); }
+  0%,
+  100% {
+    box-shadow: 0 0 8px var(--valid-soft);
+  }
+  50% {
+    box-shadow: 0 0 20px var(--valid-soft);
+  }
 }
 
 .puzzle-complete {
@@ -192,5 +227,7 @@
   font-weight: 600;
   white-space: nowrap;
 
-  &:hover { opacity: 0.9; }
+  &:hover {
+    opacity: 0.9;
+  }
 }
