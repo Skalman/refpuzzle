@@ -14,7 +14,7 @@ import {
 } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconShare, IconReset, IconPlay } from "./Icons.tsx";
+import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconReset, IconPlay } from "./Icons.tsx";
 
 const FRESH_MARKS: Marks = [
   "unmarked",
@@ -472,7 +472,7 @@ export function PuzzleView({
         <span class="controls-spacer"></span>
         <span class="split-btn">
           <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
-            <IconShare size="0.9em" /> {s.puzzle.share}
+            {s.puzzle.share}
           </button>
           <span class="split-btn-wrapper">
             <button class="toolbar-accent-btn split-btn-drop" onClick={(e) => { e.stopPropagation(); setShareMenu((v) => !v); }}>
