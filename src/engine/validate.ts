@@ -24,7 +24,11 @@ import { evaluate } from "./evaluators.ts";
 
 export type Validity = "neutral" | "valid" | "invalid" | "pending";
 
-export function validate(puzzle: Puzzle, answers: (AnswerLetter | null)[], markSets?: Marks[]): Validity[] {
+export function validate(
+  puzzle: Puzzle,
+  answers: (AnswerLetter | null)[],
+  markSets?: Marks[],
+): Validity[] {
   const fp = getFlatPuzzle(puzzle);
   const allAnswered = answers.every((a) => a != null);
   return fp.rules.map((r, i) => {
@@ -36,7 +40,8 @@ export function validate(puzzle: Puzzle, answers: (AnswerLetter | null)[], markS
     // only_true_statement: if selected claim is definitively true, that's sufficient
     if (r.t === RT_TRUE_STMT) {
       const selectedClaim = fp.optionClaims[i][letterIdx(answer)];
-      if (selectedClaim && isClaimDefinitive(selectedClaim, fp.n, answers, markSets)) return "valid";
+      if (selectedClaim && isClaimDefinitive(selectedClaim, fp.n, answers, markSets))
+        return "valid";
       return "pending";
     }
     const isValid = evaluate(r, i, answer, answers, fp);
@@ -50,7 +55,12 @@ const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 // Check if question j definitely cannot have answer `letter`
 // (either answered as something else, or that option is marked incorrect)
-function cantBe(j: number, letter: string, answers: (AnswerLetter | null)[], markSets?: Marks[]): boolean {
+function cantBe(
+  j: number,
+  letter: string,
+  answers: (AnswerLetter | null)[],
+  markSets?: Marks[],
+): boolean {
   if (answers[j] != null) return answers[j] !== letter;
   if (markSets?.[j]) return markSets[j][L2I[letter]] === "incorrect";
   return false;
@@ -66,7 +76,11 @@ function isResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Mark
 }
 
 // Check if question j's answer is definitely a vowel, definitely a consonant, or unknown
-function vowelConsonantResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Marks[]): boolean {
+function vowelConsonantResolved(
+  j: number,
+  answers: (AnswerLetter | null)[],
+  markSets?: Marks[],
+): boolean {
   if (answers[j] != null) return true;
   if (!markSets?.[j]) return false;
   const VOWELS = [0, 4]; // A=0, E=4
@@ -103,17 +117,23 @@ function isDefinitive(
     // Counting: definitive if every question in range is resolved
     case RT_COUNT_ANSWER: {
       const target = rule.answer!;
-      for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets)) return false;
+      for (let j = 0; j < n; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets))
+          return false;
       return true;
     }
     case RT_COUNT_ANSWER_BEFORE: {
       const target = rule.answer!;
-      for (let j = 0; j < rule.beforeIndex; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets)) return false;
+      for (let j = 0; j < rule.beforeIndex; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets))
+          return false;
       return true;
     }
     case RT_COUNT_ANSWER_AFTER: {
       const target = rule.answer!;
-      for (let j = rule.afterIndex + 1; j < n; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets)) return false;
+      for (let j = rule.afterIndex + 1; j < n; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, target, answers, markSets))
+          return false;
       return true;
     }
     case RT_COUNT_VOWEL:
@@ -180,7 +200,9 @@ function isClaimDefinitive(
 ): boolean {
   switch (claim.type) {
     case "count_answer_equals": {
-      for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets)) return false;
+      for (let j = 0; j < n; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
+          return false;
       return true;
     }
     case "count_consonant_answers_equals":
@@ -188,11 +210,15 @@ function isClaimDefinitive(
       for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets)) return false;
       return true;
     case "count_answer_after_equals": {
-      for (let j = claim.afterIndex + 1; j < n; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets)) return false;
+      for (let j = claim.afterIndex + 1; j < n; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
+          return false;
       return true;
     }
     case "count_answer_before_equals": {
-      for (let j = 0; j < claim.beforeIndex; j++) if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets)) return false;
+      for (let j = 0; j < claim.beforeIndex; j++)
+        if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
+          return false;
       return true;
     }
   }
@@ -226,9 +252,13 @@ function isProvablyWrong(
         const a = answers[j];
         if (a == null) {
           remaining++;
-        } else if (rule.t === RT_COUNT_VOWEL ? (a === "A" || a === "E") :
-                   rule.t === RT_COUNT_CONSONANT ? (a !== "A" && a !== "E") :
-                   a === rule.answer) {
+        } else if (
+          rule.t === RT_COUNT_VOWEL
+            ? a === "A" || a === "E"
+            : rule.t === RT_COUNT_CONSONANT
+              ? a !== "A" && a !== "E"
+              : a === rule.answer
+        ) {
           count++;
         }
       }
