@@ -81,8 +81,7 @@ export function encodeHistory(state: SavedState): string {
 
 export function decodeHistory(encoded: string, n: number): SavedState | null {
   const tokens = encoded.split(".");
-  // Support both old prefix "x." and new suffix ".x"
-  const completed = tokens[tokens.length - 1] === "x" || tokens[0] === "x";
+  const completed = tokens[tokens.length - 1] === "x";
   const actions = tokens.filter((t) => t !== "x");
 
   const history: QuestionState[][] = [];
@@ -124,13 +123,8 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
 
 export function hasState(puzzleId: string): { started: boolean; completed: boolean } {
   try {
-    let raw = localStorage.getItem(PREFIX + puzzleId);
+    const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return { started: false, completed: false };
-    // Migrate old "x." prefix to ".x" suffix
-    if (raw.startsWith("x.")) {
-      raw = raw.slice(2) + ".x";
-      localStorage.setItem(PREFIX + puzzleId, raw);
-    }
     return { started: true, completed: raw.endsWith(".x") || raw === "x" };
   } catch {
     return { started: false, completed: false };
@@ -139,13 +133,8 @@ export function hasState(puzzleId: string): { started: boolean; completed: boole
 
 export function loadState(puzzleId: string, n: number): SavedState | null {
   try {
-    let raw = localStorage.getItem(PREFIX + puzzleId);
+    const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return null;
-    // Migrate old "x." prefix to ".x" suffix
-    if (raw.startsWith("x.")) {
-      raw = raw.slice(2) + ".x";
-      localStorage.setItem(PREFIX + puzzleId, raw);
-    }
     return decodeHistory(raw, n);
   } catch {
     return null;
