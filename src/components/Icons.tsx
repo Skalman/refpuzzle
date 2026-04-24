@@ -81,6 +81,11 @@ export function IconX(p: Props) {
   return <IM {...p} paths={["M18 6 6 18", "m6 6 12 12"]} />;
 }
 
+// Play (start)
+export function IconPlay(p: Props) {
+  return <I {...p} d="M6 3l14 9-14 9V3z" />;
+}
+
 // Chevron down (dropdown)
 export function IconChevronDown(p: Props) {
   return <I {...p} d="m6 9 6 6 6-6" />;

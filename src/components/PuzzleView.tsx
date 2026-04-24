@@ -14,7 +14,7 @@ import {
 } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconShare, IconReset } from "./Icons.tsx";
+import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconShare, IconReset, IconPlay } from "./Icons.tsx";
 
 const FRESH_MARKS: Marks = [
   "unmarked",
@@ -86,6 +86,7 @@ function HistoryStrip({
   completed: boolean;
   onJump: (idx: number) => void;
 }) {
+  const s = t();
   if (history.length <= 1) return null;
 
   const moves: MoveInfo[] = [];
@@ -102,9 +103,10 @@ function HistoryStrip({
     <div class="history-strip">
       <button
         class={`history-step ${currentIdx === 0 ? "current" : ""}`}
-        onClick={() => onJump(0)}
+        onClick={completed ? undefined : () => onJump(0)}
+        disabled={completed}
       >
-        Start
+        <span class="history-icon"><IconPlay size="1em" /></span> {s.puzzle.start}
       </button>
       {moves.map((move, i) => {
         const stepIdx = i + 1;
@@ -115,7 +117,8 @@ function HistoryStrip({
           <span key={i} class="history-entry">
             <button
               class={`history-step ${!completed && stepIdx === currentIdx ? "current" : ""} ${stepIdx > currentIdx ? "future" : ""} ${isCheckpoint && i === lastCp ? "checkpoint" : ""} ${isCheckpoint && i !== lastCp ? "checkpoint-old" : ""}`}
-              onClick={() => onJump(stepIdx)}
+              onClick={completed ? undefined : () => onJump(stepIdx)}
+              disabled={completed}
               title={move.text}
             >
               {move.icon === "pin" && <span class="history-icon"><IconPin size="1.1em" /> </span>}
@@ -461,12 +464,12 @@ export function PuzzleView({
           <IconRedo />
         </button>
         <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
-          <IconPin size="0.9em" /> Checkpoint
+          <IconPin size="0.9em" /> {s.puzzle.checkpoint}
         </button>
-        <span class="controls-spacer"></span>
         <button class="toolbar-accent-btn" onClick={handleHint} disabled={completed} title={s.puzzle.hint}>
           <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
         </button>
+        <span class="controls-spacer"></span>
         <span class="split-btn">
           <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
             <IconShare size="0.9em" /> {s.puzzle.share}
@@ -477,7 +480,7 @@ export function PuzzleView({
             </button>
             {shareMenu && (
               <button class="split-btn-menu" onClick={() => { setShareMenu(false); handleShareProgress(); }}>
-                {s.puzzle.shareProgress}
+                {s.puzzle.shareWithHistory}
               </button>
             )}
             {toastMessage && <span class="share-toast">{toastMessage}</span>}
