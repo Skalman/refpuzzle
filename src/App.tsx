@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { PuzzleView } from "./components/PuzzleView.tsx";
-import { IconCalendar, IconHelp, IconMoon, IconSun, IconMonitor, IconPrint, IconCheck, IconX } from "./components/Icons.tsx";
+import { IconCalendar, IconHelp, IconMoon, IconSun, IconSunMoon, IconPrint, IconCheck, IconX } from "./components/Icons.tsx";
 import type { Puzzle } from "./engine/types.ts";
 import {
   fetchDaily,
@@ -40,7 +40,7 @@ function ThemeToggle() {
 
   return (
     <button class="theme-toggle" onClick={cycle} aria-label="Toggle theme">
-      {mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconMonitor />}
+      {mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconSunMoon />}
     </button>
   );
 }
@@ -212,7 +212,7 @@ function DayView({ dateStr }: { dateStr: string }) {
               class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}`}
               onClick={() => selectLevel(level)}
             >
-              {solved && <span class="tab-check">&#10003; </span>}
+              {solved && <span class="tab-check"><IconCheck size="0.9em" strokeWidth={3} /> </span>}
               {started && !solved && <span class="tab-started-dot">&#8226; </span>}
               <span class="tab-label">{s.difficulty[level]}</span>
             </button>

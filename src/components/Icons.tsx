@@ -111,9 +111,9 @@ export function IconMoon(p: Props) {
   return <I {...p} d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />;
 }
 
-// Monitor (auto theme)
-export function IconMonitor(p: Props) {
-  return <IM {...p} paths={["M12 17v4", "M8 21h8", "M2 4h20v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V4z"]} />;
+// Sun+Moon (auto theme)
+export function IconSunMoon(p: Props) {
+  return <IM {...p} paths={["M12 2v2", "M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715", "M16 12a4 4 0 0 0-4-4", "m19 5-1.256 1.256", "M20 12h2"]} />;
 }
 
 // Help circle
