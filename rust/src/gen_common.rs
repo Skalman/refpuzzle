@@ -90,7 +90,6 @@ pub fn validate_and_check(
     fp: &FlatPuzzle,
     n: usize,
 ) -> bool {
-    // Cheap check first: no duplicate rules (same question text)
     for i in 0..n {
         for j in (i + 1)..n {
             if rules[i] == rules[j] {

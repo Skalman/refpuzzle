@@ -1,5 +1,8 @@
 use crate::difficulty::DifficultyProfile;
-use crate::gen_common::{GenerateResult, build_flat_puzzle, check_structural, validate_and_check};
+use crate::gen_common::{
+    GenerateResult, build_flat_puzzle, check_structural, count_letter, letter_counts,
+    validate_and_check,
+};
 use crate::rng::Rng;
 use crate::types::*;
 
@@ -86,20 +89,23 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
 
     macro_rules! place {
         ($kind:expr) => {{
+            let kind_val = $kind;
             let qi = slots[assigned_count] as usize;
             let mut ok = false;
-            for _ in 0..10 {
-                if let Some(rule) = make_rule($kind, qi, n, &solution, assigned, rng) {
-                    if !is_dup(&rule, &used_rules, used_count)
-                        && check_structural(&rule, qi, &solution, n)
-                    {
-                        rules[qi] = rule;
-                        used_rules[used_count] = rule;
-                        used_count += 1;
-                        assigned |= 1 << qi;
-                        assigned_count += 1;
-                        ok = true;
-                        break;
+            if solution_compatible(kind_val, qi, &solution, n) {
+                for _ in 0..10 {
+                    if let Some(rule) = make_rule(kind_val, qi, n, &solution, assigned, rng) {
+                        if !is_dup(&rule, &used_rules, used_count)
+                            && check_structural(&rule, qi, &solution, n)
+                        {
+                            rules[qi] = rule;
+                            used_rules[used_count] = rule;
+                            used_count += 1;
+                            assigned |= 1 << qi;
+                            assigned_count += 1;
+                            ok = true;
+                            break;
+                        }
                     }
                 }
             }
@@ -150,14 +156,22 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         }
     }
 
-    // Phase 5: Fill remaining with variety (no answer_of_question)
+    // Phase 5: Fill remaining, reserving slots for structural rules
+    let av_structural: Vec<RuleKind> = av_variety.iter().copied().filter(|k| is_structural(*k)).collect();
+    let structural_reserve = if av_structural.is_empty() || n >= 12 {
+        0
+    } else {
+        1.min(n - assigned_count)
+    };
+    let fill_target = n - structural_reserve;
+
     let mut fill_pool: Vec<RuleKind> = Vec::new();
     fill_pool.extend_from_slice(&av_entry);
     fill_pool.extend_from_slice(&av_positional);
     fill_pool.extend_from_slice(&av_variety);
     fill_pool.retain(|k| *k != RuleKind::AnswerOf);
 
-    while assigned_count < n {
+    while assigned_count < fill_target {
         let mut placed = false;
         for _ in 0..20 {
             if !fill_pool.is_empty() && place!(rng.pick(&fill_pool)) {
@@ -167,6 +181,31 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         }
         if !placed && !place!(RuleKind::AnswerOf) && !place!(RuleKind::AnswerIsSelf) {
             return None;
+        }
+    }
+
+    // Phase 6: Structural rules — inspect solution, pick matching types
+    for _ in 0..structural_reserve {
+        if assigned_count >= n { break; }
+        let qi = slots[assigned_count] as usize;
+        let mut fitting: Vec<RuleKind> = av_structural.iter().copied()
+            .filter(|&k| solution_compatible(k, qi, &solution, n))
+            .collect();
+        rng.shuffle(&mut fitting);
+        let mut placed = false;
+        for &kind in &fitting {
+            if place!(kind) { placed = true; break; }
+        }
+        if !placed {
+            for _ in 0..20 {
+                if !fill_pool.is_empty() && place!(rng.pick(&fill_pool)) {
+                    placed = true;
+                    break;
+                }
+            }
+            if !placed && !place!(RuleKind::AnswerOf) && !place!(RuleKind::AnswerIsSelf) {
+                return None;
+            }
         }
     }
 
@@ -289,5 +328,93 @@ fn make_rule(
         }),
         RuleKind::AnswerIsSelf => Some(Rule::AnswerIsSelf),
         RuleKind::TrueStmt => Some(Rule::TrueStmt),
+    }
+}
+
+fn is_structural(kind: RuleKind) -> bool {
+    matches!(
+        kind,
+        RuleKind::ConsecIdent
+            | RuleKind::Unique
+            | RuleKind::OnlySame
+            | RuleKind::OnlyOdd
+            | RuleKind::EqualCount
+    )
+}
+
+fn solution_has_structural(kind: RuleKind, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
+    match kind {
+        RuleKind::ConsecIdent => {
+            let mut pairs = 0;
+            for i in 0..n.saturating_sub(1) {
+                if sol[i] == sol[i + 1] {
+                    pairs += 1;
+                }
+            }
+            pairs == 1
+        }
+        RuleKind::Unique => count_letter(sol, sol[qi], n) == 1,
+        RuleKind::OnlySame => {
+            let mut m = 0;
+            for i in 0..n {
+                if i != qi && sol[i] == sol[qi] {
+                    m += 1;
+                }
+            }
+            m == 1
+        }
+        RuleKind::OnlyOdd => LETTERS.iter().any(|&letter| {
+            let mut m = 0;
+            for i in 0..n {
+                if (i + 1) % 2 == 1 && sol[i] == letter {
+                    m += 1;
+                }
+            }
+            m == 1
+        }),
+        RuleKind::EqualCount => {
+            let counts = letter_counts(sol, n);
+            for a in 0..5 {
+                for b in (a + 1)..5 {
+                    if counts[a] == counts[b] {
+                        return true;
+                    }
+                }
+            }
+            false
+        }
+        _ => false,
+    }
+}
+
+fn solution_compatible(kind: RuleKind, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
+    match kind {
+        RuleKind::LeastCommon => {
+            let counts = letter_counts(sol, n);
+            let min = *counts.iter().min().unwrap_or(&0);
+            counts[sol[qi].idx()] == min && counts.iter().filter(|&&c| c == min).count() == 1
+        }
+        RuleKind::MostCommon => {
+            let counts = letter_counts(sol, n);
+            let max = *counts.iter().max().unwrap_or(&0);
+            counts[sol[qi].idx()] == max && counts.iter().filter(|&&c| c == max).count() == 1
+        }
+        RuleKind::SameAs => {
+            for i in 0..n {
+                if i != qi && sol[i] == sol[qi] {
+                    return true;
+                }
+            }
+            false
+        }
+        RuleKind::EqualCount => {
+            let counts = letter_counts(sol, n);
+            let qi_count = counts[sol[qi].idx()];
+            LETTERS
+                .iter()
+                .any(|&l| l != sol[qi] && counts[l.idx()] == qi_count)
+        }
+        _ if is_structural(kind) => solution_has_structural(kind, qi, sol, n),
+        _ => true,
     }
 }
