@@ -1,7 +1,6 @@
 /* ── Shared button base ── */
 .icon-btn,
 .help-btn,
-.theme-toggle,
 .toolbar-icon-btn {
   background: none;
   border: 1px solid var(--border);
@@ -29,14 +28,6 @@
   height: 1.75rem;
   font-size: 0.9rem;
   font-weight: 700;
-}
-
-.theme-toggle {
-  width: 2rem;
-  height: 2rem;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0;
 }
 
 .toolbar-icon-btn {
@@ -72,7 +63,51 @@
 
   &.reset-confirm {
     color: var(--invalid);
+    &:hover { color: var(--invalid); }
   }
+}
+
+/* ── More menu (header) ── */
+.more-menu-wrapper {
+  position: relative;
+}
+
+.more-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 4px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: var(--dropdown-shadow);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+}
+
+.more-menu-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+
+.more-menu-item {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: inherit;
+  color: var(--text);
+  cursor: pointer;
+  text-align: left;
+  display: block;
+  width: 100%;
+
+  &:hover { background: var(--bg-hover); }
+  &:first-child { border-radius: 6px 6px 0 0; }
+  &:last-child { border-radius: 0 0 6px 6px; }
 }
 
 /* ── Split button ── */
@@ -100,17 +135,17 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 2px;
+  margin-top: 4px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.4rem 0.7rem;
+  padding: 0.5rem 0.85rem;
   font-size: 0.8rem;
   font-family: inherit;
   color: var(--text);
   cursor: pointer;
   white-space: nowrap;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--dropdown-shadow);
   z-index: 10;
 
   &:hover { background: var(--bg-hover); }

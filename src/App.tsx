@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { PuzzleView } from "./components/PuzzleView.tsx";
-import { IconCalendar, IconHelp, IconMoon, IconSun, IconSunMoon, IconPrint, IconCheck, IconX } from "./components/Icons.tsx";
+import { IconCalendar, IconHelp, IconMoon, IconSun, IconSunMoon, IconCheck, IconX } from "./components/Icons.tsx";
+import { exportData, planImport, applyImport } from "./lib/backup.ts";
+import type { ImportPlan, ImportAction } from "./lib/backup.ts";
 import type { Puzzle } from "./engine/types.ts";
 import {
   fetchDaily,
@@ -15,12 +17,12 @@ import { hasState } from "./lib/store.ts";
 import { t } from "./i18n/index.ts";
 import { Logo } from "./components/Logo.tsx";
 
-function ThemeToggle() {
-  const [mode, setMode] = useState(() => {
-    return document.documentElement.getAttribute("data-theme") ?? "auto";
-  });
+function useTheme() {
+  const [mode, setMode] = useState(() =>
+    document.documentElement.getAttribute("data-theme") ?? "auto",
+  );
 
-  function cycle() {
+  const cycle = useCallback(() => {
     const html = document.documentElement;
     const current = html.getAttribute("data-theme");
     if (current === "dark") {
@@ -36,13 +38,11 @@ function ThemeToggle() {
       localStorage.setItem("refpuzzle:theme", "dark");
       setMode("dark");
     }
-  }
+  }, []);
 
-  return (
-    <button class="theme-toggle" onClick={cycle} aria-label="Toggle theme">
-      {mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconSunMoon />}
-    </button>
-  );
+  const icon = mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconSunMoon />;
+
+  return { mode, cycle, icon };
 }
 
 function OnboardingBanner() {
@@ -85,9 +85,10 @@ function OnboardingBanner() {
 
 function HelpPanel({ onClose }: { onClose: () => void }) {
   const s = t();
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal(); }, []);
   return (
-    <div class="help-panel-overlay" onClick={onClose}>
-      <div class="help-panel" onClick={(e) => e.stopPropagation()}>
+    <dialog ref={ref} class="help-panel" onClose={onClose} onClick={(e) => { if (e.target === ref.current) onClose(); }}>
         <div class="help-panel-header">
           <h3>{s.help.title}</h3>
           <button class="help-close" onClick={onClose} aria-label="Close">
@@ -114,12 +115,27 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
         <p class="help-credit">
           Inspired by <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">Logiquiz</a>
         </p>
-      </div>
-    </div>
+    </dialog>
   );
 }
 
-function AppHeader({ onHelp }: { onHelp: () => void }) {
+function AppHeader({ onHelp, onPrint, onExport, onImport }: {
+  onHelp: () => void;
+  onPrint?: () => void;
+  onExport: () => void;
+  onImport: (e: Event) => void;
+}) {
+  const s = t();
+  const theme = useTheme();
+  const [moreMenu, setMoreMenu] = useState(false);
+
+  useEffect(() => {
+    if (!moreMenu) return undefined;
+    const close = () => setMoreMenu(false);
+    document.addEventListener("click", close);
+    return () => document.removeEventListener("click", close);
+  }, [moreMenu]);
+
   return (
     <header class="app-header">
       <h1>
@@ -129,18 +145,34 @@ function AppHeader({ onHelp }: { onHelp: () => void }) {
         </a>
       </h1>
       <div class="header-actions">
-        <a href="/history" class="help-btn" aria-label="History" title="Past puzzles">
-          <IconCalendar />
+        <a href="/past" class="header-btn hide-mobile" aria-label={s.daily.pastPuzzles}>
+          <IconCalendar /> {s.daily.pastPuzzles}
         </a>
-        <button
-          class="help-btn"
-          onClick={onHelp}
-          aria-label="Help"
-          title="How to play"
-        >
-          <IconHelp />
+        <button class="header-btn hide-mobile" onClick={onHelp} aria-label="Help">
+          <IconHelp /> {s.help.title}
         </button>
-        <ThemeToggle />
+        <button class="header-btn hide-mobile" onClick={theme.cycle} aria-label="Toggle theme">
+          {theme.icon} Theme
+        </button>
+        <span class="more-menu-wrapper">
+          <button class="header-btn more-btn" onClick={(e) => { e.stopPropagation(); setMoreMenu((v) => !v); }} aria-label="More">
+            ⋯
+          </button>
+          {moreMenu && (
+            <div class="more-menu">
+              <a href="/past" class="more-menu-item show-mobile" onClick={() => setMoreMenu(false)}>{s.daily.pastPuzzles}</a>
+              <button class="more-menu-item show-mobile" onClick={() => { setMoreMenu(false); onHelp(); }}>{s.help.title}</button>
+              <button class="more-menu-item show-mobile" onClick={(e) => { e.stopPropagation(); theme.cycle(); }}>{theme.icon} Theme</button>
+              <hr class="more-menu-divider show-mobile" />
+              {onPrint && <button class="more-menu-item" onClick={() => { setMoreMenu(false); onPrint(); }}>{s.daily.printAll}</button>}
+              <button class="more-menu-item" onClick={() => { setMoreMenu(false); onExport(); }}>{s.backup.exportData}</button>
+              <label class="more-menu-item">
+                {s.backup.importData}
+                <input type="file" accept=".json" class="file-input" onChange={(e) => { setMoreMenu(false); onImport(e); }} />
+              </label>
+            </div>
+          )}
+        </span>
       </div>
     </header>
   );
@@ -157,6 +189,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
   const [_puzzleVersion, setPuzzleVersion] = useState(0);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
 
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
@@ -190,16 +223,57 @@ function DayView({ dateStr }: { dateStr: string }) {
     if (activeLevel < 5) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
+  function handleExport() {
+    const json = exportData();
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `refpuzzle-backup-${dateStr}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function handleImport(e: Event) {
+    const input = e.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        if (typeof reader.result !== "string") return;
+        setImportPlan(planImport(reader.result));
+      } catch (err) {
+        alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+      }
+    };
+    reader.readAsText(file);
+    input.value = "";
+  }
+
+  function handleConfirmImport() {
+    if (!importPlan) return;
+    applyImport(importPlan);
+    setImportPlan(null);
+    setPuzzleVersion((v) => v + 1);
+  }
+
   const isToday = dateStr === todayDateStr();
 
   return (
     <>
-      <AppHeader onHelp={() => setShowHelp(true)} />
+      <AppHeader
+        onHelp={() => setShowHelp(true)}
+        onPrint={puzzles ? () => window.print() : undefined}
+        onExport={handleExport}
+        onImport={handleImport}
+      />
       {isToday && <OnboardingBanner />}
 
       <div class="daily-header">
-        {!isToday && <a href="/history" class="back-link">&larr; History</a>}
-        <span class="daily-date">Day #{dayNumber(dateStr)} &mdash; {dateStr}</span>
+        {!isToday && <a href="/past" class="back-link">&larr; {s.daily.pastPuzzles}</a>}
+        <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
       </div>
 
       <div class="difficulty-tabs">
@@ -220,10 +294,10 @@ function DayView({ dateStr }: { dateStr: string }) {
         })}
       </div>
 
-      {loading && <div class="loading">Loading...</div>}
+      {loading && <div class="loading">{s.app.loading}</div>}
 
       {!loading && !currentPuzzle && (
-        <div class="loading">No puzzle available for this date.</div>
+        <div class="loading">{s.app.noPuzzle}</div>
       )}
 
       {!loading && currentPuzzle && (
@@ -252,10 +326,6 @@ function DayView({ dateStr }: { dateStr: string }) {
       </div>
 
       {puzzles && (
-        <button class="print-btn" onClick={() => window.print()}><IconPrint size="0.9em" /> Print all puzzles</button>
-      )}
-
-      {puzzles && (
         <div class="print-only">
           <h1>Refpuzzle &mdash; Day #{dayNumber(dateStr)} &mdash; {dateStr}</h1>
           {[1, 2, 3, 4, 5].map((lvl) => {
@@ -281,11 +351,64 @@ function DayView({ dateStr }: { dateStr: string }) {
           })}
         </div>
       )}
+
+      {importPlan && <ImportPreview plan={importPlan} onConfirm={handleConfirmImport} onCancel={() => setImportPlan(null)} />}
     </>
   );
 }
 
-function HistoryPage() {
+const ACTION_ORDER: ImportAction[] = [
+  "new", "replace-completed", "replace-longer", "keep-completed", "keep-longer", "identical",
+];
+
+function ImportPreview({ plan, onConfirm, onCancel }: { plan: ImportPlan; onConfirm: () => void; onCancel: () => void }) {
+  const s = t();
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal(); }, []);
+
+  const grouped = new Map<ImportAction, string[]>();
+  for (const entry of plan.entries) {
+    const list = grouped.get(entry.action) ?? [];
+    list.push(entry.id);
+    grouped.set(entry.action, list);
+  }
+  for (const list of grouped.values()) list.sort();
+  const hasChanges = plan.entries.some((e) => e.action === "new" || e.action === "replace-completed" || e.action === "replace-longer");
+
+  return (
+    <dialog ref={ref} class="help-panel import-preview" onClose={onCancel} onClick={(e) => { if (e.target === ref.current) onCancel(); }}>
+        <div class="help-panel-header">
+          <h3>{s.backup.importPreview}</h3>
+          <button class="help-close" onClick={onCancel}>&times;</button>
+        </div>
+        <p class="import-summary">{s.backup.puzzlesInBackup(plan.entries.length)}</p>
+        {ACTION_ORDER.map((action) => {
+          const ids = grouped.get(action);
+          if (!ids?.length) return null;
+          return (
+            <div key={action} class="import-section">
+              <h4>{s.backup.actions[action]} ({ids.length})</h4>
+              <ul class="import-list">
+                {ids.map((id) => <li key={id}>{id}</li>)}
+              </ul>
+            </div>
+          );
+        })}
+        <div class="import-actions">
+          {hasChanges ? (
+            <>
+              <button class="onboarding-dismiss" onClick={onConfirm}>{s.backup.confirmImport}</button>
+              <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>{s.backup.cancel}</button>
+            </>
+          ) : (
+            <button class="onboarding-dismiss" onClick={onCancel}>{s.backup.ok}</button>
+          )}
+        </div>
+    </dialog>
+  );
+}
+
+function PastPuzzlesPage() {
   const s = t();
   const [showHelp, setShowHelp] = useState(false);
   const today = todayDateStr();
@@ -298,10 +421,23 @@ function HistoryPage() {
 
   return (
     <>
-      <AppHeader onHelp={() => setShowHelp(true)} />
+      <AppHeader
+        onHelp={() => setShowHelp(true)}
+        onExport={() => {
+          const json = exportData();
+          const blob = new Blob([json], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = "refpuzzle-backup.json";
+          a.click();
+          URL.revokeObjectURL(url);
+        }}
+        onImport={() => {}}
+      />
 
       <div class="history-page">
-        <h2>Past Puzzles</h2>
+        <h2>{s.daily.pastPuzzles}</h2>
         <div class="history-list">
           {dates.map((dateStr) => {
             const isCurrent = dateStr === today;
@@ -313,14 +449,14 @@ function HistoryPage() {
             const started = levels.filter((l) => l.started && !l.completed);
             let status: string;
             if (solved.length === 5) {
-              status = "All solved!";
+              status = s.daily.allSolved;
             } else if (solved.length > 0 || started.length > 0) {
               const parts: string[] = [];
               if (solved.length > 0) parts.push("✓ " + solved.map((l) => s.difficulty[l.level]).join(", "));
               if (started.length > 0) parts.push("• " + started.map((l) => s.difficulty[l.level]).join(", "));
               status = parts.join("  ");
             } else {
-              status = "Not started";
+              status = s.daily.notStarted;
             }
             return (
               <a
@@ -329,8 +465,8 @@ function HistoryPage() {
                 class={`history-item ${isCurrent ? "history-today" : ""}`}
               >
                 <span class="history-date">
-                  {isCurrent ? "Today" : dateStr}
-                  <span class="history-day"> Day #{dayNumber(dateStr)}</span>
+                  {isCurrent ? s.daily.today : dateStr}
+                  <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
                 </span>
                 <span class="history-progress">{status}</span>
               </a>
@@ -375,7 +511,7 @@ export function App() {
       <div class="page">
         <Router>
           <Route path="/" component={DailyPage} />
-          <Route path="/history" component={HistoryPage} />
+          <Route path="/past" component={PastPuzzlesPage} />
           <Route path="/day/:date" component={DayRoute} />
           <Route default component={NotFound} />
         </Router>
