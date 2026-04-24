@@ -18,7 +18,11 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   const d = dayNumber(dateStr);
-  return d >= 1 && d <= 1461;
+  if (d < 1 || d > 1461) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const date = new Date(dateStr + "T00:00:00");
+  return date <= today;
 }
 
 export function dateStrFromOffset(daysAgo: number): string {

@@ -13,7 +13,7 @@ export function PuzzleList() {
       <header class="app-header">
         <h1><Logo />{s.app.title}</h1>
         <div class="header-actions">
-          <a href="/about">{s.about.title}</a>
+          <a href="/about">About</a>
           <ThemeToggle />
         </div>
       </header>

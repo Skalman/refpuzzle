@@ -1,6 +1,12 @@
+function plural(n: number, one: string, other: string): string {
+  return n === 1 ? `${n} ${one}` : `${n} ${other}`;
+}
+
 export default {
   app: {
     title: "Refpuzzle",
+    loading: "Loading...",
+    noPuzzle: "No puzzle available for this date.",
   },
   puzzleList: {
     subtitle: "Self-referential logic puzzles",
@@ -20,17 +26,46 @@ export default {
     redo: "Redo",
     reset: "Reset",
     resetConfirm: "Confirm reset?",
-    share: "Share",
-    sharePuzzle: "Share puzzle",
-    shareProgress: "Share progress",
+    share: "Share puzzle",
+    shareWithHistory: "Share with history",
     hint: "Hint",
-    save: "Save",
+    checkpoint: "Checkpoint",
     solved: "Puzzle solved!",
     back: "All puzzles",
     nextPuzzle: "Next puzzle",
     tryLevel: (level: string) => `Try ${level}`,
     linkCopied: "Link copied!",
     history: "History",
+    start: "Start",
+    solvedBadge: "Solved",
+  },
+  daily: {
+    dayNumber: (num: number) => `Day #${num}`,
+    dayLabel: (num: number, date: string) => `Day #${num} — ${date}`,
+    today: "Today",
+    pastPuzzles: "Past Puzzles",
+    allSolved: "All solved!",
+    notStarted: "Not started",
+    printAll: "Print all puzzles",
+  },
+  backup: {
+    button: "Backup",
+    exportData: "Export data",
+    importData: "Import data",
+    importPreview: "Import Preview",
+    confirmImport: "Confirm import",
+    cancel: "Cancel",
+    ok: "OK",
+    importFailed: (msg: string) => `Import failed: ${msg}`,
+    puzzlesInBackup: (n: number) => plural(n, "puzzle in backup", "puzzles in backup"),
+    actions: {
+      "new": "New — will import from file",
+      "replace-completed": "Completed in file, not locally — will replace local with file",
+      "replace-longer": "More progress in file — will replace local with file",
+      "keep-completed": "Already completed locally — will keep local, ignore file",
+      "keep-longer": "More progress locally — will keep local, ignore file",
+      "identical": "Identical — no change needed",
+    } as Record<string, string>,
   },
   onboarding: {
     welcome: "Welcome to Refpuzzle!",
@@ -41,27 +76,6 @@ export default {
   },
   help: {
     title: "How to Play",
-    howToPlaySteps: [
-      "Click an answer once to mark it incorrect",
-      "Click it twice to mark it correct (there is only one correct answer for each question)",
-      "The adjacent bar indicates the question's logical validity: green for correct, red for incorrect",
-    ],
-    howToSolve: "How to Solve",
-    howToSolveSteps: [
-      "Start by reading through all the questions to get a sense of the puzzle structure",
-      "Look for alternatives that are obviously incorrect and mark them as such",
-      "Solve questions that seem straightforward or that give clues about multiple other questions",
-      "Keep track of potential answers for each question as you go along",
-      "Revisit previous questions as new information becomes available",
-      "The game ends when all the questions are logically correct (green bar)",
-    ],
-    whatIs: "What is a self-referential puzzle?",
-    description:
-      "A self-referential puzzle is a type of puzzle where the questions refer to the puzzle itself or other questions within the same puzzle. The answers often depend on the content or structure of the puzzle, making it a meta-puzzle. Solving the puzzle usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the puzzle.",
-  },
-  about: {
-    title: "About",
-    howToPlay: "How to Play",
     howToPlaySteps: [
       "Click an answer once to mark it incorrect",
       "Click it twice to mark it correct (there is only one correct answer for each question)",
