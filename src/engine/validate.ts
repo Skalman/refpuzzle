@@ -65,6 +65,22 @@ function isResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Mark
   return remaining <= 1;
 }
 
+// Check if question j's answer is definitely a vowel, definitely a consonant, or unknown
+function vowelConsonantResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Marks[]): boolean {
+  if (answers[j] != null) return true;
+  if (!markSets?.[j]) return false;
+  const VOWELS = [0, 4]; // A=0, E=4
+  let hasVowel = false;
+  let hasConsonant = false;
+  for (let k = 0; k < 5; k++) {
+    if (markSets[j][k] !== "incorrect") {
+      if (VOWELS.includes(k)) hasVowel = true;
+      else hasConsonant = true;
+    }
+  }
+  return !(hasVowel && hasConsonant);
+}
+
 function isDefinitive(
   rule: FlatRule,
   qi: number,
@@ -102,7 +118,7 @@ function isDefinitive(
     }
     case RT_COUNT_VOWEL:
     case RT_COUNT_CONSONANT:
-      for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets)) return false;
+      for (let j = 0; j < n; j++) if (!vowelConsonantResolved(j, answers, markSets)) return false;
       return true;
 
     // Positional: for "first_with E = Q5", definitive if Q1-Q4 can't be E and Q5 is E
