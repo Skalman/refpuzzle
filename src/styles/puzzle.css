@@ -52,11 +52,15 @@
   display: flex;
   gap: 4px;
 
-  & > * { flex: 1 1 0; min-width: 0; }
+  & > * { flex: 1 1 0; }
 
   &.options-vertical {
     flex-direction: column;
     gap: 3px;
+
+    & .option-btn {
+      white-space: normal;
+    }
   }
 }
 
@@ -72,9 +76,8 @@
   align-items: center;
   gap: 0.45em;
   transition: all 0.1s;
-  padding: 0.35rem 0.5rem;
+  padding: 0.35rem 0.3rem;
   text-align: left;
-  overflow: hidden;
   white-space: nowrap;
 
   &:hover:not(:disabled) { background: var(--bg-hover); }
