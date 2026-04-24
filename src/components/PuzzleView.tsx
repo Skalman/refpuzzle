@@ -6,23 +6,22 @@ import type { Validity } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import {
-  decodeShareHash,
-  getShareUrl,
-  getPuzzleUrl,
-  sharePuzzleLink,
-} from "../lib/share.ts";
+import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconReset, IconPlay } from "./Icons.tsx";
+import {
+  IconUndo,
+  IconRedo,
+  IconPin,
+  IconHint,
+  IconCheck,
+  IconX,
+  IconChevronDown,
+  IconReset,
+  IconPlay,
+} from "./Icons.tsx";
 
-const FRESH_MARKS: Marks = [
-  "unmarked",
-  "unmarked",
-  "unmarked",
-  "unmarked",
-  "unmarked",
-];
+const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
 function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
@@ -95,9 +94,13 @@ function HistoryStrip({
   }
 
   let lastCp = -1;
-  if (!completed) for (let i = Math.min(currentIdx - 1, moves.length - 1); i >= 0; i--) {
-    if (moves[i].qi < 0 && moves[i].icon) { lastCp = i; break; }
-  }
+  if (!completed)
+    for (let i = Math.min(currentIdx - 1, moves.length - 1); i >= 0; i--) {
+      if (moves[i].qi < 0 && moves[i].icon) {
+        lastCp = i;
+        break;
+      }
+    }
 
   return (
     <div class="history-strip">
@@ -106,7 +109,10 @@ function HistoryStrip({
         onClick={completed ? undefined : () => onJump(0)}
         disabled={completed}
       >
-        <span class="history-icon"><IconPlay size="1em" /></span> {s.puzzle.start}
+        <span class="history-icon">
+          <IconPlay size="1em" />
+        </span>{" "}
+        {s.puzzle.start}
       </button>
       {moves.map((move, i) => {
         const stepIdx = i + 1;
@@ -121,13 +127,34 @@ function HistoryStrip({
               disabled={completed}
               title={move.text}
             >
-              {move.icon === "pin" && <span class="history-icon"><IconPin size="1.1em" /> </span>}
-              {move.icon === "ok" && <span class="history-icon icon-correct"><IconCheck size="1.5em" strokeWidth={3} /> </span>}
-              {move.icon === "no" && <span class="history-icon icon-incorrect"><IconX size="1.5em" strokeWidth={3} /> </span>}
-              {move.icon === "un" && <span class="history-icon"><IconUndo size="1.5em" strokeWidth={3} /> </span>}
+              {move.icon === "pin" && (
+                <span class="history-icon">
+                  <IconPin size="1.1em" />{" "}
+                </span>
+              )}
+              {move.icon === "ok" && (
+                <span class="history-icon icon-correct">
+                  <IconCheck size="1.5em" strokeWidth={3} />{" "}
+                </span>
+              )}
+              {move.icon === "no" && (
+                <span class="history-icon icon-incorrect">
+                  <IconX size="1.5em" strokeWidth={3} />{" "}
+                </span>
+              )}
+              {move.icon === "un" && (
+                <span class="history-icon">
+                  <IconUndo size="1.5em" strokeWidth={3} />{" "}
+                </span>
+              )}
               {move.text}
             </button>
-            {hintLevel != null && <span class="history-hint"><IconHint size="1.5em" strokeWidth={3} class="icon-hint" />{hintLevel}</span>}
+            {hintLevel != null && (
+              <span class="history-hint">
+                <IconHint size="1.5em" strokeWidth={3} class="icon-hint" />
+                {hintLevel}
+              </span>
+            )}
           </span>
         );
       })}
@@ -162,15 +189,19 @@ export function PuzzleView({
   // Initialize synchronously to avoid flicker
   const initState = (() => {
     const n = puzzle.questions.length;
-    const saved = initialHash
-      ? decodeShareHash(initialHash, n)
-      : loadState(puzzle.id, n);
+    const saved = initialHash ? decodeShareHash(initialHash, n) : loadState(puzzle.id, n);
     if (saved && saved.history.length > 0) {
       return saved;
     }
     const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
     const blankClone = cloneStates(blank);
-    return { questions: blank, completed: false, history: [blankClone], historyIdx: 0, hints: new Map<number, number>() };
+    return {
+      questions: blank,
+      completed: false,
+      history: [blankClone],
+      historyIdx: 0,
+      hints: new Map<number, number>(),
+    };
   })();
 
   const [questions, setQuestionsRaw] = useState<QuestionState[]>(initState.questions);
@@ -184,7 +215,11 @@ export function PuzzleView({
       const idx = q.marks.indexOf("correct");
       return idx >= 0 ? LETTERS[idx] : null;
     });
-    return validate(puzzle, answers, initState.questions.map((q) => q.marks));
+    return validate(
+      puzzle,
+      answers,
+      initState.questions.map((q) => q.marks),
+    );
   });
   const [hintText, setHintText] = useState<string | null>(null);
   const hintRef = useRef<{ steps: string[]; step: number } | null>(null);
@@ -225,11 +260,7 @@ export function PuzzleView({
       const last = historyRef.current[historyRef.current.length - 1];
       const lastDiff = describeDiff(prev, last);
       const newDiff = describeDiff(last, cloned);
-      if (
-        lastDiff.qi >= 0 &&
-        lastDiff.qi === newDiff.qi &&
-        lastDiff.oi === newDiff.oi
-      ) {
+      if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
         const merged = describeDiff(prev, cloned);
         if (merged.qi < 0) {
           historyRef.current.pop();
@@ -254,14 +285,17 @@ export function PuzzleView({
     setHistoryVersion((v) => v + 1);
   }
 
-
   const revalidate = useCallback(
     (qs: QuestionState[]) => {
       const answers: (AnswerLetter | null)[] = qs.map((q) => {
         const idx = q.marks.indexOf("correct");
         return idx >= 0 ? LETTERS[idx] : null;
       });
-      const result = validate(puzzle, answers, qs.map((q) => q.marks));
+      const result = validate(
+        puzzle,
+        answers,
+        qs.map((q) => q.marks),
+      );
       setValidity(result);
 
       const isCompleted = result.every((v) => v === "valid");
@@ -363,10 +397,7 @@ export function PuzzleView({
   }
 
   function handleHint() {
-    if (
-      hintRef.current &&
-      hintRef.current.step < hintRef.current.steps.length - 1
-    ) {
+    if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
       pushHintMarker(hintRef.current.step + 1);
@@ -415,7 +446,11 @@ export function PuzzleView({
       {/* Questions */}
       <div
         class={puzzle.difficulty >= 3 ? "questions-grid" : ""}
-        style={puzzle.difficulty >= 3 ? { gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)` } : undefined}
+        style={
+          puzzle.difficulty >= 3
+            ? { gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)` }
+            : undefined
+        }
       >
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
@@ -434,12 +469,11 @@ export function PuzzleView({
       {hintText && !completed && (
         <div class="puzzle-hint">
           {hintText}
-          {hintRef.current &&
-            hintRef.current.step < hintRef.current.steps.length - 1 && (
-              <button class="hint-more" onClick={handleHint}>
-                more
-              </button>
-            )}
+          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
+            <button class="hint-more" onClick={handleHint}>
+              more
+            </button>
+          )}
         </div>
       )}
 
@@ -457,16 +491,31 @@ export function PuzzleView({
 
       {/* Controls */}
       <div class="puzzle-controls">
-        <button class="toolbar-icon-btn" onClick={handleUndo} disabled={completed || !canUndo} title={s.puzzle.undo}>
+        <button
+          class="toolbar-icon-btn"
+          onClick={handleUndo}
+          disabled={completed || !canUndo}
+          title={s.puzzle.undo}
+        >
           <IconUndo />
         </button>
-        <button class="toolbar-icon-btn" onClick={handleRedo} disabled={completed || !canRedo} title={s.puzzle.redo}>
+        <button
+          class="toolbar-icon-btn"
+          onClick={handleRedo}
+          disabled={completed || !canRedo}
+          title={s.puzzle.redo}
+        >
           <IconRedo />
         </button>
         <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
           <IconPin size="0.9em" /> {s.puzzle.checkpoint}
         </button>
-        <button class="toolbar-accent-btn" onClick={handleHint} disabled={completed} title={s.puzzle.hint}>
+        <button
+          class="toolbar-accent-btn"
+          onClick={handleHint}
+          disabled={completed}
+          title={s.puzzle.hint}
+        >
           <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
         </button>
         <span class="controls-spacer"></span>
@@ -475,11 +524,23 @@ export function PuzzleView({
             {s.puzzle.share}
           </button>
           <span class="split-btn-wrapper">
-            <button class="toolbar-accent-btn split-btn-drop" onClick={(e) => { e.stopPropagation(); setShareMenu((v) => !v); }}>
+            <button
+              class="toolbar-accent-btn split-btn-drop"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShareMenu((v) => !v);
+              }}
+            >
               <IconChevronDown size="1em" />
             </button>
             {shareMenu && (
-              <button class="split-btn-menu" onClick={() => { setShareMenu(false); handleShareProgress(); }}>
+              <button
+                class="split-btn-menu"
+                onClick={() => {
+                  setShareMenu(false);
+                  handleShareProgress();
+                }}
+              >
                 {s.puzzle.shareWithHistory}
               </button>
             )}
@@ -504,7 +565,6 @@ export function PuzzleView({
           onJump={handleJumpTo}
         />
       )}
-
     </div>
   );
 }

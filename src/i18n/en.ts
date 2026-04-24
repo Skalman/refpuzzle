@@ -59,12 +59,12 @@ export default {
     importFailed: (msg: string) => `Import failed: ${msg}`,
     puzzlesInBackup: (n: number) => plural(n, "puzzle in backup", "puzzles in backup"),
     actions: {
-      "new": "New — will import from file",
+      new: "New — will import from file",
       "replace-completed": "Completed in file, not locally — will replace local with file",
       "replace-longer": "More progress in file — will replace local with file",
       "keep-completed": "Already completed locally — will keep local, ignore file",
       "keep-longer": "More progress locally — will keep local, ignore file",
-      "identical": "Identical — no change needed",
+      identical: "Identical — no change needed",
     } as Record<string, string>,
   },
   onboarding: {

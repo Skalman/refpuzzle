@@ -7,7 +7,13 @@ interface BackupData {
   puzzles: Record<string, string>;
 }
 
-export type ImportAction = "new" | "replace-completed" | "replace-longer" | "keep-completed" | "keep-longer" | "identical";
+export type ImportAction =
+  | "new"
+  | "replace-completed"
+  | "replace-longer"
+  | "keep-completed"
+  | "keep-longer"
+  | "identical";
 
 export interface ImportEntry {
   id: string;
@@ -79,7 +85,11 @@ export function planImport(json: string): ImportPlan {
   return { entries };
 }
 
-export function applyImport(plan: ImportPlan): { imported: number; replaced: number; skipped: number } {
+export function applyImport(plan: ImportPlan): {
+  imported: number;
+  replaced: number;
+  skipped: number;
+} {
   let imported = 0;
   let replaced = 0;
   let skipped = 0;

@@ -27,13 +27,19 @@ export function OptionButton({ index, label, mark, implied, disabled, onClick }:
       aria-label={title}
     >
       <span class="option-indicator">
-        {showIcon
-          ? (mark === "correct"
-              ? <IconCheck size="1.4em" strokeWidth={4} class="icon-correct" />
-              : <IconX size="1.4em" strokeWidth={4} class="icon-incorrect" />)
-          : <span class="option-indicator-spacer" />}
+        {showIcon ? (
+          mark === "correct" ? (
+            <IconCheck size="1.4em" strokeWidth={4} class="icon-correct" />
+          ) : (
+            <IconX size="1.4em" strokeWidth={4} class="icon-incorrect" />
+          )
+        ) : (
+          <span class="option-indicator-spacer" />
+        )}
       </span>
-      <span class="option-text"><span class="option-letter">{letter}.</span> {label}</span>
+      <span class="option-text">
+        <span class="option-letter">{letter}.</span> {label}
+      </span>
     </button>
   );
 }

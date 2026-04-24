@@ -5,13 +5,15 @@ import { Logo } from "./Logo.tsx";
 
 const stars = (n: number) => "\u2605".repeat(n) + "\u2606".repeat(5 - n);
 
-
 export function PuzzleList() {
   const s = t();
   return (
     <>
       <header class="app-header">
-        <h1><Logo />{s.app.title}</h1>
+        <h1>
+          <Logo />
+          {s.app.title}
+        </h1>
         <div class="header-actions">
           <a href="/about">About</a>
           <ThemeToggle />
