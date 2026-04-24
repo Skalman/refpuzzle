@@ -57,8 +57,6 @@ function cloneStates(qs: QuestionState[]): QuestionState[] {
 export function encodeHistory(state: SavedState): string {
   const actions: string[] = [];
 
-  if (state.completed) actions.push("x");
-
   for (let i = 1; i < state.history.length; i++) {
     let action = diffAction(state.history[i - 1], state.history[i]);
     if (i === state.historyIdx) action = `_${action}`;
@@ -69,20 +67,23 @@ export function encodeHistory(state: SavedState): string {
 
   // If current is at position 0 (no actions taken yet) or at the end
   if (state.historyIdx === 0 && state.history.length > 1) {
-    actions.splice(state.completed ? 1 : 0, 0, "_");
+    actions.splice(0, 0, "_");
   }
   if (state.historyIdx === state.history.length - 1 && state.history.length > 1) {
     const last = actions.length - 1;
     if (!actions[last].startsWith("_")) actions[last] = `_${actions[last]}`;
   }
 
+  if (state.completed) actions.push("x");
+
   return actions.join(".");
 }
 
 export function decodeHistory(encoded: string, n: number): SavedState | null {
   const tokens = encoded.split(".");
-  const completed = tokens[0] === "x";
-  const actions = completed ? tokens.slice(1) : tokens;
+  // Support both old prefix "x." and new suffix ".x"
+  const completed = tokens[tokens.length - 1] === "x" || tokens[0] === "x";
+  const actions = tokens.filter((t) => t !== "x");
 
   const history: QuestionState[][] = [];
   const current = Array.from({ length: n }, () => ({ marks: [...FRESH_MARKS] as Marks }));
@@ -123,9 +124,14 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
 
 export function hasState(puzzleId: string): { started: boolean; completed: boolean } {
   try {
-    const raw = localStorage.getItem(PREFIX + puzzleId);
+    let raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return { started: false, completed: false };
-    return { started: true, completed: raw.startsWith("x.") || raw === "x" };
+    // Migrate old "x." prefix to ".x" suffix
+    if (raw.startsWith("x.")) {
+      raw = raw.slice(2) + ".x";
+      localStorage.setItem(PREFIX + puzzleId, raw);
+    }
+    return { started: true, completed: raw.endsWith(".x") || raw === "x" };
   } catch {
     return { started: false, completed: false };
   }
@@ -133,8 +139,13 @@ export function hasState(puzzleId: string): { started: boolean; completed: boole
 
 export function loadState(puzzleId: string, n: number): SavedState | null {
   try {
-    const raw = localStorage.getItem(PREFIX + puzzleId);
+    let raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return null;
+    // Migrate old "x." prefix to ".x" suffix
+    if (raw.startsWith("x.")) {
+      raw = raw.slice(2) + ".x";
+      localStorage.setItem(PREFIX + puzzleId, raw);
+    }
     return decodeHistory(raw, n);
   } catch {
     return null;

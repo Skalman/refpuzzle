@@ -14,6 +14,7 @@ import {
 } from "../lib/share.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
+import { IconUndo, IconRedo, IconPin, IconHint, IconCheck, IconX, IconChevronDown, IconShare, IconReset } from "./Icons.tsx";
 
 const FRESH_MARKS: Marks = [
   "unmarked",
@@ -49,15 +50,15 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
       let icon: string;
       if (n === "correct") {
         text = `Q${qi + 1}=${letter}`;
-        icon = "\u2705";
+        icon = "ok";
         priority = 2;
       } else if (n === "incorrect") {
         text = `Q${qi + 1} ${letter}`;
-        icon = "\u274C";
+        icon = "no";
         priority = 1;
       } else {
         text = `Q${qi + 1} ${letter}`;
-        icon = "\u21A9";
+        icon = "un";
         priority = 0;
       }
       if (priority > bestPriority) {
@@ -67,7 +68,7 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
     }
   }
   if (!best) {
-    return { text: "", icon: "\u{1F4CC}", qi: -1, oi: -1 };
+    return { text: "", icon: "pin", qi: -1, oi: -1 };
   }
   if (bestPriority === 0) {
     const allUnmarked = next.every((q) =>
@@ -82,11 +83,13 @@ function HistoryStrip({
   history,
   currentIdx,
   hints,
+  completed,
   onJump,
 }: {
   history: QuestionState[][];
   currentIdx: number;
   hints: Map<number, number>;
+  completed: boolean;
   onJump: (idx: number) => void;
 }) {
   if (history.length <= 1) return null;
@@ -97,7 +100,7 @@ function HistoryStrip({
   }
 
   let lastCp = -1;
-  for (let i = Math.min(currentIdx - 1, moves.length - 1); i >= 0; i--) {
+  if (!completed) for (let i = Math.min(currentIdx - 1, moves.length - 1); i >= 0; i--) {
     if (moves[i].qi < 0 && moves[i].icon) { lastCp = i; break; }
   }
 
@@ -117,27 +120,27 @@ function HistoryStrip({
           // oxlint-disable-next-line react/no-array-index-key
           <span key={i} class="history-entry">
             <button
-              class={`history-step ${stepIdx === currentIdx ? "current" : ""} ${stepIdx > currentIdx ? "future" : ""} ${isCheckpoint && i === lastCp ? "checkpoint" : ""} ${isCheckpoint && i !== lastCp ? "checkpoint-old" : ""}`}
+              class={`history-step ${!completed && stepIdx === currentIdx ? "current" : ""} ${stepIdx > currentIdx ? "future" : ""} ${isCheckpoint && i === lastCp ? "checkpoint" : ""} ${isCheckpoint && i !== lastCp ? "checkpoint-old" : ""}`}
               onClick={() => onJump(stepIdx)}
               title={move.text}
             >
-              {move.icon && <span class="history-icon">{move.icon} </span>}{move.text}
+              {move.icon === "pin" && <span class="history-icon"><IconPin size="1.5em" strokeWidth={3} /> </span>}
+              {move.icon === "ok" && <span class="history-icon icon-correct"><IconCheck size="1.5em" strokeWidth={3} /> </span>}
+              {move.icon === "no" && <span class="history-icon icon-incorrect"><IconX size="1.5em" strokeWidth={3} /> </span>}
+              {move.icon === "un" && <span class="history-icon"><IconUndo size="1.5em" strokeWidth={3} /> </span>}
+              {move.text}
             </button>
-            {hintLevel != null && <span class="history-hint">💡{hintLevel}</span>}
+            {hintLevel != null && <span class="history-hint"><IconHint size="1.5em" strokeWidth={3} />{hintLevel}</span>}
           </span>
         );
       })}
+      {completed && (
+        <span class="history-step completed-step">
+          <IconCheck size="1.5em" strokeWidth={3} class="icon-correct" /> Solved
+        </span>
+      )}
     </div>
   );
-}
-
-function Toast({ message, onDone }: { message: string; onDone: () => void }) {
-  useEffect(() => {
-    const timer = setTimeout(onDone, 2000);
-    return () => clearTimeout(timer);
-  }, [onDone]);
-
-  return <div class="toast">{message}</div>;
 }
 
 interface PuzzleViewProps {
@@ -186,10 +189,20 @@ export function PuzzleView({
   }, [shareMenu]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!toastMessage) return undefined;
+    const timer = setTimeout(() => setToastMessage(null), 2000);
+    return () => clearTimeout(timer);
+  }, [toastMessage]);
+
   function pushHistory(qs: QuestionState[]) {
     const h = historyRef.current;
     const idx = historyIdxRef.current;
     historyRef.current = h.slice(0, idx + 1);
+    // Clean up hint markers for discarded future steps
+    for (const key of hintMarkers.current.keys()) {
+      if (key > idx) hintMarkers.current.delete(key);
+    }
 
     const cloned = cloneStates(qs);
     if (historyRef.current.length >= 2) {
@@ -421,6 +434,7 @@ export function PuzzleView({
             question={qDef}
             marks={questions[qi]?.marks ?? FRESH_MARKS}
             validity={validity[qi] ?? "neutral"}
+            disabled={completed}
             onOptionClick={(oi) => handleOptionClick(qi, oi)}
           />
         ))}
@@ -453,46 +467,33 @@ export function PuzzleView({
 
       {/* Controls */}
       <div class="puzzle-controls">
-        <button
-          class="toolbar-icon-btn"
-          onClick={handleUndo}
-          disabled={!canUndo}
-          title={s.puzzle.undo}
-        >
-          &#x21A9;
+        <button class="toolbar-icon-btn" onClick={handleUndo} disabled={completed || !canUndo} title={s.puzzle.undo}>
+          <IconUndo />
         </button>
-        <button
-          class="toolbar-icon-btn"
-          onClick={handleRedo}
-          disabled={!canRedo}
-          title={s.puzzle.redo}
-        >
-          &#x21AA;
+        <button class="toolbar-icon-btn" onClick={handleRedo} disabled={completed || !canRedo} title={s.puzzle.redo}>
+          <IconRedo />
         </button>
-        <button class="toolbar-accent-btn" onClick={handleSave}>
-          &#x1F4CC; Checkpoint
+        <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
+          <IconPin size="0.9em" /> Checkpoint
         </button>
         <span class="controls-spacer"></span>
-        <button
-          class="toolbar-accent-btn"
-          onClick={handleHint}
-          title={s.puzzle.hint}
-        >
-          &#x1F4A1; {s.puzzle.hint}
+        <button class="toolbar-accent-btn" onClick={handleHint} disabled={completed} title={s.puzzle.hint}>
+          <IconHint size="0.9em" /> {s.puzzle.hint}
         </button>
         <span class="split-btn">
           <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
-            {s.puzzle.share}
+            <IconShare size="0.9em" /> {s.puzzle.share}
           </button>
           <span class="split-btn-wrapper">
             <button class="toolbar-accent-btn split-btn-drop" onClick={(e) => { e.stopPropagation(); setShareMenu((v) => !v); }}>
-              &#9662;
+              <IconChevronDown size="1em" />
             </button>
             {shareMenu && (
               <button class="split-btn-menu" onClick={() => { setShareMenu(false); handleShareProgress(); }}>
                 {s.puzzle.shareProgress}
               </button>
             )}
+            {toastMessage && <span class="share-toast">{toastMessage}</span>}
           </span>
         </span>
         <button
@@ -500,7 +501,7 @@ export function PuzzleView({
           onClick={handleReset}
           disabled={historyRef.current.length <= 1}
         >
-          {resetPending ? s.puzzle.resetConfirm : s.puzzle.reset}
+          <IconReset size="0.9em" /> {resetPending ? s.puzzle.resetConfirm : s.puzzle.reset}
         </button>
       </div>
 
@@ -509,14 +510,11 @@ export function PuzzleView({
           history={historyRef.current}
           currentIdx={historyIdxRef.current}
           hints={hintMarkers.current}
+          completed={completed}
           onJump={handleJumpTo}
         />
       )}
 
-      {/* Toast notification */}
-      {toastMessage && (
-        <Toast message={toastMessage} onDone={() => setToastMessage(null)} />
-      )}
     </div>
   );
 }
