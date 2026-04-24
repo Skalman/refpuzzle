@@ -1,0 +1,55 @@
+/* ── History strip ── */
+.history-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin-top: 0.5rem;
+  padding: 0.4rem 0;
+}
+
+.history-entry {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.history-step {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.65rem;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text-muted);
+  white-space: nowrap;
+
+  &:hover { background: var(--bg-hover); }
+  &.current { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  &.future { opacity: 0.35; }
+  &.checkpoint { border-color: var(--valid); }
+  &.checkpoint-old { border-color: var(--border); }
+
+  &.completed-step {
+    border-color: var(--valid);
+    color: var(--valid);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2em;
+  }
+}
+
+.history-icon {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.history-hint {
+  font-size: 0.55rem;
+  opacity: 0.7;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.25rem;
+}

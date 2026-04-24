@@ -1,0 +1,152 @@
+/* ── Onboarding banner ── */
+.onboarding-banner {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.onboarding-content {
+  font-size: 0.85rem;
+
+  & strong { display: block; margin-bottom: 0.35rem; color: var(--accent); }
+  & ul { margin: 0; padding-left: 1.25rem; color: var(--text-muted); line-height: 1.6; }
+}
+
+.onboarding-dismiss {
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-family: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+
+  &:hover { opacity: 0.9; }
+}
+
+/* ── Help panel ── */
+.help-panel-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 1rem;
+}
+
+.help-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.5rem;
+  max-width: 500px;
+  width: 100%;
+  max-height: 80vh;
+  overflow-y: auto;
+  color: var(--text);
+
+  & ol, & ul { margin: 0 0 0.75rem 1.25rem; color: var(--text-muted); line-height: 1.6; }
+  & h4 { font-size: 0.95rem; margin: 1rem 0 0.5rem; }
+  & p { color: var(--text-muted); line-height: 1.6; margin-bottom: 0.5rem; }
+}
+
+.help-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+
+  & h3 { font-size: 1.1rem; font-weight: 700; }
+}
+
+.help-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--text-muted);
+  line-height: 1;
+  padding: 0.25rem;
+
+  &:hover { color: var(--text); }
+}
+
+.help-credit {
+  margin-top: 1rem;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  & a { color: var(--accent); }
+}
+
+/* ── Inline help ── */
+.inline-help {
+  max-width: 600px;
+  margin: 2rem auto 0;
+  padding: 1rem;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+
+  & h4 { color: var(--text); font-size: 0.85rem; margin: 0.8rem 0 0.3rem; }
+  & p { margin: 0 0 0.5rem; }
+  & ol { margin: 0; padding-left: 1.5rem; }
+}
+
+/* ── History page ── */
+.history-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+
+  & h2 { margin-bottom: 1rem; }
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  text-decoration: none;
+  color: var(--text);
+  transition: background 0.15s;
+
+  &:hover { background: var(--bg-hover); }
+  &.history-today { border-color: var(--accent); border-width: 2px; }
+}
+
+.history-date {
+  font-weight: 600;
+}
+
+.history-day {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 0.85em;
+  margin-left: 0.5rem;
+}
+
+.history-progress {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}

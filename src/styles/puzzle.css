@@ -1,0 +1,193 @@
+/* ── Puzzle view ── */
+.puzzle-view {
+  position: relative;
+}
+
+/* ── Question rows ── */
+.question-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 0;
+
+  & > .validity-bar { grid-row: 1 / -1; }
+  & > .question-header { grid-column: 2; }
+  & > .question-options { grid-column: 2; align-self: start; }
+}
+
+/* ── Validity bar (colorblind-accessible styles) ── */
+.validity-bar {
+  width: 4px;
+  align-self: stretch;
+  flex-shrink: 0;
+  margin-right: 0.5rem;
+  background: transparent;
+
+  &.neutral { background: linear-gradient(to right, var(--neutral-bar) 3px, transparent 3px); }
+  &.valid { background: var(--valid); }
+  &.pending { border-left: 4px dotted var(--pending); width: 0; }
+  &.invalid { border-left: 4px double var(--invalid); width: 0; }
+}
+
+.question-header {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+}
+
+.question-num {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.question-text {
+  font-size: 0.85rem;
+}
+
+/* ── Options ── */
+.question-options {
+  display: flex;
+  gap: 4px;
+
+  & > * { flex: 1 1 0; min-width: 0; }
+
+  &.options-vertical {
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+
+.option-btn {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45em;
+  transition: all 0.1s;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  overflow: hidden;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { background: var(--bg-hover); }
+  &:disabled { cursor: not-allowed; }
+
+  &.incorrect {
+    border-color: transparent;
+    background: var(--invalid-soft);
+    & .option-text { opacity: 0.45; }
+  }
+
+  &.implied {
+    border-color: transparent;
+    background: var(--invalid-soft);
+    cursor: not-allowed;
+    & .option-text { opacity: 0.45; }
+  }
+
+  &.correct {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  &.revealed {
+    background: var(--valid-soft);
+    color: var(--valid);
+    border-color: var(--valid);
+  }
+}
+
+.option-letter {
+  font-weight: 700;
+  opacity: 0.45;
+  font-size: 0.75rem;
+}
+
+.option-indicator {
+  align-self: center;
+  display: inline-flex;
+  width: 1.4em;
+  height: 1em;
+  flex-shrink: 0;
+  line-height: 0;
+  overflow: visible;
+}
+
+.option-indicator-spacer {
+  display: inline-block;
+  width: 1.4em;
+}
+
+/* ── Hint display ── */
+.puzzle-hint {
+  padding: 0.6rem 1rem;
+  margin-top: 0.75rem;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.hint-more {
+  background: none;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+
+  &:hover { background: var(--accent); color: white; }
+}
+
+/* ── Completion ── */
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--valid-soft); }
+  50% { box-shadow: 0 0 20px var(--valid-soft); }
+}
+
+.puzzle-complete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  margin-top: 1rem;
+  background: var(--valid-soft);
+  border: 1px solid var(--valid);
+  border-radius: 8px;
+  font-weight: 600;
+  color: var(--valid);
+  animation: glow-pulse 2s ease-in-out infinite;
+  flex-wrap: wrap;
+}
+
+.next-puzzle-btn {
+  background: var(--valid);
+  color: var(--bg);
+  border: none;
+  border-radius: 6px;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-family: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+
+  &:hover { opacity: 0.9; }
+}

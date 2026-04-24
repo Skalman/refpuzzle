@@ -1,0 +1,73 @@
+/* ── Print button ── */
+.print-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-family: inherit;
+  padding: 0.5rem;
+  margin: 1rem auto;
+  display: block;
+}
+
+/* ── Print layout ── */
+.print-only {
+  display: none;
+}
+
+@media print {
+  body * { visibility: hidden; }
+
+  .print-only, .print-only * { visibility: visible; }
+
+  .print-only {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 1rem;
+    font-size: 11pt;
+    color: #000;
+    background: #fff;
+
+    & h1 {
+      font-size: 14pt;
+      margin-bottom: 0.5rem;
+      border-bottom: 1px solid #000;
+      padding-bottom: 0.3rem;
+    }
+  }
+
+  .print-puzzle {
+    page-break-inside: avoid;
+    margin-bottom: 1rem;
+    & h2 { font-size: 12pt; margin-bottom: 0.3rem; }
+  }
+
+  .print-question {
+    margin-bottom: 0.4rem;
+  }
+
+  .print-question-text {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+  }
+
+  .print-options {
+    display: flex;
+    flex-wrap: wrap;
+    padding-left: 1.2em;
+
+    &.print-options-long {
+      flex-direction: column;
+      gap: 0.1em;
+    }
+  }
+
+  .print-option {
+    flex: 1 1 0;
+    min-width: 5em;
+  }
+}
