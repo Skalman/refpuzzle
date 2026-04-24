@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { PuzzleView } from "./components/PuzzleView.tsx";
+import { IconCalendar, IconHelp, IconMoon, IconSun, IconMonitor, IconPrint, IconCheck, IconX } from "./components/Icons.tsx";
 import type { Puzzle } from "./engine/types.ts";
 import {
   fetchDaily,
@@ -15,9 +16,8 @@ import { t } from "./i18n/index.ts";
 import { Logo } from "./components/Logo.tsx";
 
 function ThemeToggle() {
-  const [icon, setIcon] = useState(() => {
-    const theme = document.documentElement.getAttribute("data-theme");
-    return theme === "dark" ? "\u{1F319}" : theme === "light" ? "☀️" : "\u{1F310}";
+  const [mode, setMode] = useState(() => {
+    return document.documentElement.getAttribute("data-theme") ?? "auto";
   });
 
   function cycle() {
@@ -26,21 +26,21 @@ function ThemeToggle() {
     if (current === "dark") {
       html.setAttribute("data-theme", "light");
       localStorage.setItem("refpuzzle:theme", "light");
-      setIcon("☀️");
+      setMode("light");
     } else if (current === "light") {
       html.removeAttribute("data-theme");
       localStorage.removeItem("refpuzzle:theme");
-      setIcon("\u{1F310}");
+      setMode("auto");
     } else {
       html.setAttribute("data-theme", "dark");
       localStorage.setItem("refpuzzle:theme", "dark");
-      setIcon("\u{1F319}");
+      setMode("dark");
     }
   }
 
   return (
     <button class="theme-toggle" onClick={cycle} aria-label="Toggle theme">
-      {icon}
+      {mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconMonitor />}
     </button>
   );
 }
@@ -71,8 +71,8 @@ function OnboardingBanner() {
       <div class="onboarding-content">
         <strong>{s.onboarding.welcome}</strong>
         <ul>
-          <li>{s.onboarding.step1}</li>
-          <li>{s.onboarding.step2}</li>
+          <li>{s.onboarding.step1} (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</li>
+          <li>{s.onboarding.step2} (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</li>
           <li>{s.onboarding.step3}</li>
         </ul>
       </div>
@@ -95,8 +95,12 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <ol>
-          {s.help.howToPlaySteps.map((step) => (
-            <li key={step}>{step}</li>
+          {s.help.howToPlaySteps.map((step, i) => (
+            <li key={step}>
+              {step}
+              {i === 0 && <> (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</>}
+              {i === 1 && <> (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</>}
+            </li>
           ))}
         </ol>
         <h4>{s.help.howToSolve}</h4>
@@ -126,7 +130,7 @@ function AppHeader({ onHelp }: { onHelp: () => void }) {
       </h1>
       <div class="header-actions">
         <a href="/history" class="help-btn" aria-label="History" title="Past puzzles">
-          &#128197;
+          <IconCalendar />
         </a>
         <button
           class="help-btn"
@@ -134,7 +138,7 @@ function AppHeader({ onHelp }: { onHelp: () => void }) {
           aria-label="Help"
           title="How to play"
         >
-          ?
+          <IconHelp />
         </button>
         <ThemeToggle />
       </div>
@@ -248,7 +252,7 @@ function DayView({ dateStr }: { dateStr: string }) {
       </div>
 
       {puzzles && (
-        <button class="print-btn" onClick={() => window.print()}>&#x1F5A8; Print all puzzles</button>
+        <button class="print-btn" onClick={() => window.print()}><IconPrint size="0.9em" /> Print all puzzles</button>
       )}
 
       {puzzles && (

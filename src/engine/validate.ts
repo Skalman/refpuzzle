@@ -17,6 +17,7 @@ import {
   RT_SAME_AS,
   RT_UNIQUE,
   RT_TRUE_STMT,
+  RT_SELF,
 } from "./types.ts";
 import type { Claim } from "./types.ts";
 import { evaluate } from "./evaluators.ts";
@@ -76,6 +77,8 @@ function isDefinitive(
   const on = fp.optionNums[qi][ai];
 
   switch (rule.t) {
+    case RT_SELF:
+      return true;
     case RT_ANSWER_OF:
       return answers[rule.questionIndex] != null;
     case RT_LETTER_DIST:

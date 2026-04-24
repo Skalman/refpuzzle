@@ -34,7 +34,7 @@ export default {
   },
   onboarding: {
     welcome: "Welcome to Refpuzzle!",
-    step1: "Click an option once to mark it incorrect (X)",
+    step1: "Click an option once to mark it incorrect",
     step2: "Click again to select it as your answer",
     step3: "The colored bar shows if your logic is valid",
     gotIt: "Got it!",
