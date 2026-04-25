@@ -743,19 +743,6 @@ function PastPuzzlesPage() {
             });
             const solved = levels.filter((l) => l.completed);
             const started = levels.filter((l) => l.started && !l.completed);
-            let status: string;
-            if (solved.length === 5) {
-              status = s.daily.allSolved;
-            } else if (solved.length > 0 || started.length > 0) {
-              const parts: string[] = [];
-              if (solved.length > 0)
-                parts.push("✓ " + solved.map((l) => s.difficulty[l.level]).join(", "));
-              if (started.length > 0)
-                parts.push("• " + started.map((l) => s.difficulty[l.level]).join(", "));
-              status = parts.join("  ");
-            } else {
-              status = s.daily.notStarted;
-            }
             return (
               <a
                 key={dateStr}
@@ -766,7 +753,28 @@ function PastPuzzlesPage() {
                   {isCurrent ? s.daily.today : dateStr}
                   <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
                 </span>
-                <span class="history-progress">{status}</span>
+                <span class="history-progress">
+                  {solved.length === 5 ? (
+                    s.daily.allSolved
+                  ) : solved.length > 0 || started.length > 0 ? (
+                    <>
+                      {solved.length > 0 && (
+                        <span>
+                          <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />{" "}
+                          {solved.map((l) => s.difficulty[l.level]).join(", ")}
+                        </span>
+                      )}
+                      {solved.length > 0 && started.length > 0 && "  "}
+                      {started.length > 0 && (
+                        <span>
+                          &#8226; {started.map((l) => s.difficulty[l.level]).join(", ")}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    s.daily.notStarted
+                  )}
+                </span>
               </a>
             );
           })}
