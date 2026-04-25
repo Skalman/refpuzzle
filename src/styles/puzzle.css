@@ -94,7 +94,10 @@
   display: inline-flex;
   align-items: center;
   gap: 0.45em;
-  transition: background 0.1s, border-color 0.1s, opacity 0.1s;
+  transition:
+    background 0.1s,
+    border-color 0.1s,
+    opacity 0.1s;
   padding: 0.35rem 0.3rem;
   text-align: left;
   white-space: nowrap;
