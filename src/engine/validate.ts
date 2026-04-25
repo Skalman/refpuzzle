@@ -173,8 +173,13 @@ function isDefinitive(
     }
 
     case RT_SAME_AS: {
-      const tq = on - 1;
-      return tq >= 0 && tq < n && answers[tq] != null;
+      const letter = answers[qi]!;
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (!isResolved(j, answers, markSets) && !cantBe(j, letter, answers, markSets))
+          return false;
+      }
+      return true;
     }
 
     case RT_UNIQUE:

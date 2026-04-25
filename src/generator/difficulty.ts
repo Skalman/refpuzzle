@@ -25,7 +25,7 @@ export const profiles: DifficultyProfile[] = [
       "closest_after",
       "first_with_answer",
       "last_with_answer",
-      "same_answer_as",
+
       "next_same_answer",
     ],
   },
@@ -41,7 +41,7 @@ export const profiles: DifficultyProfile[] = [
       "closest_before",
       "first_with_answer",
       "last_with_answer",
-      "same_answer_as",
+
       "next_same_answer",
       "previous_same_answer",
       "least_common_answer",
@@ -66,7 +66,7 @@ export const profiles: DifficultyProfile[] = [
       "closest_before",
       "first_with_answer",
       "last_with_answer",
-      "same_answer_as",
+
       "next_same_answer",
       "previous_same_answer",
       "least_common_answer",
@@ -95,7 +95,7 @@ export const profiles: DifficultyProfile[] = [
       "closest_before",
       "first_with_answer",
       "last_with_answer",
-      "same_answer_as",
+
       "next_same_answer",
       "previous_same_answer",
       "least_common_answer",
