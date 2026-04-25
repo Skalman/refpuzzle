@@ -8,34 +8,16 @@
       animation: draw 1.0s ease-out var(--d) forwards, towhite-stroke 0.7s ease 0.8s forwards; }
     .heads polygon { opacity: 0; transform: scale(0);
       animation: pophead 0.25s ease-out var(--d) forwards, towhite-fill 0.7s ease 0.8s forwards; }
-    .dots circle { animation: pulse 2s ease-in-out var(--d) 2, towhite-fill 0.7s ease 0.8s forwards; }
+    .dots circle { animation: towhite-fill 0.7s ease 0.8s forwards; }
     @keyframes draw { to { stroke-dashoffset: 0; } }
     @keyframes pophead { to { opacity: 1; transform: scale(1); } }
     @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.4); } }
-    .dots.once circle { animation: pulse 2s ease-in-out 1; animation-delay: var(--d); fill: white; }
-    .dots.no-anim circle { animation: none; }
     @keyframes towhite-stroke { to { stroke: white; } }
     @keyframes towhite-fill { to { fill: white; } }
+    .replay .arcs path,
+    .replay .heads polygon,
+    .replay .dots circle { animation: none; }
   </style>
-  <script>
-    document.addEventListener("DOMContentLoaded", function() {
-      var running = true;
-      var dotsG = document.querySelector(".dots");
-      var lastDot = dotsG.querySelector("circle:last-child");
-      lastDot.addEventListener("animationend", function(e) {
-        if (e.animationName === "pulse") running = false;
-      });
-      function restart() {
-        if (running) return;
-        running = true;
-        dotsG.classList.add("no-anim", "once");
-        dotsG.getBBox();
-        dotsG.classList.remove("no-anim");
-      }
-      document.documentElement.addEventListener("mouseenter", restart);
-      document.documentElement.addEventListener("click", restart);
-    });
-  </script>
   <rect width="100" height="100" rx="20" fill="#6366f1"/>
   <g stroke-width="3" stroke-linecap="round" fill="none" class="arcs">
     <path style="--d:0s" d="M22.0,28.0 A60,60 0 0,1 47.4,18.8" stroke="#f472b6"/>

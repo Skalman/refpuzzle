@@ -26,7 +26,7 @@ import {
 import { hasState } from "./lib/store.ts";
 import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
-import { Logo } from "./components/Logo.tsx";
+import { Logo, replayLogoAnimation } from "./components/Logo.tsx";
 
 function useTheme() {
   const [mode, setMode] = useState(
@@ -222,8 +222,8 @@ function AppHeader({
   return (
     <header class="app-header">
       <h1>
+        <Logo />
         <a href="/" class="app-title-link">
-          <Logo />
           <span class="app-title">
             <span class="app-title-ref">Ref</span>puzzle
           </span>
@@ -380,6 +380,7 @@ function DayView({ dateStr }: { dateStr: string }) {
     (level: number) => {
       setActiveLevel(level);
       window.history.replaceState(null, "", `/day/${dateStr}?l=${level}`);
+      replayLogoAnimation();
     },
     [dateStr],
   );
@@ -432,6 +433,7 @@ function DayView({ dateStr }: { dateStr: string }) {
 
   useEffect(() => {
     setLoading(true);
+    replayLogoAnimation();
     fetchDaily(dateStr).then((data) => {
       setPuzzles(data);
       setLoading(false);

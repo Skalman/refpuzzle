@@ -424,8 +424,15 @@ export function PuzzleView({
     if (historyRef.current.length <= 1) return;
     const prev = historyRef.current[historyIdxRef.current - 1];
     const curr = historyRef.current[historyIdxRef.current];
-    if (prev && describeDiff(prev, curr).qi < 0) return;
-    pushHistory(cloneStates(questionsRef.current));
+    if (prev && describeDiff(prev, curr).qi < 0) {
+      // Current step is already a checkpoint — toggle it off (remove)
+      historyRef.current.splice(historyIdxRef.current, 1);
+      hintMarkers.current.delete(historyIdxRef.current);
+      historyIdxRef.current--;
+      setHistoryVersion((v) => v + 1);
+    } else {
+      pushHistory(cloneStates(questionsRef.current));
+    }
   }
 
   function handleReset() {
