@@ -38,6 +38,7 @@ export default {
     history: "History",
     start: "Start",
     solvedBadge: "Solved",
+    more: "more",
   },
   daily: {
     dayNumber: (num: number) => `Day #${num}`,
@@ -74,6 +75,15 @@ export default {
     step3: "The colored bar shows if your logic is valid",
     gotIt: "Got it!",
   },
+  aria: {
+    close: "Close",
+    help: "Help",
+    toggleTheme: "Toggle theme",
+    more: "More",
+  },
+  header: {
+    theme: "Theme",
+  },
   help: {
     title: "How to Play",
     howToPlaySteps: [
@@ -93,5 +103,34 @@ export default {
     whatIs: "What is a self-referential puzzle?",
     description:
       "A self-referential puzzle is a type of puzzle where the questions refer to the puzzle itself or other questions within the same puzzle. The answers often depend on the content or structure of the puzzle, making it a meta-puzzle. Solving the puzzle usually involves logic and deductive reasoning, as you have to consider the implications of each answer on the rest of the puzzle.",
+    inspiredBy: "Inspired by",
+  },
+  notFound: {
+    noPuzzle: "No puzzle",
+    noPuzzleDesc: "No puzzle available for this date.",
+    backToToday: "Back to today",
+    title: "404",
+    pageNotFound: "Page not found",
+    backToPuzzles: "Back to puzzles",
+  },
+  keyboard: {
+    title: "Keyboard Shortcuts",
+    navigation: "Navigation",
+    actions: "Actions",
+    general: "General",
+    jumpToQuestion: "Jump to question",
+    prevQuestion: "Previous question",
+    nextQuestion: "Next question",
+    moveOptions: "Move between options",
+    selectOption: "Select option A-E",
+    toggleOption: "Toggle option",
+    prevNextDifficulty: "Previous/next difficulty",
+    undo: "Undo",
+    redo: "Redo",
+    hint: "Hint",
+    checkpoint: "Checkpoint",
+    closeCancel: "Close/cancel",
+    toggleHelp: "Toggle this help",
+    navigateSections: "Navigate between sections",
   },
 } as const;

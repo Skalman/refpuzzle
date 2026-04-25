@@ -4,14 +4,25 @@ import { IconCheck, IconX } from "./Icons.tsx";
 
 interface Props {
   index: number;
+  questionIndex: number;
   label: string;
   mark: OptionMark;
   implied?: boolean;
   disabled?: boolean;
+  focused?: boolean;
   onClick: () => void;
 }
 
-export function OptionButton({ index, label, mark, implied, disabled, onClick }: Props) {
+export function OptionButton({
+  index,
+  questionIndex,
+  label,
+  mark,
+  implied,
+  disabled,
+  focused,
+  onClick,
+}: Props) {
   const letter = LETTERS[index];
   const title = `${letter}: ${label}`;
 
@@ -25,6 +36,9 @@ export function OptionButton({ index, label, mark, implied, disabled, onClick }:
       disabled={disabled}
       title={title}
       aria-label={title}
+      tabIndex={focused ? 0 : -1}
+      data-qi={questionIndex}
+      data-oi={index}
     >
       <span class="option-indicator">
         {showIcon ? (

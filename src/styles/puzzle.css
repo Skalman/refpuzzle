@@ -135,6 +135,16 @@
   }
 }
 
+.option-btn:focus-visible {
+  outline-offset: -1px;
+  z-index: 1;
+}
+
+.question-row:has(:focus-visible) > .question-header > .question-num,
+.question-row:has(:focus-visible) > .question-header > .question-text {
+  color: var(--accent);
+}
+
 .option-letter {
   font-weight: 700;
   opacity: 0.45;

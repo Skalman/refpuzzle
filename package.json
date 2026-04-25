@@ -17,7 +17,8 @@
   },
   "dependencies": {
     "preact": "^10.28.4",
-    "preact-iso": "^2.11.1"
+    "preact-iso": "^2.11.1",
+    "tinykeys": "^3.0.0"
   },
   "devDependencies": {
     "@preact/preset-vite": "^2.10.3",

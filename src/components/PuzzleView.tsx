@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { tinykeys } from "tinykeys";
 import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import { validate } from "../engine/validate.ts";
@@ -7,6 +8,7 @@ import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
+import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import {
@@ -78,12 +80,14 @@ function HistoryStrip({
   hints,
   completed,
   onJump,
+  containerRef,
 }: {
   history: QuestionState[][];
   currentIdx: number;
   hints: Map<number, number>;
   completed: boolean;
   onJump: (idx: number) => void;
+  containerRef?: { current: HTMLDivElement | null };
 }) {
   const s = t();
   if (history.length <= 1) return null;
@@ -103,7 +107,12 @@ function HistoryStrip({
     }
 
   return (
-    <div class="history-strip">
+    <div
+      ref={containerRef}
+      class="history-strip"
+      role="toolbar"
+      onKeyDown={arrowNavHandler("button.history-step:not(:disabled)")}
+    >
       <button
         class={`history-step ${currentIdx === 0 ? "current" : ""}`}
         onClick={completed ? undefined : () => onJump(0)}
@@ -159,8 +168,8 @@ function HistoryStrip({
         );
       })}
       {completed && (
-        <span class="history-step completed-step">
-          <IconCheck size="1.5em" strokeWidth={3} class="icon-correct" /> Solved
+        <span class="history-step completed-step" aria-hidden="true">
+          <IconCheck size="1.5em" strokeWidth={3} class="icon-correct" /> {s.puzzle.solvedBadge}
         </span>
       )}
     </div>
@@ -229,7 +238,29 @@ export function PuzzleView({
   const [_historyVersion, setHistoryVersion] = useState(0);
 
   const [resetPending, setResetPending] = useState(false);
+  const resetPendingRef = useRef(false);
   const [shareMenu, setShareMenu] = useState(false);
+  const shareMenuRef = useRef(false);
+
+  const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(null);
+  const [focusedOption, setFocusedOptionRaw] = useState<number | null>(null);
+  const focusedQuestionRef = useRef<number | null>(null);
+  const focusedOptionRef = useRef<number | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const nextPuzzleRef = useRef<HTMLButtonElement>(null);
+  const numberBuf = useRef({ digits: "", timer: 0 });
+  const shareDropRef = useRef<HTMLButtonElement>(null);
+  const controlsRef = useRef<HTMLDivElement>(null);
+  const historyRef2 = useRef<HTMLDivElement>(null);
+
+  function setFocusedQuestion(v: number | null) {
+    focusedQuestionRef.current = v;
+    setFocusedQuestionRaw(v);
+  }
+  function setFocusedOption(v: number | null) {
+    focusedOptionRef.current = v;
+    setFocusedOptionRaw(v);
+  }
 
   useEffect(() => {
     if (!shareMenu) return undefined;
@@ -316,6 +347,8 @@ export function PuzzleView({
   }, [questions, revalidate]);
 
   const completed = validity.length > 0 && validity.every((v) => v === "valid");
+  const completedRef = useRef(completed);
+  completedRef.current = completed;
   const canUndo = historyIdxRef.current > 0;
   const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
@@ -343,10 +376,13 @@ export function PuzzleView({
 
     applyChange(next);
     setResetPending(false);
+    resetPendingRef.current = false;
+    setFocusedQuestion(questionIdx);
+    setFocusedOption(optionIdx);
   }
 
   function handleUndo() {
-    if (!canUndo) return;
+    if (historyIdxRef.current <= 0) return;
     historyIdxRef.current--;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
@@ -355,7 +391,7 @@ export function PuzzleView({
   }
 
   function handleRedo() {
-    if (!canRedo) return;
+    if (historyIdxRef.current >= historyRef.current.length - 1) return;
     historyIdxRef.current++;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
@@ -377,15 +413,17 @@ export function PuzzleView({
     const prev = historyRef.current[historyIdxRef.current - 1];
     const curr = historyRef.current[historyIdxRef.current];
     if (prev && describeDiff(prev, curr).qi < 0) return;
-    pushHistory(cloneStates(questions));
+    pushHistory(cloneStates(questionsRef.current));
   }
 
   function handleReset() {
-    if (!resetPending) {
+    if (!resetPendingRef.current) {
       setResetPending(true);
+      resetPendingRef.current = true;
       return;
     }
     setResetPending(false);
+    resetPendingRef.current = false;
     const fresh = puzzle.questions.map(() => ({
       marks: [...FRESH_MARKS] as Marks,
     }));
@@ -437,20 +475,248 @@ export function PuzzleView({
   // Clear reset pending after timeout
   useEffect(() => {
     if (!resetPending) return undefined;
-    const timer = setTimeout(() => setResetPending(false), 3000);
+    const timer = setTimeout(() => {
+      setResetPending(false);
+      resetPendingRef.current = false;
+    }, 3000);
     return () => clearTimeout(timer);
   }, [resetPending]);
+
+  // Autofocus "Next puzzle" on completion
+  useEffect(() => {
+    if (completed && nextPuzzleRef.current) nextPuzzleRef.current.focus();
+  }, [completed]);
+
+  // Init roving tabindex on controls toolbar
+  useEffect(() => {
+    initRovingTabindex(controlsRef.current, "button:not(:disabled)");
+  });
+
+  // Init roving tabindex on history strip
+  useEffect(() => {
+    initRovingTabindex(historyRef2.current, "button.history-step:not(:disabled)");
+  });
+
+  // Scroll focused question into view
+  useEffect(() => {
+    if (focusedQuestion == null) return;
+    const row = gridRef.current?.querySelector(`[data-qi="${focusedQuestion}"]`);
+    if (row instanceof HTMLElement) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [focusedQuestion]);
+
+  // Focus the active option button when focus state changes
+  useEffect(() => {
+    if (focusedQuestion == null || focusedOption == null) return;
+    const btn = gridRef.current?.querySelector(
+      `[data-qi="${focusedQuestion}"][data-oi="${focusedOption}"]`,
+    );
+    if (btn instanceof HTMLElement) btn.focus();
+  }, [focusedQuestion, focusedOption]);
+
+  const questionCount = puzzle.questions.length;
+
+  function moveFocus(dq: number, _do: number) {
+    const qi = focusedQuestionRef.current ?? 0;
+    const oi = focusedOptionRef.current ?? 0;
+    const nq = (qi + dq + questionCount) % questionCount;
+    let no = (oi + _do + 5) % 5;
+    // When moving between questions, snap to the correct option if the
+    // target option is disabled (another option is marked correct)
+    if (dq !== 0) {
+      const marks = questionsRef.current[nq]?.marks;
+      if (marks) {
+        const correctIdx = marks.indexOf("correct");
+        if (correctIdx >= 0) no = correctIdx;
+      }
+    }
+    setFocusedQuestion(nq);
+    setFocusedOption(no);
+  }
+
+  function navigateToQuestion(num: number) {
+    if (num < 1 || num > questionCount) return;
+    const qi = num - 1;
+    setFocusedQuestion(qi);
+    const marks = questionsRef.current[qi]?.marks;
+    const correctIdx = marks?.indexOf("correct") ?? -1;
+    setFocusedOption(correctIdx >= 0 ? correctIdx : (focusedOptionRef.current ?? 0));
+  }
+
+  function handleDigit(digit: number) {
+    const buf = numberBuf.current;
+    clearTimeout(buf.timer);
+    buf.digits += String(digit);
+
+    const parsed = parseInt(buf.digits, 10);
+
+    if (buf.digits.length >= 2) {
+      if (parsed >= 1 && parsed <= questionCount) {
+        navigateToQuestion(parsed);
+      } else {
+        const first = parseInt(buf.digits[0], 10);
+        if (first >= 1 && first <= questionCount) navigateToQuestion(first);
+      }
+      buf.digits = "";
+      return;
+    }
+
+    // Single digit — immediately highlight if valid, even if we're still buffering
+    if (parsed >= 1 && parsed <= questionCount) {
+      setFocusedQuestion(parsed - 1);
+      if (focusedOptionRef.current == null) setFocusedOption(0);
+    }
+
+    // Is it ambiguous? Only "1" on puzzles with 10+ questions
+    if (digit * 10 <= questionCount) {
+      buf.timer = window.setTimeout(() => {
+        const d = parseInt(buf.digits, 10);
+        if (d >= 1 && d <= questionCount) navigateToQuestion(d);
+        buf.digits = "";
+      }, 150);
+    } else {
+      if (parsed >= 1 && parsed <= questionCount) navigateToQuestion(parsed);
+      buf.digits = "";
+    }
+  }
+
+  // Grid keyboard navigation
+  function handleGridKeyDown(e: KeyboardEvent) {
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        moveFocus(1, 0);
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        moveFocus(-1, 0);
+        break;
+      case "ArrowRight":
+        e.preventDefault();
+        moveFocus(0, 1);
+        break;
+      case "ArrowLeft":
+        e.preventDefault();
+        moveFocus(0, -1);
+        break;
+      case "Enter":
+      case " ":
+        e.preventDefault();
+        if (focusedQuestionRef.current != null && focusedOptionRef.current != null && !completed) {
+          handleOptionClick(focusedQuestionRef.current, focusedOptionRef.current);
+        }
+        break;
+    }
+  }
+
+  // Share menu keyboard navigation
+  function handleShareMenuKeyDown(e: KeyboardEvent) {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      setShareMenu(false);
+      shareMenuRef.current = false;
+      shareDropRef.current?.focus();
+    } else if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+    }
+  }
+
+  // Tinykeys shortcuts
+  useEffect(() => {
+    const g = guarded;
+    const unsubscribe = tinykeys(window, {
+      a: g(() => {
+        if (focusedQuestionRef.current != null && !completedRef.current)
+          handleOptionClick(focusedQuestionRef.current, 0);
+      }),
+      b: g(() => {
+        if (focusedQuestionRef.current != null && !completedRef.current)
+          handleOptionClick(focusedQuestionRef.current, 1);
+      }),
+      c: g(() => {
+        if (focusedQuestionRef.current != null && !completedRef.current)
+          handleOptionClick(focusedQuestionRef.current, 2);
+      }),
+      d: g(() => {
+        if (focusedQuestionRef.current != null && !completedRef.current)
+          handleOptionClick(focusedQuestionRef.current, 3);
+      }),
+      e: g(() => {
+        if (focusedQuestionRef.current != null && !completedRef.current)
+          handleOptionClick(focusedQuestionRef.current, 4);
+      }),
+      "0": g(() => {
+        if (!completedRef.current) handleDigit(0);
+      }),
+      "1": g(() => {
+        if (!completedRef.current) handleDigit(1);
+      }),
+      "2": g(() => {
+        if (!completedRef.current) handleDigit(2);
+      }),
+      "3": g(() => {
+        if (!completedRef.current) handleDigit(3);
+      }),
+      "4": g(() => {
+        if (!completedRef.current) handleDigit(4);
+      }),
+      "5": g(() => {
+        if (!completedRef.current) handleDigit(5);
+      }),
+      "6": g(() => {
+        if (!completedRef.current) handleDigit(6);
+      }),
+      "7": g(() => {
+        if (!completedRef.current) handleDigit(7);
+      }),
+      "8": g(() => {
+        if (!completedRef.current) handleDigit(8);
+      }),
+      "9": g(() => {
+        if (!completedRef.current) handleDigit(9);
+      }),
+      "$mod+z": g((ev) => {
+        ev.preventDefault();
+        if (!completedRef.current) handleUndo();
+      }),
+      "$mod+Shift+z": g((ev) => {
+        ev.preventDefault();
+        if (!completedRef.current) handleRedo();
+      }),
+      "$mod+y": g((ev) => {
+        ev.preventDefault();
+        if (!completedRef.current) handleRedo();
+      }),
+      h: g(() => {
+        if (!completedRef.current) handleHint();
+      }),
+      p: g(() => {
+        if (!completedRef.current) handleSave();
+      }),
+      j: g(() => {
+        if (!completedRef.current) moveFocus(1, 0);
+      }),
+      k: g(() => {
+        if (!completedRef.current) moveFocus(-1, 0);
+      }),
+    });
+    return unsubscribe;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div class="puzzle-view">
       {/* Questions */}
       <div
-        class={puzzle.difficulty >= 3 ? "questions-grid" : ""}
-        style={
-          puzzle.difficulty >= 3
-            ? { gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)` }
-            : undefined
-        }
+        ref={gridRef}
+        class="questions-grid"
+        style={{ gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)` }}
+        onKeyDown={handleGridKeyDown}
+        onFocusCapture={() => {
+          if (focusedQuestionRef.current == null) {
+            setFocusedQuestion(0);
+            setFocusedOption(0);
+          }
+        }}
       >
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
@@ -460,6 +726,8 @@ export function PuzzleView({
             marks={questions[qi]?.marks ?? FRESH_MARKS}
             validity={validity[qi] ?? "neutral"}
             disabled={completed}
+            focusedOption={focusedQuestion === qi ? focusedOption : null}
+            defaultFocus={focusedQuestion == null && qi === 0}
             onOptionClick={(oi) => handleOptionClick(qi, oi)}
           />
         ))}
@@ -471,7 +739,7 @@ export function PuzzleView({
           {hintText}
           {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
             <button class="hint-more" onClick={handleHint}>
-              more
+              {s.puzzle.more}
             </button>
           )}
         </div>
@@ -482,7 +750,7 @@ export function PuzzleView({
         <div class="puzzle-complete">
           <span>{s.puzzle.solved}</span>
           {level < 5 && (
-            <button class="next-puzzle-btn" onClick={onNextPuzzle}>
+            <button ref={nextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
               {s.puzzle.nextPuzzle} &rarr;
             </button>
           )}
@@ -490,7 +758,12 @@ export function PuzzleView({
       )}
 
       {/* Controls */}
-      <div class="puzzle-controls">
+      <div
+        ref={controlsRef}
+        class="puzzle-controls"
+        role="toolbar"
+        onKeyDown={arrowNavHandler("button:not(:disabled)")}
+      >
         <button
           class="toolbar-icon-btn"
           onClick={handleUndo}
@@ -525,10 +798,35 @@ export function PuzzleView({
           </button>
           <span class="split-btn-wrapper">
             <button
+              ref={shareDropRef}
               class="toolbar-accent-btn split-btn-drop"
+              aria-haspopup="true"
+              aria-expanded={shareMenu}
               onClick={(e) => {
                 e.stopPropagation();
-                setShareMenu((v) => !v);
+                setShareMenu((v) => {
+                  shareMenuRef.current = !v;
+                  return !v;
+                });
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShareMenu(true);
+                  shareMenuRef.current = true;
+                  requestAnimationFrame(() => {
+                    const item = shareDropRef.current
+                      ?.closest(".split-btn-wrapper")
+                      ?.querySelector(".split-btn-menu");
+                    if (item instanceof HTMLElement) item.focus();
+                  });
+                } else if (e.key === "Escape" && shareMenuRef.current) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setShareMenu(false);
+                  shareMenuRef.current = false;
+                }
               }}
             >
               <IconChevronDown size="1em" />
@@ -536,8 +834,11 @@ export function PuzzleView({
             {shareMenu && (
               <button
                 class="split-btn-menu"
+                role="menuitem"
+                onKeyDown={handleShareMenuKeyDown}
                 onClick={() => {
                   setShareMenu(false);
+                  shareMenuRef.current = false;
                   handleShareProgress();
                 }}
               >
@@ -563,6 +864,7 @@ export function PuzzleView({
           hints={hintMarkers.current}
           completed={completed}
           onJump={handleJumpTo}
+          containerRef={historyRef2}
         />
       )}
     </div>

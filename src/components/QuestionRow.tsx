@@ -8,17 +8,28 @@ interface Props {
   marks: Marks;
   validity: Validity;
   disabled?: boolean;
+  focusedOption?: number | null;
+  defaultFocus?: boolean;
   onOptionClick: (optionIndex: number) => void;
 }
 
 const LONG_THRESHOLD = 12;
 
-export function QuestionRow({ index, question, marks, validity, disabled, onOptionClick }: Props) {
+export function QuestionRow({
+  index,
+  question,
+  marks,
+  validity,
+  disabled,
+  focusedOption,
+  defaultFocus,
+  onOptionClick,
+}: Props) {
   const isLong = question.options.some((o) => o.label.length > LONG_THRESHOLD);
   const hasCorrect = marks.indexOf("correct") >= 0;
 
   return (
-    <div class="question-row">
+    <div class="question-row" data-qi={index}>
       <div class={`validity-bar ${validity}`} />
       <div class="question-header">
         <span class="question-num">{index + 1}.</span>
@@ -29,10 +40,12 @@ export function QuestionRow({ index, question, marks, validity, disabled, onOpti
           <OptionButton
             key={opt.label}
             index={oi}
+            questionIndex={index}
             label={opt.label}
             mark={marks[oi]}
             implied={hasCorrect && marks[oi] === "unmarked"}
             disabled={disabled || (hasCorrect && marks[oi] !== "correct")}
+            focused={focusedOption === oi || (defaultFocus && oi === 0)}
             onClick={() => onOptionClick(oi)}
           />
         ))}

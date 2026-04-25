@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
+import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
+import { KeyboardHelp, KeyboardShortcutList } from "./components/KeyboardHelp.tsx";
 import {
   IconCalendar,
   IconHelp,
@@ -22,6 +24,7 @@ import {
   puzzleId,
 } from "./puzzles/daily.ts";
 import { hasState } from "./lib/store.ts";
+import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
 import { Logo } from "./components/Logo.tsx";
 
@@ -112,7 +115,7 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
     >
       <div class="help-panel-header">
         <h3>{s.help.title}</h3>
-        <button class="help-close" onClick={onClose} aria-label="Close">
+        <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
           &times;
         </button>
       </div>
@@ -143,8 +146,10 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
       </ol>
       <h4>{s.help.whatIs}</h4>
       <p>{s.help.description}</p>
+      <h4>{s.keyboard.title}</h4>
+      <KeyboardShortcutList />
       <p class="help-credit">
-        Inspired by{" "}
+        {s.help.inspiredBy}{" "}
         <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">
           Logiquiz
         </a>
@@ -167,13 +172,52 @@ function AppHeader({
   const s = t();
   const theme = useTheme();
   const [moreMenu, setMoreMenu] = useState(false);
+  const moreBtnRef = useRef<HTMLButtonElement>(null);
+  const moreMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!moreMenu) return undefined;
     const close = () => setMoreMenu(false);
     document.addEventListener("click", close);
+    // Auto-focus the first visible item
+    requestAnimationFrame(() => {
+      const items = moreMenuRef.current?.querySelectorAll(".more-menu-item");
+      if (items) {
+        for (const item of items) {
+          if (item instanceof HTMLElement && item.offsetParent !== null) {
+            item.focus();
+            break;
+          }
+        }
+      }
+    });
     return () => document.removeEventListener("click", close);
   }, [moreMenu]);
+
+  function handleMoreMenuKeyDown(e: KeyboardEvent) {
+    const allItems = moreMenuRef.current?.querySelectorAll(".more-menu-item");
+    if (!allItems) return;
+    const items: HTMLElement[] = [];
+    for (const el of allItems) {
+      if (el instanceof HTMLElement && el.offsetParent !== null) items.push(el);
+    }
+    if (!items.length) return;
+
+    const current = document.activeElement;
+    const idx = current instanceof HTMLElement ? items.indexOf(current) : -1;
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      items[(idx + 1) % items.length].focus();
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      items[(idx - 1 + items.length) % items.length].focus();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setMoreMenu(false);
+      moreBtnRef.current?.focus();
+    }
+  }
 
   return (
     <header class="app-header">
@@ -185,34 +229,59 @@ function AppHeader({
           </span>
         </a>
       </h1>
-      <div class="header-actions">
-        <a href="/past" class="header-btn hide-mobile" aria-label={s.daily.pastPuzzles}>
+      <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler(".header-btn")}>
+        <a
+          href="/past"
+          class="header-btn hide-mobile"
+          tabIndex={0}
+          aria-label={s.daily.pastPuzzles}
+        >
           <IconCalendar /> {s.daily.pastPuzzles}
         </a>
-        <button class="header-btn hide-mobile" onClick={onHelp} aria-label="Help">
+        <button
+          class="header-btn hide-mobile"
+          tabIndex={-1}
+          onClick={onHelp}
+          aria-label={s.aria.help}
+        >
           <IconHelp /> {s.help.title}
         </button>
-        <button class="header-btn hide-mobile" onClick={theme.cycle} aria-label="Toggle theme">
-          {theme.icon} Theme
+        <button
+          class="header-btn hide-mobile"
+          tabIndex={-1}
+          onClick={theme.cycle}
+          aria-label={s.aria.toggleTheme}
+        >
+          {theme.icon} {s.header.theme}
         </button>
         <span class="more-menu-wrapper">
           <button
+            ref={moreBtnRef}
             class="header-btn more-btn"
+            tabIndex={-1}
             onClick={(e) => {
               e.stopPropagation();
               setMoreMenu((v) => !v);
             }}
-            aria-label="More"
+            aria-label={s.aria.more}
+            aria-haspopup="true"
+            aria-expanded={moreMenu}
           >
             ⋯
           </button>
           {moreMenu && (
-            <div class="more-menu">
-              <a href="/past" class="more-menu-item show-mobile" onClick={() => setMoreMenu(false)}>
+            <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
+              <a
+                href="/past"
+                class="more-menu-item show-mobile"
+                role="menuitem"
+                onClick={() => setMoreMenu(false)}
+              >
                 {s.daily.pastPuzzles}
               </a>
               <button
                 class="more-menu-item show-mobile"
+                role="menuitem"
                 onClick={() => {
                   setMoreMenu(false);
                   onHelp();
@@ -222,17 +291,19 @@ function AppHeader({
               </button>
               <button
                 class="more-menu-item show-mobile"
+                role="menuitem"
                 onClick={(e) => {
                   e.stopPropagation();
                   theme.cycle();
                 }}
               >
-                {theme.icon} Theme
+                {theme.icon} {s.header.theme}
               </button>
               <hr class="more-menu-divider show-mobile" />
               {onPrint && (
                 <button
                   class="more-menu-item"
+                  role="menuitem"
                   onClick={() => {
                     setMoreMenu(false);
                     onPrint();
@@ -243,6 +314,7 @@ function AppHeader({
               )}
               <button
                 class="more-menu-item"
+                role="menuitem"
                 onClick={() => {
                   setMoreMenu(false);
                   onExport();
@@ -250,7 +322,18 @@ function AppHeader({
               >
                 {s.backup.exportData}
               </button>
-              <label class="more-menu-item">
+              <label
+                class="more-menu-item"
+                role="menuitem"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    const input = e.currentTarget.querySelector("input");
+                    if (input instanceof HTMLInputElement) input.click();
+                  }
+                }}
+              >
                 {s.backup.importData}
                 <input
                   type="file"
@@ -278,6 +361,7 @@ function DailyPage() {
 function DayView({ dateStr }: { dateStr: string }) {
   const s = t();
   const [showHelp, setShowHelp] = useState(false);
+  const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
   const [_puzzleVersion, setPuzzleVersion] = useState(0);
@@ -288,6 +372,10 @@ function DayView({ dateStr }: { dateStr: string }) {
   const initialHash = window.location.hash.slice(1) || null;
   const [activeLevel, setActiveLevel] = useState(hashLevel >= 1 && hashLevel <= 5 ? hashLevel : 1);
 
+  const activeLevelRef = useRef(activeLevel);
+  activeLevelRef.current = activeLevel;
+  const showKeyboardHelpRef = useRef(false);
+
   const selectLevel = useCallback(
     (level: number) => {
       setActiveLevel(level);
@@ -295,6 +383,52 @@ function DayView({ dateStr }: { dateStr: string }) {
     },
     [dateStr],
   );
+
+  // Page-level keyboard shortcuts
+  useEffect(() => {
+    const g = guarded;
+    const unsubscribe = tinykeys(window, {
+      "[": g(() => {
+        if (activeLevelRef.current > 1) selectLevel(activeLevelRef.current - 1);
+      }),
+      "]": g(() => {
+        if (activeLevelRef.current < 5) selectLevel(activeLevelRef.current + 1);
+      }),
+      Escape: (ev: KeyboardEvent) => {
+        // Priority: dialog handled natively > menu > overlay > pending reset
+        const target = ev.target;
+        if (target instanceof HTMLElement && target.closest("dialog")) return;
+        if (showKeyboardHelpRef.current) {
+          showKeyboardHelpRef.current = false;
+          setShowKeyboardHelp(false);
+        }
+      },
+    });
+
+    // "?" bypasses tinykeys — tinykeys rejects shiftKey when Shift isn't in
+    // the binding, and "?" inherently requires Shift on most layouts. Matching
+    // event.key directly is layout-independent.
+    function handleQuestion(ev: KeyboardEvent) {
+      if (ev.key !== "?") return;
+      const el = ev.target;
+      if (
+        el instanceof HTMLElement &&
+        (el.closest("dialog") ||
+          el.tagName === "INPUT" ||
+          el.tagName === "TEXTAREA" ||
+          el.tagName === "SELECT")
+      )
+        return;
+      showKeyboardHelpRef.current = !showKeyboardHelpRef.current;
+      setShowKeyboardHelp(showKeyboardHelpRef.current);
+    }
+    window.addEventListener("keydown", handleQuestion);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener("keydown", handleQuestion);
+    };
+  }, [selectLevel]);
 
   useEffect(() => {
     setLoading(true);
@@ -375,13 +509,16 @@ function DayView({ dateStr }: { dateStr: string }) {
         <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
       </div>
 
-      <div class="difficulty-tabs">
+      <div class="difficulty-tabs" role="tablist" onKeyDown={arrowNavHandler(".difficulty-tab")}>
         {[1, 2, 3, 4, 5].map((level) => {
           const state = hasState(puzzleId(dateStr, level));
           const { started, completed: solved } = state;
           return (
             <button
               key={level}
+              role="tab"
+              aria-selected={activeLevel === level}
+              tabIndex={activeLevel === level ? 0 : -1}
               class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}`}
               onClick={() => selectLevel(level)}
             >
@@ -414,6 +551,14 @@ function DayView({ dateStr }: { dateStr: string }) {
       )}
 
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+      {showKeyboardHelp && (
+        <KeyboardHelp
+          onClose={() => {
+            setShowKeyboardHelp(false);
+            showKeyboardHelpRef.current = false;
+          }}
+        />
+      )}
 
       <div class="inline-help">
         <h4>{s.help.whatIs}</h4>
@@ -429,7 +574,7 @@ function DayView({ dateStr }: { dateStr: string }) {
       {puzzles && (
         <div class="print-only">
           <h1>
-            Refpuzzle &mdash; Day #{dayNumber(dateStr)} &mdash; {dateStr}
+            {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
           </h1>
           {[1, 2, 3, 4, 5].map((lvl) => {
             const p = puzzles[`level-${lvl}`];
@@ -437,7 +582,7 @@ function DayView({ dateStr }: { dateStr: string }) {
             return (
               <div key={lvl} class="print-puzzle">
                 <h2>
-                  {s.difficulty[lvl]} ({p.questions.length} questions)
+                  {s.difficulty[lvl]} ({p.questions.length} {s.puzzleList.questions})
                 </h2>
                 {p.questions.map((q, qi) => (
                   <div key={q.text} class="print-question">
@@ -518,7 +663,7 @@ function ImportPreview({
     >
       <div class="help-panel-header">
         <h3>{s.backup.importPreview}</h3>
-        <button class="help-close" onClick={onCancel}>
+        <button class="help-close" onClick={onCancel} aria-label={s.aria.close}>
           &times;
         </button>
       </div>
@@ -634,14 +779,15 @@ function PastPuzzlesPage() {
 }
 
 function DayRoute() {
+  const s = t();
   const loc = useLocation();
   const dateStr = loc.path.replace("/day/", "");
   if (!dateStr || !isValidDate(dateStr)) {
     return (
       <div class="not-found">
-        <h1>No puzzle</h1>
-        <p>No puzzle available for this date.</p>
-        <a href="/">Back to today</a>
+        <h1>{s.notFound.noPuzzle}</h1>
+        <p>{s.notFound.noPuzzleDesc}</p>
+        <a href="/">{s.notFound.backToToday}</a>
       </div>
     );
   }
@@ -649,11 +795,12 @@ function DayRoute() {
 }
 
 function NotFound() {
+  const s = t();
   return (
     <div class="not-found">
-      <h1>404</h1>
-      <p>Page not found</p>
-      <a href="/">Back to puzzles</a>
+      <h1>{s.notFound.title}</h1>
+      <p>{s.notFound.pageNotFound}</p>
+      <a href="/">{s.notFound.backToPuzzles}</a>
     </div>
   );
 }
