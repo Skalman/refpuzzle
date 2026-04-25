@@ -1,3 +1,4 @@
+use crate::evaluate::evaluate;
 use crate::types::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -259,7 +260,13 @@ pub fn find_action_fast(
                     }
                 }
             }
-            _ => {}
+            _ => {
+                // Fallback for rule types without specialized partial-state checks.
+                // Only safe when all answers are known (full evaluate is exact).
+                if (0..n).all(|i| answers[i].is_some()) && !evaluate(fp, qi, a, answers) {
+                    return Some(Action::Contradiction { qi });
+                }
+            }
         }
     }
 
@@ -478,11 +485,17 @@ pub fn find_action_fast(
                     };
                     if on != NONE_VAL {
                         let pos = on - 1;
+                        if pos < scan_start as i16 || pos >= n as i16 {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
                         if pos >= 0 && (pos as usize) < n {
-                            if let Some(pa) = answers[pos as usize] {
+                            let p = pos as usize;
+                            if let Some(pa) = answers[p] {
                                 if pa != answer {
                                     return Some(Action::Eliminate { qi, oi });
                                 }
+                            } else if (eliminated[p] >> answer.idx()) & 1 == 1 {
+                                return Some(Action::Eliminate { qi, oi });
                             }
                         }
                         if pos > 0 {
@@ -507,11 +520,17 @@ pub fn find_action_fast(
                     };
                     if on != NONE_VAL {
                         let pos = on - 1;
+                        if pos < 0 || pos >= before_idx as i16 {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
                         if pos >= 0 && (pos as usize) < n {
-                            if let Some(pa) = answers[pos as usize] {
+                            let p = pos as usize;
+                            if let Some(pa) = answers[p] {
                                 if pa != answer {
                                     return Some(Action::Eliminate { qi, oi });
                                 }
+                            } else if (eliminated[p] >> answer.idx()) & 1 == 1 {
+                                return Some(Action::Eliminate { qi, oi });
                             }
                         }
                         if pos >= 0 {
@@ -525,6 +544,97 @@ pub fn find_action_fast(
                         for j in 0..before_idx {
                             if answers[j] == Some(answer) {
                                 return Some(Action::Eliminate { qi, oi });
+                            }
+                        }
+                    }
+                }
+                Rule::OnlyOdd { answer } => {
+                    if on != NONE_VAL {
+                        let pos = (on - 1) as usize;
+                        // Position must be odd-numbered (1-indexed)
+                        if on % 2 == 0 {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
+                        // Position must be in range and could have the answer
+                        if pos < n {
+                            if let Some(pa) = answers[pos] {
+                                if pa != answer {
+                                    return Some(Action::Eliminate { qi, oi });
+                                }
+                            } else if (eliminated[pos] >> answer.idx()) & 1 == 1 {
+                                return Some(Action::Eliminate { qi, oi });
+                            }
+                        }
+                    } else {
+                        // None: eliminate if any odd-positioned Q has the answer
+                        for i in 0..n {
+                            if (i + 1) % 2 == 1 && answers[i] == Some(answer) {
+                                return Some(Action::Eliminate { qi, oi });
+                            }
+                        }
+                    }
+                }
+                Rule::ConsecIdent => {
+                    if on != NONE_VAL {
+                        let pos = on as usize;
+                        // Pair at (pos, pos+1). Both must have same answer.
+                        if pos + 1 < n {
+                            if let (Some(a), Some(b)) = (answers[pos], answers[pos + 1]) {
+                                if a != b {
+                                    return Some(Action::Eliminate { qi, oi });
+                                }
+                            }
+                        }
+                    } else {
+                        // None: eliminate if any consecutive pair has same answer
+                        for i in 0..n.saturating_sub(1) {
+                            if let (Some(a), Some(b)) = (answers[i], answers[i + 1]) {
+                                if a == b {
+                                    return Some(Action::Eliminate { qi, oi });
+                                }
+                            }
+                        }
+                    }
+                }
+                Rule::PrevSame => {
+                    if on != NONE_VAL {
+                        let pos = (on - 1) as usize;
+                        // Must point to a position before qi
+                        if pos >= qi {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
+                        // If that position is answered, it must match our letter
+                        if let Some(pa) = answers[pos] {
+                            if let Some(my) = answers[qi] {
+                                if pa != my {
+                                    return Some(Action::Eliminate { qi, oi });
+                                }
+                            }
+                        }
+                    }
+                }
+                Rule::NextSame => {
+                    if on != NONE_VAL {
+                        let pos = (on - 1) as usize;
+                        // Must point to a position after qi
+                        if pos <= qi || pos >= n {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
+                    }
+                }
+                Rule::OnlySame | Rule::SameAs => {
+                    if on != NONE_VAL {
+                        let pos = (on - 1) as usize;
+                        // Can't point to self
+                        if pos == qi {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
+                        // If target is answered, must match our selected letter
+                        if pos < n {
+                            if let (Some(target), Some(my_ans)) = (answers[pos], answers[qi]) {
+                                if target != my_ans {
+                                    return Some(Action::Eliminate { qi, oi });
+                                }
                             }
                         }
                     }
@@ -1179,6 +1289,67 @@ mod tests {
         assert!(
             new_dist > old_dist,
             "repaired distractor should be further from correct"
+        );
+    }
+
+    #[test]
+    fn test_truestmt_contradiction_when_all_answered() {
+        // When all questions are answered, a wrong TrueStmt answer should
+        // be caught by the evaluate fallback in the Contradictions section.
+        use Answer::*;
+        let mut rules = [Rule::AnswerIsSelf; MAX_N];
+        rules[0] = Rule::TrueStmt;
+        let n = 3;
+
+        let mut option_claims = [[Claim::None; 5]; MAX_N];
+        // B is correct: "1 D" is true (Q2=D in our setup)
+        option_claims[0][1] = Claim::CountAnswerEquals {
+            answer: D,
+            value: 1,
+        };
+        // A is wrong: "2 D's" is false
+        option_claims[0][0] = Claim::CountAnswerEquals {
+            answer: D,
+            value: 2,
+        };
+        // C is wrong: "0 D's" is false
+        option_claims[0][2] = Claim::CountAnswerEquals {
+            answer: D,
+            value: 0,
+        };
+
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&rules, n);
+        let fp = FlatPuzzle {
+            rules,
+            n,
+            option_nums: [[NAN_VAL; 5]; MAX_N],
+            option_answers: [[0xFFu8; 5]; MAX_N],
+            option_claims,
+            affected_by,
+            global_indices,
+        };
+
+        // All 3 answered: Q1=B (correct TrueStmt), Q2=D, Q3=A
+        let mut answers = [None; MAX_N];
+        answers[0] = Some(B);
+        answers[1] = Some(D);
+        answers[2] = Some(A);
+        let eliminated = [0u8; MAX_N];
+
+        // No contradiction (B is correct)
+        let action = find_action_fast(&fp, &answers, &eliminated);
+        assert!(
+            !matches!(action, Some(Action::Contradiction { .. })),
+            "correct TrueStmt answer should not contradict"
+        );
+
+        // Now set Q1=A (wrong). Should contradict.
+        answers[0] = Some(A);
+        let action = find_action_fast(&fp, &answers, &eliminated);
+        eprintln!("Q1=A (wrong TrueStmt): {action:?}");
+        assert!(
+            matches!(action, Some(Action::Contradiction { qi: 0 })),
+            "wrong TrueStmt answer should contradict when all answered"
         );
     }
 

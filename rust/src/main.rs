@@ -84,6 +84,7 @@ fn main() {
     );
 
     let start_time = Instant::now();
+    // gen_common::DUMP_ZERO_PROGRESS.store(true, std::sync::atomic::Ordering::Relaxed);
 
     let levels: Vec<u8> = match level_filter {
         Some(l) => vec![l],
@@ -201,6 +202,7 @@ fn main() {
         elapsed.as_secs_f64() * 1000.0 / day_count as f64
     );
     eprintln!("  Output:  {raw_kb}KB JSON");
+    gen_common::print_stats();
 
     println!("{json_out}");
 }

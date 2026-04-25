@@ -4,6 +4,45 @@ use crate::rng::Rng;
 use crate::solver::solve;
 use crate::types::*;
 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+pub static DUMP_ZERO_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+pub static STATS: [AtomicU64; 9] = {
+    const Z: AtomicU64 = AtomicU64::new(0);
+    [Z; 9]
+};
+// 0=attempts, 1=fail_eval, 2=fail_unique, 3=fail_solve, 4=repair_attempts,
+// 5=repair_ok, 6=solve_us, 7=hint_us, 8=solve_fail_zero_progress
+
+pub fn print_stats() {
+    let s = |i: usize| STATS[i].load(Ordering::Relaxed);
+    let ok = s(0) - s(1) - s(2) - s(3);
+    eprintln!(
+        "  attempts={} ok={} eval_fail={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{} | solve={}ms hint={}ms",
+        s(0),
+        ok,
+        s(1),
+        s(2),
+        s(3),
+        s(8),
+        s(5),
+        s(4),
+        s(6) / 1000,
+        s(7) / 1000
+    );
+}
+
+pub fn reset_stats() {
+    for s in &STATS {
+        s.store(0, Ordering::Relaxed);
+    }
+}
+
+fn us(t: std::time::Instant) -> u64 {
+    t.elapsed().as_micros() as u64
+}
+
 pub struct GenerateResult {
     pub rules: [Rule; MAX_N],
     pub solution: [Answer; MAX_N],
@@ -100,9 +139,12 @@ pub fn validate_and_check(
     n: usize,
     rng: &mut Rng,
 ) -> bool {
+    STATS[0].fetch_add(1, Ordering::Relaxed);
+
     for i in 0..n {
         for j in (i + 1)..n {
             if rules[i] == rules[j] {
+                STATS[1].fetch_add(1, Ordering::Relaxed);
                 return false;
             }
         }
@@ -111,31 +153,66 @@ pub fn validate_and_check(
     let opt_solution = to_optional(solution, n);
     for i in 0..n {
         if !evaluate(fp, i, solution[i], &opt_solution) {
+            STATS[1].fetch_add(1, Ordering::Relaxed);
             return false;
         }
     }
 
+    let t0 = std::time::Instant::now();
     let solutions = solve(fp, None, 2);
+    STATS[6].fetch_add(us(t0), Ordering::Relaxed);
     if solutions.len() != 1 {
+        STATS[2].fetch_add(1, Ordering::Relaxed);
         return false;
     }
 
+    let t0 = std::time::Instant::now();
     let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp);
+    STATS[7].fetch_add(us(t0), Ordering::Relaxed);
     if ok {
         return true;
     }
+    let solved_before = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
+    STATS[3].fetch_add(1, Ordering::Relaxed);
+    if solved_before == 0 {
+        STATS[8].fetch_add(1, Ordering::Relaxed);
+    }
 
-    // Solvability failed — try incremental distractor repair.
-    // For each stuck question (counting rules first), replace the distractor
-    // closest to the correct value with the furthest available value.
-    // Re-check from stuck state after each repair; verify from scratch on success.
+    let dump_this = DUMP_ZERO_PROGRESS.load(Ordering::Relaxed);
+
     let candidates = rank_repair_candidates(fp, &stuck_answers);
     let mut maybe_solved = false;
 
     for &qi in &candidates {
+        STATS[4].fetch_add(1, Ordering::Relaxed);
+        let old_nums = fp.option_nums[qi];
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
 
-        let (ok, _, _) = run_hint_engine_from(fp, stuck_answers, stuck_elim);
+        // For zero-progress puzzles, run from scratch (stuck state is empty).
+        // For partial-progress, run from stuck state (repairs stack).
+        let t0 = std::time::Instant::now();
+        let (ok, post_answers, _) = if solved_before == 0 {
+            run_hint_engine(fp)
+        } else {
+            run_hint_engine_from(fp, stuck_answers, stuck_elim)
+        };
+        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
+
+        if dump_this {
+            let post_solved = (0..n).filter(|&i| post_answers[i].is_some()).count();
+            let changed_oi = (0..5).find(|&oi| old_nums[oi] != fp.option_nums[qi][oi]);
+            if let Some(oi) = changed_oi {
+                eprintln!(
+                    "  repair Q{}: oi={} {}→{} => {post_solved}/{n} solved{}",
+                    qi + 1,
+                    oi,
+                    old_nums[oi],
+                    fp.option_nums[qi][oi],
+                    if ok { " ✓" } else { "" }
+                );
+            }
+        }
+
         if ok {
             maybe_solved = true;
             break;
@@ -143,8 +220,45 @@ pub fn validate_and_check(
     }
 
     if !maybe_solved {
-        let (ok, _, _) = run_hint_engine(fp);
+        let t0 = std::time::Instant::now();
+        let (ok, post_answers, post_elim) = run_hint_engine(fp);
+        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
         maybe_solved = ok;
+
+        if dump_this && !ok {
+            let post_solved = (0..n).filter(|&i| post_answers[i].is_some()).count();
+            let stuck_rules: Vec<String> = (0..n)
+                .filter(|&qi| post_answers[qi].is_none())
+                .map(|qi| {
+                    let rem = (!post_elim[qi] & 0b11111u8).count_ones();
+                    let kind = match fp.rules[qi] {
+                        Rule::CountAnswer { .. }
+                        | Rule::CountAnswerBefore { .. }
+                        | Rule::CountAnswerAfter { .. }
+                        | Rule::CountVowel
+                        | Rule::CountConsonant
+                        | Rule::MostCommonCount => "count",
+                        Rule::AnswerOf { .. } => "ansof",
+                        Rule::LetterDist { .. } => "ldist",
+                        Rule::FirstWith { .. }
+                        | Rule::LastWith { .. }
+                        | Rule::ClosestAfter { .. }
+                        | Rule::ClosestBefore { .. } => "pos",
+                        Rule::ConsecIdent => "consec",
+                        Rule::OnlyOdd { .. } => "odd",
+                        Rule::PrevSame | Rule::NextSame | Rule::OnlySame | Rule::SameAs => "same",
+                        Rule::TrueStmt => "true",
+                        Rule::LeastCommon
+                        | Rule::MostCommon
+                        | Rule::Unique
+                        | Rule::EqualCount { .. } => "const",
+                        Rule::AnswerIsSelf => "self",
+                    };
+                    format!("Q{}:{kind}({rem})", qi + 1)
+                })
+                .collect();
+            eprintln!("  stuck {post_solved}/{n}: {}", stuck_rules.join(" "));
+        }
     }
 
     if maybe_solved {
@@ -153,12 +267,19 @@ pub fn validate_and_check(
                 return false;
             }
         }
+        let t0 = std::time::Instant::now();
         let (ok, _, _) = run_hint_engine(fp);
+        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
         if !ok {
             return false;
         }
+        let t0 = std::time::Instant::now();
         let solutions = solve(fp, None, 2);
-        return solutions.len() == 1;
+        STATS[6].fetch_add(us(t0), Ordering::Relaxed);
+        if solutions.len() == 1 {
+            STATS[5].fetch_add(1, Ordering::Relaxed);
+            return true;
+        }
     }
 
     false
