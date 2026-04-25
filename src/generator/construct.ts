@@ -42,13 +42,7 @@ export function generateConstructive(
   return null;
 }
 
-const CONSTRAINED_TYPES = new Set<string>([
-  "least_common_answer",
-  "most_common_answer",
-  "unique_answer",
-  "equal_count_as",
-  "answer_is_self",
-]);
+const CONSTRAINED_TYPES = new Set<string>(["unique_answer", "equal_count_as", "answer_is_self"]);
 
 // Rule types by category
 const ENTRY_TYPES: ValidationRule["type"][] = [
@@ -665,13 +659,11 @@ function solutionCompatible(
   switch (type) {
     case "least_common_answer": {
       const c = letterCounts(solution.slice(0, n));
-      const min = Math.min(...c);
-      return c[L2I[solution[qi]]] === min && c.filter((v) => v === min).length === 1;
+      return c.filter((v) => v === Math.min(...c)).length === 1;
     }
     case "most_common_answer": {
       const c = letterCounts(solution.slice(0, n));
-      const max = Math.max(...c);
-      return c[L2I[solution[qi]]] === max && c.filter((v) => v === max).length === 1;
+      return c.filter((v) => v === Math.max(...c)).length === 1;
     }
     case "same_answer_as": {
       for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
@@ -704,6 +696,18 @@ function engineerOptions(
 ): OptionDef[] {
   if (CONSTRAINED_TYPES.has(rule.type)) return LETTERS.map((l) => ({ label: l }));
   if (rule.type === "only_true_statement") return buildClaims(qi, solution, n, rng);
+  if (rule.type === "least_common_answer" || rule.type === "most_common_answer") {
+    const counts = letterCounts(solution.slice(0, n));
+    const target = rule.type === "least_common_answer" ? Math.min(...counts) : Math.max(...counts);
+    const correctLetter = LETTERS[counts.indexOf(target)];
+    const targetIdx = L2I[solution[qi]];
+    const pool = rng.shuffle(LETTERS.filter((l) => l !== correctLetter) as string[]);
+    const opts: OptionDef[] = new Array(5);
+    opts[targetIdx] = { label: correctLetter };
+    let di = 0;
+    for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { label: pool[di++] };
+    return opts;
+  }
   const correct = computeValue(rule, qi, solution);
   const targetIdx = L2I[solution[qi]];
   const distractors = makeDistractors(rule, correct, n, rng);

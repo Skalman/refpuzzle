@@ -447,12 +447,12 @@ fn solution_compatible(kind: RuleKind, qi: usize, sol: &[Answer; MAX_N], n: usiz
         RuleKind::LeastCommon => {
             let counts = letter_counts(sol, n);
             let min = *counts.iter().min().unwrap_or(&0);
-            counts[sol[qi].idx()] == min && counts.iter().filter(|&&c| c == min).count() == 1
+            counts.iter().filter(|&&c| c == min).count() == 1
         }
         RuleKind::MostCommon => {
             let counts = letter_counts(sol, n);
             let max = *counts.iter().max().unwrap_or(&0);
-            counts[sol[qi].idx()] == max && counts.iter().filter(|&&c| c == max).count() == 1
+            counts.iter().filter(|&&c| c == max).count() == 1
         }
         RuleKind::SameAs => {
             for i in 0..n {

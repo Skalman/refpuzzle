@@ -285,6 +285,10 @@ fn option_label_str(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> Strin
                 format!("{} & {}", v + 1, v + 2)
             }
         }
+        Rule::LeastCommon | Rule::MostCommon => {
+            let a = fp.option_answers[qi][oi];
+            Answer::from_u8(a).map_or("?".into(), |a| a.as_char().to_string())
+        }
         ref r if r.is_constrained() => LETTERS[oi].as_char().to_string(),
         Rule::TrueStmt => claim_label_str(&fp.option_claims[qi][oi]),
         _ => {

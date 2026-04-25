@@ -2,6 +2,7 @@ import type { AnswerLetter, FlatPuzzle, FlatRule, Claim } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
+  L2I,
   NONE,
   letterIdx,
   RT_COUNT_ANSWER,
@@ -186,17 +187,21 @@ export function evaluate(
     }
 
     case RT_LEAST_COMMON: {
+      const claimed = L2I[ov];
+      if (claimed == null) return false;
       const c = fillCounts(answers);
       let min = c[0];
       for (let i = 1; i < 5; i++) if (c[i] < min) min = c[i];
-      return c[si] === min;
+      return c[claimed] === min;
     }
 
     case RT_MOST_COMMON: {
+      const claimed = L2I[ov];
+      if (claimed == null) return false;
       const c = fillCounts(answers);
       let max = c[0];
       for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
-      return c[si] === max;
+      return c[claimed] === max;
     }
 
     case RT_UNIQUE:

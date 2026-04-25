@@ -509,6 +509,36 @@ pub fn build_flat_puzzle(
                     }
                 }
             }
+            Rule::LeastCommon | Rule::MostCommon => {
+                // Find the correct letter (least/most common) and build shuffled options
+                let counts = letter_counts(solution, n);
+                let target_count = if matches!(*rule, Rule::LeastCommon) {
+                    *counts.iter().min().unwrap()
+                } else {
+                    *counts.iter().max().unwrap()
+                };
+                let correct_letter = LETTERS
+                    .iter()
+                    .find(|&&l| counts[l.idx()] == target_count)
+                    .unwrap();
+                option_answers[qi][correct_oi] = *correct_letter as u8;
+                let mut pool = [Answer::A; 4];
+                let mut plen = 0;
+                for &l in &LETTERS {
+                    if l != *correct_letter {
+                        pool[plen] = l;
+                        plen += 1;
+                    }
+                }
+                rng.shuffle(&mut pool[..plen]);
+                let mut di = 0;
+                for oi in 0..5 {
+                    if oi != correct_oi {
+                        option_answers[qi][oi] = pool[di] as u8;
+                        di += 1;
+                    }
+                }
+            }
             Rule::ConsecIdent => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = pair_distractors(correct_val, n, rng);

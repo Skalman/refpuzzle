@@ -96,11 +96,7 @@ impl Rule {
     pub fn is_constrained(&self) -> bool {
         matches!(
             self,
-            Rule::LeastCommon
-                | Rule::MostCommon
-                | Rule::Unique
-                | Rule::EqualCount { .. }
-                | Rule::AnswerIsSelf
+            Rule::Unique | Rule::EqualCount { .. } | Rule::AnswerIsSelf
         )
     }
 

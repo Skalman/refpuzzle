@@ -201,15 +201,23 @@ pub fn evaluate(
         }
 
         Rule::LeastCommon => {
+            let claimed = fp.option_answers[qi][si] as usize;
+            if claimed >= 5 {
+                return false;
+            }
             let c = fill_counts(answers, n);
             let min = c.iter().copied().min().unwrap_or(0);
-            c[si] == min
+            c[claimed] == min
         }
 
         Rule::MostCommon => {
+            let claimed = fp.option_answers[qi][si] as usize;
+            if claimed >= 5 {
+                return false;
+            }
             let c = fill_counts(answers, n);
             let max = c.iter().copied().max().unwrap_or(0);
-            c[si] == max
+            c[claimed] == max
         }
 
         Rule::Unique => count_answer(answers, selected, 0, n) == 1,
