@@ -163,47 +163,49 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
         if (e.target === ref.current) onClose();
       }}
     >
-      <div class="help-panel-header">
-        <h3>{s.help.title}</h3>
-        <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
-          &times;
-        </button>
+      <div class="help-panel-inner">
+        <div class="help-panel-header">
+          <h3>{s.help.title}</h3>
+          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
+            &times;
+          </button>
+        </div>
+        <ol>
+          {s.help.howToPlaySteps.map((step, i) => (
+            <li key={step}>
+              {step}
+              {i === 0 && (
+                <>
+                  {" "}
+                  (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+                </>
+              )}
+              {i === 1 && (
+                <>
+                  {" "}
+                  (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+                </>
+              )}
+            </li>
+          ))}
+        </ol>
+        <h4>{s.help.howToSolve}</h4>
+        <ol>
+          {s.help.howToSolveSteps.map((step) => (
+            <li key={step}>{step}</li>
+          ))}
+        </ol>
+        <h4>{s.help.whatIs}</h4>
+        <p>{s.help.description}</p>
+        <h4>{s.keyboard.title}</h4>
+        <KeyboardShortcutList />
+        <p class="help-credit">
+          {s.help.inspiredBy}{" "}
+          <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">
+            Logiquiz
+          </a>
+        </p>
       </div>
-      <ol>
-        {s.help.howToPlaySteps.map((step, i) => (
-          <li key={step}>
-            {step}
-            {i === 0 && (
-              <>
-                {" "}
-                (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
-              </>
-            )}
-            {i === 1 && (
-              <>
-                {" "}
-                (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
-              </>
-            )}
-          </li>
-        ))}
-      </ol>
-      <h4>{s.help.howToSolve}</h4>
-      <ol>
-        {s.help.howToSolveSteps.map((step) => (
-          <li key={step}>{step}</li>
-        ))}
-      </ol>
-      <h4>{s.help.whatIs}</h4>
-      <p>{s.help.description}</p>
-      <h4>{s.keyboard.title}</h4>
-      <KeyboardShortcutList />
-      <p class="help-credit">
-        {s.help.inspiredBy}{" "}
-        <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">
-          Logiquiz
-        </a>
-      </p>
     </dialog>
   );
 }
@@ -279,6 +281,7 @@ function AppHeader({
           <span class="app-title">
             <span class="app-title-ref">Ref</span>puzzle
           </span>
+          <span class="app-tagline hide-mobile">{s.puzzleList.subtitle}</span>
         </a>
       </h1>
       <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler(".header-btn")}>
@@ -755,44 +758,46 @@ function ImportPreview({
         if (e.target === ref.current) onCancel();
       }}
     >
-      <div class="help-panel-header">
-        <h3>{s.backup.importPreview}</h3>
-        <button class="help-close" onClick={onCancel} aria-label={s.aria.close}>
-          &times;
-        </button>
-      </div>
-      <p class="import-summary">{s.backup.puzzlesInBackup(plan.entries.length)}</p>
-      {ACTION_ORDER.map((action) => {
-        const ids = grouped.get(action);
-        if (!ids?.length) return null;
-        return (
-          <div key={action} class="import-section">
-            <h4>
-              {s.backup.actions[action]} ({ids.length})
-            </h4>
-            <ul class="import-list">
-              {ids.map((id) => (
-                <li key={id}>{id}</li>
-              ))}
-            </ul>
-          </div>
-        );
-      })}
-      <div class="import-actions">
-        {hasChanges ? (
-          <>
-            <button class="onboarding-dismiss" onClick={onConfirm}>
-              {s.backup.confirmImport}
-            </button>
-            <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>
-              {s.backup.cancel}
-            </button>
-          </>
-        ) : (
-          <button class="onboarding-dismiss" onClick={onCancel}>
-            {s.backup.ok}
+      <div class="help-panel-inner">
+        <div class="help-panel-header">
+          <h3>{s.backup.importPreview}</h3>
+          <button class="help-close" onClick={onCancel} aria-label={s.aria.close}>
+            &times;
           </button>
-        )}
+        </div>
+        <p class="import-summary">{s.backup.puzzlesInBackup(plan.entries.length)}</p>
+        {ACTION_ORDER.map((action) => {
+          const ids = grouped.get(action);
+          if (!ids?.length) return null;
+          return (
+            <div key={action} class="import-section">
+              <h4>
+                {s.backup.actions[action]} ({ids.length})
+              </h4>
+              <ul class="import-list">
+                {ids.map((id) => (
+                  <li key={id}>{id}</li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+        <div class="import-actions">
+          {hasChanges ? (
+            <>
+              <button class="onboarding-dismiss" onClick={onConfirm}>
+                {s.backup.confirmImport}
+              </button>
+              <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>
+                {s.backup.cancel}
+              </button>
+            </>
+          ) : (
+            <button class="onboarding-dismiss" onClick={onCancel}>
+              {s.backup.ok}
+            </button>
+          )}
+        </div>
       </div>
     </dialog>
   );
