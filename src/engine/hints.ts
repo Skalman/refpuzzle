@@ -156,20 +156,21 @@ function countRange(rule: ValidationRule, n: number): [number, number] {
   }
 }
 
-function countRuleLabel(rule: ValidationRule): string {
+function countRuleLabel(rule: ValidationRule, count?: number): string {
+  const q = count === 1 ? "question" : "questions";
   switch (rule.type) {
     case "count_answer":
-      return `questions with answer ${rule.answer}`;
+      return `${q} with answer ${rule.answer}`;
     case "count_answer_before":
-      return `questions before #${rule.beforeIndex + 1} with answer ${rule.answer}`;
+      return `${q} before #${rule.beforeIndex + 1} with answer ${rule.answer}`;
     case "count_answer_after":
-      return `questions after #${rule.afterIndex + 1} with answer ${rule.answer}`;
+      return `${q} after #${rule.afterIndex + 1} with answer ${rule.answer}`;
     case "count_vowel_answers":
-      return "questions with a vowel answer";
+      return `${q} with a vowel answer`;
     case "count_consonant_answers":
-      return "questions with a consonant answer";
+      return `${q} with a consonant answer`;
     default:
-      return "matching questions";
+      return `matching ${q}`;
   }
 }
 
@@ -213,10 +214,10 @@ function explainContradiction(
     const claimed = Number(ov);
     if (!Number.isNaN(claimed)) {
       if (count > claimed) {
-        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule)}", but there are already ${count}.`;
+        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule, claimed)}", but there are already ${count}.`;
       }
       if (count + remaining < claimed) {
-        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule)}", but at most ${count + remaining} are possible.`;
+        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule, claimed)}", but at most ${count + remaining} are possible.`;
       }
     }
   }
@@ -517,7 +518,7 @@ function findForced(
             return hintSteps(
               qi,
               `${Q(qi)} can be determined now.`,
-              `${Q(qi)}: all relevant questions are answered — there are ${count} ${countRuleLabel(rule)}, so it must be ${LETTERS[oi]}.`,
+              `${Q(qi)}: all relevant questions are answered — there are ${count} ${countRuleLabel(rule, count)}, so it must be ${LETTERS[oi]}.`,
               { type: "force", questionIndex: qi, letter: LETTERS[oi] },
             );
           }
@@ -576,10 +577,10 @@ function canEliminate(
     const claimed = Number(ov);
     if (!Number.isNaN(claimed)) {
       if (count > claimed) {
-        return `says ${claimed}, but already ${count} ${countRuleLabel(rule)}.`;
+        return `says ${claimed}, but already ${count} ${countRuleLabel(rule, count)}.`;
       }
       if (count + remaining < claimed) {
-        return `says ${claimed}, but at most ${count + remaining} ${countRuleLabel(rule)} are possible.`;
+        return `says ${claimed}, but at most ${count + remaining} ${countRuleLabel(rule, count + remaining)} are possible.`;
       }
     }
   }

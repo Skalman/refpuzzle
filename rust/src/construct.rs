@@ -62,8 +62,42 @@ fn filter_allowed(types: &[RuleKind], profile: &DifficultyProfile) -> Vec<RuleKi
 fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateResult> {
     let n = profile.question_count;
 
-    let solution: [Answer; MAX_N] =
+    let mut solution: [Answer; MAX_N] =
         std::array::from_fn(|i| if i < n { rng.pick(&LETTERS) } else { Answer::A });
+
+    // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
+    if profile.allowed_types.contains(&RuleKind::ConsecIdent) && rng.int(0, 1) == 0 {
+        let mut pair_positions = [0u8; MAX_N];
+        let mut pair_count = 0;
+        for i in 0..n - 1 {
+            if solution[i] == solution[i + 1] {
+                pair_positions[pair_count] = i as u8;
+                pair_count += 1;
+            }
+        }
+        if pair_count == 0 {
+            let pos = rng.int(0, n as i32 - 2) as usize;
+            solution[pos + 1] = solution[pos];
+        } else if pair_count > 1 {
+            // Keep one random pair, break the rest
+            let keep = rng.int(0, pair_count as i32 - 1) as usize;
+            for k in 0..pair_count {
+                if k != keep {
+                    let pos = pair_positions[k] as usize + 1;
+                    // Pick a letter different from neighbor
+                    loop {
+                        let new_letter = rng.pick(&LETTERS);
+                        if new_letter != solution[pos - 1]
+                            && (pos + 1 >= n || new_letter != solution[pos + 1])
+                        {
+                            solution[pos] = new_letter;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
 
     let mut slots: [u8; MAX_N] = std::array::from_fn(|i| i as u8);
     rng.shuffle(&mut slots[..n]);

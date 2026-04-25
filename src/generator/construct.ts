@@ -104,6 +104,29 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // 1. Random solution
   const solution: AnswerLetter[] = Array.from({ length: n }, () => rng.pick(LETTERS));
 
+  // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
+  if (profile.allowedTypes.includes("consecutive_identical") && rng.int(0, 1) === 0) {
+    const pairPositions: number[] = [];
+    for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairPositions.push(i);
+    if (pairPositions.length === 0) {
+      const pos = rng.int(0, n - 2);
+      solution[pos + 1] = solution[pos];
+    } else if (pairPositions.length > 1) {
+      const keep = rng.int(0, pairPositions.length - 1);
+      for (let k = 0; k < pairPositions.length; k++) {
+        if (k === keep) continue;
+        const pos = pairPositions[k] + 1;
+        for (;;) {
+          const nl = rng.pick(LETTERS);
+          if (nl !== solution[pos - 1] && (pos + 1 >= n || nl !== solution[pos + 1])) {
+            solution[pos] = nl;
+            break;
+          }
+        }
+      }
+    }
+  }
+
   // 2. Shuffle question indices — we'll assign rules in this order
   const slots = Array.from({ length: n }, (_, i) => i);
   rng.shuffle(slots);
@@ -426,7 +449,7 @@ function repairPairDistractors(
 ): string[] {
   const pool: string[] = [];
   for (let i = 0; i < n - 1; i++) {
-    const label = `${i + 1} and ${i + 2}`;
+    const label = `${i + 1} & ${i + 2}`;
     if (label === correctVal) continue;
     if (answers[i] != null && answers[i + 1] != null && answers[i] !== answers[i + 1]) {
       pool.unshift(label);
@@ -739,7 +762,7 @@ function computeValue(rule: ValidationRule, qi: number, sol: AnswerLetter[]): st
       return "None";
     case "consecutive_identical":
       for (let i = 0; i < sol.length - 1; i++)
-        if (sol[i] === sol[i + 1]) return `${i + 1} and ${i + 2}`;
+        if (sol[i] === sol[i + 1]) return `${i + 1} & ${i + 2}`;
       return "None";
     case "letter_distance":
       return String(Math.abs(L2I[sol[qi]] - L2I[sol[rule.otherQuestionIndex]]));
@@ -755,7 +778,7 @@ function makeDistractors(rule: ValidationRule, correct: string, n: number, rng: 
   if (rule.type === "consecutive_identical") {
     const pool: string[] = [];
     for (let i = 1; i < n; i++) {
-      const p = `${i} and ${i + 1}`;
+      const p = `${i} & ${i + 1}`;
       if (p !== correct) pool.push(p);
     }
     if (correct !== "None") pool.push("None");
@@ -777,6 +800,15 @@ function makeDistractors(rule: ValidationRule, correct: string, n: number, rng: 
     const pool: number[] = [];
     for (let i = 0; i <= Math.max(max, 4); i++) if (i !== Number(correct)) pool.push(i);
     return rng.shuffle(pool).slice(0, 4).map(String);
+  }
+  if (rule.type === "only_odd_with_answer") {
+    const pool: string[] = [];
+    for (let i = 1; i <= n; i += 2) {
+      const s = String(i);
+      if (s !== correct) pool.push(s);
+    }
+    if (correct !== "None") pool.push("None");
+    return rng.shuffle(pool).slice(0, 4);
   }
   // Positional
   let minPos = 1,
@@ -905,13 +937,13 @@ function questionText(rule: ValidationRule): string {
     case "next_same_answer":
       return "Which is the next question that has the same answer as this one?";
     case "only_same_answer":
-      return "The only other question with the same answer as this one is?";
+      return "Which is the only other question with the same answer as this one?";
     case "same_answer_as":
       return "The answer to this question is the same as the answer to question?";
     case "only_odd_with_answer":
-      return `The only odd-numbered question with answer ${rule.answer} is?`;
+      return `Which is the only odd-numbered question with answer ${rule.answer}?`;
     case "consecutive_identical":
-      return "The only two consecutive questions with identical answers are?";
+      return "Which are the only two consecutive questions with identical answers?";
     case "answer_of_question":
       return `What is the answer to question #${rule.questionIndex + 1}?`;
     case "least_common_answer":
@@ -919,7 +951,7 @@ function questionText(rule: ValidationRule): string {
     case "most_common_answer":
       return "Which is the most common answer?";
     case "unique_answer":
-      return "The answer that is not the answer to any other question is?";
+      return "Which answer is not the answer to any other question?";
     case "equal_count_as":
       return `The number of questions with answer ${rule.answer} equals the number of questions with answer?`;
     case "answer_is_self":

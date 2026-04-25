@@ -4,9 +4,7 @@ use crate::rng::Rng;
 use crate::solver::solve;
 use crate::types::*;
 
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-
-pub static DUMP_ZERO_PROGRESS: AtomicBool = AtomicBool::new(false);
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub static STATS: [AtomicU64; 9] = {
     const Z: AtomicU64 = AtomicU64::new(0);
@@ -31,12 +29,6 @@ pub fn print_stats() {
         s(6) / 1000,
         s(7) / 1000
     );
-}
-
-pub fn reset_stats() {
-    for s in &STATS {
-        s.store(0, Ordering::Relaxed);
-    }
 }
 
 fn us(t: std::time::Instant) -> u64 {
@@ -178,40 +170,20 @@ pub fn validate_and_check(
         STATS[8].fetch_add(1, Ordering::Relaxed);
     }
 
-    let dump_this = DUMP_ZERO_PROGRESS.load(Ordering::Relaxed);
-
     let candidates = rank_repair_candidates(fp, &stuck_answers);
     let mut maybe_solved = false;
 
     for &qi in &candidates {
         STATS[4].fetch_add(1, Ordering::Relaxed);
-        let old_nums = fp.option_nums[qi];
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
 
-        // For zero-progress puzzles, run from scratch (stuck state is empty).
-        // For partial-progress, run from stuck state (repairs stack).
         let t0 = std::time::Instant::now();
-        let (ok, post_answers, _) = if solved_before == 0 {
+        let (ok, _, _) = if solved_before == 0 {
             run_hint_engine(fp)
         } else {
             run_hint_engine_from(fp, stuck_answers, stuck_elim)
         };
         STATS[7].fetch_add(us(t0), Ordering::Relaxed);
-
-        if dump_this {
-            let post_solved = (0..n).filter(|&i| post_answers[i].is_some()).count();
-            let changed_oi = (0..5).find(|&oi| old_nums[oi] != fp.option_nums[qi][oi]);
-            if let Some(oi) = changed_oi {
-                eprintln!(
-                    "  repair Q{}: oi={} {}→{} => {post_solved}/{n} solved{}",
-                    qi + 1,
-                    oi,
-                    old_nums[oi],
-                    fp.option_nums[qi][oi],
-                    if ok { " ✓" } else { "" }
-                );
-            }
-        }
 
         if ok {
             maybe_solved = true;
@@ -221,44 +193,9 @@ pub fn validate_and_check(
 
     if !maybe_solved {
         let t0 = std::time::Instant::now();
-        let (ok, post_answers, post_elim) = run_hint_engine(fp);
+        let (ok, _, _) = run_hint_engine(fp);
         STATS[7].fetch_add(us(t0), Ordering::Relaxed);
         maybe_solved = ok;
-
-        if dump_this && !ok {
-            let post_solved = (0..n).filter(|&i| post_answers[i].is_some()).count();
-            let stuck_rules: Vec<String> = (0..n)
-                .filter(|&qi| post_answers[qi].is_none())
-                .map(|qi| {
-                    let rem = (!post_elim[qi] & 0b11111u8).count_ones();
-                    let kind = match fp.rules[qi] {
-                        Rule::CountAnswer { .. }
-                        | Rule::CountAnswerBefore { .. }
-                        | Rule::CountAnswerAfter { .. }
-                        | Rule::CountVowel
-                        | Rule::CountConsonant
-                        | Rule::MostCommonCount => "count",
-                        Rule::AnswerOf { .. } => "ansof",
-                        Rule::LetterDist { .. } => "ldist",
-                        Rule::FirstWith { .. }
-                        | Rule::LastWith { .. }
-                        | Rule::ClosestAfter { .. }
-                        | Rule::ClosestBefore { .. } => "pos",
-                        Rule::ConsecIdent => "consec",
-                        Rule::OnlyOdd { .. } => "odd",
-                        Rule::PrevSame | Rule::NextSame | Rule::OnlySame | Rule::SameAs => "same",
-                        Rule::TrueStmt => "true",
-                        Rule::LeastCommon
-                        | Rule::MostCommon
-                        | Rule::Unique
-                        | Rule::EqualCount { .. } => "const",
-                        Rule::AnswerIsSelf => "self",
-                    };
-                    format!("Q{}:{kind}({rem})", qi + 1)
-                })
-                .collect();
-            eprintln!("  stuck {post_solved}/{n}: {}", stuck_rules.join(" "));
-        }
     }
 
     if maybe_solved {
@@ -596,6 +533,11 @@ pub fn build_flat_puzzle(
                     count_distractors(correct_val as i32, count_max(rule, n) as i32, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
+            Rule::OnlyOdd { .. } => {
+                option_nums[qi][correct_oi] = correct_val;
+                let distractors = odd_position_distractors(correct_val, n, rng);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = positional_distractors(correct_val, n, rule, rng);
@@ -789,6 +731,27 @@ fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) ->
     let mut pool = [0i16; 20];
     let mut plen = 0;
     for i in min_pos..=max_pos {
+        if i != correct {
+            pool[plen] = i;
+            plen += 1;
+        }
+    }
+    if correct != NONE_VAL {
+        pool[plen] = NONE_VAL;
+        plen += 1;
+    }
+    rng.shuffle(&mut pool[..plen]);
+    let mut result = [0i16; 4];
+    for i in 0..4.min(plen) {
+        result[i] = pool[i];
+    }
+    result
+}
+
+fn odd_position_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
+    let mut pool = [0i16; 16];
+    let mut plen = 0;
+    for i in (1..=n as i16).step_by(2) {
         if i != correct {
             pool[plen] = i;
             plen += 1;

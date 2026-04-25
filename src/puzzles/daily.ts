@@ -17,8 +17,10 @@ export function dayNumber(dateStr: string): number {
 }
 
 export function isValidDate(dateStr: string): boolean {
-  const d = dayNumber(dateStr);
-  if (d < 1 || d > 1461) return false;
+  if (dayNumber(dateStr) < 1) return false;
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview")) {
+    return true;
+  }
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const date = new Date(dateStr + "T00:00:00");

@@ -21,6 +21,7 @@ fn main() {
     let mut start_date: Option<String> = None;
     let mut max_attempts: usize = 100;
     let mut level_filter: Option<u8> = None;
+    let mut show_stats = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -43,9 +44,12 @@ fn main() {
                 assert!((1..=5).contains(&l), "level must be 1-5");
                 level_filter = Some(l);
             }
+            "--stats" => {
+                show_stats = true;
+            }
             "--help" | "-h" => {
                 eprintln!(
-                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-5] [--attempts A]"
+                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-5] [--attempts A] [--stats]"
                 );
                 eprintln!("  Generates a year of daily puzzles.");
                 eprintln!(
@@ -53,6 +57,7 @@ fn main() {
                 );
                 eprintln!("  --level  generate only this level (default: all 5)");
                 eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026).");
+                eprintln!("  --stats  show generation statistics");
                 return;
             }
             _ => {
@@ -84,8 +89,6 @@ fn main() {
     );
 
     let start_time = Instant::now();
-    // gen_common::DUMP_ZERO_PROGRESS.store(true, std::sync::atomic::Ordering::Relaxed);
-
     let levels: Vec<u8> = match level_filter {
         Some(l) => vec![l],
         None => vec![1, 2, 3, 4, 5],
@@ -202,7 +205,9 @@ fn main() {
         elapsed.as_secs_f64() * 1000.0 / day_count as f64
     );
     eprintln!("  Output:  {raw_kb}KB JSON");
-    gen_common::print_stats();
+    if show_stats {
+        gen_common::print_stats();
+    }
 
     println!("{json_out}");
 }
@@ -277,7 +282,7 @@ fn option_label_str(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> Strin
             if v == NONE_VAL {
                 "None".into()
             } else {
-                format!("{} and {}", v + 1, v + 2)
+                format!("{} & {}", v + 1, v + 2)
             }
         }
         ref r if r.is_constrained() => LETTERS[oi].as_char().to_string(),
@@ -345,21 +350,23 @@ fn question_text(rule: &Rule) -> String {
             "Which is the previous question that has the same answer as this one?".into()
         }
         Rule::NextSame => "Which is the next question that has the same answer as this one?".into(),
-        Rule::OnlySame => "The only other question with the same answer as this one is?".into(),
+        Rule::OnlySame => {
+            "Which is the only other question with the same answer as this one?".into()
+        }
         Rule::SameAs => "The answer to this question is the same as the answer to question?".into(),
         Rule::OnlyOdd { answer } => format!(
-            "The only odd-numbered question with answer {} is?",
+            "Which is the only odd-numbered question with answer {}?",
             answer.as_char()
         ),
         Rule::ConsecIdent => {
-            "The only two consecutive questions with identical answers are?".into()
+            "Which are the only two consecutive questions with identical answers?".into()
         }
         Rule::AnswerOf { question_index } => {
             format!("What is the answer to question #{}?", question_index + 1)
         }
         Rule::LeastCommon => "Which is the least common answer?".into(),
         Rule::MostCommon => "Which is the most common answer?".into(),
-        Rule::Unique => "The answer that is not the answer to any other question is?".into(),
+        Rule::Unique => "Which answer is not the answer to any other question?".into(),
         Rule::EqualCount { answer } => format!(
             "The number of questions with answer {} equals the number of questions with answer?",
             answer.as_char()
