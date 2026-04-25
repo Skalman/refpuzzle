@@ -56,6 +56,56 @@ function useTheme() {
   return { mode, cycle, icon };
 }
 
+type InstallState =
+  | { type: "native"; fire: () => void }
+  | { type: "instructions"; message: string }
+  | { type: "qr" }
+  | null;
+
+function useInstall(): InstallState {
+  const [state, setState] = useState<InstallState>(null);
+  const s = t();
+
+  useEffect(() => {
+    if (window.matchMedia("(display-mode: standalone)").matches) return undefined;
+
+    function onPrompt(e: Event) {
+      e.preventDefault();
+      const ev = e;
+      setState({
+        type: "native",
+        fire: () => {
+          if ("prompt" in ev && typeof ev.prompt === "function") ev.prompt();
+        },
+      });
+    }
+    window.addEventListener("beforeinstallprompt", onPrompt);
+
+    const ua = navigator.userAgent;
+    const isIOS = /iPad|iPhone|iPod/.test(ua);
+    const isAndroidFF = /Android/.test(ua) && /Firefox/.test(ua);
+
+    if (isIOS) {
+      setState({ type: "instructions", message: s.install.iosSafari });
+    } else if (isAndroidFF) {
+      setState({ type: "instructions", message: s.install.androidFirefox });
+    } else {
+      // Desktop: wait briefly for beforeinstallprompt, fall back to QR code
+      const timer = setTimeout(() => {
+        setState((cur) => cur ?? { type: "qr" });
+      }, 1000);
+      return () => {
+        clearTimeout(timer);
+        window.removeEventListener("beforeinstallprompt", onPrompt);
+      };
+    }
+
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, [s]);
+
+  return state;
+}
+
 function OnboardingBanner() {
   const s = t();
   const [visible, setVisible] = useState(() => {
@@ -171,6 +221,8 @@ function AppHeader({
 }) {
   const s = t();
   const theme = useTheme();
+  const install = useInstall();
+  const [showInstallInfo, setShowInstallInfo] = useState(false);
   const [moreMenu, setMoreMenu] = useState(false);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
@@ -271,6 +323,18 @@ function AppHeader({
           </button>
           {moreMenu && (
             <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
+              {install && (
+                <button
+                  class="more-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreMenu(false);
+                    setShowInstallInfo(true);
+                  }}
+                >
+                  {s.install.button}
+                </button>
+              )}
               <a
                 href="/past"
                 class="more-menu-item show-mobile"
@@ -349,6 +413,34 @@ function AppHeader({
           )}
         </span>
       </div>
+      {showInstallInfo && install && (
+        <div
+          class="install-toast"
+          role="alertdialog"
+          onClick={() => setShowInstallInfo(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setShowInstallInfo(false);
+          }}
+        >
+          <p>{s.install.qrPrompt}</p>
+          <img src="/qr-install.png" alt="QR code" class="qr-image" width="120" height="120" />
+          {install.type === "instructions" && <p>{install.message}</p>}
+          <div class="install-toast-actions">
+            {install.type === "native" && (
+              <button class="onboarding-dismiss" onClick={() => install.fire()}>
+                {s.install.button}
+              </button>
+            )}
+            <button
+              class="onboarding-dismiss"
+              ref={(el) => el?.focus()}
+              onClick={() => setShowInstallInfo(false)}
+            >
+              {s.backup.ok}
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -706,15 +798,80 @@ function ImportPreview({
   );
 }
 
+function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
+  const s = t();
+  const levels = [1, 2, 3, 4, 5].map((l) => {
+    const { started, completed } = hasState(puzzleId(dateStr, l));
+    return { level: l, started, completed };
+  });
+  const solved = levels.filter((l) => l.completed);
+  const started = levels.filter((l) => l.started && !l.completed);
+  return (
+    <a href={`/day/${dateStr}`} class={`history-item ${isToday ? "history-today" : ""}`}>
+      <span class="history-date">
+        {isToday ? s.daily.today : dateStr}
+        <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
+      </span>
+      <span class="history-progress">
+        {solved.length === 5 ? (
+          s.daily.allSolved
+        ) : solved.length > 0 || started.length > 0 ? (
+          <>
+            {solved.length > 0 && (
+              <span>
+                <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />{" "}
+                {solved.map((l) => s.difficulty[l.level]).join(", ")}
+              </span>
+            )}
+            {solved.length > 0 && started.length > 0 && "  "}
+            {started.length > 0 && (
+              <span>&#8226; {started.map((l) => s.difficulty[l.level]).join(", ")}</span>
+            )}
+          </>
+        ) : (
+          s.daily.notStarted
+        )}
+      </span>
+    </a>
+  );
+}
+
 function PastPuzzlesPage() {
   const s = t();
   const [showHelp, setShowHelp] = useState(false);
   const today = todayDateStr();
+  const currentMonth = today.slice(0, 7);
 
-  const dates: string[] = [];
-  for (let i = 0; i < 30; i++) {
+  const allDates: string[] = [];
+  for (let i = 0; ; i++) {
     const d = dateStrFromOffset(i);
-    if (isValidDate(d)) dates.push(d);
+    if (!isValidDate(d)) break;
+    allDates.push(d);
+  }
+
+  const months = new Map<string, string[]>();
+  for (const d of allDates) {
+    const month = d.slice(0, 7);
+    const list = months.get(month) ?? [];
+    list.push(d);
+    months.set(month, list);
+  }
+
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([currentMonth]));
+
+  function toggleMonth(month: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(month)) next.delete(month);
+      else next.add(month);
+      return next;
+    });
+  }
+
+  function formatMonth(ym: string): string {
+    const [y, m] = ym.split("-");
+    const date = new Date(Number(y), Number(m) - 1);
+    return date.toLocaleString(undefined, { month: "long", year: "numeric" });
   }
 
   return (
@@ -736,51 +893,24 @@ function PastPuzzlesPage() {
 
       <div class="history-page">
         <h2>{s.daily.pastPuzzles}</h2>
-        <div class="history-list">
-          {dates.map((dateStr) => {
-            const isCurrent = dateStr === today;
-            const levels = [1, 2, 3, 4, 5].map((l) => {
-              const { started, completed } = hasState(puzzleId(dateStr, l));
-              return { level: l, started, completed };
-            });
-            const solved = levels.filter((l) => l.completed);
-            const started = levels.filter((l) => l.started && !l.completed);
-            return (
-              <a
-                key={dateStr}
-                href={`/day/${dateStr}`}
-                class={`history-item ${isCurrent ? "history-today" : ""}`}
-              >
-                <span class="history-date">
-                  {isCurrent ? s.daily.today : dateStr}
-                  <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
-                </span>
-                <span class="history-progress">
-                  {solved.length === 5 ? (
-                    s.daily.allSolved
-                  ) : solved.length > 0 || started.length > 0 ? (
-                    <>
-                      {solved.length > 0 && (
-                        <span>
-                          <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />{" "}
-                          {solved.map((l) => s.difficulty[l.level]).join(", ")}
-                        </span>
-                      )}
-                      {solved.length > 0 && started.length > 0 && "  "}
-                      {started.length > 0 && (
-                        <span>
-                          &#8226; {started.map((l) => s.difficulty[l.level]).join(", ")}
-                        </span>
-                      )}
-                    </>
-                  ) : (
-                    s.daily.notStarted
-                  )}
-                </span>
-              </a>
-            );
-          })}
-        </div>
+        {[...months.entries()].map(([month, dates]) => {
+          const isOpen = expanded.has(month);
+          return (
+            <div key={month} class="history-month">
+              <button class="history-month-header" onClick={() => toggleMonth(month)}>
+                <span>{formatMonth(month)}</span>
+                <span class={`history-month-arrow ${isOpen ? "open" : ""}`}>&#9662;</span>
+              </button>
+              {isOpen && (
+                <div class="history-list">
+                  {dates.map((dateStr) => (
+                    <DayItem key={dateStr} dateStr={dateStr} isToday={dateStr === today} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}

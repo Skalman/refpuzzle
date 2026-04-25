@@ -84,6 +84,12 @@ export default {
   header: {
     theme: "Theme",
   },
+  install: {
+    button: "Install app",
+    iosSafari: 'Tap the Share button, then "Add to Home Screen"',
+    androidFirefox: 'Tap the menu button (⋮), then "Install"',
+    qrPrompt: "Scan to install on your phone",
+  },
   help: {
     title: "How to Play",
     howToPlaySteps: [

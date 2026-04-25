@@ -251,6 +251,37 @@ kbd {
   padding: 0.05rem 0.35rem;
 }
 
+/* ── Install toast ── */
+.install-toast {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  margin-top: 0.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  box-shadow: var(--dropdown-shadow);
+  max-width: 20rem;
+  font-size: 0.85rem;
+  color: var(--text);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.install-toast-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.qr-image {
+  image-rendering: pixelated;
+  align-self: center;
+}
+
 /* ── History page ── */
 .history-page {
   max-width: 600px;
@@ -262,10 +293,45 @@ kbd {
   }
 }
 
+.history-month {
+  margin-bottom: 0.5rem;
+}
+
+.history-month-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--accent);
+  }
+}
+
+.history-month-arrow {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  transition: transform 0.15s;
+
+  &.open {
+    transform: rotate(180deg);
+  }
+}
+
 .history-list {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  padding-top: 0.5rem;
 }
 
 .history-item {
