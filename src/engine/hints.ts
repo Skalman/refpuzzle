@@ -1,4 +1,5 @@
 import type { AnswerLetter, Puzzle, FlatPuzzle, ValidationRule, Marks } from "./types.ts";
+import { evaluate as evaluateRule } from "./evaluators.ts";
 import {
   LETTERS,
   VOWELS,
@@ -20,6 +21,11 @@ import {
   RT_LETTER_DIST,
   RT_UNIQUE,
   RT_SAME_AS,
+  RT_ONLY_ODD,
+  RT_CONSEC_IDENT,
+  RT_PREV_SAME,
+  RT_NEXT_SAME,
+  RT_ONLY_SAME,
 } from "./types.ts";
 
 type Action =
@@ -214,10 +220,10 @@ function explainContradiction(
     const claimed = Number(ov);
     if (!Number.isNaN(claimed)) {
       if (count > claimed) {
-        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule, claimed)}", but there are already ${count}.`;
+        return `${Q(qi)}: "${claimed} ${countRuleLabel(rule, claimed)}", but there are already ${count}.`;
       }
       if (count + remaining < claimed) {
-        return `${Q(qi)}: you marked "${claimed} ${countRuleLabel(rule, claimed)}", but at most ${count + remaining} are possible.`;
+        return `${Q(qi)}: "${claimed} ${countRuleLabel(rule, claimed)}", but at most ${count + remaining} are possible.`;
       }
     }
   }
@@ -228,7 +234,7 @@ function explainContradiction(
     const max = Math.max(...counts);
     const claimed = Number(ov);
     if (!Number.isNaN(claimed) && max > claimed) {
-      return `${Q(qi)}: you marked "most common answer appears ${claimed} times", but ${LETTERS[counts.indexOf(max)]} already appears ${max} times.`;
+      return `${Q(qi)}: "most common answer appears ${claimed} times", but ${LETTERS[counts.indexOf(max)]} already appears ${max} times.`;
     }
   }
 
@@ -236,7 +242,7 @@ function explainContradiction(
   if (rule.type === "answer_of_question") {
     const target = answers[rule.questionIndex];
     if (target != null && target !== ov) {
-      return `${Q(qi)}: you said ${Q(rule.questionIndex)}'s answer is ${ov}, but ${Q(rule.questionIndex)} is marked ${target}.`;
+      return `${Q(qi)}: says ${Q(rule.questionIndex)}'s answer is ${ov}, but ${Q(rule.questionIndex)} is marked ${target}.`;
     }
   }
 
@@ -246,7 +252,7 @@ function explainContradiction(
     if (other != null) {
       const dist = Math.abs(L2I[answers[qi]!] - L2I[other]);
       if (String(dist) !== ov) {
-        return `${Q(qi)}: you marked distance = ${ov}, but ${answers[qi]!} and ${other} (${Q(rule.otherQuestionIndex)}) are ${dist} apart.`;
+        return `${Q(qi)}: distance = ${ov}, but ${answers[qi]!} and ${other} (${Q(rule.otherQuestionIndex)}) are ${dist} apart.`;
       }
     }
   }
@@ -277,7 +283,7 @@ function explainPositionalContradiction(
   if (rule.type === "unique_answer") {
     const count = countMatching(answers, (a) => a === answers[qi], 0, n).count;
     if (count > 1) {
-      return `${Q(qi)}: you marked ${answers[qi]!} as unique, but ${count} questions have answer ${answers[qi]!}.`;
+      return `${Q(qi)}: ${answers[qi]!} is marked unique, but ${count} ${count === 1 ? "question has" : "questions have"} answer ${answers[qi]!}.`;
     }
   }
   if (rule.type === "same_answer_as") {
@@ -288,7 +294,7 @@ function explainPositionalContradiction(
       answers[targetQ] != null &&
       answers[targetQ] !== answers[qi]
     ) {
-      return `${Q(qi)}: you said this has the same answer as ${Q(targetQ)}, but ${Q(targetQ)} is ${answers[targetQ]} and this is ${answers[qi]}.`;
+      return `${Q(qi)}: says this has the same answer as ${Q(targetQ)}, but ${Q(targetQ)} is ${answers[targetQ]} and this is ${answers[qi]}.`;
     }
   }
   return null;
@@ -305,7 +311,7 @@ function checkClosestAfter(
   if (ov === "None") {
     for (let i = afterIndex + 1; i < n; i++) {
       if (answers[i] === target) {
-        return `${Q(qi)}: you said no ${target} after #${afterIndex + 1}, but ${Q(i)} has answer ${target}.`;
+        return `${Q(qi)}: says no ${target} after #${afterIndex + 1}, but ${Q(i)} has answer ${target}.`;
       }
     }
     return null;
@@ -314,11 +320,11 @@ function checkClosestAfter(
   if (claimedPos < 0 || claimedPos >= n) return null;
 
   if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: you said closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+    return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
   }
   for (let i = afterIndex + 1; i < claimedPos; i++) {
     if (answers[i] === target) {
-      return `${Q(qi)}: you said closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
+      return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
     }
   }
   return null;
@@ -334,7 +340,7 @@ function checkClosestBefore(
   if (ov === "None") {
     for (let i = beforeIndex - 1; i >= 0; i--) {
       if (answers[i] === target) {
-        return `${Q(qi)}: you said no ${target} before #${beforeIndex + 1}, but ${Q(i)} has answer ${target}.`;
+        return `${Q(qi)}: says no ${target} before #${beforeIndex + 1}, but ${Q(i)} has answer ${target}.`;
       }
     }
     return null;
@@ -343,11 +349,11 @@ function checkClosestBefore(
   if (claimedPos < 0) return null;
 
   if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: you said closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+    return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
   }
   for (let i = beforeIndex - 1; i > claimedPos; i--) {
     if (answers[i] === target) {
-      return `${Q(qi)}: you said closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
+      return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
     }
   }
   return null;
@@ -363,7 +369,7 @@ function checkFirstWith(
   if (ov === "None") {
     for (let i = 0; i < n; i++) {
       if (answers[i] === target) {
-        return `${Q(qi)}: you said no question has answer ${target}, but ${Q(i)} does.`;
+        return `${Q(qi)}: says no question has answer ${target}, but ${Q(i)} does.`;
       }
     }
     return null;
@@ -372,11 +378,11 @@ function checkFirstWith(
   if (claimedPos < 0 || claimedPos >= n) return null;
 
   if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: you said the first ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+    return `${Q(qi)}: says the first ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
   }
   for (let i = 0; i < claimedPos; i++) {
     if (answers[i] === target) {
-      return `${Q(qi)}: you said the first ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes earlier.`;
+      return `${Q(qi)}: says the first ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes earlier.`;
     }
   }
   return null;
@@ -392,7 +398,7 @@ function checkLastWith(
   if (ov === "None") {
     for (let i = 0; i < n; i++) {
       if (answers[i] === target) {
-        return `${Q(qi)}: you said no question has answer ${target}, but ${Q(i)} does.`;
+        return `${Q(qi)}: says no question has answer ${target}, but ${Q(i)} does.`;
       }
     }
     return null;
@@ -401,11 +407,11 @@ function checkLastWith(
   if (claimedPos < 0 || claimedPos >= n) return null;
 
   if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: you said the last ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+    return `${Q(qi)}: says the last ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
   }
   for (let i = n - 1; i > claimedPos; i--) {
     if (answers[i] === target) {
-      return `${Q(qi)}: you said the last ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes later.`;
+      return `${Q(qi)}: says the last ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes later.`;
     }
   }
   return null;
@@ -784,7 +790,7 @@ function findActionFp(
         const pred = countPred2(r);
         if (pred) {
           const [from, to] = countRange2(r, n);
-          const cr = countMatching(answers, pred, from, to);
+          const cr = countMatchingAware(answers, markSets, pred, from, to);
           if (cr.count > on || cr.count + cr.remaining < on) {
             return { type: "contradiction", questionIndex: qi };
           }
@@ -844,6 +850,108 @@ function findActionFp(
         return { type: "contradiction", questionIndex: qi };
       }
     }
+
+    // Fallback: full evaluate for rule types without specialized checks
+    // (TrueStmt, OnlyOdd, ConsecIdent, OnlySame, PrevSame, NextSame,
+    // MostCommonCount, LeastCommon, MostCommon, EqualCount, AnswerIsSelf)
+    if (
+      r.t !== RT_COUNT_ANSWER &&
+      r.t !== RT_COUNT_ANSWER_BEFORE &&
+      r.t !== RT_COUNT_ANSWER_AFTER &&
+      r.t !== RT_COUNT_VOWEL &&
+      r.t !== RT_COUNT_CONSONANT &&
+      r.t !== RT_ANSWER_OF &&
+      r.t !== RT_LETTER_DIST &&
+      r.t !== RT_UNIQUE &&
+      r.t !== RT_CLOSEST_AFTER &&
+      r.t !== RT_CLOSEST_BEFORE &&
+      r.t !== RT_FIRST_WITH &&
+      r.t !== RT_LAST_WITH &&
+      r.t !== RT_SAME_AS
+    ) {
+      if (answers.slice(0, n).every((x) => x != null)) {
+        if (!evaluateRule(r, qi, a, answers, fp)) {
+          return { type: "contradiction", questionIndex: qi };
+        }
+      }
+    }
+  }
+
+  // Count saturation
+  for (let qi = 0; qi < n; qi++) {
+    if (answers[qi] == null) continue;
+    const r = fp.rules[qi];
+    const pred = countPred2(r);
+    if (!pred) continue;
+    const ai = letterIdx(answers[qi]!);
+    const on = fp.optionNums[qi][ai];
+    if (Number.isNaN(on)) continue;
+    const [from, to] = countRange2(r, n);
+    const cr = countMatchingAware(answers, markSets, pred, from, to);
+    if (cr.count === on && cr.remaining > 0) {
+      for (let j = from; j < to; j++) {
+        if (answers[j] != null) continue;
+        for (let oi = 0; oi < 5; oi++) {
+          if (markSets[j][oi] !== "incorrect" && pred(LETTERS[oi])) {
+            return { type: "eliminate", questionIndex: j, optionIndex: oi };
+          }
+        }
+      }
+    }
+    if (cr.count + cr.remaining === on && cr.remaining > 0) {
+      for (let j = from; j < to; j++) {
+        if (answers[j] != null || !canStillMatch(pred, markSets[j])) continue;
+        for (let oi = 0; oi < 5; oi++) {
+          if (markSets[j][oi] !== "incorrect" && !pred(LETTERS[oi])) {
+            return { type: "eliminate", questionIndex: j, optionIndex: oi };
+          }
+        }
+      }
+    }
+  }
+
+  // Vowel/consonant cross-elimination
+  {
+    let vowelQi = -1;
+    let consonantQi = -1;
+    for (let i = 0; i < n; i++) {
+      if (answers[i] != null) continue;
+      if (fp.rules[i].t === RT_COUNT_VOWEL) vowelQi = i;
+      if (fp.rules[i].t === RT_COUNT_CONSONANT) consonantQi = i;
+    }
+    if (vowelQi >= 0 && consonantQi >= 0) {
+      for (let oi = 0; oi < 5; oi++) {
+        if (markSets[vowelQi][oi] !== "unmarked") continue;
+        const v = fp.optionNums[vowelQi][oi];
+        if (Number.isNaN(v)) continue;
+        const need = n - v;
+        let has = false;
+        for (let coi = 0; coi < 5; coi++) {
+          if (
+            markSets[consonantQi][coi] !== "incorrect" &&
+            fp.optionNums[consonantQi][coi] === need
+          ) {
+            has = true;
+            break;
+          }
+        }
+        if (!has) return { type: "eliminate", questionIndex: vowelQi, optionIndex: oi };
+      }
+      for (let oi = 0; oi < 5; oi++) {
+        if (markSets[consonantQi][oi] !== "unmarked") continue;
+        const v = fp.optionNums[consonantQi][oi];
+        if (Number.isNaN(v)) continue;
+        const need = n - v;
+        let has = false;
+        for (let voi = 0; voi < 5; voi++) {
+          if (markSets[vowelQi][voi] !== "incorrect" && fp.optionNums[vowelQi][voi] === need) {
+            has = true;
+            break;
+          }
+        }
+        if (!has) return { type: "eliminate", questionIndex: consonantQi, optionIndex: oi };
+      }
+    }
   }
 
   // Forced values
@@ -851,6 +959,9 @@ function findActionFp(
     if (answers[qi] != null) continue;
     const r = fp.rules[qi];
 
+    if (markCount(markSets[qi]) === 0) {
+      return { type: "contradiction", questionIndex: qi };
+    }
     const remaining: number[] = [];
     for (let oi = 0; oi < 5; oi++) {
       if (markSets[qi][oi] !== "incorrect") remaining.push(oi);
@@ -908,7 +1019,7 @@ function findActionFp(
       const pred = countPred2(r);
       if (pred && r.t !== RT_MOST_COMMON_COUNT) {
         const [from, to] = countRange2(r, n);
-        const cr = countMatching(answers, pred, from, to);
+        const cr = countMatchingAware(answers, markSets, pred, from, to);
         if (!Number.isNaN(on) && (cr.count > on || cr.count + cr.remaining < on)) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
@@ -918,6 +1029,13 @@ function findActionFp(
         const target = answers[r.questionIndex];
         if (target != null && target !== ov) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+        }
+        // AnswerOf propagation: if the claimed letter is eliminated from the target
+        if (target == null) {
+          const claimedIdx = L2I[ov];
+          if (claimedIdx != null && markSets[r.questionIndex][claimedIdx] === "incorrect") {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
         }
       }
 
@@ -930,11 +1048,19 @@ function findActionFp(
 
       if ((r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) && on !== NONE) {
         const pos = on - 1;
-        const afterIdx = r.t === RT_CLOSEST_AFTER ? r.afterIndex : -1;
-        if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== r.answer) {
+        const scanStart = r.t === RT_CLOSEST_AFTER ? r.afterIndex + 1 : 0;
+        if (pos < scanStart || pos >= n) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
-        for (let j = afterIdx + 1; j < pos; j++) {
+        if (pos >= 0 && pos < n) {
+          if (answers[pos] != null && answers[pos] !== r.answer) {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
+          if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
+        }
+        for (let j = scanStart; j < pos; j++) {
           if (answers[j] === r.answer)
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
@@ -942,8 +1068,16 @@ function findActionFp(
       if ((r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) && on !== NONE) {
         const pos = on - 1;
         const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
-        if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== r.answer) {
+        if (pos < 0 || pos >= beforeIdx) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+        }
+        if (pos >= 0 && pos < n) {
+          if (answers[pos] != null && answers[pos] !== r.answer) {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
+          if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
         }
         for (let j = beforeIdx - 1; j > pos; j--) {
           if (answers[j] === r.answer)
@@ -963,6 +1097,66 @@ function findActionFp(
           if (answers[j] === r.answer)
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
+      }
+
+      // OnlyOdd: position must be odd, in range, and could have the answer
+      if (r.t === RT_ONLY_ODD) {
+        if (on !== NONE) {
+          if (on % 2 === 0) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          const pos = on - 1;
+          if (pos >= 0 && pos < n) {
+            if (answers[pos] != null && answers[pos] !== r.answer) {
+              return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+            }
+            if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+              return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+            }
+          }
+        } else {
+          for (let i = 0; i < n; i++) {
+            if ((i + 1) % 2 === 1 && answers[i] === r.answer) {
+              return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+            }
+          }
+        }
+      }
+
+      // ConsecIdent: pair must have same answer
+      if (r.t === RT_CONSEC_IDENT) {
+        if (on !== NONE) {
+          const pos = on;
+          if (pos >= 0 && pos + 1 < n) {
+            if (
+              answers[pos] != null &&
+              answers[pos + 1] != null &&
+              answers[pos] !== answers[pos + 1]
+            ) {
+              return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+            }
+          }
+        } else {
+          for (let i = 0; i < n - 1; i++) {
+            if (answers[i] != null && answers[i + 1] != null && answers[i] === answers[i + 1]) {
+              return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+            }
+          }
+        }
+      }
+
+      // PrevSame: must point before qi
+      if (r.t === RT_PREV_SAME && on !== NONE) {
+        if (on - 1 >= qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+      }
+
+      // NextSame: must point after qi
+      if (r.t === RT_NEXT_SAME && on !== NONE) {
+        if (on - 1 <= qi || on - 1 >= n)
+          return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+      }
+
+      // OnlySame/SameAs: can't point to self
+      if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && on !== NONE) {
+        if (on - 1 === qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
       }
     }
   }
@@ -996,6 +1190,37 @@ function countRange2(
   if (r.t === RT_COUNT_ANSWER_BEFORE) return [0, r.beforeIndex];
   if (r.t === RT_COUNT_ANSWER_AFTER) return [r.afterIndex + 1, n];
   return [0, n];
+}
+
+function markCount(marks: Marks): number {
+  let c = 0;
+  for (let i = 0; i < 5; i++) if (marks[i] !== "incorrect") c++;
+  return c;
+}
+
+function canStillMatch(pred: (a: AnswerLetter) => boolean, marks: Marks): boolean {
+  for (let oi = 0; oi < 5; oi++) {
+    if (marks[oi] !== "incorrect" && pred(LETTERS[oi])) return true;
+  }
+  return false;
+}
+
+function countMatchingAware(
+  answers: (AnswerLetter | null)[],
+  markSets: Marks[],
+  pred: (a: AnswerLetter) => boolean,
+  from: number,
+  to: number,
+): CountResult {
+  let count = 0;
+  let remaining = 0;
+  for (let i = from; i < to && i < answers.length; i++) {
+    const a = answers[i];
+    if (a == null) {
+      if (canStillMatch(pred, markSets[i])) remaining++;
+    } else if (pred(a)) count++;
+  }
+  return { count, remaining };
 }
 
 function countMatchingSimple(
@@ -1040,7 +1265,8 @@ function findLookahead(
             ? `Try looking at ${formatList(allQs)}.`
             : `Consider ${Q(qi)}, option ${letter}.`;
         const step3 = `What if ${Q(qi)} is ${letter}?`;
-        const step4 = `${Q(qi)} can't be ${letter}: ${result.explanation}`;
+        const expl = result.explanation.replace(new RegExp(`^${Q(qi)}: `), "");
+        const step4 = `${Q(qi)} can't be ${letter}: ${expl}`;
         return {
           steps: [step1, step2, step3, step4],
           action: { type: "eliminate", questionIndex: qi, optionIndex: oi },
