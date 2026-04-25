@@ -939,7 +939,7 @@ function questionText(rule: ValidationRule): string {
     case "only_same_answer":
       return "Which is the only other question with the same answer as this one?";
     case "same_answer_as":
-      return "The answer to this question is the same as the answer to question?";
+      return "Which question has the same answer as this one?";
     case "only_odd_with_answer":
       return `Which is the only odd-numbered question with answer ${rule.answer}?`;
     case "consecutive_identical":

@@ -411,6 +411,59 @@ pub fn find_action_fast(
         }
     }
 
+    // ── Vowel/consonant cross-rule ──
+    // If both CountVowel and CountConsonant exist, vowels + consonants = n.
+    // An option value V on one is only valid if (n - V) is an available option on the other.
+    {
+        let mut vowel_qi = None;
+        let mut consonant_qi = None;
+        for i in 0..n {
+            if answers[i].is_some() {
+                continue;
+            }
+            match fp.rules[i] {
+                Rule::CountVowel => vowel_qi = Some(i),
+                Rule::CountConsonant => consonant_qi = Some(i),
+                _ => {}
+            }
+        }
+        if let (Some(vq), Some(cq)) = (vowel_qi, consonant_qi) {
+            let nn = n as i16;
+            // Check vowel options: each needs (n - val) available in consonant
+            for oi in 0..5usize {
+                if (eliminated[vq] >> oi) & 1 == 1 {
+                    continue;
+                }
+                let v = fp.option_nums[vq][oi];
+                if v == NAN_VAL {
+                    continue;
+                }
+                let need = nn - v;
+                let has_complement = (0..5)
+                    .any(|coi| (eliminated[cq] >> coi) & 1 == 0 && fp.option_nums[cq][coi] == need);
+                if !has_complement {
+                    return Some(Action::Eliminate { qi: vq, oi });
+                }
+            }
+            // Check consonant options: each needs (n - val) available in vowel
+            for oi in 0..5usize {
+                if (eliminated[cq] >> oi) & 1 == 1 {
+                    continue;
+                }
+                let v = fp.option_nums[cq][oi];
+                if v == NAN_VAL {
+                    continue;
+                }
+                let need = nn - v;
+                let has_complement = (0..5)
+                    .any(|voi| (eliminated[vq] >> voi) & 1 == 0 && fp.option_nums[vq][voi] == need);
+                if !has_complement {
+                    return Some(Action::Eliminate { qi: cq, oi });
+                }
+            }
+        }
+    }
+
     // ── Eliminations ──
     for qi in 0..n {
         if answers[qi].is_some() {
@@ -1290,6 +1343,40 @@ mod tests {
             new_dist > old_dist,
             "repaired distractor should be further from correct"
         );
+    }
+
+    #[test]
+    fn test_vowel_consonant_cross_elimination() {
+        // n=5. Q1=CountVowel options [0,1,2,3,4], Q2=CountConsonant options [5,4,2,1,0].
+        // Q1=A(0 vowels) requires 5 consonants, but Q2 has 5 as option A → ok.
+        // Q1=D(3 vowels) requires 2 consonants, Q2 has 2 as option C → ok.
+        // Q1=E(4 vowels) requires 1 consonant, Q2 has 1 as option D → ok.
+        // Q1=C(2 vowels) requires 3 consonants, but Q2 has no 3 → eliminate!
+        use Answer::*;
+        let mut rules = [Rule::AnswerIsSelf; MAX_N];
+        rules[0] = Rule::CountVowel;
+        rules[1] = Rule::CountConsonant;
+        let n = 5;
+        let mut option_nums = [[NAN_VAL; 5]; MAX_N];
+        option_nums[0] = [0, 1, 2, 3, 4]; // Q1: vowel counts
+        option_nums[1] = [5, 4, 2, 1, 0]; // Q2: consonant counts (no 3!)
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&rules, n);
+        let fp = FlatPuzzle {
+            rules,
+            n,
+            option_nums,
+            option_answers: [[0xFFu8; 5]; MAX_N],
+            option_claims: [[Claim::None; 5]; MAX_N],
+            affected_by,
+            global_indices,
+        };
+        let answers = [None; MAX_N];
+        let eliminated = [0u8; MAX_N];
+
+        // Should eliminate Q1 oi=2 (2 vowels → needs 3 consonants, unavailable)
+        let action = find_action_fast(&fp, &answers, &eliminated);
+        eprintln!("cross-elim: {action:?}");
+        assert!(matches!(action, Some(Action::Eliminate { qi: 0, oi: 2 })));
     }
 
     #[test]

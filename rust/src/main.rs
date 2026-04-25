@@ -353,7 +353,7 @@ fn question_text(rule: &Rule) -> String {
         Rule::OnlySame => {
             "Which is the only other question with the same answer as this one?".into()
         }
-        Rule::SameAs => "The answer to this question is the same as the answer to question?".into(),
+        Rule::SameAs => "Which question has the same answer as this one?".into(),
         Rule::OnlyOdd { answer } => format!(
             "Which is the only odd-numbered question with answer {}?",
             answer.as_char()
