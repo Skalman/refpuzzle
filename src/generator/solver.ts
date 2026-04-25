@@ -75,7 +75,7 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
   return indices;
 }
 
-export function solveFp(
+function solveFp(
   fp: FlatPuzzle,
   fixedAnswers?: (AnswerLetter | null)[],
   maxSolutions = 2,

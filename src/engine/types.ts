@@ -161,7 +161,7 @@ export interface FlatRule {
   otherQuestionIndex: number;
 }
 
-export function flattenRule(r: ValidationRule): FlatRule {
+function flattenRule(r: ValidationRule): FlatRule {
   return {
     t: RT_MAP[r.type],
     answer: "answer" in r ? r.answer : null,

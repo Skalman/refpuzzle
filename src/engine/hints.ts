@@ -28,7 +28,7 @@ type Action =
   | { type: "contradiction"; questionIndex: number }
   | null;
 
-export interface Hint {
+interface Hint {
   steps: string[]; // progressive disclosure: vague → specific → full explanation
   action?:
     | { type: "force"; questionIndex: number; letter: AnswerLetter }

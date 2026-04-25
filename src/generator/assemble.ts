@@ -25,7 +25,7 @@ const CONSTRAINED_TYPES = new Set<string>([
   "answer_is_self",
 ]);
 
-export interface GenerateResult {
+interface GenerateResult {
   puzzle: Puzzle;
   solution: AnswerLetter[];
 }

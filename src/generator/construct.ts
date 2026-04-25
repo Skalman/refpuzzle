@@ -25,7 +25,7 @@ import { solve } from "./solver.ts";
 import { RNG } from "./rng.ts";
 import type { DifficultyProfile } from "./difficulty.ts";
 
-export interface GenerateResult {
+interface GenerateResult {
   puzzle: Puzzle;
   solution: AnswerLetter[];
 }
