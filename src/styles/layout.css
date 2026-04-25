@@ -107,7 +107,7 @@
 /* ── Difficulty tabs ── */
 .difficulty-tabs {
   display: flex;
-  gap: 2px;
+  gap: 0;
   margin-bottom: 0.5rem;
   background: var(--border);
   border-radius: 8px;
@@ -128,6 +128,31 @@
   text-align: center;
   transition: all 0.15s;
   white-space: nowrap;
+  &:nth-child(1) {
+    --tab-color: #22c55e;
+  }
+  &:nth-child(2) {
+    --tab-color: #60a5fa;
+  }
+  &:nth-child(3) {
+    --tab-color: #f59e0b;
+  }
+  &:nth-child(4) {
+    --tab-color: #f97316;
+  }
+  &:nth-child(5) {
+    --tab-color: #ef4444;
+  }
+
+  border-bottom: 2px solid color-mix(in srgb, var(--tab-color) 75%, transparent);
+  border-radius: 6px 6px 0 0;
+
+  &:first-child {
+    border-bottom-left-radius: 6px;
+  }
+  &:last-child {
+    border-bottom-right-radius: 6px;
+  }
 
   &:hover {
     background: var(--bg-hover);
@@ -135,9 +160,10 @@
 
   &.active {
     background: var(--bg-surface);
-    color: var(--accent);
+    color: var(--tab-color);
     font-weight: 600;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    border-bottom-color: var(--tab-color);
   }
 }
 
