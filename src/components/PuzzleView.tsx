@@ -381,6 +381,16 @@ export function PuzzleView({
     setFocusedOption(optionIdx);
   }
 
+  function focusCurrentStep() {
+    const idx = historyIdxRef.current;
+    if (idx <= 0) return;
+    const diff = describeDiff(historyRef.current[idx - 1], historyRef.current[idx]);
+    if (diff.qi >= 0) {
+      setFocusedQuestion(diff.qi);
+      setFocusedOption(diff.oi);
+    }
+  }
+
   function handleUndo() {
     if (historyIdxRef.current <= 0) return;
     historyIdxRef.current--;
@@ -388,6 +398,7 @@ export function PuzzleView({
     setHintText(null);
     hintRef.current = null;
     setHistoryVersion((v) => v + 1);
+    focusCurrentStep();
   }
 
   function handleRedo() {
@@ -397,6 +408,7 @@ export function PuzzleView({
     setHintText(null);
     hintRef.current = null;
     setHistoryVersion((v) => v + 1);
+    focusCurrentStep();
   }
 
   function handleJumpTo(idx: number) {
