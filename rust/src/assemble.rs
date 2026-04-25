@@ -40,9 +40,9 @@ fn try_generate(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateRe
         }
     }
 
-    let fp = build_flat_puzzle(&rules, &solution, n, rng)?;
+    let mut fp = build_flat_puzzle(&rules, &solution, n, rng)?;
 
-    if !validate_and_check(&rules, &solution, &fp, n) {
+    if !validate_and_check(&rules, &solution, &mut fp, n, rng) {
         return None;
     }
 

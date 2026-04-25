@@ -59,17 +59,26 @@ pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize)
     }
 }
 
-pub fn check_solvable(fp: &FlatPuzzle) -> bool {
-    let n = fp.n;
-    let mut answers = [None; MAX_N];
-    let mut eliminated = [0u8; MAX_N];
+fn run_hint_engine(fp: &FlatPuzzle) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+    run_hint_engine_from(fp, [None; MAX_N], [0u8; MAX_N])
+}
 
-    for _ in 0..n * 15 {
+fn run_hint_engine_from(
+    fp: &FlatPuzzle,
+    mut answers: [Option<Answer>; MAX_N],
+    mut eliminated: [u8; MAX_N],
+) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+    let n = fp.n;
+
+    for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            return true;
+            return (true, answers, eliminated);
         }
 
         if let Some(action) = find_action_fast(fp, &answers, &eliminated) {
+            if let crate::hints::Action::Contradiction { .. } = action {
+                return (false, answers, eliminated);
+            }
             apply_action(&action, &mut answers, &mut eliminated);
             continue;
         }
@@ -79,16 +88,17 @@ pub fn check_solvable(fp: &FlatPuzzle) -> bool {
             continue;
         }
 
-        return false;
+        return (false, answers, eliminated);
     }
-    false
+    (false, answers, eliminated)
 }
 
 pub fn validate_and_check(
     rules: &[Rule; MAX_N],
     solution: &[Answer; MAX_N],
-    fp: &FlatPuzzle,
+    fp: &mut FlatPuzzle,
     n: usize,
+    rng: &mut Rng,
 ) -> bool {
     for i in 0..n {
         for j in (i + 1)..n {
@@ -110,7 +120,277 @@ pub fn validate_and_check(
         return false;
     }
 
-    check_solvable(fp)
+    let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp);
+    if ok {
+        return true;
+    }
+
+    // Solvability failed — try incremental distractor repair.
+    // For each stuck question (counting rules first), replace the distractor
+    // closest to the correct value with the furthest available value.
+    // Re-check from stuck state after each repair; verify from scratch on success.
+    let candidates = rank_repair_candidates(fp, &stuck_answers);
+    let mut maybe_solved = false;
+
+    for &qi in &candidates {
+        repair_one_question(fp, qi, solution, &stuck_elim, rng);
+
+        let (ok, _, _) = run_hint_engine_from(fp, stuck_answers, stuck_elim);
+        if ok {
+            maybe_solved = true;
+            break;
+        }
+    }
+
+    if !maybe_solved {
+        let (ok, _, _) = run_hint_engine(fp);
+        maybe_solved = ok;
+    }
+
+    if maybe_solved {
+        for i in 0..n {
+            if !evaluate(fp, i, solution[i], &opt_solution) {
+                return false;
+            }
+        }
+        let (ok, _, _) = run_hint_engine(fp);
+        if !ok {
+            return false;
+        }
+        let solutions = solve(fp, None, 2);
+        return solutions.len() == 1;
+    }
+
+    false
+}
+
+// ── Distractor repair ──
+// When solvability fails, repair one question at a time with extreme-but-valid
+// distractor values (0, max, edge positions). Prioritize counting rules since
+// extreme counts are easy for the hint engine to disprove.
+
+fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_N]) -> Vec<usize> {
+    let n = fp.n;
+    let mut scored: Vec<(usize, u8)> = Vec::new();
+    for qi in 0..n {
+        if stuck_answers[qi].is_some() {
+            continue;
+        }
+        let rule = fp.rules[qi];
+        if rule.is_constrained() || matches!(rule, Rule::TrueStmt) {
+            continue;
+        }
+        let score = match rule {
+            _ if is_counting_type(&rule) => 3,
+            Rule::AnswerOf { question_index } => {
+                if stuck_answers[question_index as usize].is_some() {
+                    2
+                } else {
+                    0
+                }
+            }
+            Rule::LetterDist {
+                other_question_index,
+            } => {
+                if stuck_answers[other_question_index as usize].is_some() {
+                    2
+                } else {
+                    0
+                }
+            }
+            _ => 1, // positional, pairs, etc.
+        };
+        if score > 0 {
+            scored.push((qi, score));
+        }
+    }
+    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored.into_iter().map(|(qi, _)| qi).collect()
+}
+
+pub fn repair_one_question(
+    fp: &mut FlatPuzzle,
+    qi: usize,
+    solution: &[Answer; MAX_N],
+    stuck_elim: &[u8; MAX_N],
+    rng: &mut Rng,
+) {
+    let n = fp.n;
+    let correct_oi = solution[qi].idx();
+    let elim = stuck_elim[qi];
+    let rule = fp.rules[qi];
+
+    // Only repair non-eliminated wrong options — leave eliminated ones untouched
+    // to preserve puzzle quality.
+
+    match rule {
+        Rule::AnswerOf { question_index } => {
+            let correct_answer = solution[question_index as usize];
+            let mut pool = [Answer::A; 4];
+            let mut plen = 0;
+            for &l in &LETTERS {
+                if l != correct_answer {
+                    pool[plen] = l;
+                    plen += 1;
+                }
+            }
+            rng.shuffle(&mut pool[..plen]);
+            let mut di = 0;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    if di < plen {
+                        fp.option_answers[qi][oi] = pool[di] as u8;
+                        di += 1;
+                    }
+                }
+            }
+        }
+        Rule::LetterDist { .. } => {
+            let correct_val = fp.option_nums[qi][correct_oi];
+            // Find closest non-eliminated wrong option, replace with furthest value
+            let mut best_oi = None;
+            let mut best_dist = u16::MAX;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_oi = Some(oi);
+                    }
+                }
+            }
+            if let Some(oi) = best_oi {
+                let old_val = fp.option_nums[qi][oi];
+                let mut best_new = old_val;
+                let mut best_new_dist = 0u16;
+                for v in 0..5i16 {
+                    if v != correct_val && v != old_val {
+                        let mut in_use = false;
+                        for k in 0..5 {
+                            if k != oi && fp.option_nums[qi][k] == v {
+                                in_use = true;
+                            }
+                        }
+                        if !in_use {
+                            let d = (v - correct_val).unsigned_abs();
+                            if d > best_new_dist {
+                                best_new_dist = d;
+                                best_new = v;
+                            }
+                        }
+                    }
+                }
+                fp.option_nums[qi][oi] = best_new;
+            }
+        }
+        _ if is_counting_type(&rule) => {
+            let correct_val = fp.option_nums[qi][correct_oi];
+            let max = count_max(&rule, n) as i16;
+            // Find the non-eliminated wrong option closest to correct — that's
+            // the one the hint engine can't distinguish. Replace just that one.
+            let mut best_oi = None;
+            let mut best_dist = u16::MAX;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_oi = Some(oi);
+                    }
+                }
+            }
+            if let Some(oi) = best_oi {
+                // Replace with the furthest available value from correct
+                let old_val = fp.option_nums[qi][oi];
+                let mut best_new = old_val;
+                let mut best_new_dist = 0u16;
+                for v in 0..=max {
+                    if v != correct_val && v != old_val {
+                        let mut in_use = false;
+                        for k in 0..5 {
+                            if k != oi && fp.option_nums[qi][k] == v {
+                                in_use = true;
+                            }
+                        }
+                        if !in_use {
+                            let d = (v - correct_val).unsigned_abs();
+                            if d > best_new_dist {
+                                best_new_dist = d;
+                                best_new = v;
+                            }
+                        }
+                    }
+                }
+                fp.option_nums[qi][oi] = best_new;
+            }
+        }
+        _ => {
+            // Positional, ConsecIdent, etc.: same strategy — find closest-to-correct
+            // non-eliminated wrong option, replace with furthest available value.
+            let correct_val = fp.option_nums[qi][correct_oi];
+            let mut best_oi = None;
+            let mut best_dist = u16::MAX;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    let v = fp.option_nums[qi][oi];
+                    let dist = if v == NONE_VAL || correct_val == NONE_VAL {
+                        1 // treat None as close (hard to distinguish)
+                    } else {
+                        (v - correct_val).unsigned_abs()
+                    };
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_oi = Some(oi);
+                    }
+                }
+            }
+            if let Some(oi) = best_oi {
+                let (min_val, max_val) = match rule {
+                    Rule::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
+                    _ => {
+                        let min_p = match rule {
+                            Rule::ClosestAfter { after_index, .. } => after_index as i16 + 2,
+                            _ => 1,
+                        };
+                        let max_p = match rule {
+                            Rule::ClosestBefore { before_index, .. } => before_index as i16,
+                            _ => n as i16,
+                        };
+                        (min_p, max_p)
+                    }
+                };
+                let old_val = fp.option_nums[qi][oi];
+                let mut best_new = old_val;
+                let mut best_new_dist = 0u16;
+                // Try all values in range + NONE_VAL
+                let candidates_iter = (min_val..=max_val).chain(std::iter::once(NONE_VAL));
+                for v in candidates_iter {
+                    if v == correct_val || v == old_val {
+                        continue;
+                    }
+                    let mut in_use = false;
+                    for k in 0..5 {
+                        if k != oi && fp.option_nums[qi][k] == v {
+                            in_use = true;
+                        }
+                    }
+                    if in_use {
+                        continue;
+                    }
+                    let d = if v == NONE_VAL || correct_val == NONE_VAL {
+                        max_val.unsigned_abs() + 1 // treat None as far
+                    } else {
+                        (v - correct_val).unsigned_abs()
+                    };
+                    if d > best_new_dist {
+                        best_new_dist = d;
+                        best_new = v;
+                    }
+                }
+                fp.option_nums[qi][oi] = best_new;
+            }
+        }
+    }
 }
 
 // ── Build FlatPuzzle with options ──

@@ -168,7 +168,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   // Phase 5: Fill remaining, reserving slots for structural rules
   const avStructural = avVariety.filter((t) => STRUCTURAL_TYPES.has(t));
-  const structuralReserve = Math.min(avStructural.length > 0 && n < 12 ? 1 : 0, n - assigned.size);
+  const structuralReserve = Math.min(avStructural.length > 0 ? 1 : 0, n - assigned.size);
   const fillTarget = n - structuralReserve;
 
   const fillPool: ValidationRule["type"][] = [...avEntry, ...avPositional, ...avVariety].filter(
@@ -199,11 +199,17 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     rng.shuffle(fitting);
     let placed = false;
     for (const type of fitting) {
-      if (placeRule(type, assigned.size)) { placed = true; break; }
+      if (placeRule(type, assigned.size)) {
+        placed = true;
+        break;
+      }
     }
     if (!placed) {
       for (let attempt = 0; attempt < 20; attempt++) {
-        if (placeFrom(fillPool)) { placed = true; break; }
+        if (placeFrom(fillPool)) {
+          placed = true;
+          break;
+        }
       }
       if (
         !placed &&
@@ -238,30 +244,239 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const solutions = solve(puzzle, undefined, 2);
   if (solutions.length !== 1) return null;
 
-  // 5. Check solvability
-  if (!checkSolvable(puzzle, n)) return null;
+  // 5. Check solvability (with distractor repair on failure)
+  const stuckState = runHintEngine(puzzle, n);
+  if (stuckState.solved) return { puzzle, solution: solutions[0] };
 
-  return { puzzle, solution: solutions[0] };
+  for (let retry = 0; retry < 3; retry++) {
+    repairDistractors(puzzle, solution, stuckState.answers, n, rng);
+    const fp2 = flattenPuzzle(puzzle);
+    let evalOk = true;
+    for (let i = 0; i < n; i++) {
+      if (!evaluate(fp2.rules[i], i, solution[i], solution, fp2)) {
+        evalOk = false;
+        break;
+      }
+    }
+    if (!evalOk) return null;
+    const sols2 = solve(puzzle, undefined, 2);
+    if (sols2.length !== 1) continue;
+    if (checkSolvable(puzzle, n)) return { puzzle, solution: sols2[0] };
+  }
+
+  return null;
 }
 
 function checkSolvable(puzzle: Puzzle, n: number): boolean {
+  return runHintEngine(puzzle, n).solved;
+}
+
+function runHintEngine(
+  puzzle: Puzzle,
+  n: number,
+): { solved: boolean; answers: (AnswerLetter | null)[] } {
   const marks: Marks[] = Array.from(
     { length: n },
     () => ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks,
   );
   const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
   for (let step = 0; step < n * 15; step++) {
-    if (answers.every((a) => a != null)) return true;
+    if (answers.every((a) => a != null)) return { solved: true, answers };
     const fast = findActionFast(puzzle, answers, marks, n);
     if (fast) {
       applyAction(fast, marks, answers);
       continue;
     }
     const hint = findHint(puzzle, marks);
-    if (!hint?.action) return false;
+    if (!hint?.action) return { solved: false, answers };
     applyAction(hint.action, marks, answers);
   }
-  return false;
+  return { solved: false, answers };
+}
+
+function repairDistractors(
+  puzzle: Puzzle,
+  solution: AnswerLetter[],
+  stuckAnswers: (AnswerLetter | null)[],
+  n: number,
+  rng: RNG,
+): void {
+  for (let qi = 0; qi < n; qi++) {
+    if (stuckAnswers[qi] != null) continue;
+    const rule = puzzle.questions[qi].rule;
+    const correctOi = L2I[solution[qi]];
+
+    if (CONSTRAINED_TYPES.has(rule.type)) continue;
+    if (rule.type === "only_true_statement") continue;
+
+    const opts = puzzle.questions[qi].options;
+
+    if (rule.type === "answer_of_question") {
+      const target = stuckAnswers[rule.questionIndex];
+      if (target != null) {
+        const pool = rng.shuffle(LETTERS.filter((l) => l !== target) as string[]);
+        let di = 0;
+        for (let oi = 0; oi < 5; oi++) {
+          if (oi !== correctOi) opts[oi] = { label: pool[di++] };
+        }
+      }
+      continue;
+    }
+
+    const correctVal = opts[correctOi].label;
+
+    if (rule.type === "letter_distance" && rule.otherQuestionIndex != null) {
+      const other = stuckAnswers[rule.otherQuestionIndex];
+      if (other != null) {
+        const correctDist = Math.abs(L2I[solution[qi]] - L2I[other]);
+        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correctDist).map(String));
+        let di = 0;
+        for (let oi = 0; oi < 5; oi++) {
+          if (oi !== correctOi) opts[oi] = { label: pool[di++] };
+        }
+      }
+      continue;
+    }
+
+    if (isCountingType(rule.type)) {
+      const distractors = repairCountingDistractors(rule, correctVal, stuckAnswers, n, rng);
+      let di = 0;
+      for (let oi = 0; oi < 5; oi++) {
+        if (oi !== correctOi) opts[oi] = { label: distractors[di++] };
+      }
+      continue;
+    }
+
+    if (rule.type === "consecutive_identical") {
+      const distractors = repairPairDistractors(correctVal, stuckAnswers, n, rng);
+      let di = 0;
+      for (let oi = 0; oi < 5; oi++) {
+        if (oi !== correctOi) opts[oi] = { label: distractors[di++] };
+      }
+      continue;
+    }
+
+    // Positional rules — generate new distractors
+    const newDistractors = repairPositionalDistractors(rule, correctVal, stuckAnswers, n, rng);
+    let di = 0;
+    for (let oi = 0; oi < 5; oi++) {
+      if (oi !== correctOi) opts[oi] = { label: newDistractors[di++] };
+    }
+  }
+}
+
+function isCountingType(type: string): boolean {
+  return [
+    "count_answer",
+    "count_answer_before",
+    "count_answer_after",
+    "count_vowel_answers",
+    "count_consonant_answers",
+    "most_common_count",
+  ].includes(type);
+}
+
+function repairCountingDistractors(
+  rule: ValidationRule,
+  correctVal: string,
+  answers: (AnswerLetter | null)[],
+  n: number,
+  rng: RNG,
+): string[] {
+  const from = rule.type === "count_answer_after" ? rule.afterIndex + 1 : 0;
+  const to = rule.type === "count_answer_before" ? rule.beforeIndex : n;
+
+  let confirmed = 0;
+  let unknown = 0;
+  for (let i = from; i < to; i++) {
+    if (answers[i] == null) {
+      unknown++;
+    } else if (
+      rule.type === "count_vowel_answers"
+        ? answers[i] === "A" || answers[i] === "E"
+        : rule.type === "count_consonant_answers"
+          ? answers[i] !== "A" && answers[i] !== "E"
+          : "answer" in rule && answers[i] === rule.answer
+    ) {
+      confirmed++;
+    }
+  }
+
+  const correct = Number(correctVal);
+  const pool: number[] = [];
+  for (let v = 0; v < confirmed; v++) if (v !== correct) pool.push(v);
+  for (let v = confirmed + unknown + 1; v <= n; v++) if (v !== correct) pool.push(v);
+  const max =
+    rule.type === "count_answer_before"
+      ? rule.beforeIndex
+      : rule.type === "count_answer_after"
+        ? n - rule.afterIndex - 1
+        : n;
+  for (let v = 0; v <= Math.max(max, 4); v++) {
+    if (v !== correct && !pool.includes(v)) pool.push(v);
+  }
+  return rng.shuffle(pool).slice(0, 4).map(String);
+}
+
+function repairPairDistractors(
+  correctVal: string,
+  answers: (AnswerLetter | null)[],
+  n: number,
+  rng: RNG,
+): string[] {
+  const pool: string[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const label = `${i + 1} and ${i + 2}`;
+    if (label === correctVal) continue;
+    if (answers[i] != null && answers[i + 1] != null && answers[i] !== answers[i + 1]) {
+      pool.unshift(label);
+    } else {
+      pool.push(label);
+    }
+  }
+  if (correctVal !== "None") pool.push("None");
+  return rng.shuffle(pool).slice(0, 4);
+}
+
+function repairPositionalDistractors(
+  rule: ValidationRule,
+  correctVal: string,
+  answers: (AnswerLetter | null)[],
+  n: number,
+  rng: RNG,
+): string[] {
+  const answer = "answer" in rule ? rule.answer : undefined;
+  let minPos = 1;
+  let maxPos = n;
+  if (rule.type === "closest_after") minPos = rule.afterIndex + 2;
+  if (rule.type === "closest_before") maxPos = rule.beforeIndex;
+
+  const pool: string[] = [];
+
+  // Prefer positions pointing to answered questions with wrong answer
+  if (answer) {
+    for (let i = minPos - 1; i < maxPos; i++) {
+      const pos = String(i + 1);
+      if (pos === correctVal) continue;
+      if (answers[i] != null && answers[i] !== answer) {
+        pool.unshift(pos);
+      } else {
+        pool.push(pos);
+      }
+    }
+    // "None" is wrong if a match exists in range
+    const hasMatch = answers.slice(minPos - 1, maxPos).some((a) => a === answer);
+    if (correctVal !== "None" && hasMatch) pool.unshift("None");
+    else if (correctVal !== "None") pool.push("None");
+  } else {
+    for (let i = minPos; i <= maxPos; i++) {
+      const s = String(i);
+      if (s !== correctVal) pool.push(s);
+    }
+    if (correctVal !== "None") pool.push("None");
+  }
+
+  return rng.shuffle(pool).slice(0, 4);
 }
 
 function applyAction(
@@ -294,11 +509,11 @@ function makeRule(
     case "count_answer":
       return { type, answer: rng.pick(LETTERS) };
     case "count_answer_before":
-      if (n < 4) return null;
-      return { type, answer: rng.pick(LETTERS), beforeIndex: rng.int(2, n - 1) };
+      if (n < 6) return null;
+      return { type, answer: rng.pick(LETTERS), beforeIndex: rng.int(4, n - 1) };
     case "count_answer_after":
-      if (n < 4) return null;
-      return { type, answer: rng.pick(LETTERS), afterIndex: rng.int(0, Math.max(0, n - 3)) };
+      if (n < 6) return null;
+      return { type, answer: rng.pick(LETTERS), afterIndex: rng.int(0, Math.max(0, n - 5)) };
     case "count_vowel_answers":
     case "count_consonant_answers":
     case "most_common_count":
@@ -327,7 +542,11 @@ function makeRule(
     case "last_with_answer":
       return { type, answer: rng.pick(LETTERS) };
     case "previous_same_answer":
+      if (qi < 4) return null;
+      return { type };
     case "next_same_answer":
+      if (qi + 5 > n) return null;
+      return { type };
     case "only_same_answer":
     case "same_answer_as":
     case "consecutive_identical":

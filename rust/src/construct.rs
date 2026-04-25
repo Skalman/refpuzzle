@@ -157,8 +157,12 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
     }
 
     // Phase 5: Fill remaining, reserving slots for structural rules
-    let av_structural: Vec<RuleKind> = av_variety.iter().copied().filter(|k| is_structural(*k)).collect();
-    let structural_reserve = if av_structural.is_empty() || n >= 12 {
+    let av_structural: Vec<RuleKind> = av_variety
+        .iter()
+        .copied()
+        .filter(|k| is_structural(*k))
+        .collect();
+    let structural_reserve = if av_structural.is_empty() {
         0
     } else {
         1.min(n - assigned_count)
@@ -186,15 +190,22 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
 
     // Phase 6: Structural rules — inspect solution, pick matching types
     for _ in 0..structural_reserve {
-        if assigned_count >= n { break; }
+        if assigned_count >= n {
+            break;
+        }
         let qi = slots[assigned_count] as usize;
-        let mut fitting: Vec<RuleKind> = av_structural.iter().copied()
+        let mut fitting: Vec<RuleKind> = av_structural
+            .iter()
+            .copied()
             .filter(|&k| solution_compatible(k, qi, &solution, n))
             .collect();
         rng.shuffle(&mut fitting);
         let mut placed = false;
         for &kind in &fitting {
-            if place!(kind) { placed = true; break; }
+            if place!(kind) {
+                placed = true;
+                break;
+            }
         }
         if !placed {
             for _ in 0..20 {
@@ -209,9 +220,9 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         }
     }
 
-    let fp = build_flat_puzzle(&rules, &solution, n, rng)?;
+    let mut fp = build_flat_puzzle(&rules, &solution, n, rng)?;
 
-    if !validate_and_check(&rules, &solution, &fp, n) {
+    if !validate_and_check(&rules, &solution, &mut fp, n, rng) {
         return None;
     }
 
@@ -236,21 +247,21 @@ fn make_rule(
             answer: rng.pick(&LETTERS),
         }),
         RuleKind::CountAnswerBefore => {
-            if n < 4 {
+            if n < 6 {
                 return None;
             }
             Some(Rule::CountAnswerBefore {
                 answer: rng.pick(&LETTERS),
-                before_index: rng.int(2, n as i32 - 1) as u8,
+                before_index: rng.int(4, n as i32 - 1) as u8,
             })
         }
         RuleKind::CountAnswerAfter => {
-            if n < 4 {
+            if n < 6 {
                 return None;
             }
             Some(Rule::CountAnswerAfter {
                 answer: rng.pick(&LETTERS),
-                after_index: rng.int(0, (n as i32 - 3).max(0)) as u8,
+                after_index: rng.int(0, (n as i32 - 5).max(0)) as u8,
             })
         }
         RuleKind::CountVowel => Some(Rule::CountVowel),
@@ -312,8 +323,18 @@ fn make_rule(
         RuleKind::LastWith => Some(Rule::LastWith {
             answer: rng.pick(&LETTERS),
         }),
-        RuleKind::PrevSame => Some(Rule::PrevSame),
-        RuleKind::NextSame => Some(Rule::NextSame),
+        RuleKind::PrevSame => {
+            if qi < 4 {
+                return None;
+            }
+            Some(Rule::PrevSame)
+        }
+        RuleKind::NextSame => {
+            if qi + 5 > n {
+                return None;
+            }
+            Some(Rule::NextSame)
+        }
         RuleKind::OnlySame => Some(Rule::OnlySame),
         RuleKind::SameAs => Some(Rule::SameAs),
         RuleKind::ConsecIdent => Some(Rule::ConsecIdent),
