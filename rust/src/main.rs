@@ -1,4 +1,3 @@
-mod assemble;
 mod construct;
 mod difficulty;
 mod evaluate;

@@ -583,7 +583,7 @@ function makeRule(
   return null;
 }
 
-// ── Structural checks (same as assemble.ts) ──
+// ── Structural checks ──
 
 function checkStructural(rule: ValidationRule, qi: number, sol: AnswerLetter[]): boolean {
   switch (rule.type) {
@@ -679,7 +679,7 @@ function solutionCompatible(
   return true;
 }
 
-// ── Options, text, distractors (same logic as assemble.ts) ──
+// ── Options, text, distractors ──
 
 function letterCounts(sol: AnswerLetter[]): number[] {
   const c = [0, 0, 0, 0, 0];
