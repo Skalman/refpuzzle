@@ -35,6 +35,14 @@ pub fn apply_action(
     }
 }
 
+// ── State helpers (same API as JS for easy porting) ──
+
+#[inline(always)]
+fn is_elim(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
+    (eliminated[qi] >> oi) & 1 == 1
+}
+
+#[inline(always)]
 fn remaining_count(eliminated: u8) -> u32 {
     (!eliminated & 0b11111u8).count_ones()
 }
@@ -288,7 +296,7 @@ pub fn find_action_fast(
             for j in from..to {
                 if answers[j].is_none() {
                     for oi in 0..5usize {
-                        if (eliminated[j] >> oi) & 1 == 0 && pred.matches(LETTERS[oi]) {
+                        if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
                             return Some(Action::Eliminate { qi: j, oi });
                         }
                     }
@@ -299,7 +307,7 @@ pub fn find_action_fast(
             for j in from..to {
                 if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
                     for oi in 0..5usize {
-                        if (eliminated[j] >> oi) & 1 == 0 && !pred.matches(LETTERS[oi]) {
+                        if !is_elim(eliminated, j, oi) && !pred.matches(LETTERS[oi]) {
                             return Some(Action::Eliminate { qi: j, oi });
                         }
                     }
@@ -374,7 +382,7 @@ pub fn find_action_fast(
                 let mut valid_count = 0u8;
                 let mut valid_letter = Answer::A;
                 for oi in 0..5usize {
-                    if (eliminated[qi] >> oi) & 1 == 1 {
+                    if is_elim(eliminated, qi, oi) {
                         continue;
                     }
                     let dist = (oi as i16 - other_idx as i16).abs();
@@ -397,7 +405,7 @@ pub fn find_action_fast(
             let cr = count_matching(answers, eliminated, pred, from, to);
             if cr.remaining == 0 {
                 for oi in 0..5usize {
-                    if (eliminated[qi] >> oi) & 1 == 1 {
+                    if is_elim(eliminated, qi, oi) {
                         continue;
                     }
                     if fp.option_nums[qi][oi] == cr.count {
@@ -431,7 +439,7 @@ pub fn find_action_fast(
             let nn = n as i16;
             // Check vowel options: each needs (n - val) available in consonant
             for oi in 0..5usize {
-                if (eliminated[vq] >> oi) & 1 == 1 {
+                if is_elim(eliminated, vq, oi) {
                     continue;
                 }
                 let v = fp.option_nums[vq][oi];
@@ -440,14 +448,14 @@ pub fn find_action_fast(
                 }
                 let need = nn - v;
                 let has_complement = (0..5)
-                    .any(|coi| (eliminated[cq] >> coi) & 1 == 0 && fp.option_nums[cq][coi] == need);
+                    .any(|coi| !is_elim(eliminated, cq, coi) && fp.option_nums[cq][coi] == need);
                 if !has_complement {
                     return Some(Action::Eliminate { qi: vq, oi });
                 }
             }
             // Check consonant options: each needs (n - val) available in vowel
             for oi in 0..5usize {
-                if (eliminated[cq] >> oi) & 1 == 1 {
+                if is_elim(eliminated, cq, oi) {
                     continue;
                 }
                 let v = fp.option_nums[cq][oi];
@@ -456,7 +464,7 @@ pub fn find_action_fast(
                 }
                 let need = nn - v;
                 let has_complement = (0..5)
-                    .any(|voi| (eliminated[vq] >> voi) & 1 == 0 && fp.option_nums[vq][voi] == need);
+                    .any(|voi| !is_elim(eliminated, vq, voi) && fp.option_nums[vq][voi] == need);
                 if !has_complement {
                     return Some(Action::Eliminate { qi: cq, oi });
                 }
@@ -472,7 +480,7 @@ pub fn find_action_fast(
         let r = &fp.rules[qi];
 
         for oi in 0..5usize {
-            if (eliminated[qi] >> oi) & 1 == 1 {
+            if is_elim(eliminated, qi, oi) {
                 continue;
             }
             let on = fp.option_nums[qi][oi];
@@ -515,7 +523,7 @@ pub fn find_action_fast(
                             if target as u8 != ov {
                                 return Some(Action::Eliminate { qi, oi });
                             }
-                        } else if (eliminated[question_index as usize] >> ov) & 1 == 1 {
+                        } else if is_elim(eliminated, question_index as usize, ov as usize) {
                             // The letter this option claims is eliminated from the target question
                             return Some(Action::Eliminate { qi, oi });
                         }
@@ -547,7 +555,7 @@ pub fn find_action_fast(
                                 if pa != answer {
                                     return Some(Action::Eliminate { qi, oi });
                                 }
-                            } else if (eliminated[p] >> answer.idx()) & 1 == 1 {
+                            } else if is_elim(eliminated, p, answer.idx()) {
                                 return Some(Action::Eliminate { qi, oi });
                             }
                         }
@@ -582,7 +590,7 @@ pub fn find_action_fast(
                                 if pa != answer {
                                     return Some(Action::Eliminate { qi, oi });
                                 }
-                            } else if (eliminated[p] >> answer.idx()) & 1 == 1 {
+                            } else if is_elim(eliminated, p, answer.idx()) {
                                 return Some(Action::Eliminate { qi, oi });
                             }
                         }
@@ -614,7 +622,7 @@ pub fn find_action_fast(
                                 if pa != answer {
                                     return Some(Action::Eliminate { qi, oi });
                                 }
-                            } else if (eliminated[pos] >> answer.idx()) & 1 == 1 {
+                            } else if is_elim(eliminated, pos, answer.idx()) {
                                 return Some(Action::Eliminate { qi, oi });
                             }
                         }
@@ -710,11 +718,11 @@ pub fn find_lookahead_action(
         if answers[qi].is_some() {
             continue;
         }
-        for oi in 0..5u8 {
-            if (eliminated[qi] >> oi) & 1 == 1 {
+        for oi in 0..5usize {
+            if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            if trace_leads_to_contradiction(fp, answers, eliminated, qi, oi) {
+            if trace_leads_to_contradiction(fp, answers, eliminated, qi, oi as u8) {
                 return Some(Action::Eliminate {
                     qi,
                     oi: oi as usize,
@@ -860,7 +868,7 @@ mod tests {
             for qi in 0..n {
                 if answers[qi].is_none() {
                     let remaining: Vec<char> = (0..5usize)
-                        .filter(|&oi| (eliminated[qi] >> oi) & 1 == 0)
+                        .filter(|&oi| !is_elim(&eliminated, qi, oi))
                         .map(|oi| LETTERS[oi].as_char())
                         .collect();
                     steps.push(format!(
@@ -1015,7 +1023,7 @@ mod tests {
         for qi in 0..n {
             if answers[qi].is_none() {
                 let remaining: Vec<String> = (0..5usize)
-                    .filter(|&oi| (eliminated[qi] >> oi) & 1 == 0)
+                    .filter(|&oi| !is_elim(&eliminated, qi, oi))
                     .map(|oi| format!("{}={}", LETTERS[oi].as_char(), fp.option_nums[qi][oi]))
                     .collect();
                 eprintln!(
@@ -1210,7 +1218,7 @@ mod tests {
                             ));
                         } else {
                             let rem: Vec<char> = (0..5)
-                                .filter(|&oi| (eliminated[qi] >> oi) & 1 == 0)
+                                .filter(|&oi| !is_elim(&eliminated, qi, oi))
                                 .map(|oi| LETTERS[oi].as_char())
                                 .collect();
                             steps.push(format!("  Q{}: remaining {:?}", qi + 1, rem));
@@ -1230,7 +1238,7 @@ mod tests {
             for qi in 0..n {
                 if answers[qi].is_none() {
                     let rem: Vec<String> = (0..5)
-                        .filter(|&oi| (eliminated[qi] >> oi) & 1 == 0)
+                        .filter(|&oi| !is_elim(&eliminated, qi, oi))
                         .map(|oi| format!("{}={}", LETTERS[oi].as_char(), fp.option_nums[qi][oi]))
                         .collect();
                     steps.push(format!(
@@ -1636,7 +1644,7 @@ mod tests {
         for qi in 0..n {
             if answers[qi].is_none() {
                 let remaining: Vec<char> = (0..5usize)
-                    .filter(|&oi| (eliminated[qi] >> oi) & 1 == 0)
+                    .filter(|&oi| !is_elim(&eliminated, qi, oi))
                     .map(|oi| LETTERS[oi].as_char())
                     .collect();
                 eprintln!("  Q{}: remaining: {remaining:?}", qi + 1);

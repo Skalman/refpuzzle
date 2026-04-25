@@ -113,6 +113,18 @@ function formatList(items: string[]): string {
   return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
 }
 
+// ── State helpers (same API as Rust for easy porting) ──
+
+function isElim(marks: Marks[], qi: number, oi: number): boolean {
+  return marks[qi][oi] === "incorrect";
+}
+
+function remCount(marks: Marks[], qi: number): number {
+  let c = 0;
+  for (let i = 0; i < 5; i++) if (marks[qi][i] !== "incorrect") c++;
+  return c;
+}
+
 // ── Counting helpers ──
 
 interface CountResult {
@@ -433,7 +445,7 @@ function findForced(
     // Forced by elimination: only 1 option not marked incorrect
     const remaining: number[] = [];
     for (let oi = 0; oi < 5; oi++) {
-      if (markSets[qi][oi] !== "incorrect") remaining.push(oi);
+      if (!isElim(markSets, qi, oi)) remaining.push(oi);
     }
     if (remaining.length === 1) {
       const letter = LETTERS[remaining[0]];
@@ -497,7 +509,7 @@ function findForced(
       const otherIdx = L2I[otherAnswer];
       const validLetters: AnswerLetter[] = [];
       for (let oi = 0; oi < 5; oi++) {
-        if (markSets[qi][oi] === "incorrect") continue;
+        if (isElim(markSets, qi, oi)) continue;
         const dist = Math.abs(oi - otherIdx);
         const ov2 = puzzle.questions[qi].options[oi].label;
         if (String(dist) === ov2) validLetters.push(LETTERS[oi]);
@@ -519,7 +531,7 @@ function findForced(
       const { count, remaining: rem } = countMatching(answers, pred, from, to);
       if (rem === 0) {
         for (let oi = 0; oi < 5; oi++) {
-          if (markSets[qi][oi] === "incorrect") continue;
+          if (isElim(markSets, qi, oi)) continue;
           if (puzzle.questions[qi].options[oi].label === String(count)) {
             return hintSteps(
               qi,
@@ -892,7 +904,7 @@ function findActionFp(
       for (let j = from; j < to; j++) {
         if (answers[j] != null) continue;
         for (let oi = 0; oi < 5; oi++) {
-          if (markSets[j][oi] !== "incorrect" && pred(LETTERS[oi])) {
+          if (!isElim(markSets, j, oi) && pred(LETTERS[oi])) {
             return { type: "eliminate", questionIndex: j, optionIndex: oi };
           }
         }
@@ -902,7 +914,7 @@ function findActionFp(
       for (let j = from; j < to; j++) {
         if (answers[j] != null || !canStillMatch(pred, markSets[j])) continue;
         for (let oi = 0; oi < 5; oi++) {
-          if (markSets[j][oi] !== "incorrect" && !pred(LETTERS[oi])) {
+          if (!isElim(markSets, j, oi) && !pred(LETTERS[oi])) {
             return { type: "eliminate", questionIndex: j, optionIndex: oi };
           }
         }
@@ -927,10 +939,7 @@ function findActionFp(
         const need = n - v;
         let has = false;
         for (let coi = 0; coi < 5; coi++) {
-          if (
-            markSets[consonantQi][coi] !== "incorrect" &&
-            fp.optionNums[consonantQi][coi] === need
-          ) {
+          if (!isElim(markSets, consonantQi, coi) && fp.optionNums[consonantQi][coi] === need) {
             has = true;
             break;
           }
@@ -944,7 +953,7 @@ function findActionFp(
         const need = n - v;
         let has = false;
         for (let voi = 0; voi < 5; voi++) {
-          if (markSets[vowelQi][voi] !== "incorrect" && fp.optionNums[vowelQi][voi] === need) {
+          if (!isElim(markSets, vowelQi, voi) && fp.optionNums[vowelQi][voi] === need) {
             has = true;
             break;
           }
@@ -959,12 +968,12 @@ function findActionFp(
     if (answers[qi] != null) continue;
     const r = fp.rules[qi];
 
-    if (markCount(markSets[qi]) === 0) {
+    if (remCount(markSets, qi) === 0) {
       return { type: "contradiction", questionIndex: qi };
     }
     const remaining: number[] = [];
     for (let oi = 0; oi < 5; oi++) {
-      if (markSets[qi][oi] !== "incorrect") remaining.push(oi);
+      if (!isElim(markSets, qi, oi)) remaining.push(oi);
     }
     if (remaining.length === 1) {
       return { type: "force", questionIndex: qi, letter: LETTERS[remaining[0]] };
@@ -997,7 +1006,7 @@ function findActionFp(
       const cr = countMatching(answers, pred, from, to);
       if (cr.remaining === 0) {
         for (let oi = 0; oi < 5; oi++) {
-          if (markSets[qi][oi] === "incorrect") continue;
+          if (isElim(markSets, qi, oi)) continue;
           if (fp.optionNums[qi][oi] === cr.count) {
             return { type: "force", questionIndex: qi, letter: LETTERS[oi] };
           }
@@ -1033,7 +1042,7 @@ function findActionFp(
         // AnswerOf propagation: if the claimed letter is eliminated from the target
         if (target == null) {
           const claimedIdx = L2I[ov];
-          if (claimedIdx != null && markSets[r.questionIndex][claimedIdx] === "incorrect") {
+          if (claimedIdx != null && isElim(markSets, r.questionIndex, claimedIdx)) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
@@ -1056,7 +1065,7 @@ function findActionFp(
           if (answers[pos] != null && answers[pos] !== r.answer) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
-          if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+          if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
@@ -1075,7 +1084,7 @@ function findActionFp(
           if (answers[pos] != null && answers[pos] !== r.answer) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
-          if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+          if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
@@ -1108,7 +1117,7 @@ function findActionFp(
             if (answers[pos] != null && answers[pos] !== r.answer) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
-            if (answers[pos] == null && markSets[pos][L2I[r.answer!]] === "incorrect") {
+            if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
           }
@@ -1192,12 +1201,6 @@ function countRange2(
   return [0, n];
 }
 
-function markCount(marks: Marks): number {
-  let c = 0;
-  for (let i = 0; i < 5; i++) if (marks[i] !== "incorrect") c++;
-  return c;
-}
-
 function canStillMatch(pred: (a: AnswerLetter) => boolean, marks: Marks): boolean {
   for (let oi = 0; oi < 5; oi++) {
     if (marks[oi] !== "incorrect" && pred(LETTERS[oi])) return true;
@@ -1251,7 +1254,7 @@ function findLookahead(
     if (answers[qi] != null) continue;
 
     for (let oi = 0; oi < 5; oi++) {
-      if (markSets[qi][oi] === "incorrect") continue;
+      if (isElim(markSets, qi, oi)) continue;
 
       const result = traceAssumption(puzzle, answers, markSets, n, qi, oi);
       if (result) {
