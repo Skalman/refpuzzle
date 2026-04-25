@@ -29,5 +29,14 @@ export function Logo() {
       replayFn = null;
     };
   }, []);
-  return <span ref={ref} class="app-logo" tabIndex={0} role="img" aria-label="Logo" dangerouslySetInnerHTML={{ __html: logoSvg }} />;
+  return (
+    <span
+      ref={ref}
+      class="app-logo"
+      tabIndex={0}
+      role="img"
+      aria-label="Logo"
+      dangerouslySetInnerHTML={{ __html: logoSvg }}
+    />
+  );
 }
