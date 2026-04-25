@@ -1,3 +1,6 @@
+.nowrap { white-space: nowrap; }
+.nowrap svg { vertical-align: -0.125em; }
+
 /* ── Reset ── */
 *,
 *::before,

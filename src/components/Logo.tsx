@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "preact/hooks";
 import logoSvg from "../assets/logo.svg?raw";
+import { t } from "../i18n/index.ts";
 
 let replayFn: (() => void) | null = null;
 
@@ -8,12 +9,13 @@ export function replayLogoAnimation() {
 }
 
 export function Logo() {
+  const s = t();
   const ref = useRef<HTMLSpanElement>(null);
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el) return undefined;
     const svg = el.querySelector("svg");
-    if (!svg) return;
+    if (!svg) return undefined;
 
     function replay() {
       svg!.classList.add("replay");
@@ -35,7 +37,7 @@ export function Logo() {
       class="app-logo"
       tabIndex={0}
       role="img"
-      aria-label="Logo"
+      aria-label={s.aria.logo}
       dangerouslySetInnerHTML={{ __html: logoSvg }}
     />
   );

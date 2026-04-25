@@ -133,10 +133,12 @@ function OnboardingBanner() {
         <strong>{s.onboarding.welcome}</strong>
         <ul>
           <li>
-            {s.onboarding.step1} (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+            {s.onboarding.step1}{" "}
+            <span class="nowrap">(<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</span>
           </li>
           <li>
-            {s.onboarding.step2} (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+            {s.onboarding.step2}{" "}
+            <span class="nowrap">(<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</span>
           </li>
           <li>{s.onboarding.step3}</li>
         </ul>
@@ -177,13 +179,13 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
               {i === 0 && (
                 <>
                   {" "}
-                  (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+                  <span class="nowrap">(<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</span>
                 </>
               )}
               {i === 1 && (
                 <>
                   {" "}
-                  (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+                  <span class="nowrap">(<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</span>
                 </>
               )}
             </li>
@@ -387,7 +389,7 @@ function AppHeader({
                   onExport();
                 }}
               >
-                {s.backup.exportData}
+                {s.backup.exportProgress}
               </button>
               <label
                 class="more-menu-item"
@@ -401,7 +403,7 @@ function AppHeader({
                   }
                 }}
               >
-                {s.backup.importData}
+                {s.backup.importProgress}
                 <input
                   type="file"
                   accept=".json"
@@ -931,7 +933,7 @@ function DayRoute() {
     return (
       <div class="not-found">
         <h1>{s.notFound.noPuzzle}</h1>
-        <p>{s.notFound.noPuzzleDesc}</p>
+        <p>{s.app.noPuzzle}</p>
         <a href="/">{s.notFound.backToToday}</a>
       </div>
     );

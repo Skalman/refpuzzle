@@ -861,7 +861,7 @@ export function PuzzleView({
                   handleShareProgress();
                 }}
               >
-                {s.puzzle.shareWithHistory}
+                {s.puzzle.shareWithProgress}
               </button>
             )}
             {toastMessage && <span class="share-toast">{toastMessage}</span>}
