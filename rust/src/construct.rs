@@ -260,12 +260,7 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         return None;
     }
 
-    Some(GenerateResult {
-        rules,
-        solution,
-        fp,
-        n,
-    })
+    Some(GenerateResult { rules, fp, n })
 }
 
 fn make_rule(

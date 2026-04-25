@@ -37,7 +37,6 @@ fn us(t: std::time::Instant) -> u64 {
 
 pub struct GenerateResult {
     pub rules: [Rule; MAX_N],
-    pub solution: [Answer; MAX_N],
     pub fp: FlatPuzzle,
     pub n: usize,
 }
