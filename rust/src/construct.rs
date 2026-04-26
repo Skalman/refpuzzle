@@ -51,6 +51,26 @@ const VARIETY_TYPES: &[RuleKind] = &[
     RuleKind::TrueStmt,
 ];
 
+fn type_cap(kind: RuleKind) -> u8 {
+    match kind {
+        RuleKind::LetterDist => 1,
+        RuleKind::AnswerOf => 2,
+        _ => 3,
+    }
+}
+
+fn symmetric_group(kind: RuleKind) -> Option<u8> {
+    match kind {
+        RuleKind::FirstWith | RuleKind::LastWith => Some(0),
+        RuleKind::ClosestAfter | RuleKind::ClosestBefore => Some(1),
+        RuleKind::NextSame | RuleKind::PrevSame => Some(2),
+        RuleKind::CountAnswerBefore | RuleKind::CountAnswerAfter => Some(3),
+        RuleKind::CountVowel | RuleKind::CountConsonant => Some(4),
+        RuleKind::LeastCommon | RuleKind::MostCommon => Some(5),
+        _ => None,
+    }
+}
+
 fn filter_allowed(types: &[RuleKind], profile: &DifficultyProfile) -> Vec<RuleKind> {
     types
         .iter()
@@ -121,12 +141,32 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         false
     }
 
+    let mut kind_counts = [0u8; 32];
+    let mut group_counts = [0u8; 8];
+
+    // Variant: 25% of the time for levels with letter_distance,
+    // trade letter_distance for a 3rd answer_of chain
+    let extra_chain = profile.allowed_types.contains(&RuleKind::LetterDist) && rng.int(0, 3) == 0;
+
+    let mut caps = [3u8; 32];
+    caps[RuleKind::LetterDist as u8 as usize] = 1;
+    caps[RuleKind::AnswerOf as u8 as usize] = 2;
+    if extra_chain {
+        caps[RuleKind::AnswerOf as u8 as usize] = 3;
+        caps[RuleKind::LetterDist as u8 as usize] = 0;
+    }
+
     macro_rules! place {
         ($kind:expr) => {{
             let kind_val = $kind;
-            let qi = slots[assigned_count] as usize;
+            let ki = kind_val as u8 as usize;
+            let gi = symmetric_group(kind_val);
             let mut ok = false;
-            if solution_compatible(kind_val, qi, &solution, n) {
+            if kind_counts[ki] < caps[ki]
+                && gi.map_or(true, |g| group_counts[g as usize] < 3)
+                && solution_compatible(kind_val, slots[assigned_count] as usize, &solution, n)
+            {
+                let qi = slots[assigned_count] as usize;
                 for _ in 0..10 {
                     if let Some(rule) = make_rule(kind_val, qi, n, &solution, assigned, rng) {
                         if !is_dup(&rule, &used_rules, used_count)
@@ -137,6 +177,10 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
                             used_count += 1;
                             assigned |= 1 << qi;
                             assigned_count += 1;
+                            kind_counts[ki] += 1;
+                            if let Some(g) = gi {
+                                group_counts[g as usize] += 1;
+                            }
                             ok = true;
                             break;
                         }
@@ -155,11 +199,35 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         return None;
     }
 
-    // Phase 2: 2 answer_of_question (cascade backbone)
-    let chain_count = 2.min(n - assigned_count);
+    // Phase 2: answer_of_question backbone
+    let chain_count = if extra_chain {
+        3
+    } else if n <= 5 && rng.int(0, 1) == 0 {
+        1
+    } else {
+        2
+    }
+    .min(n - assigned_count);
     for _ in 0..chain_count {
         if !place!(RuleKind::AnswerOf) {
             return None;
+        }
+    }
+
+    // Phase 2b: occasionally place PrevSame/NextSame (need specific slot positions)
+    if rng.int(0, 1) == 0 && assigned_count < n {
+        let candidates: &[(RuleKind, usize)] =
+            &[(RuleKind::PrevSame, n - 1), (RuleKind::NextSame, 0)];
+        let (kind, needed_qi) = candidates[rng.int(0, 1) as usize];
+        if profile.allowed_types.contains(&kind) && (assigned & (1 << needed_qi)) == 0 {
+            // Swap the needed slot to the current position
+            for i in assigned_count..n {
+                if slots[i] as usize == needed_qi {
+                    slots.swap(i, assigned_count);
+                    break;
+                }
+            }
+            place!(kind);
         }
     }
 

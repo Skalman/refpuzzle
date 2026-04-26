@@ -9,7 +9,7 @@ pub struct DifficultyProfile {
 pub static PROFILES: [DifficultyProfile; 5] = [
     DifficultyProfile {
         question_count: 4,
-        allowed_types: &[CountAnswer, AnswerOf, AnswerIsSelf],
+        allowed_types: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
     },
     DifficultyProfile {
         question_count: 5,
@@ -18,9 +18,11 @@ pub static PROFILES: [DifficultyProfile; 5] = [
             AnswerOf,
             AnswerIsSelf,
             ClosestAfter,
+            ClosestBefore,
             FirstWith,
             LastWith,
             NextSame,
+            PrevSame,
         ],
     },
     DifficultyProfile {

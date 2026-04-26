@@ -37,6 +37,7 @@ impl Answer {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
 pub enum RuleKind {
     CountAnswer,
     CountAnswerBefore,

@@ -12,7 +12,7 @@ export const profiles: DifficultyProfile[] = [
     level: 1,
     name: "Beginner",
     questionCount: 4,
-    allowedTypes: ["count_answer", "answer_of_question", "answer_is_self"],
+    allowedTypes: ["count_answer", "answer_of_question", "answer_is_self", "first_with_answer", "last_with_answer"],
   },
   {
     level: 2,
@@ -23,10 +23,12 @@ export const profiles: DifficultyProfile[] = [
       "answer_of_question",
       "answer_is_self",
       "closest_after",
+      "closest_before",
       "first_with_answer",
       "last_with_answer",
 
       "next_same_answer",
+      "previous_same_answer",
     ],
   },
   {

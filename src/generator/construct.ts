@@ -85,6 +85,37 @@ const STRUCTURAL_TYPES = new Set<ValidationRule["type"]>([
   "equal_count_as",
 ]);
 
+function typeCap(type: ValidationRule["type"]): number {
+  if (type === "letter_distance") return 1;
+  if (type === "answer_of_question") return 2;
+  return 3;
+}
+
+function symmetricGroup(type: ValidationRule["type"]): string | null {
+  switch (type) {
+    case "first_with_answer":
+    case "last_with_answer":
+      return "first_last";
+    case "closest_after":
+    case "closest_before":
+      return "closest";
+    case "next_same_answer":
+    case "previous_same_answer":
+      return "next_prev_same";
+    case "count_answer_before":
+    case "count_answer_after":
+      return "count_before_after";
+    case "count_vowel_answers":
+    case "count_consonant_answers":
+      return "count_vowel_consonant";
+    case "least_common_answer":
+    case "most_common_answer":
+      return "least_most_common";
+    default:
+      return null;
+  }
+}
+
 function allowed(
   types: ValidationRule["type"][],
   profile: DifficultyProfile,
@@ -133,7 +164,25 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const avPositional = allowed(POSITIONAL_TYPES, profile);
   const avVariety = allowed(VARIETY_TYPES, profile);
 
+  const kindCounts: Record<string, number> = {};
+  const groupCounts: Record<string, number> = {};
+
+  // Variant: 25% of the time for levels with letter_distance,
+  // trade letter_distance for a 3rd answer_of chain
+  const extraChain = profile.allowedTypes.includes("letter_distance")
+    && rng.int(0, 3) === 0;
+
+  const capsOverride: Record<string, number> = {};
+  if (extraChain) {
+    capsOverride["answer_of_question"] = 3;
+    capsOverride["letter_distance"] = 0;
+  }
+
   function placeRule(type: ValidationRule["type"], slotIdx: number): boolean {
+    const cap = capsOverride[type] ?? typeCap(type);
+    if ((kindCounts[type] ?? 0) >= cap) return false;
+    const group = symmetricGroup(type);
+    if (group !== null && (groupCounts[group] ?? 0) >= 3) return false;
     const qi = slots[slotIdx];
     if (!solutionCompatible(type, qi, solution, n)) return false;
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -145,6 +194,8 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
       rules[qi] = rule;
       assigned.add(qi);
       usedRuleKeys.add(key);
+      kindCounts[type] = (kindCounts[type] ?? 0) + 1;
+      if (group !== null) groupCounts[group] = (groupCounts[group] ?? 0) + 1;
       return true;
     }
     return false;
@@ -159,10 +210,29 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   if (avEntry.length === 0) return null;
   if (!placeFrom(avEntry)) return null;
 
-  // Phase 2: 2 answer_of_question (cascade backbone — enough but not too many)
-  const chainCount = Math.min(2, n - assigned.size);
+  // Phase 2: answer_of_question backbone
+  const chainCount = Math.min(
+    extraChain ? 3 : n <= 5 && rng.int(0, 1) === 0 ? 1 : 2,
+    n - assigned.size,
+  );
   for (let c = 0; c < chainCount; c++) {
     if (!placeRule("answer_of_question", assigned.size)) return null;
+  }
+
+  // Phase 2b: occasionally place prev/next_same (need specific slot positions)
+  if (rng.int(0, 1) === 0 && assigned.size < n) {
+    const candidates: [ValidationRule["type"], number][] = [
+      ["previous_same_answer", n - 1],
+      ["next_same_answer", 0],
+    ];
+    const [kind, neededQi] = candidates[rng.int(0, 1)];
+    if (profile.allowedTypes.includes(kind) && !assigned.has(neededQi)) {
+      const idx = slots.indexOf(neededQi, assigned.size);
+      if (idx >= 0) {
+        [slots[assigned.size], slots[idx]] = [slots[idx], slots[assigned.size]];
+        placeRule(kind, assigned.size);
+      }
+    }
   }
 
   // Phase 3: 2-3 positional rules (strong lookahead entry points)
