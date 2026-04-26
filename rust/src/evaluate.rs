@@ -13,10 +13,10 @@ fn count_answer(answers: &[Option<Answer>], target: Answer, from: usize, to: usi
 fn count_vowels(answers: &[Option<Answer>], n: usize) -> i16 {
     let mut c: i16 = 0;
     for i in 0..n {
-        if let Some(a) = answers[i] {
-            if a.is_vowel() {
-                c += 1;
-            }
+        if let Some(a) = answers[i]
+            && a.is_vowel()
+        {
+            c += 1;
         }
     }
     c
@@ -25,10 +25,10 @@ fn count_vowels(answers: &[Option<Answer>], n: usize) -> i16 {
 fn count_consonants(answers: &[Option<Answer>], n: usize) -> i16 {
     let mut c: i16 = 0;
     for i in 0..n {
-        if let Some(a) = answers[i] {
-            if !a.is_vowel() {
-                c += 1;
-            }
+        if let Some(a) = answers[i]
+            && !a.is_vowel()
+        {
+            c += 1;
         }
     }
     c
@@ -180,12 +180,12 @@ pub fn evaluate(
             let mut pair_count = 0u8;
             let mut pair_first: i16 = -1;
             for i in 0..n.saturating_sub(1) {
-                if let (Some(a), Some(b)) = (answers[i], answers[i + 1]) {
-                    if a == b {
-                        pair_count += 1;
-                        if pair_count == 1 {
-                            pair_first = i as i16;
-                        }
+                if let (Some(a), Some(b)) = (answers[i], answers[i + 1])
+                    && a == b
+                {
+                    pair_count += 1;
+                    if pair_count == 1 {
+                        pair_first = i as i16;
                     }
                 }
             }

@@ -7,6 +7,7 @@ use crate::types::*;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub static STATS: [AtomicU64; 9] = {
+    #[allow(clippy::declare_interior_mutable_const)]
     const Z: AtomicU64 = AtomicU64::new(0);
     [Z; 9]
 };
@@ -261,7 +262,7 @@ fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_
             scored.push((qi, score));
         }
     }
-    scored.sort_by(|a, b| b.1.cmp(&a.1));
+    scored.sort_by_key(|&(_, s)| std::cmp::Reverse(s));
     scored.into_iter().map(|(qi, _)| qi).collect()
 }
 
@@ -294,11 +295,9 @@ pub fn repair_one_question(
             rng.shuffle(&mut pool[..plen]);
             let mut di = 0;
             for oi in 0..5 {
-                if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    if di < plen {
-                        fp.option_answers[qi][oi] = pool[di] as u8;
-                        di += 1;
-                    }
+                if oi != correct_oi && (elim >> oi) & 1 == 0 && di < plen {
+                    fp.option_answers[qi][oi] = pool[di] as u8;
+                    di += 1;
                 }
             }
         }
@@ -737,9 +736,7 @@ fn count_distractors(correct: i32, max: i32, rng: &mut Rng) -> [i16; 4] {
     }
     rng.shuffle(&mut pool[..plen]);
     let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
+    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
 }
 
@@ -771,9 +768,7 @@ fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) ->
     }
     rng.shuffle(&mut pool[..plen]);
     let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
+    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
 }
 
@@ -792,9 +787,7 @@ fn odd_position_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
     }
     rng.shuffle(&mut pool[..plen]);
     let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
+    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
 }
 
@@ -814,9 +807,7 @@ fn pair_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
     }
     rng.shuffle(&mut pool[..plen]);
     let mut result = [0i16; 4];
-    for i in 0..4.min(plen) {
-        result[i] = pool[i];
-    }
+    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
 }
 

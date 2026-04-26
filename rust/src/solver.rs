@@ -234,10 +234,10 @@ fn check_rule(
     let r = &fp.rules[i];
     let answer_i = answers[i].unwrap();
 
-    if all_answered || can_fully_evaluate_local(r, assigned, range_masks, i) {
-        if !evaluate(fp, i, answer_i, answers) {
-            return true;
-        }
+    if (all_answered || can_fully_evaluate_local(r, assigned, range_masks, i))
+        && !evaluate(fp, i, answer_i, answers)
+    {
+        return true;
     }
 
     // Forward checking for counting rules
@@ -281,10 +281,10 @@ fn check_rule(
             for j in 0..n {
                 if answers[j].is_none() {
                     remaining += 1;
-                } else if let Some(a) = answers[j] {
-                    if is_vowel == a.is_vowel() {
-                        count += 1;
-                    }
+                } else if let Some(a) = answers[j]
+                    && is_vowel == a.is_vowel()
+                {
+                    count += 1;
                 }
             }
             if count > opt_val || count + remaining < opt_val {

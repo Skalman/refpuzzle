@@ -1,3 +1,5 @@
+#![allow(clippy::needless_range_loop)]
+
 mod construct;
 mod difficulty;
 mod evaluate;
@@ -138,18 +140,18 @@ fn main() {
                 }
             }
             done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
-            if let Ok(mut last) = last_report.try_lock() {
-                if last.elapsed().as_secs() >= 15 {
-                    let counts: Vec<usize> = (0..5)
-                        .map(|i| done_by_level[i].load(Ordering::Relaxed))
-                        .collect();
-                    let done_total: usize = counts.iter().sum();
-                    eprintln!(
-                        "  {done_total}/{total}: L1={} L2={} L3={} L4={} L5={}",
-                        counts[0], counts[1], counts[2], counts[3], counts[4],
-                    );
-                    *last = Instant::now();
-                }
+            if let Ok(mut last) = last_report.try_lock()
+                && last.elapsed().as_secs() >= 15
+            {
+                let counts: Vec<usize> = (0..5)
+                    .map(|i| done_by_level[i].load(Ordering::Relaxed))
+                    .collect();
+                let done_total: usize = counts.iter().sum();
+                eprintln!(
+                    "  {done_total}/{total}: L1={} L2={} L3={} L4={} L5={}",
+                    counts[0], counts[1], counts[2], counts[3], counts[4],
+                );
+                *last = Instant::now();
             }
             ((day_idx, level), result)
         })
@@ -247,7 +249,8 @@ fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
             1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
             4 | 6 | 9 | 11 => 30,
             2 => {
-                if year % 4 == 0 && (year % 100 != 0 || year % 400 == 0) {
+                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
+                {
                     29
                 } else {
                     28

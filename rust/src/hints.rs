@@ -53,6 +53,7 @@ struct CountResult {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[allow(clippy::enum_variant_names)]
 enum CountPred {
     IsAnswer(Answer),
     IsVowel,
@@ -81,10 +82,8 @@ fn count_matching(
     let mut remaining: i16 = 0;
     for i in from..to {
         match answers[i] {
-            None => {
-                if can_still_match(pred, eliminated[i]) {
-                    remaining += 1;
-                }
+            None if can_still_match(pred, eliminated[i]) => {
+                remaining += 1;
             }
             Some(a) if pred.matches(a) => count += 1,
             _ => {}
@@ -179,10 +178,10 @@ pub fn find_action_fast(
             }
             Rule::AnswerOf { question_index } => {
                 let ov = fp.option_answers[qi][ai];
-                if let Some(target) = answers[question_index as usize] {
-                    if target as u8 != ov {
-                        return Some(Action::Contradiction { qi });
-                    }
+                if let Some(target) = answers[question_index as usize]
+                    && target as u8 != ov
+                {
+                    return Some(Action::Contradiction { qi });
                 }
             }
             Rule::LetterDist {
@@ -207,12 +206,12 @@ pub fn find_action_fast(
                 };
                 if on != NONE_VAL {
                     let pos = on - 1;
-                    if pos >= 0 && (pos as usize) < n {
-                        if let Some(pa) = answers[pos as usize] {
-                            if pa != answer {
-                                return Some(Action::Contradiction { qi });
-                            }
-                        }
+                    if pos >= 0
+                        && (pos as usize) < n
+                        && let Some(pa) = answers[pos as usize]
+                        && pa != answer
+                    {
+                        return Some(Action::Contradiction { qi });
                     }
                     if pos > 0 {
                         for j in scan_start..(pos as usize) {
@@ -236,12 +235,12 @@ pub fn find_action_fast(
                 };
                 if on != NONE_VAL {
                     let pos = on - 1;
-                    if pos >= 0 && (pos as usize) < n {
-                        if let Some(pa) = answers[pos as usize] {
-                            if pa != answer {
-                                return Some(Action::Contradiction { qi });
-                            }
-                        }
+                    if pos >= 0
+                        && (pos as usize) < n
+                        && let Some(pa) = answers[pos as usize]
+                        && pa != answer
+                    {
+                        return Some(Action::Contradiction { qi });
                     }
                     if pos >= 0 {
                         for j in ((pos as usize + 1)..before_idx).rev() {
@@ -260,12 +259,12 @@ pub fn find_action_fast(
             }
             Rule::SameAs => {
                 let tq = on - 1;
-                if tq >= 0 && (tq as usize) < n {
-                    if let Some(ta) = answers[tq as usize] {
-                        if ta != a {
-                            return Some(Action::Contradiction { qi });
-                        }
-                    }
+                if tq >= 0
+                    && (tq as usize) < n
+                    && let Some(ta) = answers[tq as usize]
+                    && ta != a
+                {
+                    return Some(Action::Contradiction { qi });
                 }
             }
             _ => {
@@ -334,15 +333,15 @@ pub fn find_action_fast(
             });
         }
 
-        if let Rule::AnswerOf { question_index } = *r {
-            if let Some(target) = answers[question_index as usize] {
-                for oi in 0..5usize {
-                    if fp.option_answers[qi][oi] == target as u8 {
-                        return Some(Action::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        });
-                    }
+        if let Rule::AnswerOf { question_index } = *r
+            && let Some(target) = answers[question_index as usize]
+        {
+            for oi in 0..5usize {
+                if fp.option_answers[qi][oi] == target as u8 {
+                    return Some(Action::Force {
+                        qi,
+                        answer: LETTERS[oi],
+                    });
                 }
             }
         }
@@ -351,15 +350,15 @@ pub fn find_action_fast(
             let Some(other_ans) = answers[other] else {
                 continue;
             };
-            if let Rule::AnswerOf { question_index } = fp.rules[other] {
-                if question_index as usize == qi {
-                    let implied = fp.option_answers[other][other_ans.idx()];
-                    if implied <= 4 {
-                        return Some(Action::Force {
-                            qi,
-                            answer: LETTERS[implied as usize],
-                        });
-                    }
+            if let Rule::AnswerOf { question_index } = fp.rules[other]
+                && question_index as usize == qi
+            {
+                let implied = fp.option_answers[other][other_ans.idx()];
+                if implied <= 4 {
+                    return Some(Action::Force {
+                        qi,
+                        answer: LETTERS[implied as usize],
+                    });
                 }
             }
             if let Rule::SameAs = fp.rules[other] {
@@ -376,27 +375,26 @@ pub fn find_action_fast(
         if let Rule::LetterDist {
             other_question_index,
         } = *r
+            && let Some(other_ans) = answers[other_question_index as usize]
         {
-            if let Some(other_ans) = answers[other_question_index as usize] {
-                let other_idx = other_ans.idx();
-                let mut valid_count = 0u8;
-                let mut valid_letter = Answer::A;
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let dist = (oi as i16 - other_idx as i16).abs();
-                    if dist == fp.option_nums[qi][oi] {
-                        valid_count += 1;
-                        valid_letter = LETTERS[oi];
-                    }
+            let other_idx = other_ans.idx();
+            let mut valid_count = 0u8;
+            let mut valid_letter = Answer::A;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
                 }
-                if valid_count == 1 {
-                    return Some(Action::Force {
-                        qi,
-                        answer: valid_letter,
-                    });
+                let dist = (oi as i16 - other_idx as i16).abs();
+                if dist == fp.option_nums[qi][oi] {
+                    valid_count += 1;
+                    valid_letter = LETTERS[oi];
                 }
+            }
+            if valid_count == 1 {
+                return Some(Action::Force {
+                    qi,
+                    answer: valid_letter,
+                });
             }
         }
 
@@ -488,32 +486,25 @@ pub fn find_action_fast(
             match *r {
                 Rule::CountAnswer { answer }
                 | Rule::CountAnswerBefore { answer, .. }
-                | Rule::CountAnswerAfter { answer, .. } => {
-                    if on != NAN_VAL {
-                        let (from, to) = count_range(r, n);
-                        let cr = count_matching(
-                            answers,
-                            eliminated,
-                            CountPred::IsAnswer(answer),
-                            from,
-                            to,
-                        );
-                        if cr.count > on || cr.count + cr.remaining < on {
-                            return Some(Action::Eliminate { qi, oi });
-                        }
+                | Rule::CountAnswerAfter { answer, .. }
+                    if on != NAN_VAL =>
+                {
+                    let (from, to) = count_range(r, n);
+                    let cr =
+                        count_matching(answers, eliminated, CountPred::IsAnswer(answer), from, to);
+                    if cr.count > on || cr.count + cr.remaining < on {
+                        return Some(Action::Eliminate { qi, oi });
                     }
                 }
-                Rule::CountVowel | Rule::CountConsonant => {
-                    if on != NAN_VAL {
-                        let pred = if matches!(*r, Rule::CountVowel) {
-                            CountPred::IsVowel
-                        } else {
-                            CountPred::IsConsonant
-                        };
-                        let cr = count_matching(answers, eliminated, pred, 0, n);
-                        if cr.count > on || cr.count + cr.remaining < on {
-                            return Some(Action::Eliminate { qi, oi });
-                        }
+                Rule::CountVowel | Rule::CountConsonant if on != NAN_VAL => {
+                    let pred = if matches!(*r, Rule::CountVowel) {
+                        CountPred::IsVowel
+                    } else {
+                        CountPred::IsConsonant
+                    };
+                    let cr = count_matching(answers, eliminated, pred, 0, n);
+                    if cr.count > on || cr.count + cr.remaining < on {
+                        return Some(Action::Eliminate { qi, oi });
                     }
                 }
                 Rule::AnswerOf { question_index } => {
@@ -639,65 +630,56 @@ pub fn find_action_fast(
                     if on != NONE_VAL {
                         let pos = on as usize;
                         // Pair at (pos, pos+1). Both must have same answer.
-                        if pos + 1 < n {
-                            if let (Some(a), Some(b)) = (answers[pos], answers[pos + 1]) {
-                                if a != b {
-                                    return Some(Action::Eliminate { qi, oi });
-                                }
-                            }
+                        if pos + 1 < n
+                            && let (Some(a), Some(b)) = (answers[pos], answers[pos + 1])
+                            && a != b
+                        {
+                            return Some(Action::Eliminate { qi, oi });
                         }
                     } else {
                         // None: eliminate if any consecutive pair has same answer
                         for i in 0..n.saturating_sub(1) {
-                            if let (Some(a), Some(b)) = (answers[i], answers[i + 1]) {
-                                if a == b {
-                                    return Some(Action::Eliminate { qi, oi });
-                                }
+                            if let (Some(a), Some(b)) = (answers[i], answers[i + 1])
+                                && a == b
+                            {
+                                return Some(Action::Eliminate { qi, oi });
                             }
                         }
                     }
                 }
-                Rule::PrevSame => {
-                    if on != NONE_VAL {
-                        let pos = (on - 1) as usize;
-                        // Must point to a position before qi
-                        if pos >= qi {
-                            return Some(Action::Eliminate { qi, oi });
-                        }
-                        // If that position is answered, it must match our letter
-                        if let Some(pa) = answers[pos] {
-                            if let Some(my) = answers[qi] {
-                                if pa != my {
-                                    return Some(Action::Eliminate { qi, oi });
-                                }
-                            }
-                        }
+                Rule::PrevSame if on != NONE_VAL => {
+                    let pos = (on - 1) as usize;
+                    // Must point to a position before qi
+                    if pos >= qi {
+                        return Some(Action::Eliminate { qi, oi });
+                    }
+                    // If that position is answered, it must match our letter
+                    if let Some(pa) = answers[pos]
+                        && let Some(my) = answers[qi]
+                        && pa != my
+                    {
+                        return Some(Action::Eliminate { qi, oi });
                     }
                 }
-                Rule::NextSame => {
-                    if on != NONE_VAL {
-                        let pos = (on - 1) as usize;
-                        // Must point to a position after qi
-                        if pos <= qi || pos >= n {
-                            return Some(Action::Eliminate { qi, oi });
-                        }
+                Rule::NextSame if on != NONE_VAL => {
+                    let pos = (on - 1) as usize;
+                    // Must point to a position after qi
+                    if pos <= qi || pos >= n {
+                        return Some(Action::Eliminate { qi, oi });
                     }
                 }
-                Rule::OnlySame | Rule::SameAs => {
-                    if on != NONE_VAL {
-                        let pos = (on - 1) as usize;
-                        // Can't point to self
-                        if pos == qi {
-                            return Some(Action::Eliminate { qi, oi });
-                        }
-                        // If target is answered, must match our selected letter
-                        if pos < n {
-                            if let (Some(target), Some(my_ans)) = (answers[pos], answers[qi]) {
-                                if target != my_ans {
-                                    return Some(Action::Eliminate { qi, oi });
-                                }
-                            }
-                        }
+                Rule::OnlySame | Rule::SameAs if on != NONE_VAL => {
+                    let pos = (on - 1) as usize;
+                    // Can't point to self
+                    if pos == qi {
+                        return Some(Action::Eliminate { qi, oi });
+                    }
+                    // If target is answered, must match our selected letter
+                    if pos < n
+                        && let (Some(target), Some(my_ans)) = (answers[pos], answers[qi])
+                        && target != my_ans
+                    {
+                        return Some(Action::Eliminate { qi, oi });
                     }
                 }
                 _ => {}
@@ -723,10 +705,7 @@ pub fn find_lookahead_action(
                 continue;
             }
             if trace_leads_to_contradiction(fp, answers, eliminated, qi, oi as u8) {
-                return Some(Action::Eliminate {
-                    qi,
-                    oi: oi as usize,
-                });
+                return Some(Action::Eliminate { qi, oi });
             }
         }
     }
@@ -1360,7 +1339,6 @@ mod tests {
         // Q1=D(3 vowels) requires 2 consonants, Q2 has 2 as option C → ok.
         // Q1=E(4 vowels) requires 1 consonant, Q2 has 1 as option D → ok.
         // Q1=C(2 vowels) requires 3 consonants, but Q2 has no 3 → eliminate!
-        use Answer::*;
         let mut rules = [Rule::AnswerIsSelf; MAX_N];
         rules[0] = Rule::CountVowel;
         rules[1] = Rule::CountConsonant;
@@ -1482,7 +1460,7 @@ mod tests {
             global_indices,
         };
 
-        let mut answers = [None; MAX_N];
+        let answers = [None; MAX_N];
         let mut eliminated = [0u8; MAX_N];
         // Eliminate all but C from Q1
         eliminated[0] = 0b11011; // A,B,D,E eliminated, C remains
