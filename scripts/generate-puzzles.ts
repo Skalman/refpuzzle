@@ -1,7 +1,7 @@
 import { writeFileSync, mkdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { generate } from "../src/generator/assemble.ts";
+import { generateConstructive as generate } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
 import type { AnswerLetter, Puzzle } from "../src/engine/types.ts";

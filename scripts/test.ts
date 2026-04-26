@@ -3,8 +3,27 @@ import { LETTERS, flattenPuzzle } from "../src/engine/types.ts";
 import { evaluate, evaluateClaim } from "../src/engine/evaluators.ts";
 import { findHint, findActionFast } from "../src/engine/hints.ts";
 import { solve } from "../src/generator/solver.ts";
-import { allPuzzles } from "../src/puzzles/index.ts";
-import { encodeState, decodeState } from "../src/lib/share.ts";
+import { readFileSync, readdirSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const dailyDir = resolve(__dirname, "../public/puzzles/daily");
+
+const allPuzzles: Puzzle[] = [];
+for (const file of readdirSync(dailyDir).filter((f: string) => f.endsWith(".json"))) {
+	const yearData: Record<string, Record<string, Puzzle>> = JSON.parse(
+		readFileSync(resolve(dailyDir, file), "utf8"),
+	);
+	for (const dateKey of Object.keys(yearData)) {
+		for (const [levelKey, puzzle] of Object.entries(yearData[dateKey])) {
+			puzzle.id = `${file.replace(".json", "")}-${dateKey}-${levelKey}`;
+			allPuzzles.push(puzzle);
+		}
+	}
+}
+import { encodeHistory, decodeHistory } from "../src/lib/store.ts";
+import type { SavedState } from "../src/lib/store.ts";
 
 let passed = 0;
 let failed = 0;
@@ -720,6 +739,27 @@ function testHints() {
 // Share encode/decode roundtrip tests
 // ════════════════════════════════════════════════
 
+function mkState(steps: Marks[]): SavedState {
+	const history: { marks: Marks }[][] = [steps.map(() => ({ marks: ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks }))];
+	let current = history[0].map((q) => ({ marks: [...q.marks] as Marks }));
+	for (let qi = 0; qi < steps.length; qi++) {
+		for (let oi = 0; oi < 5; oi++) {
+			if (steps[qi][oi] === "unmarked") continue;
+			current = current.map((q) => ({ marks: [...q.marks] as Marks }));
+			current[qi].marks[oi] = steps[qi][oi];
+			history.push(current.map((q) => ({ marks: [...q.marks] as Marks })));
+		}
+	}
+	const last = history[history.length - 1];
+	return {
+		questions: last,
+		completed: false,
+		history,
+		historyIdx: history.length - 1,
+		hints: new Map(),
+	};
+}
+
 function testShare() {
 	console.log("Share encode/decode tests...");
 
@@ -729,26 +769,50 @@ function testShare() {
 		["incorrect", "incorrect", "incorrect", "incorrect", "correct"],
 	];
 
-	const encoded = encodeState(marks);
-	const decoded = decodeState(encoded);
+	const state = mkState(marks);
+	const encoded = encodeHistory(state);
+	const decoded = decodeHistory(encoded, 3);
 	assert(decoded != null, "decode: returns non-null");
-	assertEq(decoded, marks, "decode: roundtrip matches original");
+	assertEq(
+		decoded!.questions.map((q) => q.marks),
+		state.questions.map((q) => q.marks),
+		"decode: roundtrip marks match",
+	);
 
-	// All unmarked
-	const allBlank: Marks[] = [
+	// All unmarked — single-step history, encode/decode should roundtrip
+	const blankState = mkState([
 		["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"],
-	];
-	assertEq(decodeState(encodeState(allBlank)), allBlank, "decode: all-blank roundtrip");
+	]);
+	const blankEncoded = encodeHistory(blankState);
+	const blankDecoded = decodeHistory(blankEncoded, 1);
+	assert(blankDecoded != null, "decode: blank returns non-null");
+	assertEq(
+		blankDecoded!.questions.map((q) => q.marks),
+		blankState.questions.map((q) => q.marks),
+		"decode: all-blank roundtrip",
+	);
 
 	// All correct
-	const allCorrect: Marks[] = [
+	const correctState = mkState([
 		["correct", "correct", "correct", "correct", "correct"],
-	];
-	assertEq(decodeState(encodeState(allCorrect)), allCorrect, "decode: all-correct roundtrip");
+	]);
+	const correctEncoded = encodeHistory(correctState);
+	const correctDecoded = decodeHistory(correctEncoded, 1);
+	assert(correctDecoded != null, "decode: all-correct returns non-null");
+	assertEq(
+		correctDecoded!.questions.map((q) => q.marks),
+		correctState.questions.map((q) => q.marks),
+		"decode: all-correct roundtrip",
+	);
 
-	// Invalid input
-	assert(decodeState("") === null, "decode: empty string returns null");
-	assert(decodeState("XYZ") === null, "decode: invalid chars returns null");
+	// Empty input — decodes to a blank starting state
+	const emptyDecoded = decodeHistory("", 1);
+	assert(emptyDecoded != null, "decode: empty string returns a blank state");
+	assertEq(
+		emptyDecoded!.questions.map((q) => q.marks),
+		[["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"]],
+		"decode: empty string produces all-unmarked marks",
+	);
 }
 
 // ════════════════════════════════════════════════
