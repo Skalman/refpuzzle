@@ -2,8 +2,21 @@ import { defineConfig } from "vite";
 import { preact } from "@preact/preset-vite";
 import { brotliCompressSync, constants } from "node:zlib";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { execSync } from "node:child_process";
 import { join } from "node:path";
 import type { Plugin } from "vite";
+
+function versionPlugin(): Plugin {
+  return {
+    name: "version-txt",
+    apply: "build",
+    closeBundle() {
+      const hash = execSync("git rev-parse --short HEAD").toString().trim();
+      const ts = new Date().toISOString().slice(0, 19).replace("T", " ");
+      writeFileSync(join(__dirname, "dist", "version.txt"), `${hash} ${ts}\n`);
+    },
+  };
+}
 
 function brotliPlugin(): Plugin {
   return {
@@ -32,7 +45,7 @@ function brotliPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [preact(), brotliPlugin()],
+  plugins: [preact(), versionPlugin(), brotliPlugin()],
   build: {
     target: "es2018",
   },

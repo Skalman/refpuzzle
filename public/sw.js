@@ -28,24 +28,7 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin GET requests
   if (event.request.method !== "GET" || url.origin !== self.location.origin) return;
 
-  // Puzzle data: cache-first (immutable per year file)
-  if (url.pathname.startsWith("/puzzles/")) {
-    event.respondWith(
-      caches.open(CACHE_NAME).then((cache) =>
-        cache.match(event.request).then(
-          (cached) =>
-            cached ||
-            fetch(event.request).then((response) => {
-              if (response.ok) cache.put(event.request, response.clone());
-              return response;
-            }),
-        ),
-      ),
-    );
-    return;
-  }
-
-  // App shell (HTML, JS, CSS, SVG): stale-while-revalidate
+  // Everything cacheable: stale-while-revalidate
   if (
     event.request.destination === "document" ||
     event.request.destination === "script" ||
