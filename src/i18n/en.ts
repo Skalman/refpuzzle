@@ -47,8 +47,8 @@ export default {
   },
   backup: {
     button: "Backup",
-    exportProgress: "Export progress",
-    importProgress: "Import progress",
+    exportBackup: "Export backup",
+    importBackup: "Import backup",
     importPreview: "Import preview",
     confirmImport: "Confirm import",
     cancel: "Cancel",
@@ -105,6 +105,18 @@ export default {
     description:
       "Each question refers to the puzzle itself — how many questions have a certain answer, which answers appear where, and so on. Your goal is to find the unique set of answers where every question is true.",
     inspiredBy: "Inspired by",
+  },
+  sync: {
+    title: "Sync devices",
+    description: "Transfer your progress between two devices.",
+    start: "Start sync",
+    enterCode: "Have a code?",
+    join: "Join",
+    waiting: "Waiting for other device...",
+    codePlaceholder: "123456",
+    expired: "Code expired or not found",
+    tooBusy: "Too busy, try again later",
+    error: "Sync failed",
   },
   notFound: {
     noPuzzle: "No puzzle",

@@ -14,6 +14,7 @@ import {
 } from "./components/Icons.tsx";
 import { exportData, planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan, ImportAction } from "./lib/backup.ts";
+import { startSync, joinSync, pollSync } from "./lib/sync.ts";
 import type { Puzzle } from "./engine/types.ts";
 import {
   fetchDaily,
@@ -215,11 +216,13 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
 function AppHeader({
   onHelp,
   onPrint,
+  onSync,
   onExport,
   onImport,
 }: {
   onHelp: () => void;
   onPrint?: () => void;
+  onSync: () => void;
   onExport: () => void;
   onImport: (e: Event) => void;
 }) {
@@ -386,10 +389,20 @@ function AppHeader({
                 role="menuitem"
                 onClick={() => {
                   setMoreMenu(false);
+                  onSync();
+                }}
+              >
+                {s.sync.title}
+              </button>
+              <button
+                class="more-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setMoreMenu(false);
                   onExport();
                 }}
               >
-                {s.backup.exportProgress}
+                {s.backup.exportBackup}
               </button>
               <label
                 class="more-menu-item"
@@ -403,7 +416,7 @@ function AppHeader({
                   }
                 }}
               >
-                {s.backup.importProgress}
+                {s.backup.importBackup}
                 <input
                   type="file"
                   accept=".json"
@@ -463,6 +476,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const [loading, setLoading] = useState(true);
   const [_puzzleVersion, setPuzzleVersion] = useState(0);
   const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+  const [showSync, setShowSync] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
@@ -594,6 +608,7 @@ function DayView({ dateStr }: { dateStr: string }) {
       <AppHeader
         onHelp={() => setShowHelp(true)}
         onPrint={puzzles ? () => window.print() : undefined}
+        onSync={() => setShowSync(true)}
         onExport={handleExport}
         onImport={handleImport}
       />
@@ -705,6 +720,20 @@ function DayView({ dateStr }: { dateStr: string }) {
         </div>
       )}
 
+      {showSync && (
+        <SyncDialog
+          onImport={(json) => {
+            setShowSync(false);
+            try {
+              setImportPlan(planImport(json));
+            } catch (err) {
+              alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+            }
+          }}
+          onClose={() => setShowSync(false)}
+        />
+      )}
+
       {importPlan && (
         <ImportPreview
           plan={importPlan}
@@ -805,6 +834,135 @@ function ImportPreview({
   );
 }
 
+function SyncDialog({
+  onImport,
+  onClose,
+}: {
+  onImport: (json: string) => void;
+  onClose: () => void;
+}) {
+  const s = t();
+  const ref = useRef<HTMLDialogElement>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [inputCode, setInputCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    ref.current?.showModal();
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, []);
+
+  function handleStart() {
+    setBusy(true);
+    setError(null);
+    startSync()
+      .then((c) => {
+        setCode(c);
+        setBusy(false);
+        pollRef.current = setInterval(() => {
+          pollSync(c).then((json) => {
+            if (json) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              onImport(json);
+            }
+          });
+        }, 2000);
+      })
+      .catch(() => {
+        setError(s.sync.error);
+        setBusy(false);
+      });
+  }
+
+  function handleJoin() {
+    const trimmed = inputCode.trim();
+    if (trimmed.length !== 6) return;
+    setBusy(true);
+    setError(null);
+    joinSync(trimmed)
+      .then((json) => {
+        onImport(json);
+      })
+      .catch(() => {
+        setError(s.sync.expired);
+        setBusy(false);
+      });
+  }
+
+  return (
+    <dialog
+      ref={ref}
+      class="help-panel sync-dialog"
+      onClose={onClose}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
+    >
+      <div class="help-panel-inner">
+        <div class="help-panel-header">
+          <h3>{s.sync.title}</h3>
+          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
+            &times;
+          </button>
+        </div>
+        <p>{s.sync.description}</p>
+
+        {!code && (
+          <>
+            <button class="onboarding-dismiss sync-start-btn" onClick={handleStart} disabled={busy}>
+              {s.sync.start}
+            </button>
+
+            <div class="sync-divider">
+              <span>{s.sync.enterCode}</span>
+            </div>
+
+            <div class="sync-join">
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                class="sync-code-input"
+                maxLength={6}
+                placeholder={s.sync.codePlaceholder}
+                value={inputCode}
+                onInput={(e) => {
+                  const el = e.target;
+                  if (el instanceof HTMLInputElement) setInputCode(el.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleJoin();
+                }}
+              />
+              <button
+                class="onboarding-dismiss"
+                onClick={handleJoin}
+                disabled={busy || inputCode.trim().length !== 6}
+              >
+                {s.sync.join}
+              </button>
+            </div>
+          </>
+        )}
+
+        {code && (
+          <div class="sync-waiting">
+            <div class="sync-code-display">{code}</div>
+            <p class="sync-waiting-text">{s.sync.waiting}</p>
+          </div>
+        )}
+
+        {error && <p class="sync-error">{error}</p>}
+      </div>
+    </dialog>
+  );
+}
+
 function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
   const s = t();
   const levels = [1, 2, 3, 4, 5].map((l) => {
@@ -885,6 +1043,7 @@ function PastPuzzlesPage() {
     <>
       <AppHeader
         onHelp={() => setShowHelp(true)}
+        onSync={() => {}}
         onExport={() => {
           const json = exportData();
           const blob = new Blob([json], { type: "application/json" });
