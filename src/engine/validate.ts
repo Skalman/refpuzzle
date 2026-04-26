@@ -182,9 +182,14 @@ function isDefinitive(
       return true;
     }
 
-    case RT_UNIQUE:
-      for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets)) return false;
+    case RT_UNIQUE: {
+      const letter = answers[qi]!;
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (!cantBe(j, letter, answers, markSets)) return false;
+      }
       return true;
+    }
 
     case RT_TRUE_STMT: {
       const selectedClaim = fp.optionClaims[qi][ai];

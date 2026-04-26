@@ -176,7 +176,7 @@ export function evaluate(
       const pairs: string[] = [];
       for (let i = 0; i < n - 1; i++) {
         if (answers[i] != null && answers[i] === answers[i + 1])
-          pairs.push(`${i + 1} and ${i + 2}`);
+          pairs.push(`${i + 1} & ${i + 2}`);
       }
       return pairs.length === 1 && pairs[0] === ov;
     }
