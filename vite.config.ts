@@ -12,7 +12,7 @@ function versionPlugin(): Plugin {
     apply: "build",
     closeBundle() {
       const hash = execSync("git rev-parse --short HEAD").toString().trim();
-      const ts = new Date().toISOString().slice(0, 19).replace("T", " ");
+      const ts = new Date().toISOString();
       writeFileSync(join(__dirname, "dist", "version.txt"), `${hash} ${ts}\n`);
     },
   };

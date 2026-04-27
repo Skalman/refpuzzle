@@ -34,7 +34,8 @@ self.addEventListener("fetch", (event) => {
     event.request.destination === "script" ||
     event.request.destination === "style" ||
     event.request.destination === "image" ||
-    url.pathname.endsWith(".svg")
+    url.pathname.endsWith(".svg") ||
+    url.pathname.endsWith(".json")
   ) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
