@@ -1,7 +1,137 @@
-import type { Puzzle } from "../engine/types.ts";
+import type {
+  Puzzle,
+  QuestionDef,
+  ValidationRule,
+  OptionDef,
+  Claim,
+  AnswerLetter,
+} from "../engine/types.ts";
+import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const YEAR_CACHE = new Map<string, Record<string, Record<string, Puzzle>> | null>();
+const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
+const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
+
+interface CompactRule {
+  t: string;
+  a?: number;
+  q?: number;
+}
+interface CompactClaim {
+  t: string;
+  a?: number;
+  q?: number;
+  v: number;
+}
+interface CompactQuestion {
+  o?: (number | null)[];
+  r: CompactRule;
+  c?: (CompactClaim | null)[];
+}
+interface CompactPuzzle {
+  q: CompactQuestion[];
+}
+
+export function parseCompactYear(
+  data: Record<string, Record<string, CompactPuzzle>>,
+): Record<string, Record<string, Puzzle>> {
+  const result: Record<string, Record<string, Puzzle>> = {};
+  for (const [mmdd, levels] of Object.entries(data)) {
+    result[mmdd] = {};
+    for (const [lvl, compact] of Object.entries(levels)) {
+      const questions: QuestionDef[] = compact.q.map((cq) => {
+        const rule = expandRule(cq.r);
+        const options: OptionDef[] = cq.c
+          ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
+          : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
+        return { options, rule };
+      });
+      result[mmdd][lvl] = {
+        id: "",
+        title: "",
+        difficulty:
+          (
+            {
+              "level-1": 1,
+              "level-2": 2,
+              "level-3": 3,
+              "level-4": 4,
+              "level-5": 5,
+            } as Record<string, Puzzle["difficulty"]>
+          )[lvl] ?? 1,
+        questions,
+      };
+    }
+  }
+  return result;
+}
+
+function L(i: number | undefined): AnswerLetter {
+  return LETTERS[i ?? 0];
+}
+
+function expandRule(r: CompactRule): ValidationRule {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const type = r.t as ValidationRule["type"];
+  switch (type) {
+    case "count_vowel_answers":
+    case "count_consonant_answers":
+    case "most_common_count":
+    case "previous_same_answer":
+    case "next_same_answer":
+    case "only_same_answer":
+    case "same_answer_as":
+    case "consecutive_identical":
+    case "least_common_answer":
+    case "most_common_answer":
+    case "unique_answer":
+    case "answer_is_self":
+    case "only_true_statement":
+      return { type };
+    case "count_answer":
+    case "first_with_answer":
+    case "last_with_answer":
+    case "only_odd_with_answer":
+    case "equal_count_as":
+      return { type, answer: L(r.a) };
+    case "count_answer_after":
+    case "closest_after":
+      return { type, answer: L(r.a), afterIndex: r.q! };
+    case "count_answer_before":
+    case "closest_before":
+      return { type, answer: L(r.a), beforeIndex: r.q! };
+    case "answer_of_question":
+    case "letter_distance":
+      return { type, questionIndex: r.q! };
+    default: {
+      (type) satisfies never;
+      // oxlint-disable-next-line typescript/restrict-template-expressions
+      throw new Error(`Unknown rule type: ${type}`);
+    }
+  }
+}
+
+function expandClaim(c: CompactClaim): Claim {
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const rule = expandRule(c) as ValidationRule & { type: Claim["type"] };
+  const type = rule.type;
+  switch (type) {
+    case "count_answer":
+    case "count_consonant_answers":
+    case "count_vowel_answers":
+    case "count_answer_after":
+    case "count_answer_before":
+      return {
+        ...rule,
+        value: c.v,
+      };
+    default: {
+      (type) satisfies never;
+      // oxlint-disable-next-line typescript/restrict-template-expressions
+      throw new Error(`Unsupported claim rule type: ${type}`);
+    }
+  }
+}
 
 export function todayDateStr(): string {
   const now = new Date();
@@ -18,7 +148,10 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview")) {
+  if (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("preview")
+  ) {
     return true;
   }
   const today = new Date();
@@ -35,29 +168,37 @@ export function dateStrFromOffset(daysAgo: number): string {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
-async function fetchYear(year: string): Promise<Record<string, Record<string, Puzzle>> | null> {
-  if (YEAR_CACHE.has(year)) return YEAR_CACHE.get(year)!;
+async function fetchYearRaw(
+  year: string,
+): Promise<Record<string, Record<string, CompactPuzzle>> | null> {
+  if (YEAR_RAW.has(year)) return YEAR_RAW.get(year)!;
   try {
     const resp = await fetch(`/puzzles/daily/${year}.json`);
     if (!resp.ok) {
-      YEAR_CACHE.set(year, null);
+      YEAR_RAW.set(year, null);
       return null;
     }
-    const data: Record<string, Record<string, Puzzle>> = await resp.json(); // eslint-disable-line
-    YEAR_CACHE.set(year, data);
+    const data = await resp.json(); // eslint-disable-line
+    YEAR_RAW.set(year, data);
     return data;
   } catch {
-    YEAR_CACHE.set(year, null);
+    YEAR_RAW.set(year, null);
     return null;
   }
 }
 
-export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
+export async function fetchDaily(
+  dateStr: string,
+): Promise<Record<string, Puzzle> | null> {
+  const key = dateStr;
+  if (DAY_CACHE.has(key)) return DAY_CACHE.get(key)!;
   const year = dateStr.slice(0, 4);
   const mmdd = dateStr.slice(5, 7) + dateStr.slice(8, 10);
-  const yearData = await fetchYear(year);
-  if (!yearData) return null;
-  return yearData[mmdd] ?? null;
+  const raw = await fetchYearRaw(year);
+  if (!raw?.[mmdd]) return null;
+  const day = parseCompactYear({ [mmdd]: raw[mmdd] })[mmdd];
+  DAY_CACHE.set(key, day);
+  return day;
 }
 
 export function puzzleId(dateStr: string, level: number): string {

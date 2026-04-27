@@ -363,6 +363,8 @@ export function PuzzleView({
     const next = cloneStates(questionsRef.current);
     const q = next[questionIdx];
     const current = q.marks[optionIdx];
+    const hasCorrect = q.marks.indexOf("correct") >= 0;
+    if (hasCorrect && current !== "correct") return;
 
     if (current === "unmarked") {
       q.marks[optionIdx] = "incorrect";
@@ -739,7 +741,7 @@ export function PuzzleView({
       >
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
-            key={qDef.text}
+            key={qDef.rule.type + JSON.stringify(qDef.rule)}
             index={qi}
             question={qDef}
             marks={questions[qi]?.marks ?? FRESH_MARKS}

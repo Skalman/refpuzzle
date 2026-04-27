@@ -16,6 +16,7 @@ import { exportData, planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan, ImportAction } from "./lib/backup.ts";
 import { startSync, joinSync, pollSync } from "./lib/sync.ts";
 import type { Puzzle } from "./engine/types.ts";
+import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./engine/render.ts";
 import {
   fetchDaily,
   todayDateStr,
@@ -698,22 +699,31 @@ function DayView({ dateStr }: { dateStr: string }) {
                 <h2>
                   {s.difficulty[lvl]} ({p.questions.length} {s.puzzleList.questions})
                 </h2>
-                {p.questions.map((q, qi) => (
-                  <div key={q.text} class="print-question">
-                    <div class="print-question-text">
-                      {qi + 1}. {q.text}
+                {p.questions.map((q, qi) => {
+                  const labels = q.options.map((opt, oi) =>
+                    "claim" in opt
+                      ? renderClaimLabel(opt.claim)
+                      : renderOptionLabel(q.rule, opt.value, oi),
+                  );
+                  return (
+                    // oxlint-disable-next-line react/no-array-index-key
+                    <div key={qi} class="print-question">
+                      <div class="print-question-text">
+                        {qi + 1}. {renderQuestionText(q.rule)}
+                      </div>
+                      <div
+                        class={`print-options ${labels.some((l) => l.length > 12) ? "print-options-long" : ""}`}
+                      >
+                        {labels.map((label, oi) => (
+                          // oxlint-disable-next-line react/no-array-index-key
+                          <span key={oi} class="print-option">
+                            {String.fromCharCode(65 + oi)}. {label}
+                          </span>
+                        ))}
+                      </div>
                     </div>
-                    <div
-                      class={`print-options ${q.options.some((o) => o.label.length > 12) ? "print-options-long" : ""}`}
-                    >
-                      {q.options.map((opt, oi) => (
-                        <span key={opt.label} class="print-option">
-                          {String.fromCharCode(65 + oi)}. {opt.label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })}

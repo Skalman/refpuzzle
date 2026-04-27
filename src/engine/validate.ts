@@ -1,7 +1,6 @@
 import type { AnswerLetter, Puzzle, FlatPuzzle, FlatRule, Marks } from "./types.ts";
 import {
   getFlatPuzzle,
-  NONE,
   letterIdx,
   RT_COUNT_ANSWER,
   RT_COUNT_ANSWER_BEFORE,
@@ -15,6 +14,11 @@ import {
   RT_FIRST_WITH,
   RT_LAST_WITH,
   RT_SAME_AS,
+  RT_ONLY_ODD,
+  RT_CONSEC_IDENT,
+  RT_PREV_SAME,
+  RT_NEXT_SAME,
+  RT_ONLY_SAME,
   RT_UNIQUE,
   RT_TRUE_STMT,
   RT_SELF,
@@ -53,8 +57,6 @@ export function validate(
 
 const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
-// Check if question j definitely cannot have answer `letter`
-// (either answered as something else, or that option is marked incorrect)
 function cantBe(
   j: number,
   letter: string,
@@ -66,7 +68,6 @@ function cantBe(
   return false;
 }
 
-// Check if question j's answer is fully determined (answered, or all but one eliminated)
 function isResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Marks[]): boolean {
   if (answers[j] != null) return true;
   if (!markSets?.[j]) return false;
@@ -75,7 +76,6 @@ function isResolved(j: number, answers: (AnswerLetter | null)[], markSets?: Mark
   return remaining <= 1;
 }
 
-// Check if question j's answer is definitely a vowel, definitely a consonant, or unknown
 function vowelConsonantResolved(
   j: number,
   answers: (AnswerLetter | null)[],
@@ -104,7 +104,7 @@ function isDefinitive(
 ): boolean {
   const n = fp.n;
   const ai = letterIdx(answers[qi]!);
-  const on = fp.optionNums[qi][ai];
+  const v = fp.optionValues[qi][ai];
 
   switch (rule.t) {
     case RT_SELF:
@@ -112,9 +112,8 @@ function isDefinitive(
     case RT_ANSWER_OF:
       return answers[rule.questionIndex] != null;
     case RT_LETTER_DIST:
-      return answers[rule.otherQuestionIndex] != null;
+      return answers[rule.questionIndex] != null;
 
-    // Counting: definitive if every question in range is resolved
     case RT_COUNT_ANSWER: {
       const target = rule.answer!;
       for (let j = 0; j < n; j++)
@@ -141,38 +140,74 @@ function isDefinitive(
       for (let j = 0; j < n; j++) if (!vowelConsonantResolved(j, answers, markSets)) return false;
       return true;
 
-    // Positional: for "first_with E = Q5", definitive if Q1-Q4 can't be E and Q5 is E
     case RT_CLOSEST_AFTER:
     case RT_FIRST_WITH: {
       const target = rule.answer!;
       const start = rule.t === RT_CLOSEST_AFTER ? rule.afterIndex + 1 : 0;
-      if (on === NONE) {
-        // Claimed no match — every question in range must be resolved or can't be target
+      if (v == null) {
         for (let j = start; j < n; j++) if (!cantBe(j, target, answers, markSets)) return false;
         return true;
       }
-      const pos = on - 1;
-      // Claimed position must have the answer
-      if (answers[pos] == null) return false;
-      // All positions before must definitively not have the answer
-      for (let j = start; j < pos; j++) if (!cantBe(j, target, answers, markSets)) return false;
+      if (answers[v] == null) return false;
+      for (let j = start; j < v; j++) if (!cantBe(j, target, answers, markSets)) return false;
       return true;
     }
     case RT_CLOSEST_BEFORE:
     case RT_LAST_WITH: {
       const target = rule.answer!;
       const end = rule.t === RT_CLOSEST_BEFORE ? rule.beforeIndex : n;
-      if (on === NONE) {
+      if (v == null) {
         for (let j = 0; j < end; j++) if (!cantBe(j, target, answers, markSets)) return false;
         return true;
       }
-      const pos = on - 1;
-      if (answers[pos] == null) return false;
-      for (let j = pos + 1; j < end; j++) if (!cantBe(j, target, answers, markSets)) return false;
+      if (answers[v] == null) return false;
+      for (let j = v + 1; j < end; j++) if (!cantBe(j, target, answers, markSets)) return false;
       return true;
     }
 
     case RT_SAME_AS: {
+      const letter = answers[qi]!;
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (!isResolved(j, answers, markSets) && !cantBe(j, letter, answers, markSets))
+          return false;
+      }
+      return true;
+    }
+
+    case RT_ONLY_ODD: {
+      const target = rule.answer!;
+      if (v == null) {
+        for (let j = 0; j < n; j += 2) if (!cantBe(j, target, answers, markSets)) return false;
+        return true;
+      }
+      if (answers[v] == null) return false;
+      for (let j = 0; j < n; j += 2) {
+        if (j === v) continue;
+        if (!cantBe(j, target, answers, markSets)) return false;
+      }
+      return true;
+    }
+
+    case RT_CONSEC_IDENT: {
+      for (let j = 0; j < n - 1; j++) {
+        if (!isResolved(j, answers, markSets) || !isResolved(j + 1, answers, markSets))
+          return false;
+      }
+      return true;
+    }
+
+    case RT_PREV_SAME: {
+      for (let j = 0; j < qi; j++) if (!isResolved(j, answers, markSets)) return false;
+      return true;
+    }
+
+    case RT_NEXT_SAME: {
+      for (let j = qi + 1; j < n; j++) if (!isResolved(j, answers, markSets)) return false;
+      return true;
+    }
+
+    case RT_ONLY_SAME: {
       const letter = answers[qi]!;
       for (let j = 0; j < n; j++) {
         if (j === qi) continue;
@@ -198,7 +233,6 @@ function isDefinitive(
     }
   }
 
-  // Global rules (most_common, etc.): need all answers
   return answers.slice(0, n).every((a) => a != null);
 }
 
@@ -209,23 +243,23 @@ function isClaimDefinitive(
   markSets?: Marks[],
 ): boolean {
   switch (claim.type) {
-    case "count_answer_equals": {
+    case "count_answer": {
       for (let j = 0; j < n; j++)
         if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
           return false;
       return true;
     }
-    case "count_consonant_answers_equals":
-    case "count_vowel_answers_equals":
+    case "count_consonant_answers":
+    case "count_vowel_answers":
       for (let j = 0; j < n; j++) if (!isResolved(j, answers, markSets)) return false;
       return true;
-    case "count_answer_after_equals": {
+    case "count_answer_after": {
       for (let j = claim.afterIndex + 1; j < n; j++)
         if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
           return false;
       return true;
     }
-    case "count_answer_before_equals": {
+    case "count_answer_before": {
       for (let j = 0; j < claim.beforeIndex; j++)
         if (!isResolved(j, answers, markSets) && !cantBe(j, claim.answer, answers, markSets))
           return false;
@@ -243,17 +277,16 @@ function isProvablyWrong(
   fp: FlatPuzzle,
 ): boolean {
   const ai = letterIdx(answer);
-  const on = fp.optionNums[qi][ai];
+  const v = fp.optionValues[qi][ai];
   const n = fp.n;
 
   switch (rule.t) {
-    // Counting: provably wrong if count already exceeds or can't reach claimed value
     case RT_COUNT_ANSWER:
     case RT_COUNT_ANSWER_BEFORE:
     case RT_COUNT_ANSWER_AFTER:
     case RT_COUNT_VOWEL:
     case RT_COUNT_CONSONANT: {
-      if (Number.isNaN(on)) return false;
+      if (v == null) return false;
       const rangeStart = rule.t === RT_COUNT_ANSWER_AFTER ? rule.afterIndex + 1 : 0;
       const rangeEnd = rule.t === RT_COUNT_ANSWER_BEFORE ? rule.beforeIndex : n;
       let count = 0;
@@ -272,40 +305,34 @@ function isProvablyWrong(
           count++;
         }
       }
-      return count > on || count + remaining < on;
+      return count > v || count + remaining < v;
     }
 
-    // answer_of_question: if referenced question is answered with different letter
     case RT_ANSWER_OF: {
       const target = answers[rule.questionIndex];
       if (target == null) return false;
-      return target !== fp.optionLabels[qi][ai];
+      return v != null && letterIdx(target) !== v;
     }
 
-    // letter_distance: if other question answered, distance doesn't match
     case RT_LETTER_DIST: {
-      const other = answers[rule.otherQuestionIndex];
+      const other = answers[rule.questionIndex];
       if (other == null) return false;
       const dist = Math.abs(ai - letterIdx(other));
-      return dist !== on;
+      return dist !== v;
     }
 
-    // Positional: if claimed position is answered with wrong letter
     case RT_CLOSEST_AFTER:
     case RT_FIRST_WITH: {
-      if (on === NONE) {
-        // Claimed "None" but a match exists in the range
+      if (v == null) {
         const start = rule.t === RT_CLOSEST_AFTER ? rule.afterIndex + 1 : 0;
         for (let j = start; j < n; j++) {
           if (answers[j] === rule.answer) return true;
         }
         return false;
       }
-      const pos = on - 1;
-      if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== rule.answer) return true;
-      // Closer match exists
+      if (v >= 0 && v < n && answers[v] != null && answers[v] !== rule.answer) return true;
       const start = rule.t === RT_CLOSEST_AFTER ? rule.afterIndex + 1 : 0;
-      for (let j = start; j < pos; j++) {
+      for (let j = start; j < v; j++) {
         if (answers[j] === rule.answer) return true;
       }
       return false;
@@ -313,31 +340,27 @@ function isProvablyWrong(
 
     case RT_CLOSEST_BEFORE:
     case RT_LAST_WITH: {
-      if (on === NONE) {
+      if (v == null) {
         const end = rule.t === RT_CLOSEST_BEFORE ? rule.beforeIndex : n;
         for (let j = 0; j < end; j++) {
           if (answers[j] === rule.answer) return true;
         }
         return false;
       }
-      const pos = on - 1;
-      if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== rule.answer) return true;
+      if (v >= 0 && v < n && answers[v] != null && answers[v] !== rule.answer) return true;
       const end = rule.t === RT_CLOSEST_BEFORE ? rule.beforeIndex : n;
-      for (let j = end - 1; j > pos; j--) {
+      for (let j = end - 1; j > v; j--) {
         if (answers[j] === rule.answer) return true;
       }
       return false;
     }
 
-    // same_answer_as: if target question answered with different letter
     case RT_SAME_AS: {
-      const tq = on - 1;
-      if (tq < 0 || tq >= n) return false;
-      if (answers[tq] != null && answers[tq] !== answer) return true;
+      if (v == null || v < 0 || v >= n) return false;
+      if (answers[v] != null && answers[v] !== answer) return true;
       return false;
     }
 
-    // unique: if same answer appears elsewhere
     case RT_UNIQUE: {
       let count = 0;
       for (let j = 0; j < n; j++) {

@@ -2,8 +2,6 @@ import type { AnswerLetter, FlatPuzzle, FlatRule, Claim } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
-  L2I,
-  NONE,
   letterIdx,
   RT_COUNT_ANSWER,
   RT_COUNT_ANSWER_BEFORE,
@@ -80,74 +78,73 @@ export function evaluate(
   fp: FlatPuzzle,
 ): boolean {
   const si = letterIdx(selectedAnswer);
-  const ov = fp.optionLabels[questionIdx][si];
-  const on = fp.optionNums[questionIdx][si];
+  const v = fp.optionValues[questionIdx][si];
   const r = rule;
   const n = fp.n;
 
   switch (r.t) {
     case RT_COUNT_ANSWER:
-      return countAnswer(answers, r.answer!) === on;
+      return countAnswer(answers, r.answer!) === v;
 
     case RT_COUNT_ANSWER_BEFORE:
-      return countAnswerInRange(answers, r.answer!, 0, r.beforeIndex) === on;
+      return countAnswerInRange(answers, r.answer!, 0, r.beforeIndex) === v;
 
     case RT_COUNT_ANSWER_AFTER:
-      return countAnswerInRange(answers, r.answer!, r.afterIndex + 1, n) === on;
+      return countAnswerInRange(answers, r.answer!, r.afterIndex + 1, n) === v;
 
     case RT_COUNT_VOWEL:
-      return countVowels(answers) === on;
+      return countVowels(answers) === v;
 
     case RT_COUNT_CONSONANT:
-      return countConsonants(answers) === on;
+      return countConsonants(answers) === v;
 
     case RT_MOST_COMMON_COUNT: {
       const c = fillCounts(answers);
       let max = c[0];
       for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
-      return max === on;
+      return max === v;
     }
 
     case RT_CLOSEST_AFTER: {
       for (let i = r.afterIndex + 1; i < n; i++) {
-        if (answers[i] === r.answer) return i + 1 === on;
+        if (answers[i] === r.answer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_CLOSEST_BEFORE: {
       for (let i = r.beforeIndex - 1; i >= 0; i--) {
-        if (answers[i] === r.answer) return i + 1 === on;
+        if (answers[i] === r.answer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_FIRST_WITH: {
       for (let i = 0; i < n; i++) {
-        if (answers[i] === r.answer) return i + 1 === on;
+        if (answers[i] === r.answer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_LAST_WITH: {
       for (let i = n - 1; i >= 0; i--) {
-        if (answers[i] === r.answer) return i + 1 === on;
+        if (answers[i] === r.answer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_PREV_SAME: {
       for (let i = questionIdx - 1; i >= 0; i--) {
-        if (answers[i] === selectedAnswer) return i + 1 === on;
+        if (answers[i] === selectedAnswer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_NEXT_SAME: {
       for (let i = questionIdx + 1; i < n; i++) {
-        if (answers[i] === selectedAnswer) return i + 1 === on;
+        if (answers[i] === selectedAnswer) return i === v;
       }
-      return on === NONE;
+      return v == null;
     }
 
     case RT_ONLY_SAME: {
@@ -155,13 +152,12 @@ export function evaluate(
       for (let i = 0; i < n; i++) {
         if (i !== questionIdx && answers[i] === selectedAnswer) matches.push(i);
       }
-      return matches.length === 1 && matches[0] + 1 === on;
+      return matches.length === 1 && matches[0] === v;
     }
 
     case RT_SAME_AS: {
-      const targetQ = Number(ov) - 1;
-      if (targetQ < 0 || targetQ >= n || answers[targetQ] == null) return false;
-      return answers[targetQ] === selectedAnswer;
+      if (v == null || v < 0 || v >= n || answers[v] == null) return false;
+      return answers[v] === selectedAnswer;
     }
 
     case RT_ONLY_ODD: {
@@ -169,39 +165,36 @@ export function evaluate(
       for (let i = 0; i < n; i++) {
         if ((i + 1) % 2 === 1 && answers[i] === r.answer) matches.push(i);
       }
-      return matches.length === 1 && matches[0] + 1 === on;
+      return matches.length === 1 && matches[0] === v;
     }
 
     case RT_CONSEC_IDENT: {
-      const pairs: string[] = [];
+      const pairs: number[] = [];
       for (let i = 0; i < n - 1; i++) {
-        if (answers[i] != null && answers[i] === answers[i + 1])
-          pairs.push(`${i + 1} & ${i + 2}`);
+        if (answers[i] != null && answers[i] === answers[i + 1]) pairs.push(i);
       }
-      return pairs.length === 1 && pairs[0] === ov;
+      return pairs.length === 1 && pairs[0] === v;
     }
 
     case RT_ANSWER_OF: {
       const other = answers[r.questionIndex];
-      return other != null && other === ov;
+      return other != null && letterIdx(other) === v;
     }
 
     case RT_LEAST_COMMON: {
-      const claimed = L2I[ov];
-      if (claimed == null) return false;
+      if (v == null) return false;
       const c = fillCounts(answers);
       let min = c[0];
       for (let i = 1; i < 5; i++) if (c[i] < min) min = c[i];
-      return c[claimed] === min;
+      return c[v] === min;
     }
 
     case RT_MOST_COMMON: {
-      const claimed = L2I[ov];
-      if (claimed == null) return false;
+      if (v == null) return false;
       const c = fillCounts(answers);
       let max = c[0];
       for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
-      return c[claimed] === max;
+      return c[v] === max;
     }
 
     case RT_UNIQUE:
@@ -217,10 +210,10 @@ export function evaluate(
       return true;
 
     case RT_LETTER_DIST: {
-      const other = answers[r.otherQuestionIndex];
+      const other = answers[r.questionIndex];
       if (other == null) return false;
       const dist = Math.abs(si - letterIdx(other));
-      return dist === on;
+      return dist === v;
     }
 
     case RT_TRUE_STMT: {
@@ -244,22 +237,22 @@ export function evaluate(
 
 export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): boolean {
   switch (claim.type) {
-    case "count_answer_equals":
+    case "count_answer":
       return countAnswer(answers, claim.answer) === claim.value;
 
-    case "count_consonant_answers_equals":
+    case "count_consonant_answers":
       return countConsonants(answers) === claim.value;
 
-    case "count_vowel_answers_equals":
+    case "count_vowel_answers":
       return countVowels(answers) === claim.value;
 
-    case "count_answer_after_equals":
+    case "count_answer_after":
       return (
         countAnswerInRange(answers, claim.answer, claim.afterIndex + 1, answers.length) ===
         claim.value
       );
 
-    case "count_answer_before_equals":
+    case "count_answer_before":
       return countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) === claim.value;
   }
   claim satisfies never;

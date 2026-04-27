@@ -1,10 +1,10 @@
 import type { AnswerLetter, Puzzle, FlatPuzzle, ValidationRule, Marks } from "./types.ts";
 import { evaluate as evaluateRule } from "./evaluators.ts";
+import { renderOptionLabel } from "./render.ts";
 import {
   LETTERS,
   VOWELS,
   L2I,
-  NONE,
   letterIdx,
   getFlatPuzzle,
   RT_COUNT_ANSWER,
@@ -99,8 +99,16 @@ function deriveAnswers(markSets: Marks[]): (AnswerLetter | null)[] {
   });
 }
 
-function optVal(puzzle: Puzzle, qi: number, answer: AnswerLetter): string {
-  return puzzle.questions[qi].options[L2I[answer]].label;
+// Get the semantic value for the selected answer
+function optValue(puzzle: Puzzle, qi: number, answer: AnswerLetter): number | null {
+  return puzzle.questions[qi].options[L2I[answer]].value;
+}
+
+// Get the display string for the selected answer
+function optDisplay(puzzle: Puzzle, qi: number, answer: AnswerLetter): string {
+  const rule = puzzle.questions[qi].rule;
+  const v = puzzle.questions[qi].options[L2I[answer]].value;
+  return renderOptionLabel(rule, v, qi);
 }
 
 function Q(i: number): string {
@@ -204,8 +212,9 @@ function findContradiction(
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] == null) continue;
     const rule = puzzle.questions[qi].rule;
-    const ov = optVal(puzzle, qi, answers[qi]!);
-    const msg = explainContradiction(rule, qi, answers, ov, n);
+    const ov = optDisplay(puzzle, qi, answers[qi]!);
+    const v = optValue(puzzle, qi, answers[qi]!);
+    const msg = explainContradiction(rule, qi, answers, ov, v, n);
     if (msg) {
       const answer = answers[qi]!;
       return hintSteps(qi, `Reconsider ${Q(qi)}'s answer (${answer}).`, msg, {
@@ -222,6 +231,7 @@ function explainContradiction(
   qi: number,
   answers: (AnswerLetter | null)[],
   ov: string,
+  v: number | null,
   n: number,
 ): string | null {
   // Counting rules
@@ -229,13 +239,12 @@ function explainContradiction(
   if (pred && rule.type !== "most_common_count") {
     const [from, to] = countRange(rule, n);
     const { count, remaining } = countMatching(answers, pred, from, to);
-    const claimed = Number(ov);
-    if (!Number.isNaN(claimed)) {
-      if (count > claimed) {
-        return `${Q(qi)}: "${claimed} ${countRuleLabel(rule, claimed)}", but there are already ${count}.`;
+    if (v != null) {
+      if (count > v) {
+        return `${Q(qi)}: "${v} ${countRuleLabel(rule, v)}", but there are already ${count}.`;
       }
-      if (count + remaining < claimed) {
-        return `${Q(qi)}: "${claimed} ${countRuleLabel(rule, claimed)}", but at most ${count + remaining} are possible.`;
+      if (count + remaining < v) {
+        return `${Q(qi)}: "${v} ${countRuleLabel(rule, v)}", but at most ${count + remaining} are possible.`;
       }
     }
   }
@@ -244,69 +253,64 @@ function explainContradiction(
   if (rule.type === "most_common_count") {
     const counts = LETTERS.map((l) => countMatching(answers, (a) => a === l, 0, n).count);
     const max = Math.max(...counts);
-    const claimed = Number(ov);
-    if (!Number.isNaN(claimed) && max > claimed) {
-      return `${Q(qi)}: "most common answer appears ${claimed} times", but ${LETTERS[counts.indexOf(max)]} already appears ${max} times.`;
+    if (v != null && max > v) {
+      return `${Q(qi)}: "most common answer appears ${v} times", but ${LETTERS[counts.indexOf(max)]} already appears ${max} times.`;
     }
   }
 
   // answer_of_question
   if (rule.type === "answer_of_question") {
     const target = answers[rule.questionIndex];
-    if (target != null && target !== ov) {
-      return `${Q(qi)}: says ${Q(rule.questionIndex)}'s answer is ${ov}, but ${Q(rule.questionIndex)} is marked ${target}.`;
+    if (target != null && v != null && letterIdx(target) !== v) {
+      return `${Q(qi)}: says ${Q(rule.questionIndex)}'s answer is ${LETTERS[v]}, but ${Q(rule.questionIndex)} is marked ${target}.`;
     }
   }
 
   // letter_distance
   if (rule.type === "letter_distance") {
-    const other = answers[rule.otherQuestionIndex];
+    const other = answers[rule.questionIndex];
     if (other != null) {
       const dist = Math.abs(L2I[answers[qi]!] - L2I[other]);
-      if (String(dist) !== ov) {
-        return `${Q(qi)}: distance = ${ov}, but ${answers[qi]!} and ${other} (${Q(rule.otherQuestionIndex)}) are ${dist} apart.`;
+      if (v != null && dist !== v) {
+        return `${Q(qi)}: distance = ${ov}, but ${answers[qi]!} and ${other} (${Q(rule.questionIndex)}) are ${dist} apart.`;
       }
     }
   }
 
   // Positional rules
-  return explainPositionalContradiction(rule, qi, answers, ov, n);
+  return explainPositionalContradiction(rule, qi, answers, v, n);
 }
 
 function explainPositionalContradiction(
   rule: ValidationRule,
   qi: number,
   answers: (AnswerLetter | null)[],
-  ov: string,
+  v: number | null,
   n: number,
 ): string | null {
   if (rule.type === "closest_after") {
-    return checkClosestAfter(qi, answers, ov, rule.afterIndex, rule.answer, n);
+    return checkClosestAfter(qi, answers, v, rule.afterIndex, rule.answer, n);
   }
   if (rule.type === "closest_before") {
-    return checkClosestBefore(qi, answers, ov, rule.beforeIndex, rule.answer);
+    return checkClosestBefore(qi, answers, v, rule.beforeIndex, rule.answer);
   }
   if (rule.type === "first_with_answer") {
-    return checkFirstWith(qi, answers, ov, rule.answer, n);
+    return checkFirstWith(qi, answers, v, rule.answer, n);
   }
   if (rule.type === "last_with_answer") {
-    return checkLastWith(qi, answers, ov, rule.answer, n);
+    return checkLastWith(qi, answers, v, rule.answer, n);
   }
   if (rule.type === "unique_answer") {
-    const count = countMatching(answers, (a) => a === answers[qi], 0, n).count;
+    const a = answers[qi]!;
+    let count = 0;
+    for (let i = 0; i < n; i++) if (answers[i] === a) count++;
     if (count > 1) {
-      return `${Q(qi)}: ${answers[qi]!} is marked unique, but ${count} ${count === 1 ? "question has" : "questions have"} answer ${answers[qi]!}.`;
+      return `${Q(qi)}: ${a} is marked unique, but ${count} questions have answer ${a}.`;
     }
   }
   if (rule.type === "same_answer_as") {
-    const targetQ = Number(ov) - 1;
-    if (
-      targetQ >= 0 &&
-      targetQ < n &&
-      answers[targetQ] != null &&
-      answers[targetQ] !== answers[qi]
-    ) {
-      return `${Q(qi)}: says this has the same answer as ${Q(targetQ)}, but ${Q(targetQ)} is ${answers[targetQ]} and this is ${answers[qi]}.`;
+    if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== answers[qi]) {
+      return `${Q(qi)}: says this has the same answer as ${Q(v)}, but ${Q(v)} is ${answers[v]} and this is ${answers[qi]}.`;
     }
   }
   return null;
@@ -315,12 +319,12 @@ function explainPositionalContradiction(
 function checkClosestAfter(
   qi: number,
   answers: (AnswerLetter | null)[],
-  ov: string,
+  v: number | null,
   afterIndex: number,
   target: AnswerLetter,
   n: number,
 ): string | null {
-  if (ov === "None") {
+  if (v == null) {
     for (let i = afterIndex + 1; i < n; i++) {
       if (answers[i] === target) {
         return `${Q(qi)}: says no ${target} after #${afterIndex + 1}, but ${Q(i)} has answer ${target}.`;
@@ -328,15 +332,14 @@ function checkClosestAfter(
     }
     return null;
   }
-  const claimedPos = Number(ov) - 1;
-  if (claimedPos < 0 || claimedPos >= n) return null;
+  if (v < 0 || v >= n) return null;
 
-  if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+  if (answers[v] != null && answers[v] !== target) {
+    return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
   }
-  for (let i = afterIndex + 1; i < claimedPos; i++) {
+  for (let i = afterIndex + 1; i < v; i++) {
     if (answers[i] === target) {
-      return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
+      return `${Q(qi)}: says closest ${target} after #${afterIndex + 1} is ${Q(v)}, but ${Q(i)} also has ${target} and is closer.`;
     }
   }
   return null;
@@ -345,11 +348,11 @@ function checkClosestAfter(
 function checkClosestBefore(
   qi: number,
   answers: (AnswerLetter | null)[],
-  ov: string,
+  v: number | null,
   beforeIndex: number,
   target: AnswerLetter,
 ): string | null {
-  if (ov === "None") {
+  if (v == null) {
     for (let i = beforeIndex - 1; i >= 0; i--) {
       if (answers[i] === target) {
         return `${Q(qi)}: says no ${target} before #${beforeIndex + 1}, but ${Q(i)} has answer ${target}.`;
@@ -357,15 +360,14 @@ function checkClosestBefore(
     }
     return null;
   }
-  const claimedPos = Number(ov) - 1;
-  if (claimedPos < 0) return null;
+  if (v < 0) return null;
 
-  if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+  if (answers[v] != null && answers[v] !== target) {
+    return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
   }
-  for (let i = beforeIndex - 1; i > claimedPos; i--) {
+  for (let i = beforeIndex - 1; i > v; i--) {
     if (answers[i] === target) {
-      return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and is closer.`;
+      return `${Q(qi)}: says closest ${target} before #${beforeIndex + 1} is ${Q(v)}, but ${Q(i)} also has ${target} and is closer.`;
     }
   }
   return null;
@@ -374,11 +376,11 @@ function checkClosestBefore(
 function checkFirstWith(
   qi: number,
   answers: (AnswerLetter | null)[],
-  ov: string,
+  v: number | null,
   target: AnswerLetter,
   n: number,
 ): string | null {
-  if (ov === "None") {
+  if (v == null) {
     for (let i = 0; i < n; i++) {
       if (answers[i] === target) {
         return `${Q(qi)}: says no question has answer ${target}, but ${Q(i)} does.`;
@@ -386,15 +388,14 @@ function checkFirstWith(
     }
     return null;
   }
-  const claimedPos = Number(ov) - 1;
-  if (claimedPos < 0 || claimedPos >= n) return null;
+  if (v < 0 || v >= n) return null;
 
-  if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: says the first ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+  if (answers[v] != null && answers[v] !== target) {
+    return `${Q(qi)}: says the first ${target} is ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
   }
-  for (let i = 0; i < claimedPos; i++) {
+  for (let i = 0; i < v; i++) {
     if (answers[i] === target) {
-      return `${Q(qi)}: says the first ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes earlier.`;
+      return `${Q(qi)}: says the first ${target} is ${Q(v)}, but ${Q(i)} also has ${target} and comes earlier.`;
     }
   }
   return null;
@@ -403,11 +404,11 @@ function checkFirstWith(
 function checkLastWith(
   qi: number,
   answers: (AnswerLetter | null)[],
-  ov: string,
+  v: number | null,
   target: AnswerLetter,
   n: number,
 ): string | null {
-  if (ov === "None") {
+  if (v == null) {
     for (let i = 0; i < n; i++) {
       if (answers[i] === target) {
         return `${Q(qi)}: says no question has answer ${target}, but ${Q(i)} does.`;
@@ -415,15 +416,14 @@ function checkLastWith(
     }
     return null;
   }
-  const claimedPos = Number(ov) - 1;
-  if (claimedPos < 0 || claimedPos >= n) return null;
+  if (v < 0 || v >= n) return null;
 
-  if (answers[claimedPos] != null && answers[claimedPos] !== target) {
-    return `${Q(qi)}: says the last ${target} is ${Q(claimedPos)}, but ${Q(claimedPos)} is marked ${answers[claimedPos]}.`;
+  if (answers[v] != null && answers[v] !== target) {
+    return `${Q(qi)}: says the last ${target} is ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
   }
-  for (let i = n - 1; i > claimedPos; i--) {
+  for (let i = n - 1; i > v; i--) {
     if (answers[i] === target) {
-      return `${Q(qi)}: says the last ${target} is ${Q(claimedPos)}, but ${Q(i)} also has ${target} and comes later.`;
+      return `${Q(qi)}: says the last ${target} is ${Q(v)}, but ${Q(i)} also has ${target} and comes later.`;
     }
   }
   return null;
@@ -461,7 +461,8 @@ function findForced(
     const rule = puzzle.questions[qi].rule;
     if (rule.type === "answer_of_question" && answers[rule.questionIndex] != null) {
       const target = answers[rule.questionIndex]!;
-      const oi = puzzle.questions[qi].options.findIndex((o) => o.label === target);
+      const targetIdx = letterIdx(target);
+      const oi = puzzle.questions[qi].options.findIndex((o) => o.value === targetIdx);
       if (oi >= 0) {
         const letter = LETTERS[oi];
         return hintSteps(
@@ -479,19 +480,19 @@ function findForced(
       if (otherAns == null) continue;
       const otherRule = puzzle.questions[other].rule;
       if (otherRule.type === "answer_of_question" && otherRule.questionIndex === qi) {
-        const implied = optVal(puzzle, other, otherAns);
-        const idx = L2I[implied] ?? -1;
-        if (idx >= 0) {
+        const impliedIdx = optValue(puzzle, other, otherAns);
+        if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
+          const implied = LETTERS[impliedIdx];
           return hintSteps(
             qi,
             `${Q(qi)} can be determined now.`,
             `${Q(other)} is ${otherAns}, which says ${Q(qi)}'s answer is ${implied}.`,
-            { type: "force", questionIndex: qi, letter: LETTERS[idx] },
+            { type: "force", questionIndex: qi, letter: implied },
           );
         }
       }
       if (otherRule.type === "same_answer_as") {
-        const targetQ = Number(optVal(puzzle, other, otherAns)) - 1;
+        const targetQ = optValue(puzzle, other, otherAns);
         if (targetQ === qi) {
           return hintSteps(
             qi,
@@ -504,21 +505,21 @@ function findForced(
     }
 
     // Forced by letter_distance when other question is answered
-    if (rule.type === "letter_distance" && answers[rule.otherQuestionIndex] != null) {
-      const otherAnswer = answers[rule.otherQuestionIndex]!;
-      const otherIdx = L2I[otherAnswer];
+    if (rule.type === "letter_distance" && answers[rule.questionIndex] != null) {
+      const otherAnswer = answers[rule.questionIndex]!;
+      const otherIdx = letterIdx(otherAnswer);
       const validLetters: AnswerLetter[] = [];
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(markSets, qi, oi)) continue;
         const dist = Math.abs(oi - otherIdx);
-        const ov2 = puzzle.questions[qi].options[oi].label;
-        if (String(dist) === ov2) validLetters.push(LETTERS[oi]);
+        const optV = puzzle.questions[qi].options[oi].value;
+        if (optV != null && dist === optV) validLetters.push(LETTERS[oi]);
       }
       if (validLetters.length === 1) {
         return hintSteps(
           qi,
           `${Q(qi)} can be determined now.`,
-          `${Q(qi)}: ${Q(rule.otherQuestionIndex)} is ${otherAnswer}, and only option ${validLetters[0]} gives the right distance.`,
+          `${Q(qi)}: ${Q(rule.questionIndex)} is ${otherAnswer}, and only option ${validLetters[0]} gives the right distance.`,
           { type: "force", questionIndex: qi, letter: validLetters[0] },
         );
       }
@@ -532,7 +533,7 @@ function findForced(
       if (rem === 0) {
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(markSets, qi, oi)) continue;
-          if (puzzle.questions[qi].options[oi].label === String(count)) {
+          if (puzzle.questions[qi].options[oi].value === count) {
             return hintSteps(
               qi,
               `${Q(qi)} can be determined now.`,
@@ -563,8 +564,9 @@ function findEliminable(
 
     for (let oi = 0; oi < 5; oi++) {
       if (markSets[qi][oi] !== "unmarked") continue;
-      const ov = puzzle.questions[qi].options[oi].label;
-      const msg = canEliminate(rule, qi, oi, ov, answers, n);
+      const v = puzzle.questions[qi].options[oi].value;
+      const ov = renderOptionLabel(rule, v, qi);
+      const msg = canEliminate(rule, qi, oi, ov, v, answers, n);
       if (msg) {
         return hintSteps(
           qi,
@@ -584,6 +586,7 @@ function canEliminate(
   qi: number,
   oi: number,
   ov: string,
+  v: number | null,
   answers: (AnswerLetter | null)[],
   n: number,
 ): string | null {
@@ -592,13 +595,12 @@ function canEliminate(
   if (pred && rule.type !== "most_common_count") {
     const [from, to] = countRange(rule, n);
     const { count, remaining } = countMatching(answers, pred, from, to);
-    const claimed = Number(ov);
-    if (!Number.isNaN(claimed)) {
-      if (count > claimed) {
-        return `says ${claimed}, but already ${count} ${countRuleLabel(rule, count)}.`;
+    if (v != null) {
+      if (count > v) {
+        return `says ${v}, but already ${count} ${countRuleLabel(rule, count)}.`;
       }
-      if (count + remaining < claimed) {
-        return `says ${claimed}, but at most ${count + remaining} ${countRuleLabel(rule, count + remaining)} are possible.`;
+      if (count + remaining < v) {
+        return `says ${v}, but at most ${count + remaining} ${countRuleLabel(rule, count + remaining)} are possible.`;
       }
     }
   }
@@ -606,43 +608,42 @@ function canEliminate(
   // answer_of_question: target already answered with different letter
   if (rule.type === "answer_of_question") {
     const target = answers[rule.questionIndex];
-    if (target != null && target !== ov) {
-      return `says ${Q(rule.questionIndex)} is ${ov}, but it's marked ${target}.`;
+    if (target != null && v != null && letterIdx(target) !== v) {
+      return `says ${Q(rule.questionIndex)} is ${LETTERS[v]}, but it's marked ${target}.`;
     }
   }
 
   // letter_distance: other question answered, distance doesn't match
   if (rule.type === "letter_distance") {
-    const other = answers[rule.otherQuestionIndex];
-    if (other != null) {
-      const dist = Math.abs(oi - L2I[other]);
-      if (String(dist) !== ov) {
+    const other = answers[rule.questionIndex];
+    if (other != null && v != null) {
+      const dist = Math.abs(oi - letterIdx(other));
+      if (dist !== v) {
         return `says distance is ${ov}, but ${LETTERS[oi]} and ${other} are ${dist} apart.`;
       }
     }
   }
 
   // Positional: claimed position has wrong answer
-  if (isPositionalRule(rule.type) && ov !== "None") {
-    const claimedPos = Number(ov) - 1;
-    if (claimedPos >= 0 && claimedPos < n) {
-      const posAnswer = answers[claimedPos];
+  if (isPositionalRule(rule.type) && v != null) {
+    if (v >= 0 && v < n) {
+      const posAnswer = answers[v];
       if (posAnswer != null) {
-        const msg = checkPositionalElim(rule, qi, oi, ov, claimedPos, posAnswer, answers, n);
+        const msg = checkPositionalElim(rule, v, posAnswer);
         if (msg) return msg;
       }
     }
   }
 
   // Positional "None" but a match exists
-  if (isPositionalRule(rule.type) && ov === "None") {
+  if (isPositionalRule(rule.type) && v == null) {
     const msg = checkNoneElim(rule, qi, answers, n);
     if (msg) return msg;
   }
 
   // Closer match exists for closest_after/before, first/last
-  if (ov !== "None") {
-    const msg = checkCloserExists(rule, qi, ov, answers, n);
+  if (v != null) {
+    const msg = checkCloserExists(rule, v, answers, n);
     if (msg) return msg;
   }
 
@@ -663,30 +664,18 @@ function isPositionalRule(type: string): boolean {
 
 function checkPositionalElim(
   rule: ValidationRule,
-  _qi: number,
-  _oi: number,
-  _ov: string,
-  claimedPos: number,
+  pos: number,
   posAnswer: AnswerLetter,
-  _answers: (AnswerLetter | null)[],
-  _n: number,
 ): string | null {
   if (
     rule.type === "closest_after" ||
+    rule.type === "closest_before" ||
     rule.type === "first_with_answer" ||
     rule.type === "last_with_answer"
   ) {
     if (posAnswer !== rule.answer) {
-      return `says ${Q(claimedPos)} has answer ${rule.answer}, but it's marked ${posAnswer}.`;
+      return `says ${Q(pos)} has answer ${rule.answer}, but it's marked ${posAnswer}.`;
     }
-  }
-  if (rule.type === "closest_before") {
-    if (posAnswer !== rule.answer) {
-      return `says ${Q(claimedPos)} has answer ${rule.answer}, but it's marked ${posAnswer}.`;
-    }
-  }
-  if (rule.type === "same_answer_as") {
-    return null; // handled separately since it depends on this question's answer
   }
   return null;
 }
@@ -723,39 +712,35 @@ function checkNoneElim(
 
 function checkCloserExists(
   rule: ValidationRule,
-  _qi: number,
-  ov: string,
+  pos: number,
   answers: (AnswerLetter | null)[],
   n: number,
 ): string | null {
-  const claimedPos = Number(ov) - 1;
-  if (Number.isNaN(claimedPos) || claimedPos < 0) return null;
-
   if (rule.type === "closest_after") {
-    for (let i = rule.afterIndex + 1; i < claimedPos; i++) {
+    for (let i = rule.afterIndex + 1; i < pos; i++) {
       if (answers[i] === rule.answer) {
-        return `says closest ${rule.answer} after #${rule.afterIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} has ${rule.answer} and is closer.`;
+        return `says closest ${rule.answer} after #${rule.afterIndex + 1} is ${Q(pos)}, but ${Q(i)} has ${rule.answer} and is closer.`;
       }
     }
   }
   if (rule.type === "closest_before") {
-    for (let i = rule.beforeIndex - 1; i > claimedPos; i--) {
+    for (let i = rule.beforeIndex - 1; i > pos; i--) {
       if (answers[i] === rule.answer) {
-        return `says closest ${rule.answer} before #${rule.beforeIndex + 1} is ${Q(claimedPos)}, but ${Q(i)} has ${rule.answer} and is closer.`;
+        return `says closest ${rule.answer} before #${rule.beforeIndex + 1} is ${Q(pos)}, but ${Q(i)} has ${rule.answer} and is closer.`;
       }
     }
   }
   if (rule.type === "first_with_answer") {
-    for (let i = 0; i < claimedPos; i++) {
+    for (let i = 0; i < pos; i++) {
       if (answers[i] === rule.answer) {
-        return `says first ${rule.answer} is ${Q(claimedPos)}, but ${Q(i)} has ${rule.answer} and comes earlier.`;
+        return `says first ${rule.answer} is ${Q(pos)}, but ${Q(i)} has ${rule.answer} and comes earlier.`;
       }
     }
   }
   if (rule.type === "last_with_answer") {
-    for (let i = n - 1; i > claimedPos; i--) {
+    for (let i = n - 1; i > pos; i--) {
       if (answers[i] === rule.answer) {
-        return `says last ${rule.answer} is ${Q(claimedPos)}, but ${Q(i)} has ${rule.answer} and comes later.`;
+        return `says last ${rule.answer} is ${Q(pos)}, but ${Q(i)} has ${rule.answer} and comes later.`;
       }
     }
   }
@@ -788,8 +773,7 @@ function findActionFp(
     if (a == null) continue;
     const r = fp.rules[qi];
     const ai = letterIdx(a);
-    const ov = fp.optionLabels[qi][ai];
-    const on = fp.optionNums[qi][ai];
+    const v = fp.optionValues[qi][ai];
 
     if (
       r.t === RT_COUNT_ANSWER ||
@@ -798,12 +782,12 @@ function findActionFp(
       r.t === RT_COUNT_VOWEL ||
       r.t === RT_COUNT_CONSONANT
     ) {
-      if (!Number.isNaN(on)) {
+      if (v != null) {
         const pred = countPred2(r);
         if (pred) {
           const [from, to] = countRange2(r, n);
           const cr = countMatchingAware(answers, markSets, pred, from, to);
-          if (cr.count > on || cr.count + cr.remaining < on) {
+          if (cr.count > v || cr.count + cr.remaining < v) {
             return { type: "contradiction", questionIndex: qi };
           }
         }
@@ -811,27 +795,27 @@ function findActionFp(
     }
     if (r.t === RT_ANSWER_OF) {
       const target = answers[r.questionIndex];
-      if (target != null && target !== ov) return { type: "contradiction", questionIndex: qi };
+      if (target != null && v != null && letterIdx(target) !== v) return { type: "contradiction", questionIndex: qi };
     }
     if (r.t === RT_LETTER_DIST) {
-      const other = answers[r.otherQuestionIndex];
+      const other = answers[r.questionIndex];
       if (other != null) {
         const dist = Math.abs(ai - letterIdx(other));
-        if (dist !== on) return { type: "contradiction", questionIndex: qi };
+        if (dist !== v) return { type: "contradiction", questionIndex: qi };
       }
     }
     if (r.t === RT_UNIQUE) {
-      if (countMatchingSimple(answers, a, 0, n) > 1)
-        return { type: "contradiction", questionIndex: qi };
+      let count = 0;
+      for (let i = 0; i < n; i++) if (answers[i] === a) count++;
+      if (count > 1) return { type: "contradiction", questionIndex: qi };
     }
     if (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) {
       const afterIdx = r.t === RT_CLOSEST_AFTER ? r.afterIndex : -1;
-      if (on !== NONE) {
-        const pos = on - 1;
-        if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== r.answer) {
+      if (v != null) {
+        if (v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer) {
           return { type: "contradiction", questionIndex: qi };
         }
-        for (let j = afterIdx + 1; j < pos; j++) {
+        for (let j = afterIdx + 1; j < v; j++) {
           if (answers[j] === r.answer) return { type: "contradiction", questionIndex: qi };
         }
       } else {
@@ -842,12 +826,11 @@ function findActionFp(
     }
     if (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) {
       const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
-      if (on !== NONE) {
-        const pos = on - 1;
-        if (pos >= 0 && pos < n && answers[pos] != null && answers[pos] !== r.answer) {
+      if (v != null) {
+        if (v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer) {
           return { type: "contradiction", questionIndex: qi };
         }
-        for (let j = beforeIdx - 1; j > pos; j--) {
+        for (let j = beforeIdx - 1; j > v; j--) {
           if (answers[j] === r.answer) return { type: "contradiction", questionIndex: qi };
         }
       } else {
@@ -857,15 +840,12 @@ function findActionFp(
       }
     }
     if (r.t === RT_SAME_AS) {
-      const tq = on - 1;
-      if (tq >= 0 && tq < n && answers[tq] != null && answers[tq] !== a) {
+      if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== a) {
         return { type: "contradiction", questionIndex: qi };
       }
     }
 
     // Fallback: full evaluate for rule types without specialized checks
-    // (TrueStmt, OnlyOdd, ConsecIdent, OnlySame, PrevSame, NextSame,
-    // MostCommonCount, LeastCommon, MostCommon, EqualCount, AnswerIsSelf)
     if (
       r.t !== RT_COUNT_ANSWER &&
       r.t !== RT_COUNT_ANSWER_BEFORE &&
@@ -896,11 +876,11 @@ function findActionFp(
     const pred = countPred2(r);
     if (!pred) continue;
     const ai = letterIdx(answers[qi]!);
-    const on = fp.optionNums[qi][ai];
-    if (Number.isNaN(on)) continue;
+    const v = fp.optionValues[qi][ai];
+    if (v == null) continue;
     const [from, to] = countRange2(r, n);
     const cr = countMatchingAware(answers, markSets, pred, from, to);
-    if (cr.count === on && cr.remaining > 0) {
+    if (cr.count === v && cr.remaining > 0) {
       for (let j = from; j < to; j++) {
         if (answers[j] != null) continue;
         for (let oi = 0; oi < 5; oi++) {
@@ -910,7 +890,7 @@ function findActionFp(
         }
       }
     }
-    if (cr.count + cr.remaining === on && cr.remaining > 0) {
+    if (cr.count + cr.remaining === v && cr.remaining > 0) {
       for (let j = from; j < to; j++) {
         if (answers[j] != null || !canStillMatch(pred, markSets[j])) continue;
         for (let oi = 0; oi < 5; oi++) {
@@ -934,12 +914,12 @@ function findActionFp(
     if (vowelQi >= 0 && consonantQi >= 0) {
       for (let oi = 0; oi < 5; oi++) {
         if (markSets[vowelQi][oi] !== "unmarked") continue;
-        const v = fp.optionNums[vowelQi][oi];
-        if (Number.isNaN(v)) continue;
-        const need = n - v;
+        const vv = fp.optionValues[vowelQi][oi];
+        if (vv == null) continue;
+        const need = n - vv;
         let has = false;
         for (let coi = 0; coi < 5; coi++) {
-          if (!isElim(markSets, consonantQi, coi) && fp.optionNums[consonantQi][coi] === need) {
+          if (!isElim(markSets, consonantQi, coi) && fp.optionValues[consonantQi][coi] === need) {
             has = true;
             break;
           }
@@ -948,12 +928,12 @@ function findActionFp(
       }
       for (let oi = 0; oi < 5; oi++) {
         if (markSets[consonantQi][oi] !== "unmarked") continue;
-        const v = fp.optionNums[consonantQi][oi];
-        if (Number.isNaN(v)) continue;
-        const need = n - v;
+        const vv = fp.optionValues[consonantQi][oi];
+        if (vv == null) continue;
+        const need = n - vv;
         let has = false;
         for (let voi = 0; voi < 5; voi++) {
-          if (!isElim(markSets, vowelQi, voi) && fp.optionNums[vowelQi][voi] === need) {
+          if (!isElim(markSets, vowelQi, voi) && fp.optionValues[vowelQi][voi] === need) {
             has = true;
             break;
           }
@@ -981,8 +961,9 @@ function findActionFp(
 
     if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null) {
       const target = answers[r.questionIndex]!;
+      const targetIdx = letterIdx(target);
       for (let oi = 0; oi < 5; oi++) {
-        if (fp.optionLabels[qi][oi] === target) {
+        if (fp.optionValues[qi][oi] === targetIdx) {
           return { type: "force", questionIndex: qi, letter: LETTERS[oi] };
         }
       }
@@ -994,9 +975,10 @@ function findActionFp(
       if (otherAns == null) continue;
       const otherR = fp.rules[other];
       if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
-        const implied = fp.optionLabels[other][letterIdx(otherAns)];
-        const idx = L2I[implied] ?? -1;
-        if (idx >= 0) return { type: "force", questionIndex: qi, letter: LETTERS[idx] };
+        const impliedIdx = fp.optionValues[other][letterIdx(otherAns)];
+        if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
+          return { type: "force", questionIndex: qi, letter: LETTERS[impliedIdx] };
+        }
       }
     }
 
@@ -1007,7 +989,7 @@ function findActionFp(
       if (cr.remaining === 0) {
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(markSets, qi, oi)) continue;
-          if (fp.optionNums[qi][oi] === cr.count) {
+          if (fp.optionValues[qi][oi] === cr.count) {
             return { type: "force", questionIndex: qi, letter: LETTERS[oi] };
           }
         }
@@ -1022,85 +1004,81 @@ function findActionFp(
 
     for (let oi = 0; oi < 5; oi++) {
       if (markSets[qi][oi] !== "unmarked") continue;
-      const ov = fp.optionLabels[qi][oi];
-      const on = fp.optionNums[qi][oi];
+      const v = fp.optionValues[qi][oi];
 
       const pred = countPred2(r);
       if (pred && r.t !== RT_MOST_COMMON_COUNT) {
         const [from, to] = countRange2(r, n);
         const cr = countMatchingAware(answers, markSets, pred, from, to);
-        if (!Number.isNaN(on) && (cr.count > on || cr.count + cr.remaining < on)) {
+        if (v != null && (cr.count > v || cr.count + cr.remaining < v)) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
 
       if (r.t === RT_ANSWER_OF) {
         const target = answers[r.questionIndex];
-        if (target != null && target !== ov) {
+        if (target != null && v != null && letterIdx(target) !== v) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
         // AnswerOf propagation: if the claimed letter is eliminated from the target
-        if (target == null) {
-          const claimedIdx = L2I[ov];
-          if (claimedIdx != null && isElim(markSets, r.questionIndex, claimedIdx)) {
+        if (target == null && v != null && v >= 0 && v < 5) {
+          if (isElim(markSets, r.questionIndex, v)) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
       }
 
       if (r.t === RT_LETTER_DIST) {
-        const other = answers[r.otherQuestionIndex];
-        if (other != null && Math.abs(oi - letterIdx(other)) !== on) {
+        const other = answers[r.questionIndex];
+        if (other != null && v != null && Math.abs(oi - letterIdx(other)) !== v) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
 
-      if ((r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) && on !== NONE) {
-        const pos = on - 1;
+      if ((r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) && v != null) {
         const scanStart = r.t === RT_CLOSEST_AFTER ? r.afterIndex + 1 : 0;
-        if (pos < scanStart || pos >= n) {
+        if (v < scanStart || v >= n) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
-        if (pos >= 0 && pos < n) {
-          if (answers[pos] != null && answers[pos] !== r.answer) {
+        if (v >= 0 && v < n) {
+          if (answers[v] != null && answers[v] !== r.answer) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
-          if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
+          if (answers[v] == null && isElim(markSets, v, L2I[r.answer!])) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
-        for (let j = scanStart; j < pos; j++) {
+        for (let j = scanStart; j < v; j++) {
           if (answers[j] === r.answer)
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
-      if ((r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) && on !== NONE) {
-        const pos = on - 1;
+      if ((r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) && v != null) {
         const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
-        if (pos < 0 || pos >= beforeIdx) {
+        if (v < 0 || v >= beforeIdx) {
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
-        if (pos >= 0 && pos < n) {
-          if (answers[pos] != null && answers[pos] !== r.answer) {
+        if (v >= 0 && v < n) {
+          if (answers[v] != null && answers[v] !== r.answer) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
-          if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
+          if (answers[v] == null && isElim(markSets, v, L2I[r.answer!])) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           }
         }
-        for (let j = beforeIdx - 1; j > pos; j--) {
+        for (let j = beforeIdx - 1; j > v; j--) {
           if (answers[j] === r.answer)
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
-      if (on === NONE && (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH)) {
+      if (v == null && (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH)) {
         const afterIdx = r.t === RT_CLOSEST_AFTER ? r.afterIndex : -1;
         for (let j = afterIdx + 1; j < n; j++) {
           if (answers[j] === r.answer)
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         }
       }
-      if (on === NONE && (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH)) {
+      if (v == null && (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH)) {
         const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
         for (let j = beforeIdx - 1; j >= 0; j--) {
           if (answers[j] === r.answer)
@@ -1110,14 +1088,13 @@ function findActionFp(
 
       // OnlyOdd: position must be odd, in range, and could have the answer
       if (r.t === RT_ONLY_ODD) {
-        if (on !== NONE) {
-          if (on % 2 === 0) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
-          const pos = on - 1;
-          if (pos >= 0 && pos < n) {
-            if (answers[pos] != null && answers[pos] !== r.answer) {
+        if (v != null) {
+          if ((v + 1) % 2 === 0) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          if (v >= 0 && v < n) {
+            if (answers[v] != null && answers[v] !== r.answer) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
-            if (answers[pos] == null && isElim(markSets, pos, L2I[r.answer!])) {
+            if (answers[v] == null && isElim(markSets, v, L2I[r.answer!])) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
           }
@@ -1132,14 +1109,9 @@ function findActionFp(
 
       // ConsecIdent: pair must have same answer
       if (r.t === RT_CONSEC_IDENT) {
-        if (on !== NONE) {
-          const pos = on;
-          if (pos >= 0 && pos + 1 < n) {
-            if (
-              answers[pos] != null &&
-              answers[pos + 1] != null &&
-              answers[pos] !== answers[pos + 1]
-            ) {
+        if (v != null) {
+          if (v >= 0 && v + 1 < n) {
+            if (answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1]) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
           }
@@ -1153,19 +1125,19 @@ function findActionFp(
       }
 
       // PrevSame: must point before qi
-      if (r.t === RT_PREV_SAME && on !== NONE) {
-        if (on - 1 >= qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+      if (r.t === RT_PREV_SAME && v != null) {
+        if (v >= qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
       }
 
       // NextSame: must point after qi
-      if (r.t === RT_NEXT_SAME && on !== NONE) {
-        if (on - 1 <= qi || on - 1 >= n)
+      if (r.t === RT_NEXT_SAME && v != null) {
+        if (v <= qi || v >= n)
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
       }
 
       // OnlySame/SameAs: can't point to self
-      if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && on !== NONE) {
-        if (on - 1 === qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+      if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && v != null) {
+        if (v === qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
       }
     }
   }
@@ -1224,19 +1196,6 @@ function countMatchingAware(
     } else if (pred(a)) count++;
   }
   return { count, remaining };
-}
-
-function countMatchingSimple(
-  answers: (AnswerLetter | null)[],
-  target: AnswerLetter,
-  from: number,
-  to: number,
-): number {
-  let c = 0;
-  for (let i = from; i < to; i++) {
-    if (answers[i] === target) c++;
-  }
-  return c;
 }
 
 // ════════════════════════════════════════════════

@@ -3,6 +3,7 @@ import { LETTERS, flattenPuzzle } from "../src/engine/types.ts";
 import { evaluate, evaluateClaim } from "../src/engine/evaluators.ts";
 import { findHint, findActionFast } from "../src/engine/hints.ts";
 import { solve } from "../src/generator/solver.ts";
+import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,9 +13,7 @@ const dailyDir = resolve(__dirname, "../public/puzzles/daily");
 
 const allPuzzles: Puzzle[] = [];
 for (const file of readdirSync(dailyDir).filter((f: string) => f.endsWith(".json"))) {
-	const yearData: Record<string, Record<string, Puzzle>> = JSON.parse(
-		readFileSync(resolve(dailyDir, file), "utf8"),
-	);
+	const yearData = parseCompactYear(JSON.parse(readFileSync(resolve(dailyDir, file), "utf8")));
 	for (const dateKey of Object.keys(yearData)) {
 		for (const [levelKey, puzzle] of Object.entries(yearData[dateKey])) {
 			puzzle.id = `${file.replace(".json", "")}-${dateKey}-${levelKey}`;
@@ -57,46 +56,42 @@ function testEvaluators() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
 				options: [
-					{ label: "0" },
-					{ label: "1" },
-					{ label: "2" },
-					{ label: "3" },
-					{ label: "4" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "count_answer", answer: "B" },
 			},
 			{
-				text: "Q2",
 				options: [
-					{ label: "A" },
-					{ label: "B" },
-					{ label: "C" },
-					{ label: "D" },
-					{ label: "E" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "answer_of_question", questionIndex: 0 },
 			},
 			{
-				text: "Q3",
 				options: [
-					{ label: "1" },
-					{ label: "2" },
-					{ label: "3" },
-					{ label: "4" },
-					{ label: "None" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: null },
 				],
 				rule: { type: "closest_after", afterIndex: 0, answer: "C" },
 			},
 			{
-				text: "Q4",
 				options: [
-					{ label: "0" },
-					{ label: "1" },
-					{ label: "2" },
-					{ label: "3" },
-					{ label: "4" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "letter_distance", otherQuestionIndex: 0 },
 			},
@@ -164,24 +159,21 @@ function testEvaluators() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
 				options: [
-					{ label: "A" },
-					{ label: "B" },
-					{ label: "C" },
-					{ label: "D" },
-					{ label: "E" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "least_common_answer" },
 			},
 			{
-				text: "Q2",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 			{
-				text: "Q3",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 		],
@@ -258,35 +250,32 @@ function testSolver() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
 				options: [
-					{ label: "A" },
-					{ label: "B" },
-					{ label: "C" },
-					{ label: "D" },
-					{ label: "E" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "answer_of_question", questionIndex: 1 },
 			},
 			{
-				text: "Q2",
 				options: [
-					{ label: "A" },
-					{ label: "B" },
-					{ label: "C" },
-					{ label: "D" },
-					{ label: "E" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "answer_of_question", questionIndex: 0 },
 			},
 			{
-				text: "Q3",
 				options: [
-					{ label: "3" },
-					{ label: "0" },
-					{ label: "1" },
-					{ label: "2" },
-					{ label: "4" },
+					{ value: 3 },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 4 },
 				],
 				rule: { type: "count_answer", answer: "A" },
 			},
@@ -399,11 +388,11 @@ function testGeneratedPuzzles() {
 			}
 		}
 
-		// Every question has unique text
-		const texts = new Set(puzzle.questions.map((q) => q.text));
+		// Every question has unique rule
+		const ruleKeys = new Set(puzzle.questions.map((q) => JSON.stringify(q.rule)));
 		assert(
-			texts.size === puzzle.questions.length,
-			`${name}: all question texts are unique`,
+			ruleKeys.size === puzzle.questions.length,
+			`${name}: all question rules are unique`,
 		);
 
 		// Every question has exactly 5 options
@@ -414,13 +403,14 @@ function testGeneratedPuzzles() {
 			);
 		}
 
-		// Options within each question are distinct
+		// Options within each question are distinct (skip claim-based questions)
 		for (let i = 0; i < puzzle.questions.length; i++) {
-			const labels = puzzle.questions[i].options.map((o) => o.label);
-			const unique = new Set(labels);
+			if (puzzle.questions[i].rule.type === "only_true_statement") continue;
+			const values = puzzle.questions[i].options.map((o) => JSON.stringify(o.value));
+			const unique = new Set(values);
 			assert(
 				unique.size === 5,
-				`${name} Q${i + 1}: all option labels are distinct (${labels.join(", ")})`,
+				`${name} Q${i + 1}: all option values are distinct (${values.join(", ")})`,
 			);
 		}
 	}
@@ -440,24 +430,22 @@ function testSolverEdgeCases() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
 				options: [
-					{ label: "A" },
-					{ label: "B" },
-					{ label: "C" },
-					{ label: "D" },
-					{ label: "E" },
+					{ value: 0 },
+					{ value: 1 },
+					{ value: 2 },
+					{ value: 3 },
+					{ value: 4 },
 				],
 				rule: { type: "answer_of_question", questionIndex: 1 },
 			},
 			{
-				text: "Q2",
 				options: [
-					{ label: "B" },
-					{ label: "A" },
-					{ label: "D" },
-					{ label: "E" },
-					{ label: "C" },
+					{ value: 1 },
+					{ value: 0 },
+					{ value: 3 },
+					{ value: 4 },
+					{ value: 2 },
 				],
 				// Q2 mirrors Q1, but options are swapped so Q1=Q2 is impossible
 				// Q1=A → optA='A' → Q2 must be A → Q2=A → optA='B' → Q1 must be B → contradiction
@@ -477,13 +465,11 @@ function testSolverEdgeCases() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 			{
-				text: "Q2",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 		],
@@ -529,13 +515,11 @@ function testHints() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 			{
-				text: "Q2",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_of_question", questionIndex: 0 },
 			},
 		],
@@ -591,18 +575,15 @@ function testHints() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
-				options: [{ label: "0" }, { label: "1" }, { label: "2" }, { label: "3" }, { label: "4" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "count_answer", answer: "A" },
 			},
 			{
-				text: "Q2",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 			{
-				text: "Q3",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_is_self" },
 			},
 		],
@@ -640,13 +621,11 @@ function testHints() {
 		difficulty: 1,
 		questions: [
 			{
-				text: "Q1",
-				options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_of_question", questionIndex: 1 },
 			},
 			{
-				text: "Q2",
-				options: [{ label: "B" }, { label: "A" }, { label: "C" }, { label: "D" }, { label: "E" }],
+				options: [{ value: 1 }, { value: 0 }, { value: 2 }, { value: 3 }, { value: 4 }],
 				rule: { type: "answer_of_question", questionIndex: 0 },
 			},
 		],
@@ -675,12 +654,12 @@ function testHints() {
 			questions: [
 				{
 					text: "Q1",
-					options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+					options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 					rule: { type: "answer_is_self" },
 				},
 				{
 					text: "Q2",
-					options: [{ label: "A" }, { label: "B" }, { label: "C" }, { label: "D" }, { label: "E" }],
+					options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
 					rule: { type: "answer_is_self" },
 				},
 			],

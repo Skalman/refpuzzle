@@ -1,5 +1,7 @@
 import type { QuestionDef, Marks } from "../engine/types.ts";
+import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/validate.ts";
+import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../engine/render.ts";
 import { OptionButton } from "./OptionButton.tsx";
 
 interface Props {
@@ -25,7 +27,12 @@ export function QuestionRow({
   defaultFocus,
   onOptionClick,
 }: Props) {
-  const isLong = question.options.some((o) => o.label.length > LONG_THRESHOLD);
+  const rule = question.rule;
+  const labels = question.options.map((opt, oi) => {
+    if ("claim" in opt) return renderClaimLabel(opt.claim);
+    return renderOptionLabel(rule, opt.value, oi);
+  });
+  const isLong = labels.some((l) => l.length > LONG_THRESHOLD);
   const hasCorrect = marks.indexOf("correct") >= 0;
 
   return (
@@ -33,15 +40,15 @@ export function QuestionRow({
       <div class={`validity-bar ${validity}`} />
       <div class="question-header">
         <span class="question-num">{index + 1}.</span>
-        <span class="question-text">{question.text}</span>
+        <span class="question-text">{renderQuestionText(rule)}</span>
       </div>
       <div class={`question-options ${isLong ? "options-vertical" : ""}`}>
-        {question.options.map((opt, oi) => (
+        {question.options.map((_opt, oi) => (
           <OptionButton
-            key={opt.label}
+            key={LETTERS[oi]}
             index={oi}
             questionIndex={index}
-            label={opt.label}
+            label={labels[oi]}
             mark={marks[oi]}
             implied={hasCorrect && marks[oi] === "unmarked"}
             disabled={disabled || (hasCorrect && marks[oi] !== "correct")}

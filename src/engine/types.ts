@@ -25,7 +25,6 @@ export interface Puzzle {
 }
 
 export interface QuestionDef {
-  text: string;
   options: OptionDef[];
   rule: ValidationRule;
 }
@@ -33,30 +32,20 @@ export interface QuestionDef {
 export type OptionDef = SimpleOption | StatementOption;
 
 export interface SimpleOption {
-  label: string;
+  value: number | null;
 }
 
 export interface StatementOption {
-  label: string;
+  value: number | null;
   claim: Claim;
 }
 
 export type Claim =
-  | { type: "count_answer_equals"; answer: AnswerLetter; value: number }
-  | { type: "count_consonant_answers_equals"; value: number }
-  | { type: "count_vowel_answers_equals"; value: number }
-  | {
-      type: "count_answer_after_equals";
-      answer: AnswerLetter;
-      afterIndex: number;
-      value: number;
-    }
-  | {
-      type: "count_answer_before_equals";
-      answer: AnswerLetter;
-      beforeIndex: number;
-      value: number;
-    };
+  | { type: "count_answer"; answer: AnswerLetter; value: number }
+  | { type: "count_consonant_answers"; value: number }
+  | { type: "count_vowel_answers"; value: number }
+  | { type: "count_answer_after"; answer: AnswerLetter; afterIndex: number; value: number }
+  | { type: "count_answer_before"; answer: AnswerLetter; beforeIndex: number; value: number };
 
 export type ValidationRule =
   // ── Counting ──
@@ -88,14 +77,12 @@ export type ValidationRule =
   | { type: "answer_is_self" }
 
   // ── Relationship ──
-  | { type: "letter_distance"; otherQuestionIndex: number }
+  | { type: "letter_distance"; questionIndex: number }
 
   // ── Compound ──
   | { type: "only_true_statement" };
 
 // Numeric rule type IDs — top-level constants for V8 inlining
-export const NONE = -1;
-
 export const RT_COUNT_ANSWER = 0;
 export const RT_COUNT_ANSWER_BEFORE = 1;
 export const RT_COUNT_ANSWER_AFTER = 2;
@@ -158,7 +145,6 @@ export interface FlatRule {
   questionIndex: number;
   afterIndex: number;
   beforeIndex: number;
-  otherQuestionIndex: number;
 }
 
 function flattenRule(r: ValidationRule): FlatRule {
@@ -168,15 +154,13 @@ function flattenRule(r: ValidationRule): FlatRule {
     questionIndex: "questionIndex" in r ? r.questionIndex : -1,
     afterIndex: "afterIndex" in r ? r.afterIndex : -1,
     beforeIndex: "beforeIndex" in r ? r.beforeIndex : -1,
-    otherQuestionIndex: "otherQuestionIndex" in r ? r.otherQuestionIndex : -1,
   };
 }
 
 // Pre-flattened puzzle for solver/evaluator
 export interface FlatPuzzle {
   rules: FlatRule[];
-  optionLabels: string[][]; // [questionIdx][optionIdx] → label
-  optionNums: Float64Array[]; // pre-parsed numeric values (NaN if not a number)
+  optionValues: (number | null)[][]; // [questionIdx][optionIdx] → semantic value
   optionClaims: (Claim | null)[][]; // for only_true_statement
   affectedBy: number[][]; // affectedBy[j] = question indices to re-check when Q_j changes
   globalIndices: number[]; // indices of questions with global rules (need all answers)
@@ -225,7 +209,7 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
     } else if (r.t === RT_ANSWER_OF) {
       affectedBy[r.questionIndex].push(i);
     } else if (r.t === RT_LETTER_DIST) {
-      affectedBy[r.otherQuestionIndex].push(i);
+      affectedBy[r.questionIndex].push(i);
     } else if (r.t === RT_CLOSEST_AFTER || r.t === RT_COUNT_ANSWER_AFTER) {
       for (let j = r.afterIndex + 1; j < n; j++) affectedBy[j].push(i);
     } else if (r.t === RT_CLOSEST_BEFORE || r.t === RT_COUNT_ANSWER_BEFORE) {
@@ -243,15 +227,7 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
 
   return {
     rules,
-    optionLabels: puzzle.questions.map((q) => q.options.map((o) => o.label)),
-    optionNums: puzzle.questions.map((q) => {
-      const arr = new Float64Array(5);
-      for (let i = 0; i < 5; i++) {
-        const label = q.options[i].label;
-        arr[i] = label === "None" ? NONE : Number(label);
-      }
-      return arr;
-    }),
+    optionValues: puzzle.questions.map((q) => q.options.map((o) => o.value)),
     optionClaims: puzzle.questions.map((q) =>
       q.options.map((o) => ("claim" in o ? o.claim : null)),
     ),

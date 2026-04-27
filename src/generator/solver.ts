@@ -222,8 +222,8 @@ function checkRule(
 
   // Forward checking for counting rules
   if (r.t === RT_COUNT_ANSWER || r.t === RT_COUNT_ANSWER_BEFORE || r.t === RT_COUNT_ANSWER_AFTER) {
-    const optVal = fp.optionNums[i][letterIdx(answers[i]!)];
-    if (Number.isNaN(optVal)) return false;
+    const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
+    if (optVal == null) return false;
 
     let rangeStart: number;
     let rangeEnd: number;
@@ -249,8 +249,8 @@ function checkRule(
   }
 
   if (r.t === RT_COUNT_VOWEL || r.t === RT_COUNT_CONSONANT) {
-    const optVal = fp.optionNums[i][letterIdx(answers[i]!)];
-    if (Number.isNaN(optVal)) return false;
+    const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
+    if (optVal == null) return false;
     const isVowel = r.t === RT_COUNT_VOWEL;
     let count = 0;
     let remaining = 0;
@@ -290,7 +290,7 @@ function canFullyEvaluateLocal(
     case RT_ANSWER_OF:
       return (assigned & (1 << r.questionIndex)) !== 0;
     case RT_LETTER_DIST:
-      return (assigned & (1 << r.otherQuestionIndex)) !== 0;
+      return (assigned & (1 << r.questionIndex)) !== 0;
     case RT_NEXT_SAME:
     case RT_CLOSEST_AFTER:
     case RT_CLOSEST_BEFORE:

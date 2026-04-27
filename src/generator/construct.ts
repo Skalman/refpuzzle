@@ -188,7 +188,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     for (let attempt = 0; attempt < 10; attempt++) {
       const rule = makeRule(type, qi, n, solution, assigned, rng);
       if (!rule) continue;
-      const key = questionText(rule);
+      const key = JSON.stringify(rule);
       if (usedRuleKeys.has(key)) continue;
       if (!checkStructural(rule, qi, solution)) continue;
       rules[qi] = rule;
@@ -310,7 +310,6 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // 3. Build and validate puzzle
   const finalRules: ValidationRule[] = rules.filter((r): r is ValidationRule => r !== null);
   const questions: QuestionDef[] = finalRules.map((rule, i) => ({
-    text: questionText(rule),
     options: engineerOptions(rule, i, solution, n, rng),
     rule,
   }));
@@ -401,25 +400,26 @@ function repairDistractors(
     if (rule.type === "answer_of_question") {
       const target = stuckAnswers[rule.questionIndex];
       if (target != null) {
-        const pool = rng.shuffle(LETTERS.filter((l) => l !== target) as string[]);
+        const correctIdx = L2I[target];
+        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
         let di = 0;
         for (let oi = 0; oi < 5; oi++) {
-          if (oi !== correctOi) opts[oi] = { label: pool[di++] };
+          if (oi !== correctOi) opts[oi] = { value: pool[di++] };
         }
       }
       continue;
     }
 
-    const correctVal = opts[correctOi].label;
+    const correctVal = opts[correctOi].value;
 
-    if (rule.type === "letter_distance" && rule.otherQuestionIndex != null) {
-      const other = stuckAnswers[rule.otherQuestionIndex];
+    if (rule.type === "letter_distance" && rule.questionIndex != null) {
+      const other = stuckAnswers[rule.questionIndex];
       if (other != null) {
         const correctDist = Math.abs(L2I[solution[qi]] - L2I[other]);
-        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correctDist).map(String));
+        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correctDist));
         let di = 0;
         for (let oi = 0; oi < 5; oi++) {
-          if (oi !== correctOi) opts[oi] = { label: pool[di++] };
+          if (oi !== correctOi) opts[oi] = { value: pool[di++] };
         }
       }
       continue;
@@ -429,7 +429,7 @@ function repairDistractors(
       const distractors = repairCountingDistractors(rule, correctVal, stuckAnswers, n, rng);
       let di = 0;
       for (let oi = 0; oi < 5; oi++) {
-        if (oi !== correctOi) opts[oi] = { label: distractors[di++] };
+        if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
       }
       continue;
     }
@@ -438,7 +438,7 @@ function repairDistractors(
       const distractors = repairPairDistractors(correctVal, stuckAnswers, n, rng);
       let di = 0;
       for (let oi = 0; oi < 5; oi++) {
-        if (oi !== correctOi) opts[oi] = { label: distractors[di++] };
+        if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
       }
       continue;
     }
@@ -447,7 +447,7 @@ function repairDistractors(
     const newDistractors = repairPositionalDistractors(rule, correctVal, stuckAnswers, n, rng);
     let di = 0;
     for (let oi = 0; oi < 5; oi++) {
-      if (oi !== correctOi) opts[oi] = { label: newDistractors[di++] };
+      if (oi !== correctOi) opts[oi] = { value: newDistractors[di++] };
     }
   }
 }
@@ -465,11 +465,11 @@ function isCountingType(type: string): boolean {
 
 function repairCountingDistractors(
   rule: ValidationRule,
-  correctVal: string,
+  correctVal: number | null,
   answers: (AnswerLetter | null)[],
   n: number,
   rng: RNG,
-): string[] {
+): (number | null)[] {
   const from = rule.type === "count_answer_after" ? rule.afterIndex + 1 : 0;
   const to = rule.type === "count_answer_before" ? rule.beforeIndex : n;
 
@@ -489,10 +489,9 @@ function repairCountingDistractors(
     }
   }
 
-  const correct = Number(correctVal);
   const pool: number[] = [];
-  for (let v = 0; v < confirmed; v++) if (v !== correct) pool.push(v);
-  for (let v = confirmed + unknown + 1; v <= n; v++) if (v !== correct) pool.push(v);
+  for (let v = 0; v < confirmed; v++) if (v !== correctVal) pool.push(v);
+  for (let v = confirmed + unknown + 1; v <= n; v++) if (v !== correctVal) pool.push(v);
   const max =
     rule.type === "count_answer_before"
       ? rule.beforeIndex
@@ -500,67 +499,62 @@ function repairCountingDistractors(
         ? n - rule.afterIndex - 1
         : n;
   for (let v = 0; v <= Math.max(max, 4); v++) {
-    if (v !== correct && !pool.includes(v)) pool.push(v);
+    if (v !== correctVal && !pool.includes(v)) pool.push(v);
   }
-  return rng.shuffle(pool).slice(0, 4).map(String);
+  return rng.shuffle(pool).slice(0, 4);
 }
 
 function repairPairDistractors(
-  correctVal: string,
+  correctVal: number | null,
   answers: (AnswerLetter | null)[],
   n: number,
   rng: RNG,
-): string[] {
-  const pool: string[] = [];
+): (number | null)[] {
+  const pool: (number | null)[] = [];
   for (let i = 0; i < n - 1; i++) {
-    const label = `${i + 1} & ${i + 2}`;
-    if (label === correctVal) continue;
+    if (i === correctVal) continue;
     if (answers[i] != null && answers[i + 1] != null && answers[i] !== answers[i + 1]) {
-      pool.unshift(label);
+      pool.unshift(i);
     } else {
-      pool.push(label);
+      pool.push(i);
     }
   }
-  if (correctVal !== "None") pool.push("None");
+  if (correctVal != null) pool.push(null);
   return rng.shuffle(pool).slice(0, 4);
 }
 
 function repairPositionalDistractors(
   rule: ValidationRule,
-  correctVal: string,
+  correctVal: number | null,
   answers: (AnswerLetter | null)[],
   n: number,
   rng: RNG,
-): string[] {
+): (number | null)[] {
   const answer = "answer" in rule ? rule.answer : undefined;
-  let minPos = 1;
-  let maxPos = n;
-  if (rule.type === "closest_after") minPos = rule.afterIndex + 2;
-  if (rule.type === "closest_before") maxPos = rule.beforeIndex;
+  let minPos = 0;
+  let maxPos = n - 1;
+  if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
+  if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
 
-  const pool: string[] = [];
+  const pool: (number | null)[] = [];
 
-  // Prefer positions pointing to answered questions with wrong answer
   if (answer) {
-    for (let i = minPos - 1; i < maxPos; i++) {
-      const pos = String(i + 1);
-      if (pos === correctVal) continue;
+    for (let i = minPos; i <= maxPos; i++) {
+      if (i === correctVal) continue;
       if (answers[i] != null && answers[i] !== answer) {
-        pool.unshift(pos);
+        pool.unshift(i);
       } else {
-        pool.push(pos);
+        pool.push(i);
       }
     }
-    // "None" is wrong if a match exists in range
-    const hasMatch = answers.slice(minPos - 1, maxPos).some((a) => a === answer);
-    if (correctVal !== "None" && hasMatch) pool.unshift("None");
-    else if (correctVal !== "None") pool.push("None");
+    const hasMatch = answers.slice(minPos, maxPos + 1).some((a) => a === answer);
+    if (correctVal != null && hasMatch) pool.unshift(null);
+    else if (correctVal != null) pool.push(null);
   } else {
     for (let i = minPos; i <= maxPos; i++) {
-      const s = String(i);
-      if (s !== correctVal) pool.push(s);
+      if (i !== correctVal) pool.push(i);
     }
-    if (correctVal !== "None") pool.push("None");
+    if (correctVal != null) pool.push(null);
   }
 
   return rng.shuffle(pool).slice(0, 4);
@@ -616,9 +610,9 @@ function makeRule(
         // Can point at any other question
         const pool = [];
         for (let j = 0; j < n; j++) if (j !== qi) pool.push(j);
-        return { type, otherQuestionIndex: rng.pick(pool) };
+        return { type, questionIndex: rng.pick(pool) };
       }
-      return { type, otherQuestionIndex: rng.pick(targets) };
+      return { type, questionIndex: rng.pick(targets) };
     }
     case "closest_after":
       return { type, afterIndex: rng.int(0, Math.max(0, n - 5)), answer: rng.pick(LETTERS) };
@@ -764,98 +758,98 @@ function engineerOptions(
   n: number,
   rng: RNG,
 ): OptionDef[] {
-  if (CONSTRAINED_TYPES.has(rule.type)) return LETTERS.map((l) => ({ label: l }));
+  // Constrained types: value is the letter index (0=A, 1=B, etc.)
+  if (CONSTRAINED_TYPES.has(rule.type)) return LETTERS.map((_l, i) => ({ value: i }));
   if (rule.type === "only_true_statement") return buildClaims(qi, solution, n, rng);
   if (rule.type === "least_common_answer" || rule.type === "most_common_answer") {
     const counts = letterCounts(solution.slice(0, n));
     const target = rule.type === "least_common_answer" ? Math.min(...counts) : Math.max(...counts);
-    const correctLetter = LETTERS[counts.indexOf(target)];
+    const correctIdx = counts.indexOf(target);
     const targetIdx = L2I[solution[qi]];
-    const pool = rng.shuffle(LETTERS.filter((l) => l !== correctLetter) as string[]);
+    const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
     const opts: OptionDef[] = new Array(5);
-    opts[targetIdx] = { label: correctLetter };
+    opts[targetIdx] = { value: correctIdx };
     let di = 0;
-    for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { label: pool[di++] };
+    for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: pool[di++] };
     return opts;
   }
   const correct = computeValue(rule, qi, solution);
   const targetIdx = L2I[solution[qi]];
   const distractors = makeDistractors(rule, correct, n, rng);
   const opts: OptionDef[] = new Array(5);
-  opts[targetIdx] = { label: correct };
+  opts[targetIdx] = { value: correct };
   let di = 0;
-  for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { label: distractors[di++] };
+  for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: distractors[di++] };
   return opts;
 }
 
-function computeValue(rule: ValidationRule, qi: number, sol: AnswerLetter[]): string {
+function computeValue(rule: ValidationRule, qi: number, sol: AnswerLetter[]): number | null {
   switch (rule.type) {
     case "answer_of_question":
-      return sol[rule.questionIndex];
+      return L2I[sol[rule.questionIndex]];
     case "count_answer":
-      return String(sol.filter((a) => a === rule.answer).length);
+      return sol.filter((a) => a === rule.answer).length;
     case "count_answer_before":
-      return String(sol.slice(0, rule.beforeIndex).filter((a) => a === rule.answer).length);
+      return sol.slice(0, rule.beforeIndex).filter((a) => a === rule.answer).length;
     case "count_answer_after":
-      return String(sol.slice(rule.afterIndex + 1).filter((a) => a === rule.answer).length);
+      return sol.slice(rule.afterIndex + 1).filter((a) => a === rule.answer).length;
     case "count_vowel_answers":
-      return String(sol.filter((a) => a === "A" || a === "E").length);
+      return sol.filter((a) => a === "A" || a === "E").length;
     case "count_consonant_answers":
-      return String(sol.filter((a) => a !== "A" && a !== "E").length);
+      return sol.filter((a) => a !== "A" && a !== "E").length;
     case "most_common_count":
-      return String(Math.max(...letterCounts(sol)));
+      return Math.max(...letterCounts(sol));
     case "closest_after":
       for (let i = rule.afterIndex + 1; i < sol.length; i++)
-        if (sol[i] === rule.answer) return String(i + 1);
-      return "None";
+        if (sol[i] === rule.answer) return i;
+      return null;
     case "closest_before":
       for (let i = rule.beforeIndex - 1; i >= 0; i--)
-        if (sol[i] === rule.answer) return String(i + 1);
-      return "None";
+        if (sol[i] === rule.answer) return i;
+      return null;
     case "first_with_answer":
-      for (let i = 0; i < sol.length; i++) if (sol[i] === rule.answer) return String(i + 1);
-      return "None";
+      for (let i = 0; i < sol.length; i++) if (sol[i] === rule.answer) return i;
+      return null;
     case "last_with_answer":
-      for (let i = sol.length - 1; i >= 0; i--) if (sol[i] === rule.answer) return String(i + 1);
-      return "None";
+      for (let i = sol.length - 1; i >= 0; i--) if (sol[i] === rule.answer) return i;
+      return null;
     case "previous_same_answer":
-      for (let i = qi - 1; i >= 0; i--) if (sol[i] === sol[qi]) return String(i + 1);
-      return "None";
+      for (let i = qi - 1; i >= 0; i--) if (sol[i] === sol[qi]) return i;
+      return null;
     case "next_same_answer":
-      for (let i = qi + 1; i < sol.length; i++) if (sol[i] === sol[qi]) return String(i + 1);
-      return "None";
+      for (let i = qi + 1; i < sol.length; i++) if (sol[i] === sol[qi]) return i;
+      return null;
     case "only_same_answer":
-      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return String(i + 1);
-      return "None";
+      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return i;
+      return null;
     case "same_answer_as":
-      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return String(i + 1);
-      return "None";
+      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return i;
+      return null;
     case "only_odd_with_answer":
       for (let i = 0; i < sol.length; i++)
-        if ((i + 1) % 2 === 1 && sol[i] === rule.answer) return String(i + 1);
-      return "None";
+        if ((i + 1) % 2 === 1 && sol[i] === rule.answer) return i;
+      return null;
     case "consecutive_identical":
       for (let i = 0; i < sol.length - 1; i++)
-        if (sol[i] === sol[i + 1]) return `${i + 1} & ${i + 2}`;
-      return "None";
+        if (sol[i] === sol[i + 1]) return i;
+      return null;
     case "letter_distance":
-      return String(Math.abs(L2I[sol[qi]] - L2I[sol[rule.otherQuestionIndex]]));
+      return Math.abs(L2I[sol[qi]] - L2I[sol[rule.questionIndex]]);
   }
   throw new Error(`computeValue: ${rule.type}`);
 }
 
-function makeDistractors(rule: ValidationRule, correct: string, n: number, rng: RNG): string[] {
+function makeDistractors(rule: ValidationRule, correct: number | null, n: number, rng: RNG): (number | null)[] {
   if (rule.type === "answer_of_question")
-    return rng.shuffle((LETTERS as readonly string[]).filter((v) => v !== correct));
+    return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct));
   if (rule.type === "letter_distance")
-    return rng.shuffle(["0", "1", "2", "3", "4"].filter((v) => v !== correct)).slice(0, 4);
+    return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct)).slice(0, 4);
   if (rule.type === "consecutive_identical") {
-    const pool: string[] = [];
-    for (let i = 1; i < n; i++) {
-      const p = `${i} & ${i + 1}`;
-      if (p !== correct) pool.push(p);
+    const pool: (number | null)[] = [];
+    for (let i = 0; i < n - 1; i++) {
+      if (i !== correct) pool.push(i);
     }
-    if (correct !== "None") pool.push("None");
+    if (correct != null) pool.push(null);
     return rng.shuffle(pool).slice(0, 4);
   }
   if (
@@ -872,29 +866,27 @@ function makeDistractors(rule: ValidationRule, correct: string, n: number, rng: 
     if (rule.type === "count_answer_before") max = rule.beforeIndex;
     if (rule.type === "count_answer_after") max = n - rule.afterIndex - 1;
     const pool: number[] = [];
-    for (let i = 0; i <= Math.max(max, 4); i++) if (i !== Number(correct)) pool.push(i);
-    return rng.shuffle(pool).slice(0, 4).map(String);
-  }
-  if (rule.type === "only_odd_with_answer") {
-    const pool: string[] = [];
-    for (let i = 1; i <= n; i += 2) {
-      const s = String(i);
-      if (s !== correct) pool.push(s);
-    }
-    if (correct !== "None") pool.push("None");
+    for (let i = 0; i <= Math.max(max, 4); i++) if (i !== correct) pool.push(i);
     return rng.shuffle(pool).slice(0, 4);
   }
-  // Positional
-  let minPos = 1,
-    maxPos = n;
-  if (rule.type === "closest_after") minPos = rule.afterIndex + 2;
-  if (rule.type === "closest_before") maxPos = rule.beforeIndex;
-  const pool: string[] = [];
-  for (let i = minPos; i <= maxPos; i++) {
-    const s = String(i);
-    if (s !== correct) pool.push(s);
+  if (rule.type === "only_odd_with_answer") {
+    const pool: (number | null)[] = [];
+    for (let i = 0; i < n; i++) {
+      if ((i + 1) % 2 === 1 && i !== correct) pool.push(i);
+    }
+    if (correct != null) pool.push(null);
+    return rng.shuffle(pool).slice(0, 4);
   }
-  if (correct !== "None") pool.push("None");
+  // Positional (0-based indices)
+  let minPos = 0,
+    maxPos = n - 1;
+  if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
+  if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
+  const pool: (number | null)[] = [];
+  for (let i = minPos; i <= maxPos; i++) {
+    if (i !== correct) pool.push(i);
+  }
+  if (correct != null) pool.push(null);
   return rng.shuffle(pool).slice(0, 4);
 }
 
@@ -902,22 +894,22 @@ function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG):
   const targetIdx = L2I[solution[qi]];
   const options: StatementOption[] = new Array(5);
   const trueClaim = makeTrueClaim(solution, n, rng);
-  options[targetIdx] = { label: claimLabel(trueClaim), claim: trueClaim };
-  const usedLabels = new Set([options[targetIdx].label]);
+  options[targetIdx] = { value: null, claim: trueClaim };
+  const usedKeys = new Set([claimKey(trueClaim)]);
   for (let i = 0; i < 5; i++) {
     if (i === targetIdx) continue;
     for (let att = 0; att < 30; att++) {
       const fc = makeFalseClaim(solution, n, rng);
-      const label = claimLabel(fc);
-      if (!usedLabels.has(label)) {
-        usedLabels.add(label);
-        options[i] = { label, claim: fc };
+      const key = claimKey(fc);
+      if (!usedKeys.has(key)) {
+        usedKeys.add(key);
+        options[i] = { value: null, claim: fc };
         break;
       }
     }
     if (!options[i]) {
       const fc = makeFalseClaim(solution, n, rng);
-      options[i] = { label: claimLabel(fc), claim: fc };
+      options[i] = { value: null, claim: fc };
     }
   }
   return options;
@@ -926,23 +918,23 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   const t = rng.int(0, 4);
   if (t === 0) {
     const a = rng.pick(LETTERS);
-    return { type: "count_answer_equals", answer: a, value: sol.filter((x) => x === a).length };
+    return { type: "count_answer", answer: a, value: sol.filter((x) => x === a).length };
   }
   if (t === 1)
     return {
-      type: "count_consonant_answers_equals",
+      type: "count_consonant_answers",
       value: sol.filter((a) => a !== "A" && a !== "E").length,
     };
   if (t === 2)
     return {
-      type: "count_vowel_answers_equals",
+      type: "count_vowel_answers",
       value: sol.filter((a) => a === "A" || a === "E").length,
     };
   if (t === 3) {
     const a = rng.pick(LETTERS);
     const ai = rng.int(0, n - 2);
     return {
-      type: "count_answer_after_equals",
+      type: "count_answer_after",
       answer: a,
       afterIndex: ai,
       value: sol.slice(ai + 1).filter((x) => x === a).length,
@@ -951,7 +943,7 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   const a = rng.pick(LETTERS);
   const bi = rng.int(1, n - 1);
   return {
-    type: "count_answer_before_equals",
+    type: "count_answer_before",
     answer: a,
     beforeIndex: bi,
     value: sol.slice(0, bi).filter((x) => x === a).length,
@@ -966,74 +958,8 @@ function makeFalseClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
     const fc = { ...base, value: newVal };
     if (!evaluateClaim(fc, sol)) return fc;
   }
-  return { type: "count_answer_equals", answer: "A", value: n + 1 };
+  return { type: "count_answer", answer: "A", value: n + 1 };
 }
-function claimLabel(c: Claim): string {
-  switch (c.type) {
-    case "count_answer_equals":
-      return `How many questions have answer ${c.answer}? ${c.value}`;
-    case "count_consonant_answers_equals":
-      return `How many questions have a consonant as the answer? ${c.value}`;
-    case "count_vowel_answers_equals":
-      return `How many questions have a vowel as the answer? ${c.value}`;
-    case "count_answer_after_equals":
-      return `How many questions after #${c.afterIndex + 1} have answer ${c.answer}? ${c.value}`;
-    case "count_answer_before_equals":
-      return `How many questions before #${c.beforeIndex + 1} have answer ${c.answer}? ${c.value}`;
-  }
-  return "";
-}
-
-function questionText(rule: ValidationRule): string {
-  switch (rule.type) {
-    case "count_answer":
-      return `How many questions have answer ${rule.answer}?`;
-    case "count_answer_before":
-      return `How many questions before #${rule.beforeIndex + 1} have answer ${rule.answer}?`;
-    case "count_answer_after":
-      return `How many questions after #${rule.afterIndex + 1} have answer ${rule.answer}?`;
-    case "count_vowel_answers":
-      return "How many questions have a vowel as the answer?";
-    case "count_consonant_answers":
-      return "How many questions have a consonant as the answer?";
-    case "most_common_count":
-      return "How many times does the most common answer occur?";
-    case "closest_after":
-      return `Which is the closest question after #${rule.afterIndex + 1} that has answer ${rule.answer}?`;
-    case "closest_before":
-      return `Which is the closest question before #${rule.beforeIndex + 1} that has answer ${rule.answer}?`;
-    case "first_with_answer":
-      return `Which is the first question with answer ${rule.answer}?`;
-    case "last_with_answer":
-      return `Which is the last question with answer ${rule.answer}?`;
-    case "previous_same_answer":
-      return "Which is the previous question that has the same answer as this one?";
-    case "next_same_answer":
-      return "Which is the next question that has the same answer as this one?";
-    case "only_same_answer":
-      return "Which is the only other question with the same answer as this one?";
-    case "same_answer_as":
-      return "Which question has the same answer as this one?";
-    case "only_odd_with_answer":
-      return `Which is the only odd-numbered question with answer ${rule.answer}?`;
-    case "consecutive_identical":
-      return "Which are the only two consecutive questions with identical answers?";
-    case "answer_of_question":
-      return `What is the answer to question #${rule.questionIndex + 1}?`;
-    case "least_common_answer":
-      return "Which is the least common answer?";
-    case "most_common_answer":
-      return "Which is the most common answer?";
-    case "unique_answer":
-      return "Which answer is not the answer to any other question?";
-    case "equal_count_as":
-      return `The number of questions with answer ${rule.answer} equals the number of questions with answer?`;
-    case "answer_is_self":
-      return "What is the answer to this question?";
-    case "letter_distance":
-      return `How many letters away is the answer to this question from the answer to question #${rule.otherQuestionIndex + 1}?`;
-    case "only_true_statement":
-      return "Which statement is the only true statement?";
-  }
-  return "";
+function claimKey(c: Claim): string {
+  return JSON.stringify(c);
 }
