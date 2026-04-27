@@ -313,9 +313,7 @@ fn can_fully_evaluate_local(
             (assigned & mask) == mask
         }
         Rule::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
-        Rule::LetterDist {
-            other_question_index,
-        } => (assigned & (1 << other_question_index)) != 0,
+        Rule::LetterDist { question_index } => (assigned & (1 << question_index)) != 0,
         Rule::NextSame
         | Rule::ClosestAfter { .. }
         | Rule::ClosestBefore { .. }

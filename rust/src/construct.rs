@@ -398,7 +398,7 @@ fn make_rule(
                 }
             }
             Some(Rule::LetterDist {
-                other_question_index: rng.pick(&pool[..plen]),
+                question_index: rng.pick(&pool[..plen]),
             })
         }
         RuleKind::ClosestAfter => Some(Rule::ClosestAfter {

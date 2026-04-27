@@ -184,10 +184,8 @@ pub fn find_action_fast(
                     return Some(Action::Contradiction { qi });
                 }
             }
-            Rule::LetterDist {
-                other_question_index,
-            } => {
-                if let Some(other) = answers[other_question_index as usize] {
+            Rule::LetterDist { question_index } => {
+                if let Some(other) = answers[question_index as usize] {
                     let dist = (ai as i16 - other.idx() as i16).abs();
                     if dist != on {
                         return Some(Action::Contradiction { qi });
@@ -205,7 +203,7 @@ pub fn find_action_fast(
                     _ => 0,
                 };
                 if on != NONE_VAL {
-                    let pos = on - 1;
+                    let pos = on;
                     if pos >= 0
                         && (pos as usize) < n
                         && let Some(pa) = answers[pos as usize]
@@ -234,7 +232,7 @@ pub fn find_action_fast(
                     _ => n,
                 };
                 if on != NONE_VAL {
-                    let pos = on - 1;
+                    let pos = on;
                     if pos >= 0
                         && (pos as usize) < n
                         && let Some(pa) = answers[pos as usize]
@@ -258,7 +256,7 @@ pub fn find_action_fast(
                 }
             }
             Rule::SameAs => {
-                let tq = on - 1;
+                let tq = on;
                 if tq >= 0
                     && (tq as usize) < n
                     && let Some(ta) = answers[tq as usize]
@@ -362,7 +360,7 @@ pub fn find_action_fast(
                 }
             }
             if let Rule::SameAs = fp.rules[other] {
-                let target_q = fp.option_nums[other][other_ans.idx()] - 1;
+                let target_q = fp.option_nums[other][other_ans.idx()];
                 if target_q >= 0 && target_q as usize == qi {
                     return Some(Action::Force {
                         qi,
@@ -372,10 +370,8 @@ pub fn find_action_fast(
             }
         }
 
-        if let Rule::LetterDist {
-            other_question_index,
-        } = *r
-            && let Some(other_ans) = answers[other_question_index as usize]
+        if let Rule::LetterDist { question_index } = *r
+            && let Some(other_ans) = answers[question_index as usize]
         {
             let other_idx = other_ans.idx();
             let mut valid_count = 0u8;
@@ -520,10 +516,8 @@ pub fn find_action_fast(
                         }
                     }
                 }
-                Rule::LetterDist {
-                    other_question_index,
-                } => {
-                    if let Some(other) = answers[other_question_index as usize] {
+                Rule::LetterDist { question_index } => {
+                    if let Some(other) = answers[question_index as usize] {
                         let dist = (oi as i16 - other.idx() as i16).abs();
                         if dist != on {
                             return Some(Action::Eliminate { qi, oi });
@@ -536,7 +530,7 @@ pub fn find_action_fast(
                         _ => 0,
                     };
                     if on != NONE_VAL {
-                        let pos = on - 1;
+                        let pos = on;
                         if pos < scan_start as i16 || pos >= n as i16 {
                             return Some(Action::Eliminate { qi, oi });
                         }
@@ -571,7 +565,7 @@ pub fn find_action_fast(
                         _ => n,
                     };
                     if on != NONE_VAL {
-                        let pos = on - 1;
+                        let pos = on;
                         if pos < 0 || pos >= before_idx as i16 {
                             return Some(Action::Eliminate { qi, oi });
                         }
@@ -602,9 +596,9 @@ pub fn find_action_fast(
                 }
                 Rule::OnlyOdd { answer } => {
                     if on != NONE_VAL {
-                        let pos = (on - 1) as usize;
-                        // Position must be odd-numbered (1-indexed)
-                        if on % 2 == 0 {
+                        let pos = (on) as usize;
+                        // Position must be odd-numbered (0-indexed: 0, 2, 4...)
+                        if on % 2 != 0 {
                             return Some(Action::Eliminate { qi, oi });
                         }
                         // Position must be in range and could have the answer
@@ -648,7 +642,7 @@ pub fn find_action_fast(
                     }
                 }
                 Rule::PrevSame if on != NONE_VAL => {
-                    let pos = (on - 1) as usize;
+                    let pos = (on) as usize;
                     // Must point to a position before qi
                     if pos >= qi {
                         return Some(Action::Eliminate { qi, oi });
@@ -662,14 +656,14 @@ pub fn find_action_fast(
                     }
                 }
                 Rule::NextSame if on != NONE_VAL => {
-                    let pos = (on - 1) as usize;
+                    let pos = (on) as usize;
                     // Must point to a position after qi
                     if pos <= qi || pos >= n {
                         return Some(Action::Eliminate { qi, oi });
                     }
                 }
                 Rule::OnlySame | Rule::SameAs if on != NONE_VAL => {
-                    let pos = (on - 1) as usize;
+                    let pos = (on) as usize;
                     // Can't point to self
                     if pos == qi {
                         return Some(Action::Eliminate { qi, oi });
@@ -722,25 +716,21 @@ mod tests {
     fn make_stuck_puzzle() -> FlatPuzzle {
         use Answer::*;
         let rules = [
-            Rule::LetterDist {
-                other_question_index: 8,
-            }, // Q1
+            Rule::LetterDist { question_index: 8 }, // Q1
             Rule::ClosestBefore {
                 before_index: 6,
                 answer: A,
             }, // Q2
-            Rule::AnswerOf { question_index: 3 }, // Q3
-            Rule::CountConsonant,                 // Q4
-            Rule::CountAnswer { answer: D },      // Q5
-            Rule::TrueStmt,                       // Q6
-            Rule::LetterDist {
-                other_question_index: 2,
-            }, // Q7
-            Rule::OnlyOdd { answer: D },          // Q8
-            Rule::AnswerOf { question_index: 2 }, // Q9
-            Rule::FirstWith { answer: B },        // Q10
-            Rule::CountAnswer { answer: C },      // Q11
-            Rule::CountAnswer { answer: E },      // Q12
+            Rule::AnswerOf { question_index: 3 },   // Q3
+            Rule::CountConsonant,                   // Q4
+            Rule::CountAnswer { answer: D },        // Q5
+            Rule::TrueStmt,                         // Q6
+            Rule::LetterDist { question_index: 2 }, // Q7
+            Rule::OnlyOdd { answer: D },            // Q8
+            Rule::AnswerOf { question_index: 2 },   // Q9
+            Rule::FirstWith { answer: B },          // Q10
+            Rule::CountAnswer { answer: C },        // Q11
+            Rule::CountAnswer { answer: E },        // Q12
             // padding
             Rule::AnswerIsSelf,
             Rule::AnswerIsSelf,
@@ -905,9 +895,7 @@ mod tests {
             Rule::AnswerOf { question_index: 8 }, // Q8
             Rule::AnswerOf { question_index: 5 }, // Q9
             Rule::MostCommonCount, // Q10
-            Rule::LetterDist {
-                other_question_index: 8,
-            }, // Q11
+            Rule::LetterDist { question_index: 8 }, // Q11
             Rule::TrueStmt, // Q12
             Rule::AnswerIsSelf,
             Rule::AnswerIsSelf,
@@ -1081,9 +1069,7 @@ mod tests {
     fn make_q7_stuck_puzzle() -> FlatPuzzle {
         use Answer::*;
         let rules = [
-            Rule::LetterDist {
-                other_question_index: 1,
-            }, // Q1
+            Rule::LetterDist { question_index: 1 }, // Q1
             Rule::ClosestAfter {
                 after_index: 1,
                 answer: D,
@@ -1092,18 +1078,18 @@ mod tests {
                 answer: E,
                 after_index: 6,
             }, // Q3
-            Rule::AnswerOf { question_index: 2 }, // Q4
-            Rule::CountConsonant,                 // Q5
-            Rule::LastWith { answer: A },         // Q6
-            Rule::OnlyOdd { answer: B },          // Q7
-            Rule::CountVowel,                     // Q8
-            Rule::AnswerOf { question_index: 3 }, // Q9
-            Rule::TrueStmt,                       // Q10
+            Rule::AnswerOf { question_index: 2 },   // Q4
+            Rule::CountConsonant,                   // Q5
+            Rule::LastWith { answer: A },           // Q6
+            Rule::OnlyOdd { answer: B },            // Q7
+            Rule::CountVowel,                       // Q8
+            Rule::AnswerOf { question_index: 3 },   // Q9
+            Rule::TrueStmt,                         // Q10
             Rule::CountAnswerBefore {
                 answer: A,
                 before_index: 11,
             }, // Q11
-            Rule::OnlyOdd { answer: E },          // Q12
+            Rule::OnlyOdd { answer: E },            // Q12
             Rule::AnswerIsSelf,
             Rule::AnswerIsSelf,
             Rule::AnswerIsSelf,

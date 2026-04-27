@@ -213,34 +213,52 @@ fn main() {
     println!("{json_out}");
 }
 
-fn puzzle_to_json(result: &GenerateResult, level: usize) -> Value {
+fn option_value_json(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
+    // Letter-type rules store values in option_answers as letter indices (already 0-based)
+    if matches!(
+        rule,
+        Rule::AnswerOf { .. } | Rule::LeastCommon | Rule::MostCommon
+    ) {
+        let a = fp.option_answers[qi][oi];
+        if a > 4 {
+            return Value::Null;
+        }
+        return json!(a);
+    }
+    // Constrained types always have A-E (0-4)
+    if rule.is_constrained() {
+        return json!(oi);
+    }
+    let v = fp.option_nums[qi][oi];
+    if v == NONE_VAL || v == NAN_VAL {
+        return Value::Null;
+    }
+    json!(v)
+}
+
+fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
     let n = result.n;
     let questions: Vec<Value> = (0..n)
         .map(|qi| {
             let rule = &result.rules[qi];
-            let options: Vec<Value> = (0..5)
-                .map(|oi| {
-                    let label = option_label_str(rule, qi, oi, &result.fp);
-                    if let Rule::TrueStmt = rule {
-                        let claim = &result.fp.option_claims[qi][oi];
-                        json!({ "label": label, "claim": claim_to_json(claim) })
-                    } else {
-                        json!({ "label": label })
-                    }
-                })
-                .collect();
-            json!({
-                "text": question_text(rule),
-                "options": options,
-                "rule": rule_to_json(rule)
-            })
+            let mut q = serde_json::Map::new();
+            if let Rule::TrueStmt = rule {
+                let claims: Vec<Value> = (0..5)
+                    .map(|oi| claim_to_json(&result.fp.option_claims[qi][oi]))
+                    .collect();
+                q.insert("c".into(), json!(claims));
+            } else {
+                let options: Vec<Value> = (0..5)
+                    .map(|oi| option_value_json(rule, qi, oi, &result.fp))
+                    .collect();
+                q.insert("o".into(), json!(options));
+            }
+            q.insert("r".into(), rule_to_json(rule));
+            Value::Object(q)
         })
         .collect();
 
-    json!({
-        "difficulty": level,
-        "questions": questions
-    })
+    json!({ "q": questions })
 }
 
 fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
@@ -273,219 +291,46 @@ fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
     result
 }
 
-fn option_label_str(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> String {
-    match *rule {
-        Rule::AnswerOf { .. } => {
-            let a = fp.option_answers[qi][oi];
-            Answer::from_u8(a).map_or("?".into(), |a| a.as_char().to_string())
-        }
-        Rule::ConsecIdent => {
-            let v = fp.option_nums[qi][oi];
-            if v == NONE_VAL {
-                "None".into()
-            } else {
-                format!("{} & {}", v + 1, v + 2)
-            }
-        }
-        Rule::LeastCommon | Rule::MostCommon => {
-            let a = fp.option_answers[qi][oi];
-            Answer::from_u8(a).map_or("?".into(), |a| a.as_char().to_string())
-        }
-        ref r if r.is_constrained() => LETTERS[oi].as_char().to_string(),
-        Rule::TrueStmt => claim_label_str(&fp.option_claims[qi][oi]),
-        _ => {
-            let v = fp.option_nums[qi][oi];
-            if v == NONE_VAL {
-                "None".into()
-            } else {
-                v.to_string()
-            }
-        }
-    }
-}
-
-fn question_text(rule: &Rule) -> String {
-    match *rule {
-        Rule::CountAnswer { answer } => {
-            format!("How many questions have answer {}?", answer.as_char())
-        }
-        Rule::CountAnswerBefore {
-            answer,
-            before_index,
-        } => format!(
-            "How many questions before #{} have answer {}?",
-            before_index + 1,
-            answer.as_char()
-        ),
-        Rule::CountAnswerAfter {
-            answer,
-            after_index,
-        } => format!(
-            "How many questions after #{} have answer {}?",
-            after_index + 1,
-            answer.as_char()
-        ),
-        Rule::CountVowel => "How many questions have a vowel as the answer?".into(),
-        Rule::CountConsonant => "How many questions have a consonant as the answer?".into(),
-        Rule::MostCommonCount => "How many times does the most common answer occur?".into(),
-        Rule::ClosestAfter {
-            after_index,
-            answer,
-        } => format!(
-            "Which is the closest question after #{} that has answer {}?",
-            after_index + 1,
-            answer.as_char()
-        ),
-        Rule::ClosestBefore {
-            before_index,
-            answer,
-        } => format!(
-            "Which is the closest question before #{} that has answer {}?",
-            before_index + 1,
-            answer.as_char()
-        ),
-        Rule::FirstWith { answer } => format!(
-            "Which is the first question with answer {}?",
-            answer.as_char()
-        ),
-        Rule::LastWith { answer } => format!(
-            "Which is the last question with answer {}?",
-            answer.as_char()
-        ),
-        Rule::PrevSame => {
-            "Which is the previous question that has the same answer as this one?".into()
-        }
-        Rule::NextSame => "Which is the next question that has the same answer as this one?".into(),
-        Rule::OnlySame => {
-            "Which is the only other question with the same answer as this one?".into()
-        }
-        Rule::SameAs => "Which question has the same answer as this one?".into(),
-        Rule::OnlyOdd { answer } => format!(
-            "Which is the only odd-numbered question with answer {}?",
-            answer.as_char()
-        ),
-        Rule::ConsecIdent => {
-            "Which are the only two consecutive questions with identical answers?".into()
-        }
-        Rule::AnswerOf { question_index } => {
-            format!("What is the answer to question #{}?", question_index + 1)
-        }
-        Rule::LeastCommon => "Which is the least common answer?".into(),
-        Rule::MostCommon => "Which is the most common answer?".into(),
-        Rule::Unique => "Which answer is not the answer to any other question?".into(),
-        Rule::EqualCount { answer } => format!(
-            "The number of questions with answer {} equals the number of questions with answer?",
-            answer.as_char()
-        ),
-        Rule::AnswerIsSelf => "What is the answer to this question?".into(),
-        Rule::LetterDist {
-            other_question_index,
-        } => format!(
-            "How many letters away is the answer to this question from the answer to question #{}?",
-            other_question_index + 1
-        ),
-        Rule::TrueStmt => "Which statement is the only true statement?".into(),
-    }
-}
-
-fn claim_label_str(claim: &Claim) -> String {
-    match *claim {
-        Claim::None => String::new(),
-        Claim::CountAnswerEquals { answer, value } => format!(
-            "How many questions have answer {}? {}",
-            answer.as_char(),
-            value
-        ),
-        Claim::CountConsonantEquals { value } => format!(
-            "How many questions have a consonant as the answer? {}",
-            value
-        ),
-        Claim::CountVowelEquals { value } => {
-            format!("How many questions have a vowel as the answer? {}", value)
-        }
-        Claim::CountAnswerAfterEquals {
-            answer,
-            after_index,
-            value,
-        } => format!(
-            "How many questions after #{} have answer {}? {}",
-            after_index + 1,
-            answer.as_char(),
-            value
-        ),
-        Claim::CountAnswerBeforeEquals {
-            answer,
-            before_index,
-            value,
-        } => format!(
-            "How many questions before #{} have answer {}? {}",
-            before_index + 1,
-            answer.as_char(),
-            value
-        ),
-    }
-}
-
 fn rule_to_json(rule: &Rule) -> Value {
     match *rule {
-        Rule::CountAnswer { answer } => {
-            json!({"type": "count_answer", "answer": answer.as_char().to_string()})
-        }
+        Rule::CountAnswer { answer } => json!({"t": "count_answer", "a": answer.idx()}),
         Rule::CountAnswerBefore {
             answer,
             before_index,
-        } => {
-            json!({"type": "count_answer_before", "answer": answer.as_char().to_string(), "beforeIndex": before_index})
-        }
+        } => json!({"t": "count_answer_before", "a": answer.idx(), "q": before_index}),
         Rule::CountAnswerAfter {
             answer,
             after_index,
-        } => {
-            json!({"type": "count_answer_after", "answer": answer.as_char().to_string(), "afterIndex": after_index})
-        }
-        Rule::CountVowel => json!({"type": "count_vowel_answers"}),
-        Rule::CountConsonant => json!({"type": "count_consonant_answers"}),
-        Rule::MostCommonCount => json!({"type": "most_common_count"}),
+        } => json!({"t": "count_answer_after", "a": answer.idx(), "q": after_index}),
+        Rule::CountVowel => json!({"t": "count_vowel_answers"}),
+        Rule::CountConsonant => json!({"t": "count_consonant_answers"}),
+        Rule::MostCommonCount => json!({"t": "most_common_count"}),
         Rule::ClosestAfter {
             after_index,
             answer,
-        } => {
-            json!({"type": "closest_after", "afterIndex": after_index, "answer": answer.as_char().to_string()})
-        }
+        } => json!({"t": "closest_after", "q": after_index, "a": answer.idx()}),
         Rule::ClosestBefore {
             before_index,
             answer,
-        } => {
-            json!({"type": "closest_before", "beforeIndex": before_index, "answer": answer.as_char().to_string()})
-        }
-        Rule::FirstWith { answer } => {
-            json!({"type": "first_with_answer", "answer": answer.as_char().to_string()})
-        }
-        Rule::LastWith { answer } => {
-            json!({"type": "last_with_answer", "answer": answer.as_char().to_string()})
-        }
-        Rule::PrevSame => json!({"type": "previous_same_answer"}),
-        Rule::NextSame => json!({"type": "next_same_answer"}),
-        Rule::OnlySame => json!({"type": "only_same_answer"}),
-        Rule::SameAs => json!({"type": "same_answer_as"}),
-        Rule::OnlyOdd { answer } => {
-            json!({"type": "only_odd_with_answer", "answer": answer.as_char().to_string()})
-        }
-        Rule::ConsecIdent => json!({"type": "consecutive_identical"}),
+        } => json!({"t": "closest_before", "q": before_index, "a": answer.idx()}),
+        Rule::FirstWith { answer } => json!({"t": "first_with_answer", "a": answer.idx()}),
+        Rule::LastWith { answer } => json!({"t": "last_with_answer", "a": answer.idx()}),
+        Rule::PrevSame => json!({"t": "previous_same_answer"}),
+        Rule::NextSame => json!({"t": "next_same_answer"}),
+        Rule::OnlySame => json!({"t": "only_same_answer"}),
+        Rule::SameAs => json!({"t": "same_answer_as"}),
+        Rule::OnlyOdd { answer } => json!({"t": "only_odd_with_answer", "a": answer.idx()}),
+        Rule::ConsecIdent => json!({"t": "consecutive_identical"}),
         Rule::AnswerOf { question_index } => {
-            json!({"type": "answer_of_question", "questionIndex": question_index})
+            json!({"t": "answer_of_question", "q": question_index})
         }
-        Rule::LeastCommon => json!({"type": "least_common_answer"}),
-        Rule::MostCommon => json!({"type": "most_common_answer"}),
-        Rule::Unique => json!({"type": "unique_answer"}),
-        Rule::EqualCount { answer } => {
-            json!({"type": "equal_count_as", "answer": answer.as_char().to_string()})
-        }
-        Rule::AnswerIsSelf => json!({"type": "answer_is_self"}),
-        Rule::LetterDist {
-            other_question_index,
-        } => json!({"type": "letter_distance", "otherQuestionIndex": other_question_index}),
-        Rule::TrueStmt => json!({"type": "only_true_statement"}),
+        Rule::LeastCommon => json!({"t": "least_common_answer"}),
+        Rule::MostCommon => json!({"t": "most_common_answer"}),
+        Rule::Unique => json!({"t": "unique_answer"}),
+        Rule::EqualCount { answer } => json!({"t": "equal_count_as", "a": answer.idx()}),
+        Rule::AnswerIsSelf => json!({"t": "answer_is_self"}),
+        Rule::LetterDist { question_index } => json!({"t": "letter_distance", "q": question_index}),
+        Rule::TrueStmt => json!({"t": "only_true_statement"}),
     }
 }
 
@@ -493,27 +338,21 @@ fn claim_to_json(claim: &Claim) -> Value {
     match *claim {
         Claim::None => Value::Null,
         Claim::CountAnswerEquals { answer, value } => {
-            json!({"type": "count_answer_equals", "answer": answer.as_char().to_string(), "value": value})
+            json!({"t": "count_answer", "a": answer.idx(), "v": value})
         }
         Claim::CountConsonantEquals { value } => {
-            json!({"type": "count_consonant_answers_equals", "value": value})
+            json!({"t": "count_consonant_answers", "v": value})
         }
-        Claim::CountVowelEquals { value } => {
-            json!({"type": "count_vowel_answers_equals", "value": value})
-        }
+        Claim::CountVowelEquals { value } => json!({"t": "count_vowel_answers", "v": value}),
         Claim::CountAnswerAfterEquals {
             answer,
             after_index,
             value,
-        } => {
-            json!({"type": "count_answer_after_equals", "answer": answer.as_char().to_string(), "afterIndex": after_index, "value": value})
-        }
+        } => json!({"t": "count_answer_after", "a": answer.idx(), "q": after_index, "v": value}),
         Claim::CountAnswerBeforeEquals {
             answer,
             before_index,
             value,
-        } => {
-            json!({"type": "count_answer_before_equals", "answer": answer.as_char().to_string(), "beforeIndex": before_index, "value": value})
-        }
+        } => json!({"t": "count_answer_before", "a": answer.idx(), "q": before_index, "v": value}),
     }
 }

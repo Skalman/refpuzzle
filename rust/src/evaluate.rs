@@ -83,7 +83,7 @@ pub fn evaluate(
         } => {
             for i in (after_index as usize + 1)..n {
                 if answers[i] == Some(answer) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -95,7 +95,7 @@ pub fn evaluate(
         } => {
             for i in (0..before_index as usize).rev() {
                 if answers[i] == Some(answer) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -104,7 +104,7 @@ pub fn evaluate(
         Rule::FirstWith { answer } => {
             for i in 0..n {
                 if answers[i] == Some(answer) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -113,7 +113,7 @@ pub fn evaluate(
         Rule::LastWith { answer } => {
             for i in (0..n).rev() {
                 if answers[i] == Some(answer) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -122,7 +122,7 @@ pub fn evaluate(
         Rule::PrevSame => {
             for i in (0..qi).rev() {
                 if answers[i] == Some(selected) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -131,7 +131,7 @@ pub fn evaluate(
         Rule::NextSame => {
             for i in (qi + 1)..n {
                 if answers[i] == Some(selected) {
-                    return (i as i16 + 1) == on;
+                    return i as i16 == on;
                 }
             }
             on == NONE_VAL
@@ -144,7 +144,7 @@ pub fn evaluate(
                 if i != qi && answers[i] == Some(selected) {
                     match_count += 1;
                     if match_count == 1 {
-                        first_match = i as i16 + 1;
+                        first_match = i as i16;
                     }
                 }
             }
@@ -152,11 +152,10 @@ pub fn evaluate(
         }
 
         Rule::SameAs => {
-            let target_q = on - 1;
-            if target_q < 0 || target_q >= n as i16 {
+            if on < 0 || on >= n as i16 {
                 return false;
             }
-            match answers[target_q as usize] {
+            match answers[on as usize] {
                 Some(a) => a == selected,
                 None => false,
             }
@@ -169,7 +168,7 @@ pub fn evaluate(
                 if (i + 1) % 2 == 1 && answers[i] == Some(answer) {
                     match_count += 1;
                     if match_count == 1 {
-                        first_match = i as i16 + 1;
+                        first_match = i as i16;
                     }
                 }
             }
@@ -230,11 +229,9 @@ pub fn evaluate(
 
         Rule::AnswerIsSelf => true,
 
-        Rule::LetterDist {
-            other_question_index,
-        } => match answers[other_question_index as usize] {
+        Rule::LetterDist { question_index } => match answers[question_index as usize] {
             Some(other) => {
-                let dist = (si as i16 - other.idx() as i16).abs();
+                let dist = (si as i16 - other.idx() as i16).unsigned_abs() as i16;
                 dist == on
             }
             None => false,
@@ -244,16 +241,12 @@ pub fn evaluate(
             let claims = &fp.option_claims[qi];
             let mut true_count = 0u8;
             let mut selected_is_true = false;
-            for i in 0..5usize {
-                if claims[i] == Claim::None {
-                    continue;
-                }
-                let is_true = evaluate_claim(&claims[i], answers, n);
-                if is_true {
+            for i in 0..5 {
+                if claims[i] != Claim::None && evaluate_claim(&claims[i], answers, n) {
                     true_count += 1;
-                }
-                if i == si && is_true {
-                    selected_is_true = true;
+                    if i == si {
+                        selected_is_true = true;
+                    }
                 }
             }
             selected_is_true && true_count == 1

@@ -89,7 +89,7 @@ pub enum Rule {
     Unique,
     EqualCount { answer: Answer },
     AnswerIsSelf,
-    LetterDist { other_question_index: u8 },
+    LetterDist { question_index: u8 },
     TrueStmt,
 }
 
@@ -209,10 +209,8 @@ impl FlatPuzzle {
                     Rule::AnswerOf { question_index } => {
                         affected_by[question_index as usize].push(i as u8);
                     }
-                    Rule::LetterDist {
-                        other_question_index,
-                    } => {
-                        affected_by[other_question_index as usize].push(i as u8);
+                    Rule::LetterDist { question_index } => {
+                        affected_by[question_index as usize].push(i as u8);
                     }
                     Rule::ClosestAfter { after_index, .. }
                     | Rule::CountAnswerAfter { after_index, .. } => {

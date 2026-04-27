@@ -247,10 +247,8 @@ fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_
                     0
                 }
             }
-            Rule::LetterDist {
-                other_question_index,
-            } => {
-                if stuck_answers[other_question_index as usize].is_some() {
+            Rule::LetterDist { question_index } => {
+                if stuck_answers[question_index as usize].is_some() {
                     2
                 } else {
                     0
@@ -405,12 +403,12 @@ pub fn repair_one_question(
                     Rule::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
                     _ => {
                         let min_p = match rule {
-                            Rule::ClosestAfter { after_index, .. } => after_index as i16 + 2,
-                            _ => 1,
+                            Rule::ClosestAfter { after_index, .. } => after_index as i16 + 1,
+                            _ => 0,
                         };
                         let max_p = match rule {
-                            Rule::ClosestBefore { before_index, .. } => before_index as i16,
-                            _ => n as i16,
+                            Rule::ClosestBefore { before_index, .. } => before_index as i16 - 1,
+                            _ => n as i16 - 1,
                         };
                         (min_p, max_p)
                     }
@@ -625,7 +623,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         } => {
             for i in (after_index as usize + 1)..n {
                 if sol[i] == answer {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -636,7 +634,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         } => {
             for i in (0..before_index as usize).rev() {
                 if sol[i] == answer {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -644,7 +642,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::FirstWith { answer } => {
             for i in 0..n {
                 if sol[i] == answer {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -652,7 +650,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::LastWith { answer } => {
             for i in (0..n).rev() {
                 if sol[i] == answer {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -660,7 +658,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::PrevSame => {
             for i in (0..qi).rev() {
                 if sol[i] == sol[qi] {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -668,7 +666,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::NextSame => {
             for i in (qi + 1)..n {
                 if sol[i] == sol[qi] {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -676,7 +674,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::OnlySame | Rule::SameAs => {
             for i in 0..n {
                 if i != qi && sol[i] == sol[qi] {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -684,7 +682,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
         Rule::OnlyOdd { answer } => {
             for i in 0..n {
                 if (i + 1) % 2 == 1 && sol[i] == answer {
-                    return (i as i16) + 1;
+                    return i as i16;
                 }
             }
             NONE_VAL
@@ -697,9 +695,9 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::LetterDist {
-            other_question_index,
-        } => (sol[qi].idx() as i16 - sol[other_question_index as usize].idx() as i16).abs(),
+        Rule::LetterDist { question_index } => {
+            (sol[qi].idx() as i16 - sol[question_index as usize].idx() as i16).abs()
+        }
         _ => NAN_VAL,
     }
 }
@@ -741,15 +739,15 @@ fn count_distractors(correct: i32, max: i32, rng: &mut Rng) -> [i16; 4] {
 }
 
 fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) -> [i16; 4] {
-    let mut min_pos: i16 = 1;
-    let mut max_pos = n as i16;
+    let mut min_pos: i16 = 0;
+    let mut max_pos = n as i16 - 1;
 
     match *rule {
         Rule::ClosestAfter { after_index, .. } | Rule::CountAnswerAfter { after_index, .. } => {
-            min_pos = after_index as i16 + 2;
+            min_pos = after_index as i16 + 1;
         }
         Rule::ClosestBefore { before_index, .. } | Rule::CountAnswerBefore { before_index, .. } => {
-            max_pos = before_index as i16;
+            max_pos = before_index as i16 - 1;
         }
         _ => {}
     }
@@ -775,7 +773,7 @@ fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) ->
 fn odd_position_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
     let mut pool = [0i16; 16];
     let mut plen = 0;
-    for i in (1..=n as i16).step_by(2) {
+    for i in (0..n as i16).step_by(2) {
         if i != correct {
             pool[plen] = i;
             plen += 1;
@@ -794,10 +792,9 @@ fn odd_position_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
 fn pair_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
     let mut pool = [0i16; 16];
     let mut plen = 0;
-    for i in 0..n.saturating_sub(1) {
-        let v = i as i16;
-        if v != correct {
-            pool[plen] = v;
+    for i in 0..n.saturating_sub(1) as i16 {
+        if i != correct {
+            pool[plen] = i;
             plen += 1;
         }
     }
