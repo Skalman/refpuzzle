@@ -68,6 +68,7 @@ export function findHint(puzzle: Puzzle, markSets: Marks[]): Hint | null {
   const answers = deriveAnswers(markSets);
 
   return (
+    findError(puzzle, answers, n) ??
     findSimpleDeduction(puzzle, answers, markSets, n) ??
     findLookahead(puzzle, answers, markSets, n) ?? {
       steps: [
@@ -79,6 +80,80 @@ export function findHint(puzzle: Puzzle, markSets: Marks[]): Hint | null {
   );
 }
 
+function findError(
+  puzzle: Puzzle,
+  answers: (AnswerLetter | null)[],
+  n: number,
+): Hint | null {
+  const hasContradiction = answers.some((a, qi) => {
+    if (a == null) return false;
+    const rule = puzzle.questions[qi].rule;
+    const ov = optDisplay(puzzle, qi, a);
+    const v = optValue(puzzle, qi, a);
+    return explainContradiction(rule, qi, answers, ov, v, n) != null;
+  });
+  if (!hasContradiction) return null;
+
+  const solution = autoSolve(puzzle, n);
+  if (!solution) {
+    return {
+      steps: ["It looks like you've made an error somewhere."],
+      action: { type: "contradiction", questionIndex: 0 },
+    };
+  }
+
+  for (let qi = 0; qi < n; qi++) {
+    if (answers[qi] != null && answers[qi] !== solution[qi]) {
+      return {
+        steps: [
+          "It looks like you've made an error somewhere.",
+          `Check ${Q(qi)}.`,
+          `${Q(qi)} should not be ${answers[qi]!}.`,
+        ],
+        action: { type: "contradiction", questionIndex: qi },
+      };
+    }
+  }
+
+  return null;
+}
+
+function autoSolve(puzzle: Puzzle, n: number): AnswerLetter[] | null {
+  const marks: Marks[] = Array.from(
+    { length: n },
+    () => ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks,
+  );
+  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+
+  for (let iter = 0; iter < n * 15; iter++) {
+    if (answers.every((a) => a != null)) return answers;
+    const action = findActionFast(puzzle, answers, marks, n);
+    if (action) {
+      if (action.type === "contradiction") return null;
+      applyAutoAction(action, answers, marks);
+      continue;
+    }
+    const hint = findLookahead(puzzle, answers, marks, n);
+    if (!hint?.action) return null;
+    applyAutoAction(hint.action, answers, marks);
+  }
+  return answers.every((a) => a != null) ? (answers) : null;
+}
+
+function applyAutoAction(
+  action: NonNullable<Hint["action"]>,
+  answers: (AnswerLetter | null)[],
+  marks: Marks[],
+): void {
+  if (action.type === "force") {
+    answers[action.questionIndex] = action.letter;
+    for (let j = 0; j < 5; j++) marks[action.questionIndex][j] = "incorrect";
+    marks[action.questionIndex][L2I[action.letter]] = "correct";
+  } else if (action.type === "eliminate") {
+    marks[action.questionIndex][action.optionIndex] = "incorrect";
+  }
+}
+
 function findSimpleDeduction(
   puzzle: Puzzle,
   answers: (AnswerLetter | null)[],
@@ -86,7 +161,6 @@ function findSimpleDeduction(
   n: number,
 ): Hint | null {
   return (
-    findContradiction(puzzle, answers, n) ??
     findForced(puzzle, answers, markSets, n) ??
     findEliminable(puzzle, answers, markSets, n)
   );
