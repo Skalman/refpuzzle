@@ -444,7 +444,7 @@ function repairDistractors(
     }
 
     // Positional rules — generate new distractors
-    const newDistractors = repairPositionalDistractors(rule, correctVal, stuckAnswers, n, rng);
+    const newDistractors = repairPositionalDistractors(rule, correctVal, qi, stuckAnswers, n, rng);
     let di = 0;
     for (let oi = 0; oi < 5; oi++) {
       if (oi !== correctOi) opts[oi] = { value: newDistractors[di++] };
@@ -526,6 +526,7 @@ function repairPairDistractors(
 function repairPositionalDistractors(
   rule: ValidationRule,
   correctVal: number | null,
+  qi: number,
   answers: (AnswerLetter | null)[],
   n: number,
   rng: RNG,
@@ -535,6 +536,8 @@ function repairPositionalDistractors(
   let maxPos = n - 1;
   if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
   if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
+  if (rule.type === "previous_same_answer") maxPos = qi - 1;
+  if (rule.type === "next_same_answer") minPos = qi + 1;
 
   const pool: (number | null)[] = [];
 
@@ -775,7 +778,7 @@ function engineerOptions(
   }
   const correct = computeValue(rule, qi, solution);
   const targetIdx = L2I[solution[qi]];
-  const distractors = makeDistractors(rule, correct, n, rng);
+  const distractors = makeDistractors(rule, correct, qi, n, rng);
   const opts: OptionDef[] = new Array(5);
   opts[targetIdx] = { value: correct };
   let di = 0;
@@ -839,7 +842,7 @@ function computeValue(rule: ValidationRule, qi: number, sol: AnswerLetter[]): nu
   throw new Error(`computeValue: ${rule.type}`);
 }
 
-function makeDistractors(rule: ValidationRule, correct: number | null, n: number, rng: RNG): (number | null)[] {
+function makeDistractors(rule: ValidationRule, correct: number | null, qi: number, n: number, rng: RNG): (number | null)[] {
   if (rule.type === "answer_of_question")
     return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct));
   if (rule.type === "letter_distance")
@@ -882,6 +885,8 @@ function makeDistractors(rule: ValidationRule, correct: number | null, n: number
     maxPos = n - 1;
   if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
   if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
+  if (rule.type === "previous_same_answer") maxPos = qi - 1;
+  if (rule.type === "next_same_answer") minPos = qi + 1;
   const pool: (number | null)[] = [];
   for (let i = minPos; i <= maxPos; i++) {
     if (i !== correct) pool.push(i);

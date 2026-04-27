@@ -566,7 +566,7 @@ pub fn build_flat_puzzle(
             }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, n, rule, rng);
+                let distractors = positional_distractors(correct_val, qi, n, rule, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
         }
@@ -738,7 +738,13 @@ fn count_distractors(correct: i32, max: i32, rng: &mut Rng) -> [i16; 4] {
     result
 }
 
-fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) -> [i16; 4] {
+fn positional_distractors(
+    correct: i16,
+    qi: usize,
+    n: usize,
+    rule: &Rule,
+    rng: &mut Rng,
+) -> [i16; 4] {
     let mut min_pos: i16 = 0;
     let mut max_pos = n as i16 - 1;
 
@@ -748,6 +754,12 @@ fn positional_distractors(correct: i16, n: usize, rule: &Rule, rng: &mut Rng) ->
         }
         Rule::ClosestBefore { before_index, .. } | Rule::CountAnswerBefore { before_index, .. } => {
             max_pos = before_index as i16 - 1;
+        }
+        Rule::PrevSame => {
+            max_pos = qi as i16 - 1;
+        }
+        Rule::NextSame => {
+            min_pos = qi as i16 + 1;
         }
         _ => {}
     }
