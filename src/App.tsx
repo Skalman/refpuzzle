@@ -225,15 +225,11 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
 function AppHeader({
   onHelp,
   onPrint,
-  onSync,
-  onExport,
-  onImport,
+  onBackup,
 }: {
   onHelp: () => void;
   onPrint?: () => void;
-  onSync: () => void;
-  onExport: () => void;
-  onImport: (e: Event) => void;
+  onBackup: () => void;
 }) {
   const s = t();
   const theme = useTheme();
@@ -398,44 +394,11 @@ function AppHeader({
                 role="menuitem"
                 onClick={() => {
                   setMoreMenu(false);
-                  onSync();
+                  onBackup();
                 }}
               >
-                {s.sync.title}
+                {s.backup.button}
               </button>
-              <button
-                class="more-menu-item"
-                role="menuitem"
-                onClick={() => {
-                  setMoreMenu(false);
-                  onExport();
-                }}
-              >
-                {s.backup.exportBackup}
-              </button>
-              <label
-                class="more-menu-item"
-                role="menuitem"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    const input = e.currentTarget.querySelector("input");
-                    if (input instanceof HTMLInputElement) input.click();
-                  }
-                }}
-              >
-                {s.backup.importBackup}
-                <input
-                  type="file"
-                  accept=".json"
-                  class="file-input"
-                  onChange={(e) => {
-                    setMoreMenu(false);
-                    onImport(e);
-                  }}
-                />
-              </label>
             </div>
           )}
         </span>
@@ -484,6 +447,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const [_puzzleVersion, setPuzzleVersion] = useState(0);
   const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
   const [showSync, setShowSync] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
 
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
@@ -615,9 +579,7 @@ function DayView({ dateStr }: { dateStr: string }) {
       <AppHeader
         onHelp={() => setShowHelp(true)}
         onPrint={puzzles ? () => window.print() : undefined}
-        onSync={() => setShowSync(true)}
-        onExport={handleExport}
-        onImport={handleImport}
+        onBackup={() => setShowBackup(true)}
       />
       {isToday && <OnboardingBanner />}
 
@@ -736,6 +698,15 @@ function DayView({ dateStr }: { dateStr: string }) {
         </div>
       )}
 
+      {showBackup && (
+        <BackupDialog
+          onExport={handleExport}
+          onImport={(e) => { setShowBackup(false); handleImport(e); }}
+          onSync={() => { setShowBackup(false); setShowSync(true); }}
+          onClose={() => setShowBackup(false)}
+        />
+      )}
+
       {showSync && (
         <SyncDialog
           onImport={(json) => {
@@ -844,6 +815,57 @@ function ImportPreview({
               {s.backup.ok}
             </button>
           )}
+        </div>
+      </div>
+    </dialog>
+  );
+}
+
+function BackupDialog({
+  onExport,
+  onImport,
+  onSync,
+  onClose,
+}: {
+  onExport: () => void;
+  onImport: (e: Event) => void;
+  onSync: () => void;
+  onClose: () => void;
+}) {
+  const s = t();
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal(); }, []);
+
+  return (
+    <dialog
+      ref={ref}
+      class="help-panel sync-dialog"
+      onClose={onClose}
+      onClick={(e) => { if (e.target === ref.current) onClose(); }}
+    >
+      <div class="help-panel-inner">
+        <div class="help-panel-header">
+          <h3>{s.backup.button}</h3>
+          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
+            &times;
+          </button>
+        </div>
+        <div class="backup-actions">
+          <button class="onboarding-dismiss backup-action-btn" onClick={() => { onClose(); onExport(); }}>
+            {s.backup.exportBackup}
+          </button>
+          <label class="onboarding-dismiss backup-action-btn">
+            {s.backup.importBackup}
+            <input
+              type="file"
+              accept=".json"
+              class="file-input"
+              onChange={(e) => onImport(e)}
+            />
+          </label>
+          <button class="onboarding-dismiss backup-action-btn" onClick={onSync}>
+            {s.sync.title}
+          </button>
         </div>
       </div>
     </dialog>
@@ -1020,6 +1042,9 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
 function PastPuzzlesPage() {
   const s = t();
   const [showHelp, setShowHelp] = useState(false);
+  const [showBackup, setShowBackup] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
   const today = todayDateStr();
   const currentMonth = today.slice(0, 7);
 
@@ -1059,18 +1084,7 @@ function PastPuzzlesPage() {
     <>
       <AppHeader
         onHelp={() => setShowHelp(true)}
-        onSync={() => {}}
-        onExport={() => {
-          const json = exportData();
-          const blob = new Blob([json], { type: "application/json" });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = "refpuzzle-backup.json";
-          a.click();
-          URL.revokeObjectURL(url);
-        }}
-        onImport={() => {}}
+        onBackup={() => setShowBackup(true)}
       />
 
       <div class="history-page">
@@ -1096,6 +1110,67 @@ function PastPuzzlesPage() {
       </div>
 
       {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
+
+      {showBackup && (
+        <BackupDialog
+          onExport={() => {
+            setShowBackup(false);
+            const json = exportData();
+            const blob = new Blob([json], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "refpuzzle-backup.json";
+            a.click();
+            URL.revokeObjectURL(url);
+          }}
+          onImport={(e) => {
+            setShowBackup(false);
+            const input = e.target;
+            if (!(input instanceof HTMLInputElement)) return;
+            const file = input.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              try {
+                if (typeof reader.result !== "string") return;
+                setImportPlan(planImport(reader.result));
+              } catch (err) {
+                alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+              }
+            };
+            reader.readAsText(file);
+            input.value = "";
+          }}
+          onSync={() => { setShowBackup(false); setShowSync(true); }}
+          onClose={() => setShowBackup(false)}
+        />
+      )}
+
+      {showSync && (
+        <SyncDialog
+          onImport={(json) => {
+            setShowSync(false);
+            try {
+              setImportPlan(planImport(json));
+            } catch (err) {
+              alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+            }
+          }}
+          onClose={() => setShowSync(false)}
+        />
+      )}
+
+      {importPlan && (
+        <ImportPreview
+          plan={importPlan}
+          onConfirm={() => {
+            applyImport(importPlan);
+            setImportPlan(null);
+          }}
+          onCancel={() => setImportPlan(null)}
+        />
+      )}
     </>
   );
 }

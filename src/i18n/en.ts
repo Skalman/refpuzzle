@@ -50,7 +50,7 @@ export default {
     printAll: "Print all puzzles",
   },
   backup: {
-    button: "Backup",
+    button: "Backup and sync",
     exportBackup: "Export backup",
     importBackup: "Import backup",
     importPreview: "Import preview",

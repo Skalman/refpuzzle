@@ -177,6 +177,21 @@
   border-top: 1px solid var(--border);
 }
 
+/* ── Backup dialog ── */
+.backup-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.backup-action-btn {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.9rem;
+  text-align: center;
+  cursor: pointer;
+}
+
 /* ── Sync dialog ── */
 .sync-dialog {
   max-width: 22rem;
