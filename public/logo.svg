@@ -39,7 +39,7 @@
   <rect width="100" height="100" rx="20" fill="#6366f1"/>
   <g stroke-width="3" stroke-linecap="round" fill="none" class="arcs">
     <path style="--d:0s" d="M22.0,28.0 A60,60 0 0,1 47.4,18.8" stroke="#f472b6"/>
-    <path style="--d:0.15s" d="M75.0,22.0 A60,60 0 0,1 77.8,49.0" stroke="#60a5fa"/>
+    <path style="--d:0.15s" d="M75.0,22.0 A60,60 0 0,1 77.8,49.0" stroke="#29bafe"/>
     <path style="--d:0.3s" d="M68.0,75.0 A60,60 0 0,1 33.5,53.2" stroke="#facc15"/>
     <path style="--d:0.45s" d="M24.0,78.0 A60,60 0 0,1 17.7,55.4" stroke="#4ade80"/>
   </g>
@@ -51,7 +51,7 @@
   </g>
   <g class="heads">
     <polygon style="--d:0.25s; transform-origin:54.9px 18.4px" points="62.4,18.9 47.5,12.3 47.4,25.3" fill="#f472b6"/>
-    <polygon style="--d:0.4s; transform-origin:76.4px 56.4px" points="74.0,63.5 84.1,50.6 71.5,47.4" fill="#60a5fa"/>
+    <polygon style="--d:0.4s; transform-origin:76.4px 56.4px" points="74.0,63.5 84.1,50.6 71.5,47.4" fill="#29bafe"/>
     <polygon style="--d:0.55s; transform-origin:29.3px 47.1px" points="25.9,40.4 27.9,56.6 39.1,49.9" fill="#facc15"/>
     <polygon style="--d:0.7s; transform-origin:17.6px 47.9px" points="18.4,40.5 11.2,55.1 24.2,55.7" fill="#4ade80"/>
   </g>
@@ -63,7 +63,7 @@
   </g>
   <g class="dots">
     <circle cx="22" cy="28" r="5" fill="#f472b6" style="--d:0s; transform-origin:22px 28px"/>
-    <circle cx="75" cy="22" r="5" fill="#60a5fa" style="--d:0.5s; transform-origin:75px 22px"/>
+    <circle cx="75" cy="22" r="5" fill="#29bafe" style="--d:0.5s; transform-origin:75px 22px"/>
     <circle cx="68" cy="75" r="5" fill="#facc15" style="--d:1s; transform-origin:68px 75px"/>
     <circle cx="24" cy="78" r="5" fill="#4ade80" style="--d:1.5s; transform-origin:24px 78px"/>
   </g>
