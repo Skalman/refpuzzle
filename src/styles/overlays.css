@@ -325,6 +325,12 @@ kbd {
 }
 
 /* ── Install toast ── */
+.install-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
 .install-toast {
   position: absolute;
   right: 0;
@@ -342,7 +348,19 @@ kbd {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  align-items: flex-start;
+  align-items: center;
+}
+
+.install-domain {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: -0.25rem 0 0;
+}
+
+.install-btn {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 0.95rem;
 }
 
 .install-toast-actions {

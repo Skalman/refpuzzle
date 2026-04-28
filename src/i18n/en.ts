@@ -84,8 +84,8 @@ export default {
   install: {
     button: "Install app",
     iosSafari: 'Tap the Share button, then "Add to Home Screen"',
-    androidFirefox: 'Tap the menu button (⋮), then "Install"',
-    qrPrompt: "Scan to install on your phone",
+    androidFirefox: 'Tap the menu button (⋮), then "Add app to Home screen"',
+    qrPrompt: "Scan to open on another device",
   },
   help: {
     title: "How to play",

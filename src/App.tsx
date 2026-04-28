@@ -441,32 +441,30 @@ function AppHeader({
         </span>
       </div>
       {showInstallInfo && install && (
-        <div
-          class="install-toast"
-          role="alertdialog"
-          onClick={() => setShowInstallInfo(false)}
-          onKeyDown={(e) => {
-            if (e.key === "Escape") setShowInstallInfo(false);
-          }}
-        >
-          <p>{s.install.qrPrompt}</p>
-          <img src="/qr-install.png" alt="QR code" class="qr-image" width="120" height="120" />
-          {install.type === "instructions" && <p>{install.message}</p>}
-          <div class="install-toast-actions">
+        <>
+          <div class="install-backdrop" onClick={() => setShowInstallInfo(false)} />
+          <div
+            class="install-toast"
+            role="alertdialog"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setShowInstallInfo(false);
+            }}
+          >
             {install.type === "native" && (
-              <button class="onboarding-dismiss" onClick={() => install.fire()}>
+              <button
+                class="onboarding-dismiss install-btn"
+                ref={(el) => el?.focus()}
+                onClick={() => install.fire()}
+              >
                 {s.install.button}
               </button>
             )}
-            <button
-              class="onboarding-dismiss"
-              ref={(el) => el?.focus()}
-              onClick={() => setShowInstallInfo(false)}
-            >
-              {s.backup.ok}
-            </button>
+            <p>{s.install.qrPrompt}</p>
+            <img src="/qr-install.png" alt="QR code" class="qr-image" width="120" height="120" />
+            <p class="install-domain">refpuzzle.danwolff.se</p>
+            {install.type === "instructions" && <p>{install.message}</p>}
           </div>
-        </div>
+        </>
       )}
     </header>
   );
