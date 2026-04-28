@@ -4,7 +4,7 @@
   "description": "Daily self-referential logic puzzles. Solve by deduction — each question refers to the puzzle itself.",
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#6366f1",
+  "theme_color": "#f8f9fa",
   "background_color": "#f8f9fa",
   "icons": [
     {

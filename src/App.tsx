@@ -30,6 +30,11 @@ import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
 import { Logo, replayLogoAnimation } from "./components/Logo.tsx";
 
+function updateThemeColor(dark: boolean) {
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fa");
+}
+
 function useTheme() {
   const [mode, setMode] = useState(
     () => document.documentElement.getAttribute("data-theme") ?? "auto",
@@ -42,14 +47,17 @@ function useTheme() {
       html.setAttribute("data-theme", "light");
       localStorage.setItem("refpuzzle:theme", "light");
       setMode("light");
+      updateThemeColor(false);
     } else if (current === "light") {
       html.removeAttribute("data-theme");
       localStorage.removeItem("refpuzzle:theme");
       setMode("auto");
+      updateThemeColor(matchMedia("(prefers-color-scheme: dark)").matches);
     } else {
       html.setAttribute("data-theme", "dark");
       localStorage.setItem("refpuzzle:theme", "dark");
       setMode("dark");
+      updateThemeColor(true);
     }
   }, []);
 
