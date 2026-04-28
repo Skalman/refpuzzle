@@ -63,9 +63,25 @@
 
   &.reset-confirm {
     color: var(--invalid);
+    background: var(--invalid-soft);
+    position: relative;
+
     &:hover {
       color: var(--invalid);
+      background: var(--invalid-soft);
     }
+
+    & > :not(.reset-overlay) {
+      visibility: hidden;
+    }
+  }
+
+  & .reset-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -130,6 +146,7 @@
 
 .split-btn-wrapper {
   position: relative;
+  display: flex;
 }
 
 .split-btn .split-btn-drop {
@@ -137,6 +154,7 @@
   padding-left: 0.3rem;
   padding-right: 0.3rem;
   border-left: 1px solid var(--border);
+  align-self: stretch;
 }
 
 .split-btn-menu {
@@ -147,17 +165,27 @@
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.5rem 0.85rem;
+  padding: 0.25rem 0;
   font-size: 0.8rem;
-  font-family: inherit;
-  color: var(--text);
-  cursor: pointer;
   white-space: nowrap;
   box-shadow: var(--dropdown-shadow);
   z-index: 10;
 
-  &:hover {
-    background: var(--bg-hover);
+  & button {
+    display: block;
+    width: 100%;
+    padding: 0.35rem 0.85rem;
+    background: none;
+    border: none;
+    font-family: inherit;
+    font-size: inherit;
+    color: var(--text);
+    cursor: pointer;
+    text-align: left;
+
+    &:hover {
+      background: var(--bg-hover);
+    }
   }
 }
 
