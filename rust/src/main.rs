@@ -48,10 +48,18 @@ fn main() {
             "--stats" => {
                 show_stats = true;
             }
+            "--check" => {
+                i += 1;
+                let file = &args[i];
+                let target = args.get(i + 1).cloned();
+                check_json(file, target.as_deref());
+                return;
+            }
             "--help" | "-h" => {
                 eprintln!(
                     "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-5] [--attempts A] [--stats]"
                 );
+                eprintln!("       logiquiz-gen --check <file.json> [MMDD-level-N]");
                 eprintln!("  Generates a year of daily puzzles.");
                 eprintln!(
                     "  Seeds are derived from the date, so the same date always produces the same puzzle."
@@ -59,6 +67,7 @@ fn main() {
                 eprintln!("  --level  generate only this level (default: all 5)");
                 eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026).");
                 eprintln!("  --stats  show generation statistics");
+                eprintln!("  --check  verify solvability of puzzles in a JSON file");
                 return;
             }
             _ => {
@@ -292,82 +301,183 @@ fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
 }
 
 fn rule_to_json(rule: &Rule) -> Value {
-    match *rule {
-        Rule::CountAnswer { answer } => json!({"t": "count_answer", "a": answer.idx()}),
-        Rule::CountAnswerBefore {
-            answer,
-            before_index,
-        } => json!({"t": "count_answer_before", "a": answer.idx(), "q": before_index}),
-        Rule::CountAnswerAfter {
-            answer,
-            after_index,
-        } => json!({"t": "count_answer_after", "a": answer.idx(), "q": after_index}),
-        Rule::CountVowel => json!({"t": "count_vowel_answers"}),
-        Rule::CountConsonant => json!({"t": "count_consonant_answers"}),
-        Rule::MostCommonCount => json!({"t": "most_common_count"}),
-        Rule::ClosestAfter {
-            after_index,
-            answer,
-        } => json!({"t": "closest_after", "q": after_index, "a": answer.idx()}),
-        Rule::ClosestBefore {
-            before_index,
-            answer,
-        } => json!({"t": "closest_before", "q": before_index, "a": answer.idx()}),
-        Rule::FirstWith { answer } => json!({"t": "first_with_answer", "a": answer.idx()}),
-        Rule::LastWith { answer } => json!({"t": "last_with_answer", "a": answer.idx()}),
-        Rule::PrevSame => json!({"t": "previous_same_answer"}),
-        Rule::NextSame => json!({"t": "next_same_answer"}),
-        Rule::OnlySame => json!({"t": "only_same_answer"}),
-        Rule::SameAs => json!({"t": "same_answer_as"}),
-        Rule::OnlyOdd { answer } => json!({"t": "only_odd_with_answer", "a": answer.idx()}),
-        Rule::ConsecIdent => json!({"t": "consecutive_identical"}),
-        Rule::AnswerOf { question_index } => {
-            json!({"t": "answer_of_question", "q": question_index})
+    serde_json::to_value(rule).unwrap()
+}
+
+fn check_json(path: &str, target: Option<&str>) {
+    let data: Value =
+        serde_json::from_str(&std::fs::read_to_string(path).expect("can't read file"))
+            .expect("invalid JSON");
+    let obj = data.as_object().expect("top-level must be object");
+
+    let mut total = 0;
+    let mut solved = 0;
+    let mut failures = Vec::new();
+
+    for (day, levels) in obj {
+        let levels = levels.as_object().unwrap();
+        for (lvl, puzzle) in levels {
+            let key = format!("{day}-{lvl}");
+            if let Some(t) = target {
+                if key != t {
+                    continue;
+                }
+            }
+            let fp = match parse_puzzle(puzzle) {
+                Some(fp) => fp,
+                None => {
+                    eprintln!("  SKIP {key}: parse failed");
+                    continue;
+                }
+            };
+            total += 1;
+            let (ok, steps) = run_check(&fp);
+            if ok {
+                solved += 1;
+            } else {
+                let answered = steps
+                    .iter()
+                    .filter(|s| s.chars().last().map_or(false, |c| c.is_uppercase()))
+                    .count();
+                failures.push(format!("{key}: {answered}/{}", fp.n));
+            }
+            if target.is_some() {
+                println!("{}", steps.join("."));
+                if !ok {
+                    std::process::exit(1);
+                }
+                return;
+            }
         }
-        Rule::LeastCommon => json!({"t": "least_common_answer"}),
-        Rule::MostCommon => json!({"t": "most_common_answer"}),
-        Rule::Unique => json!({"t": "unique_answer"}),
-        Rule::EqualCount { answer } => json!({"t": "equal_count_as", "a": answer.idx()}),
-        Rule::AnswerIsSelf => json!({"t": "answer_is_self"}),
-        Rule::LetterDist { question_index } => json!({"t": "letter_distance", "q": question_index}),
-        Rule::TrueStmt => json!({"t": "only_true_statement"}),
+    }
+
+    println!("{solved}/{total} solved");
+    if !failures.is_empty() {
+        println!("\nFailed ({}):", failures.len());
+        for f in &failures {
+            println!("  {f}");
+        }
+        std::process::exit(1);
     }
 }
 
+fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
+    let n = fp.n;
+    let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+    let mut eliminated = [0u8; MAX_N];
+    let mut steps = Vec::new();
+    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+
+    for _ in 0..n * 30 {
+        if (0..n).all(|i| answers[i].is_some()) {
+            return (true, steps);
+        }
+        if let Some(action) = hints::find_action_fast(fp, &answers, &eliminated) {
+            match action {
+                hints::Action::Contradiction { .. } => return (false, steps),
+                hints::Action::Force { qi, answer } => {
+                    let oi = answer.idx();
+                    eliminated[qi] = 0b11111 ^ (1 << oi);
+                    answers[qi] = Some(answer);
+                    steps.push(format!("{}{}", qi + 1, answer.as_char()));
+                }
+                hints::Action::Eliminate { qi, oi } => {
+                    eliminated[qi] |= 1 << oi;
+                    steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
+                }
+            }
+            continue;
+        }
+        if let Some(action) = hints::find_lookahead_action(fp, &answers, &eliminated) {
+            hints::apply_action(&action, &mut answers, &mut eliminated);
+            match action {
+                hints::Action::Force { qi, answer } => {
+                    steps.push(format!("{}{}", qi + 1, answer.as_char()));
+                }
+                hints::Action::Eliminate { qi, oi } => {
+                    steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
+                }
+                _ => {}
+            }
+            continue;
+        }
+        break;
+    }
+    (false, steps)
+}
+
+fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
+    let qs = v.get("q")?.as_array()?;
+    let n = qs.len();
+    if n == 0 || n > MAX_N {
+        return None;
+    }
+
+    let mut rules = [Rule::AnswerIsSelf; MAX_N];
+    let mut option_nums = [[NAN_VAL; 5]; MAX_N];
+    let mut option_answers = [[0xFFu8; 5]; MAX_N];
+    let mut option_claims = [[Claim::None; 5]; MAX_N];
+
+    for (qi, q) in qs.iter().enumerate() {
+        let r = q.get("r")?;
+        rules[qi] = serde_json::from_value(r.clone()).ok()?;
+
+        if let Some(claims) = q.get("c") {
+            let claims = claims.as_array()?;
+            for (oi, c) in claims.iter().enumerate() {
+                if c.is_null() {
+                    continue;
+                }
+                option_claims[qi][oi] = serde_json::from_value(c.clone()).ok()?;
+                option_nums[qi][oi] = NAN_VAL;
+            }
+        } else if let Some(opts) = q.get("o") {
+            let opts = opts.as_array()?;
+            for (oi, o) in opts.iter().enumerate() {
+                if o.is_null() {
+                    option_nums[qi][oi] = NONE_VAL;
+                } else {
+                    option_nums[qi][oi] = o.as_i64()? as i16;
+                }
+            }
+            if matches!(
+                rules[qi],
+                Rule::AnswerOf { .. } | Rule::LeastCommon | Rule::MostCommon
+            ) {
+                for oi in 0..5 {
+                    option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
+                    {
+                        option_nums[qi][oi] as u8
+                    } else {
+                        0xFF
+                    };
+                    option_nums[qi][oi] = NAN_VAL;
+                }
+            }
+            if rules[qi].is_constrained() {
+                for oi in 0..5 {
+                    option_answers[qi][oi] = oi as u8;
+                    option_nums[qi][oi] = NAN_VAL;
+                }
+            }
+        }
+    }
+
+    let (affected_by, global_indices) = FlatPuzzle::build_deps(&rules, n);
+    Some(FlatPuzzle {
+        rules,
+        option_nums,
+        option_answers,
+        option_claims,
+        affected_by,
+        global_indices,
+        n,
+    })
+}
+
 fn claim_to_json(claim: &Claim) -> Value {
-    match *claim {
+    match claim {
         Claim::None => Value::Null,
-        Claim::CountAnswerEquals { answer, value } => {
-            json!({"t": "count_answer", "a": answer.idx(), "v": value})
-        }
-        Claim::CountConsonantEquals { value } => {
-            json!({"t": "count_consonant_answers", "v": value})
-        }
-        Claim::CountVowelEquals { value } => json!({"t": "count_vowel_answers", "v": value}),
-        Claim::CountAnswerAfterEquals {
-            answer,
-            after_index,
-            value,
-        } => json!({"t": "count_answer_after", "a": answer.idx(), "q": after_index, "v": value}),
-        Claim::CountAnswerBeforeEquals {
-            answer,
-            before_index,
-            value,
-        } => json!({"t": "count_answer_before", "a": answer.idx(), "q": before_index, "v": value}),
-        Claim::ClaimAnswerOf {
-            question_index,
-            value,
-        } => json!({"t": "answer_of_question", "q": question_index, "v": value.idx()}),
-        Claim::FirstWithAnswer {
-            value,
-            question_index,
-        } => json!({"t": "first_with_answer", "v": question_index, "a": value.idx()}),
-        Claim::LastWithAnswer {
-            value,
-            question_index,
-        } => json!({"t": "last_with_answer", "v": question_index, "a": value.idx()}),
-        Claim::MostCommonAnswer { value } => {
-            json!({"t": "most_common_answer", "v": value.idx()})
-        }
+        _ => serde_json::to_value(claim).unwrap(),
     }
 }

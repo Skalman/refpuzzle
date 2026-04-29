@@ -1,3 +1,5 @@
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
 pub const MAX_N: usize = 16;
 pub const NONE_VAL: i16 = -1;
 pub const NAN_VAL: i16 = i16::MIN;
@@ -23,6 +25,26 @@ impl Answer {
     }
     pub fn as_char(self) -> char {
         (b'A' + self as u8) as char
+    }
+}
+
+impl Serialize for Answer {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_u8(*self as u8)
+    }
+}
+
+impl<'de> Deserialize<'de> for Answer {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = u8::deserialize(d)?;
+        match v {
+            0 => Ok(Answer::A),
+            1 => Ok(Answer::B),
+            2 => Ok(Answer::C),
+            3 => Ok(Answer::D),
+            4 => Ok(Answer::E),
+            _ => Err(serde::de::Error::custom(format!("invalid answer: {v}"))),
+        }
     }
 }
 
@@ -55,31 +77,97 @@ pub enum RuleKind {
     TrueStmt,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(tag = "t")]
 pub enum Rule {
-    CountAnswer { answer: Answer },
-    CountAnswerBefore { answer: Answer, before_index: u8 },
-    CountAnswerAfter { answer: Answer, after_index: u8 },
+    #[serde(rename = "count_answer")]
+    CountAnswer {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "count_answer_before")]
+    CountAnswerBefore {
+        #[serde(rename = "a")]
+        answer: Answer,
+        #[serde(rename = "q")]
+        before_index: u8,
+    },
+    #[serde(rename = "count_answer_after")]
+    CountAnswerAfter {
+        #[serde(rename = "a")]
+        answer: Answer,
+        #[serde(rename = "q")]
+        after_index: u8,
+    },
+    #[serde(rename = "count_vowel_answers")]
     CountVowel,
+    #[serde(rename = "count_consonant_answers")]
     CountConsonant,
+    #[serde(rename = "most_common_count")]
     MostCommonCount,
-    ClosestAfter { after_index: u8, answer: Answer },
-    ClosestBefore { before_index: u8, answer: Answer },
-    FirstWith { answer: Answer },
-    LastWith { answer: Answer },
+    #[serde(rename = "closest_after")]
+    ClosestAfter {
+        #[serde(rename = "q")]
+        after_index: u8,
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "closest_before")]
+    ClosestBefore {
+        #[serde(rename = "q")]
+        before_index: u8,
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "first_with_answer")]
+    FirstWith {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "last_with_answer")]
+    LastWith {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "previous_same_answer")]
     PrevSame,
+    #[serde(rename = "next_same_answer")]
     NextSame,
+    #[serde(rename = "only_same_answer")]
     OnlySame,
+    #[serde(rename = "same_answer_as")]
     SameAs,
-    OnlyOdd { answer: Answer },
+    #[serde(rename = "only_odd_with_answer")]
+    OnlyOdd {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "consecutive_identical")]
     ConsecIdent,
-    AnswerOf { question_index: u8 },
+    #[serde(rename = "answer_of_question")]
+    AnswerOf {
+        #[serde(rename = "q")]
+        question_index: u8,
+    },
+    #[serde(rename = "least_common_answer")]
     LeastCommon,
+    #[serde(rename = "most_common_answer")]
     MostCommon,
+    #[serde(rename = "unique_answer")]
     Unique,
-    EqualCount { answer: Answer },
+    #[serde(rename = "equal_count_as")]
+    EqualCount {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
+    #[serde(rename = "answer_is_self")]
     AnswerIsSelf,
-    LetterDist { question_index: u8 },
+    #[serde(rename = "letter_distance")]
+    LetterDist {
+        #[serde(rename = "q")]
+        question_index: u8,
+    },
+    #[serde(rename = "only_true_statement")]
     TrueStmt,
 }
 
@@ -131,42 +219,70 @@ impl Rule {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[serde(tag = "t")]
 pub enum Claim {
+    #[serde(skip)]
     None,
+    #[serde(rename = "count_answer")]
     CountAnswerEquals {
+        #[serde(rename = "a")]
         answer: Answer,
+        #[serde(rename = "v")]
         value: u8,
     },
+    #[serde(rename = "count_consonant_answers")]
     CountConsonantEquals {
+        #[serde(rename = "v")]
         value: u8,
     },
+    #[serde(rename = "count_vowel_answers")]
     CountVowelEquals {
+        #[serde(rename = "v")]
         value: u8,
     },
+    #[serde(rename = "count_answer_after")]
     CountAnswerAfterEquals {
+        #[serde(rename = "a")]
         answer: Answer,
+        #[serde(rename = "q")]
         after_index: u8,
+        #[serde(rename = "v")]
         value: u8,
     },
+    #[serde(rename = "count_answer_before")]
     CountAnswerBeforeEquals {
+        #[serde(rename = "a")]
         answer: Answer,
+        #[serde(rename = "q")]
         before_index: u8,
+        #[serde(rename = "v")]
         value: u8,
     },
+    #[serde(rename = "answer_of_question")]
     ClaimAnswerOf {
+        #[serde(rename = "q")]
         question_index: u8,
+        #[serde(rename = "v")]
         value: Answer,
     },
+    #[serde(rename = "first_with_answer")]
     FirstWithAnswer {
+        #[serde(rename = "a")]
         value: Answer,
+        #[serde(rename = "v")]
         question_index: u8,
     },
+    #[serde(rename = "last_with_answer")]
     LastWithAnswer {
+        #[serde(rename = "a")]
         value: Answer,
+        #[serde(rename = "v")]
         question_index: u8,
     },
+    #[serde(rename = "most_common_answer")]
     MostCommonAnswer {
+        #[serde(rename = "v")]
         value: Answer,
     },
 }
