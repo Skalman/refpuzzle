@@ -401,6 +401,8 @@ pub fn repair_one_question(
             if let Some(oi) = best_oi {
                 let (min_val, max_val) = match rule {
                     Rule::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
+                    Rule::PrevSame => (0, qi as i16 - 1),
+                    Rule::NextSame => (qi as i16 + 1, n as i16 - 1),
                     _ => {
                         let min_p = match rule {
                             Rule::ClosestAfter { after_index, .. } => after_index as i16 + 1,
@@ -413,13 +415,14 @@ pub fn repair_one_question(
                         (min_p, max_p)
                     }
                 };
+                let exclude_self = matches!(rule, Rule::OnlySame | Rule::SameAs);
                 let old_val = fp.option_nums[qi][oi];
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 // Try all values in range + NONE_VAL
                 let candidates_iter = (min_val..=max_val).chain(std::iter::once(NONE_VAL));
                 for v in candidates_iter {
-                    if v == correct_val || v == old_val {
+                    if v == correct_val || v == old_val || (exclude_self && v == qi as i16) {
                         continue;
                     }
                     let mut in_use = false;
@@ -761,13 +764,16 @@ fn positional_distractors(
         Rule::NextSame => {
             min_pos = qi as i16 + 1;
         }
+        Rule::ConsecIdent => {
+            max_pos = n as i16 - 2;
+        }
         _ => {}
     }
 
     let mut pool = [0i16; 20];
     let mut plen = 0;
     for i in min_pos..=max_pos {
-        if i != correct {
+        if i != correct && !matches!(*rule, Rule::OnlySame | Rule::SameAs if i as usize == qi) {
             pool[plen] = i;
             plen += 1;
         }

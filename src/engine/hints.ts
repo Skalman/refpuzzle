@@ -160,9 +160,56 @@ function findSimpleDeduction(
   markSets: Marks[],
   n: number,
 ): Hint | null {
-  return (
-    findForced(puzzle, answers, markSets, n) ??
-    findEliminable(puzzle, answers, markSets, n)
+  const action = findActionFast(puzzle, answers, markSets, n);
+  if (!action || action.type === "contradiction") return null;
+  if (action.type === "force") {
+    return explainForce(puzzle, answers, markSets, n, action);
+  }
+  return explainElimination(puzzle, answers, markSets, n, action);
+}
+
+function explainForce(
+  puzzle: Puzzle,
+  answers: (AnswerLetter | null)[],
+  markSets: Marks[],
+  n: number,
+  action: { type: "force"; questionIndex: number; letter: AnswerLetter },
+): Hint {
+  const qi = action.questionIndex;
+  const letter = action.letter;
+  // Try the user-facing findForced for a nice explanation
+  const userHint = findForced(puzzle, answers, markSets, n);
+  if (userHint?.action?.type === "force" && userHint.action.questionIndex === qi) {
+    return userHint;
+  }
+  return hintSteps(qi, `Look at ${Q(qi)}.`, `${Q(qi)} must be ${letter}.`, action);
+}
+
+function explainElimination(
+  puzzle: Puzzle,
+  answers: (AnswerLetter | null)[],
+  markSets: Marks[],
+  n: number,
+  action: { type: "eliminate"; questionIndex: number; optionIndex: number },
+): Hint {
+  const qi = action.questionIndex;
+  const oi = action.optionIndex;
+  // Try the user-facing findEliminable for a nice explanation
+  const userHint = findEliminable(puzzle, answers, markSets, n);
+  if (
+    userHint?.action?.type === "eliminate" &&
+    userHint.action.questionIndex === qi &&
+    userHint.action.optionIndex === oi
+  ) {
+    return userHint;
+  }
+  const letter = LETTERS[oi];
+  return hintSteps(
+    qi,
+    `Consider ${Q(qi)}, option ${letter}.`,
+    `${Q(qi)} can't be ${letter}.`,
+    action,
+    oi,
   );
 }
 
@@ -725,6 +772,40 @@ function canEliminate(
   if (v != null) {
     const msg = checkCloserExists(rule, v, answers, n);
     if (msg) return msg;
+  }
+
+  // OnlySame/SameAs: can't point to self
+  if ((rule.type === "only_same_answer" || rule.type === "same_answer_as") && v != null) {
+    if (v === qi) return `can't refer to itself.`;
+    if (v >= 0 && v < n && answers[v] != null && answers[qi] != null && answers[v] !== answers[qi]) {
+      return `says ${Q(v)}, but ${Q(v)} is ${answers[v]} while this is ${answers[qi]}.`;
+    }
+  }
+
+  // PrevSame: must point before this question
+  if (rule.type === "previous_same_answer" && v != null) {
+    if (v >= qi) return `says ${Q(v)}, but that's not before ${Q(qi)}.`;
+    if (v >= 0 && v < n && answers[v] != null && answers[qi] != null && answers[v] !== answers[qi]) {
+      return `says ${Q(v)}, but ${Q(v)} is ${answers[v]} while this is ${answers[qi]}.`;
+    }
+  }
+
+  // NextSame: must point after this question
+  if (rule.type === "next_same_answer" && v != null) {
+    if (v <= qi || v >= n) return `says ${Q(v)}, but that's not after ${Q(qi)}.`;
+  }
+
+  // ConsecIdent: pair must have same answer
+  if (rule.type === "consecutive_identical" && v != null) {
+    if (v >= 0 && v + 1 < n && answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1]) {
+      return `says ${Q(v)} & ${Q(v + 1)}, but they have different answers.`;
+    }
+  } else if (rule.type === "consecutive_identical" && v == null) {
+    for (let i = 0; i < n - 1; i++) {
+      if (answers[i] != null && answers[i + 1] != null && answers[i] === answers[i + 1]) {
+        return `says none, but ${Q(i)} and ${Q(i + 1)} both have answer ${answers[i]}.`;
+      }
+    }
   }
 
   return null;

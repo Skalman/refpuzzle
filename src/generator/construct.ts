@@ -1038,9 +1038,10 @@ function makeDistractors(
   if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
   if (rule.type === "previous_same_answer") maxPos = qi - 1;
   if (rule.type === "next_same_answer") minPos = qi + 1;
+  const excludeSelf = rule.type === "only_same_answer" || rule.type === "same_answer_as";
   const pool: (number | null)[] = [];
   for (let i = minPos; i <= maxPos; i++) {
-    if (i !== correct) pool.push(i);
+    if (i !== correct && !(excludeSelf && i === qi)) pool.push(i);
   }
   if (correct != null) pool.push(null);
   return rng.shuffle(pool).slice(0, 4);
