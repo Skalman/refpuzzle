@@ -21,16 +21,6 @@ impl Answer {
     pub fn is_vowel(self) -> bool {
         matches!(self, Answer::A | Answer::E)
     }
-    pub fn from_u8(v: u8) -> Option<Self> {
-        match v {
-            0 => Some(Answer::A),
-            1 => Some(Answer::B),
-            2 => Some(Answer::C),
-            3 => Some(Answer::D),
-            4 => Some(Answer::E),
-            _ => None,
-        }
-    }
     pub fn as_char(self) -> char {
         (b'A' + self as u8) as char
     }
