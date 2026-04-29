@@ -51,14 +51,6 @@ const VARIETY_TYPES: &[RuleKind] = &[
     RuleKind::TrueStmt,
 ];
 
-fn type_cap(kind: RuleKind) -> u8 {
-    match kind {
-        RuleKind::LetterDist => 1,
-        RuleKind::AnswerOf => 2,
-        _ => 3,
-    }
-}
-
 fn symmetric_group(kind: RuleKind) -> Option<u8> {
     match kind {
         RuleKind::FirstWith | RuleKind::LastWith => Some(0),
@@ -143,6 +135,17 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
 
     let mut kind_counts = [0u8; 32];
     let mut group_counts = [0u8; 8];
+    let mut group_caps = [3u8; 8];
+
+    // Vowel/consonant group cap: 1 for L3, 50% 1 / 50% 2 for L4-L5
+    let vc_group = symmetric_group(RuleKind::CountVowel).unwrap() as usize;
+    if n <= 8 {
+        group_caps[vc_group] = 1;
+    } else if rng.int(0, 1) == 0 {
+        group_caps[vc_group] = 1;
+    } else {
+        group_caps[vc_group] = 2;
+    }
 
     // Variant: 25% of the time for levels with letter_distance,
     // trade letter_distance for a 3rd answer_of chain
@@ -163,7 +166,7 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
             let gi = symmetric_group(kind_val);
             let mut ok = false;
             if kind_counts[ki] < caps[ki]
-                && gi.map_or(true, |g| group_counts[g as usize] < 3)
+                && gi.map_or(true, |g| group_counts[g as usize] < group_caps[g as usize])
                 && solution_compatible(kind_val, slots[assigned_count] as usize, &solution, n)
             {
                 let qi = slots[assigned_count] as usize;

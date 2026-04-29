@@ -166,6 +166,16 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   const kindCounts: Record<string, number> = {};
   const groupCounts: Record<string, number> = {};
+  const groupCaps: Record<string, number> = {};
+
+  // Vowel/consonant group cap: 1 for L3, 50% 1 / 50% 2 for L4-L5
+  if (n <= 8) {
+    groupCaps["count_vowel_consonant"] = 1;
+  } else if (rng.int(0, 1) === 0) {
+    groupCaps["count_vowel_consonant"] = 1;
+  } else {
+    groupCaps["count_vowel_consonant"] = 2;
+  }
 
   // Variant: 25% of the time for levels with letter_distance,
   // trade letter_distance for a 3rd answer_of chain
@@ -182,7 +192,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     const cap = capsOverride[type] ?? typeCap(type);
     if ((kindCounts[type] ?? 0) >= cap) return false;
     const group = symmetricGroup(type);
-    if (group !== null && (groupCounts[group] ?? 0) >= 3) return false;
+    if (group !== null && (groupCounts[group] ?? 0) >= (groupCaps[group] ?? 3)) return false;
     const qi = slots[slotIdx];
     if (!solutionCompatible(type, qi, solution, n)) return false;
     for (let attempt = 0; attempt < 10; attempt++) {
