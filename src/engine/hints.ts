@@ -1010,6 +1010,27 @@ function findActionFp(
         return { type: "contradiction", questionIndex: qi };
       }
     }
+    if (r.t === RT_PREV_SAME && v != null) {
+      if (v >= qi) return { type: "contradiction", questionIndex: qi };
+      if (v >= 0 && v < n && answers[v] != null && answers[v] !== a) {
+        return { type: "contradiction", questionIndex: qi };
+      }
+    }
+    if (r.t === RT_NEXT_SAME && v != null) {
+      if (v <= qi || v >= n) return { type: "contradiction", questionIndex: qi };
+    }
+    // OnlySame contradiction: target must match our answer
+    // Note: only the self-reference check (v===qi) is safe here;
+    // the answer-mismatch check can false-positive because optionValues
+    // for OnlySame stores question indices, not answer letters
+    if (r.t === RT_ONLY_SAME && v != null && v === qi) {
+      return { type: "contradiction", questionIndex: qi };
+    }
+    if (r.t === RT_CONSEC_IDENT && v != null) {
+      if (v >= 0 && v + 1 < n && answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1]) {
+        return { type: "contradiction", questionIndex: qi };
+      }
+    }
 
     // Fallback: full evaluate for rule types without specialized checks
     if (
