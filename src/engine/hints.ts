@@ -1043,7 +1043,7 @@ function findActionFp(
       }
     }
 
-    // Reverse answer_of_question
+    // Reverse answer_of_question / SameAs
     for (let other = 0; other < n; other++) {
       const otherAns = answers[other];
       if (otherAns == null) continue;
@@ -1052,6 +1052,33 @@ function findActionFp(
         const impliedIdx = fp.optionValues[other][letterIdx(otherAns)];
         if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
           return { type: "force", questionIndex: qi, letter: LETTERS[impliedIdx] };
+        }
+      }
+      if (otherR.t === RT_SAME_AS) {
+        const targetQ = fp.optionValues[other][letterIdx(otherAns)];
+        if (targetQ != null && targetQ >= 0 && targetQ === qi) {
+          return { type: "force", questionIndex: qi, letter: otherAns };
+        }
+      }
+    }
+
+    // LetterDist forced value
+    if (r.t === RT_LETTER_DIST) {
+      const otherAns = answers[r.questionIndex];
+      if (otherAns != null) {
+        const otherIdx = letterIdx(otherAns);
+        let validCount = 0;
+        let validLetter: AnswerLetter = "A";
+        for (let oi = 0; oi < 5; oi++) {
+          if (isElim(markSets, qi, oi)) continue;
+          const dist = Math.abs(oi - otherIdx);
+          if (dist === fp.optionValues[qi][oi]) {
+            validCount++;
+            validLetter = LETTERS[oi];
+          }
+        }
+        if (validCount === 1) {
+          return { type: "force", questionIndex: qi, letter: validLetter };
         }
       }
     }
