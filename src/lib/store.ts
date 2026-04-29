@@ -56,22 +56,18 @@ function cloneStates(qs: QuestionState[]): QuestionState[] {
 
 export function encodeHistory(state: SavedState): string {
   const actions: string[] = [];
+  const atEnd = state.historyIdx === state.history.length - 1;
 
   for (let i = 1; i < state.history.length; i++) {
     let action = diffAction(state.history[i - 1], state.history[i]);
-    if (i === state.historyIdx) action = `_${action}`;
+    if (i === state.historyIdx && !atEnd) action = `_${action}`;
     actions.push(action);
     const hintLevel = state.hints.get(i);
     if (hintLevel != null) actions.push(`h${hintLevel}`);
   }
 
-  // If current is at position 0 (no actions taken yet) or at the end
   if (state.historyIdx === 0 && state.history.length > 1) {
     actions.splice(0, 0, "_");
-  }
-  if (state.historyIdx === state.history.length - 1 && state.history.length > 1) {
-    const last = actions.length - 1;
-    if (!actions[last].startsWith("_")) actions[last] = `_${actions[last]}`;
   }
 
   if (state.completed) actions.push("x");
