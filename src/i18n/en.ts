@@ -87,6 +87,7 @@ export default {
   },
   install: {
     button: "Install app",
+    shareApp: "Share app",
     iosSafari: 'Tap the Share button, then "Add to Home Screen"',
     androidFirefox: 'Tap the menu button (⋮), then "Add app to Home screen"',
     qrPrompt: "Scan to open on another device",
@@ -118,6 +119,7 @@ export default {
     join: "Join",
     waiting: "Waiting for other device...",
     codePlaceholder: "123456",
+    scanQr: "Scan QR code",
     expired: "Code expired or not found",
     tooBusy: "Too busy, try again later",
     error: "Sync failed",

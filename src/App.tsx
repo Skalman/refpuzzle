@@ -15,6 +15,7 @@ import {
 import { exportData, planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan, ImportAction } from "./lib/backup.ts";
 import { startSync, joinSync, pollSync } from "./lib/sync.ts";
+// QR components lazy-loaded via dynamic import (no preact dependency in chunks)
 import type { Puzzle } from "./engine/types.ts";
 import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./engine/render.ts";
 import {
@@ -234,6 +235,7 @@ function AppHeader({
   const s = t();
   const theme = useTheme();
   const install = useInstall();
+  const isInstalled = window.matchMedia("(display-mode: standalone)").matches;
   const [showInstallInfo, setShowInstallInfo] = useState(false);
   const [moreMenu, setMoreMenu] = useState(false);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
@@ -336,18 +338,16 @@ function AppHeader({
           </button>
           {moreMenu && (
             <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
-              {install && (
-                <button
-                  class="more-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenu(false);
-                    setShowInstallInfo(true);
-                  }}
-                >
-                  {s.install.button}
-                </button>
-              )}
+              <button
+                class="more-menu-item"
+                role="menuitem"
+                onClick={() => {
+                  setMoreMenu(false);
+                  setShowInstallInfo(true);
+                }}
+              >
+                {isInstalled ? s.install.shareApp : s.install.button}
+              </button>
               <a
                 href="/past"
                 class="more-menu-item show-mobile"
@@ -403,7 +403,7 @@ function AppHeader({
           )}
         </span>
       </div>
-      {showInstallInfo && install && (
+      {showInstallInfo && (
         <>
           <div class="install-backdrop" onClick={() => setShowInstallInfo(false)} />
           <div
@@ -413,7 +413,7 @@ function AppHeader({
               if (e.key === "Escape") setShowInstallInfo(false);
             }}
           >
-            {install.type === "native" && (
+            {install?.type === "native" && (
               <button
                 class="onboarding-dismiss install-btn"
                 ref={(el) => el?.focus()}
@@ -423,9 +423,14 @@ function AppHeader({
               </button>
             )}
             <p>{s.install.qrPrompt}</p>
-            <img src="/qr-install.png" alt="QR code" class="qr-image" width="120" height="120" />
-            <p class="install-domain">refpuzzle.danwolff.se</p>
-            {install.type === "instructions" && <p>{install.message}</p>}
+            <div class="qr-image" ref={(el) => {
+              if (!el) return;
+              import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
+                el.innerHTML = renderQrSvg(window.location.origin + "/");
+              });
+            }} />
+            <p class="install-domain">{window.location.host}</p>
+            {install?.type === "instructions" && <p>{install.message}</p>}
           </div>
         </>
       )}
@@ -617,7 +622,7 @@ function DayView({ dateStr }: { dateStr: string }) {
         })}
       </div>
 
-      {loading && <div class="loading">{s.app.loading}</div>}
+      {loading && <div class="loading"><span class="spinner" /></div>}
 
       {!loading && !currentPuzzle && <div class="loading">{s.app.noPuzzle}</div>}
 
@@ -885,14 +890,21 @@ function SyncDialog({
   const [inputCode, setInputCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const stopScanRef = useRef<(() => void) | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     ref.current?.showModal();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
+      stopScanRef.current?.();
     };
   }, []);
+
+  function syncUrl(c: string) {
+    return `${window.location.origin}/sync#${c}`;
+  }
 
   function handleStart() {
     setBusy(true);
@@ -917,12 +929,11 @@ function SyncDialog({
       });
   }
 
-  function handleJoin() {
-    const trimmed = inputCode.trim();
-    if (trimmed.length !== 6) return;
+  function handleJoinCode(c: string) {
     setBusy(true);
     setError(null);
-    joinSync(trimmed)
+    setScanning(false);
+    joinSync(c)
       .then((json) => {
         onImport(json);
       })
@@ -930,6 +941,18 @@ function SyncDialog({
         setError(s.sync.expired);
         setBusy(false);
       });
+  }
+
+  function handleScan(data: string) {
+    const match = data.match(/\/sync#(\d{6})$/);
+    if (match) {
+      handleJoinCode(match[1]);
+    } else if (/^\d{6}$/.test(data)) {
+      handleJoinCode(data);
+    } else {
+      setError(s.sync.expired);
+      setScanning(false);
+    }
   }
 
   return (
@@ -950,11 +973,12 @@ function SyncDialog({
         </div>
         <p>{s.sync.description}</p>
 
-        {!code && (
+        {!code && !scanning && (
           <>
             <button class="onboarding-dismiss sync-start-btn" onClick={handleStart} disabled={busy}>
               {s.sync.start}
             </button>
+            {error && <p class="sync-error">{error}</p>}
 
             <div class="sync-divider">
               <span>{s.sync.enterCode}</span>
@@ -971,31 +995,64 @@ function SyncDialog({
                 value={inputCode}
                 onInput={(e) => {
                   const el = e.target;
-                  if (el instanceof HTMLInputElement) setInputCode(el.value);
+                  if (el instanceof HTMLInputElement) {
+                    setInputCode(el.value);
+                    if (el.value.trim().length === 6) handleJoinCode(el.value.trim());
+                  }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") handleJoin();
+                  if (e.key === "Enter" && inputCode.trim().length === 6) handleJoinCode(inputCode.trim());
                 }}
               />
               <button
                 class="onboarding-dismiss"
-                onClick={handleJoin}
+                onClick={() => handleJoinCode(inputCode.trim())}
                 disabled={busy || inputCode.trim().length !== 6}
               >
                 {s.sync.join}
               </button>
             </div>
+
+            <button
+              class="sync-scan-btn"
+              onClick={() => setScanning(true)}
+            >
+              {s.sync.scanQr}
+            </button>
+          </>
+        )}
+
+        {!code && scanning && (
+          <>
+            <div class="qr-scanner" ref={(el) => {
+              if (!el) return;
+              import("./components/QrScanner.tsx").then(({ default: startScan }) => {
+                stopScanRef.current?.();
+                stopScanRef.current = startScan(
+                  el,
+                  handleScan,
+                  (msg) => { setError(msg); setScanning(false); },
+                );
+              });
+            }} />
+            <button class="sync-scan-btn" onClick={() => { stopScanRef.current?.(); stopScanRef.current = null; setScanning(false); }}>
+              {s.sync.enterCode}
+            </button>
           </>
         )}
 
         {code && (
           <div class="sync-waiting">
+            <div class="qr-image" ref={(el) => {
+              if (!el) return;
+              import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
+                el.innerHTML = renderQrSvg(syncUrl(code));
+              });
+            }} />
             <div class="sync-code-display">{code}</div>
             <p class="sync-waiting-text">{s.sync.waiting}</p>
           </div>
         )}
-
-        {error && <p class="sync-error">{error}</p>}
       </div>
     </dialog>
   );
@@ -1191,6 +1248,53 @@ function DayRoute() {
   return <DayView dateStr={dateStr} />;
 }
 
+function SyncRoute() {
+  const s = t();
+  const code = window.location.hash.slice(1);
+  const [status, setStatus] = useState<"joining" | "done" | "error">("joining");
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+
+  useEffect(() => {
+    if (!/^\d{6}$/.test(code)) {
+      setStatus("error");
+      return;
+    }
+    joinSync(code)
+      .then((json) => {
+        try {
+          setImportPlan(planImport(json));
+          setStatus("done");
+        } catch {
+          setStatus("error");
+        }
+      })
+      .catch(() => setStatus("error"));
+  }, [code]);
+
+  return (
+    <div class="not-found">
+      {status === "joining" && <div class="loading"><span class="spinner" /></div>}
+      {status === "error" && (
+        <>
+          <h1>{s.sync.expired}</h1>
+          <a href="/">{s.notFound.backToPuzzles}</a>
+        </>
+      )}
+      {importPlan && (
+        <ImportPreview
+          plan={importPlan}
+          onConfirm={() => {
+            applyImport(importPlan);
+            setImportPlan(null);
+            window.location.href = "/";
+          }}
+          onCancel={() => { window.location.href = "/"; }}
+        />
+      )}
+    </div>
+  );
+}
+
 function NotFound() {
   const s = t();
   return (
@@ -1210,6 +1314,7 @@ export function App() {
           <Route path="/" component={DailyPage} />
           <Route path="/past" component={PastPuzzlesPage} />
           <Route path="/day/:date" component={DayRoute} />
+          <Route path="/sync" component={SyncRoute} />
           <Route default component={NotFound} />
         </Router>
       </div>

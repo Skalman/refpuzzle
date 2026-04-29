@@ -65,22 +65,23 @@
 
 .help-panel-inner {
   padding: 1.5rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
 
-  & ol,
-  & ul {
-    margin: 0 0 0.75rem 1.25rem;
-    color: var(--text-muted);
-    line-height: 1.6;
-  }
-  & h4 {
-    font-size: 0.95rem;
-    margin: 1rem 0 0.5rem;
-  }
-  & p {
-    color: var(--text-muted);
-    line-height: 1.6;
-    margin-bottom: 0.5rem;
-  }
+.help-panel-inner ol,
+.help-panel-inner ul {
+  margin: 0 0 0.75rem 1.25rem;
+}
+
+.help-panel-inner h4 {
+  font-size: 0.95rem;
+  margin: 1rem 0 0.5rem;
+  color: var(--text);
+}
+
+.help-panel-inner p {
+  margin-bottom: 0.5rem;
 }
 
 .help-panel-header {
@@ -255,9 +256,43 @@
   font-size: 0.85rem;
 }
 
+.sync-scan-btn {
+  width: 100%;
+  padding: 0.4rem;
+  margin-top: 0.25rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--bg-hover);
+  }
+}
+
+.qr-scanner {
+  width: 100%;
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.qr-scanner-video {
+  width: 100%;
+  display: block;
+  border-radius: 8px;
+}
+
 .sync-error {
-  color: var(--incorrect);
+  color: var(--invalid);
+  background: var(--invalid-soft);
   font-size: 0.85rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  text-align: center;
   margin-top: 0.5rem;
 }
 
@@ -384,8 +419,11 @@ kbd {
 }
 
 .qr-image {
-  image-rendering: pixelated;
   align-self: center;
+  width: 7.5rem;
+  height: 7.5rem;
+  border-radius: 0.25rem;
+  background: white;
 }
 
 /* ── History page ── */
