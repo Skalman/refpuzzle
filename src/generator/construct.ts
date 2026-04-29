@@ -177,6 +177,11 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     groupCaps["count_vowel_consonant"] = 2;
   }
 
+  // Count-letter cap: prevent multiple count rules for the same letter
+  const countLetterCap = rng.int(0, 3) === 0 ? 2 : 1;
+  const countLetterCounts: Record<string, number> = {};
+  const COUNT_RULE_TYPES = new Set(["count_answer", "count_answer_before", "count_answer_after"]);
+
   // Variant: 25% of the time for levels with letter_distance,
   // trade letter_distance for a 3rd answer_of chain
   const extraChain = profile.allowedTypes.includes("letter_distance")
@@ -198,9 +203,17 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     for (let attempt = 0; attempt < 10; attempt++) {
       const rule = makeRule(type, qi, n, solution, assigned, rng);
       if (!rule) continue;
+      if (COUNT_RULE_TYPES.has(rule.type) && "answer" in rule) {
+        const letter = rule.answer as string;
+        if ((countLetterCounts[letter] ?? 0) >= countLetterCap) continue;
+      }
       const key = JSON.stringify(rule);
       if (usedRuleKeys.has(key)) continue;
       if (!checkStructural(rule, qi, solution)) continue;
+      if (COUNT_RULE_TYPES.has(rule.type) && "answer" in rule) {
+        const letter = rule.answer as string;
+        countLetterCounts[letter] = (countLetterCounts[letter] ?? 0) + 1;
+      }
       rules[qi] = rule;
       assigned.add(qi);
       usedRuleKeys.add(key);

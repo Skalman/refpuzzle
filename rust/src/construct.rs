@@ -51,6 +51,15 @@ const VARIETY_TYPES: &[RuleKind] = &[
     RuleKind::TrueStmt,
 ];
 
+fn count_rule_answer(rule: &Rule) -> Option<Answer> {
+    match rule {
+        Rule::CountAnswer { answer }
+        | Rule::CountAnswerBefore { answer, .. }
+        | Rule::CountAnswerAfter { answer, .. } => Some(*answer),
+        _ => None,
+    }
+}
+
 fn symmetric_group(kind: RuleKind) -> Option<u8> {
     match kind {
         RuleKind::FirstWith | RuleKind::LastWith => Some(0),
@@ -147,6 +156,10 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
         group_caps[vc_group] = 2;
     }
 
+    // Count-letter cap: prevent multiple count rules for the same letter
+    let count_letter_cap: u8 = if rng.int(0, 3) == 0 { 2 } else { 1 };
+    let mut count_letter_counts = [0u8; 5];
+
     // Variant: 25% of the time for levels with letter_distance,
     // trade letter_distance for a 3rd answer_of chain
     let extra_chain = profile.allowed_types.contains(&RuleKind::LetterDist) && rng.int(0, 3) == 0;
@@ -172,9 +185,17 @@ fn try_constructive(profile: &DifficultyProfile, rng: &mut Rng) -> Option<Genera
                 let qi = slots[assigned_count] as usize;
                 for _ in 0..10 {
                     if let Some(rule) = make_rule(kind_val, qi, n, &solution, assigned, rng) {
+                        if let Some(a) = count_rule_answer(&rule) {
+                            if count_letter_counts[a.idx()] >= count_letter_cap {
+                                continue;
+                            }
+                        }
                         if !is_dup(&rule, &used_rules, used_count)
                             && check_structural(&rule, qi, &solution, n)
                         {
+                            if let Some(a) = count_rule_answer(&rule) {
+                                count_letter_counts[a.idx()] += 1;
+                            }
                             rules[qi] = rule;
                             used_rules[used_count] = rule;
                             used_count += 1;
