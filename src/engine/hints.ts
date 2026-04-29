@@ -640,7 +640,7 @@ function findEliminable(
       if (markSets[qi][oi] !== "unmarked") continue;
       const v = puzzle.questions[qi].options[oi].value;
       const ov = renderOptionLabel(rule, v, qi);
-      const msg = canEliminate(rule, qi, oi, ov, v, answers, n);
+      const msg = canEliminate(rule, qi, oi, ov, v, answers, markSets, n);
       if (msg) {
         return hintSteps(
           qi,
@@ -662,6 +662,7 @@ function canEliminate(
   ov: string,
   v: number | null,
   answers: (AnswerLetter | null)[],
+  markSets: Marks[],
   n: number,
 ): string | null {
   // Count bounds
@@ -698,13 +699,18 @@ function canEliminate(
     }
   }
 
-  // Positional: claimed position has wrong answer
+  // Positional: claimed position has wrong answer or answer eliminated
   if (isPositionalRule(rule.type) && v != null) {
     if (v >= 0 && v < n) {
       const posAnswer = answers[v];
       if (posAnswer != null) {
         const msg = checkPositionalElim(rule, v, posAnswer);
         if (msg) return msg;
+      } else if (markSets) {
+        const reqAnswer = positionalAnswer(rule);
+        if (reqAnswer && isElim(markSets, v, L2I[reqAnswer])) {
+          return `says ${Q(v)}, but ${reqAnswer} is already ruled out there.`;
+        }
       }
     }
   }
@@ -721,6 +727,11 @@ function canEliminate(
     if (msg) return msg;
   }
 
+  return null;
+}
+
+function positionalAnswer(rule: ValidationRule): AnswerLetter | null {
+  if ("answer" in rule && rule.answer) return rule.answer;
   return null;
 }
 
