@@ -9,7 +9,10 @@ import type {
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
+const YEAR_RAW = new Map<
+  string,
+  Record<string, Record<string, CompactPuzzle>> | null
+>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
 interface CompactRule {
@@ -114,23 +117,7 @@ function expandRule(r: CompactRule): ValidationRule {
 function expandClaim(c: CompactClaim): Claim {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const rule = expandRule(c) as ValidationRule & { type: Claim["type"] };
-  const type = rule.type;
-  switch (type) {
-    case "count_answer":
-    case "count_consonant_answers":
-    case "count_vowel_answers":
-    case "count_answer_after":
-    case "count_answer_before":
-      return {
-        ...rule,
-        value: c.v,
-      };
-    default: {
-      (type) satisfies never;
-      // oxlint-disable-next-line typescript/restrict-template-expressions
-      throw new Error(`Unsupported claim rule type: ${type}`);
-    }
-  }
+  return { ...rule, value: c.v };
 }
 
 export function todayDateStr(): string {
@@ -178,7 +165,7 @@ async function fetchYearRaw(
       YEAR_RAW.set(year, null);
       return null;
     }
-    const data = await resp.json(); // eslint-disable-line
+    const data = await resp.json();
     YEAR_RAW.set(year, data);
     return data;
   } catch {

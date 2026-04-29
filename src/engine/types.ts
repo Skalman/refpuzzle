@@ -1,7 +1,16 @@
 export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
+export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>([
+  "A",
+  "E",
+]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
-export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
+export type Marks = [
+  OptionMark,
+  OptionMark,
+  OptionMark,
+  OptionMark,
+  OptionMark,
+];
 
 export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
@@ -44,8 +53,22 @@ export type Claim =
   | { type: "count_answer"; answer: AnswerLetter; value: number }
   | { type: "count_consonant_answers"; value: number }
   | { type: "count_vowel_answers"; value: number }
-  | { type: "count_answer_after"; answer: AnswerLetter; afterIndex: number; value: number }
-  | { type: "count_answer_before"; answer: AnswerLetter; beforeIndex: number; value: number };
+  | {
+      type: "count_answer_after";
+      answer: AnswerLetter;
+      afterIndex: number;
+      value: number;
+    }
+  | {
+      type: "count_answer_before";
+      answer: AnswerLetter;
+      beforeIndex: number;
+      value: number;
+    }
+  | { type: "answer_of_question"; questionIndex: number; value: number }
+  | { type: "first_with_answer"; answer: AnswerLetter; value: number }
+  | { type: "last_with_answer"; answer: AnswerLetter; value: number }
+  | { type: "most_common_answer"; value: number };
 
 export type ValidationRule =
   // ── Counting ──

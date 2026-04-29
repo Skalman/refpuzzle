@@ -840,6 +840,21 @@ pub fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
 
 // ── Claims for only_true_statement ──
 
+fn claim_category(claim: &Claim) -> u16 {
+    match *claim {
+        Claim::None => 0,
+        Claim::CountAnswerEquals { answer, .. } => 100 + answer.idx() as u16,
+        Claim::CountConsonantEquals { .. } => 200,
+        Claim::CountVowelEquals { .. } => 201,
+        Claim::CountAnswerAfterEquals { answer, .. } => 300 + answer.idx() as u16,
+        Claim::CountAnswerBeforeEquals { answer, .. } => 400 + answer.idx() as u16,
+        Claim::ClaimAnswerOf { question_index, .. } => 500 + question_index as u16,
+        Claim::FirstWithAnswer { value, .. } => 600 + value.idx() as u16,
+        Claim::LastWithAnswer { value, .. } => 700 + value.idx() as u16,
+        Claim::MostCommonAnswer { .. } => 800,
+    }
+}
+
 fn build_claims(
     qi: usize,
     solution: &[Answer; MAX_N],
@@ -862,7 +877,10 @@ fn build_claims(
         let mut found = false;
         for _ in 0..30 {
             let fc = make_false_claim(solution, n, rng, &opt_sol);
-            if fc != claims[target_oi] && (0..oi).all(|j| j == target_oi || claims[j] != fc) {
+            let cat = claim_category(&fc);
+            if cat != claim_category(&claims[target_oi])
+                && (0..oi).all(|j| j == target_oi || claim_category(&claims[j]) != cat)
+            {
                 claims[oi] = fc;
                 found = true;
                 break;
@@ -876,7 +894,7 @@ fn build_claims(
 }
 
 fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
-    match rng.int(0, 4) {
+    match rng.int(0, 8) {
         0 => {
             let a = rng.pick(&LETTERS);
             Claim::CountAnswerEquals {
@@ -892,20 +910,79 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
         },
         3 => {
             let a = rng.pick(&LETTERS);
-            let ai = rng.int(0, n as i32 - 2) as u8;
+            let ai = rng.int(0, (n as i32 - 5).max(0)) as u8;
             Claim::CountAnswerAfterEquals {
                 answer: a,
                 after_index: ai,
                 value: ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as u8,
             }
         }
-        _ => {
+        4 => {
             let a = rng.pick(&LETTERS);
-            let bi = rng.int(1, n as i32 - 1) as u8;
+            let bi = rng.int(4, n as i32 - 1) as u8;
             Claim::CountAnswerBeforeEquals {
                 answer: a,
                 before_index: bi,
                 value: (0..bi as usize).filter(|&i| sol[i] == a).count() as u8,
+            }
+        }
+        5 => {
+            let qi = rng.int(0, n as i32 - 1) as u8;
+            Claim::ClaimAnswerOf {
+                question_index: qi,
+                value: sol[qi as usize],
+            }
+        }
+        6 => {
+            let a = rng.pick(&LETTERS);
+            let first = (0..n).find(|&i| sol[i] == a);
+            match first {
+                Some(qi) => Claim::FirstWithAnswer {
+                    question_index: qi as u8,
+                    value: a,
+                },
+                None => {
+                    let a2 = rng.pick(&LETTERS);
+                    Claim::CountAnswerEquals {
+                        answer: a2,
+                        value: count_letter(sol, a2, n) as u8,
+                    }
+                }
+            }
+        }
+        7 => {
+            let a = rng.pick(&LETTERS);
+            let last = (0..n).rev().find(|&i| sol[i] == a);
+            match last {
+                Some(qi) => Claim::LastWithAnswer {
+                    question_index: qi as u8,
+                    value: a,
+                },
+                None => {
+                    let a2 = rng.pick(&LETTERS);
+                    Claim::CountAnswerEquals {
+                        answer: a2,
+                        value: count_letter(sol, a2, n) as u8,
+                    }
+                }
+            }
+        }
+        _ => {
+            let counts = letter_counts(sol, n);
+            let max = *counts.iter().max().unwrap_or(&0);
+            let most: Vec<Answer> = LETTERS
+                .iter()
+                .filter(|&&a| counts[a.idx()] == max)
+                .copied()
+                .collect();
+            if most.len() == 1 {
+                Claim::MostCommonAnswer { value: most[0] }
+            } else {
+                let a = rng.pick(&LETTERS);
+                Claim::CountAnswerEquals {
+                    answer: a,
+                    value: count_letter(sol, a, n) as u8,
+                }
             }
         }
     }
@@ -919,27 +996,59 @@ fn make_false_claim(
 ) -> Claim {
     for _ in 0..30 {
         let base = make_true_claim(sol, n, rng);
-        let offset = rng.pick(&[-2i8, -1, 1, 2]);
-        let base_value = match base {
-            Claim::CountAnswerEquals { value, .. }
-            | Claim::CountConsonantEquals { value }
-            | Claim::CountVowelEquals { value }
-            | Claim::CountAnswerAfterEquals { value, .. }
-            | Claim::CountAnswerBeforeEquals { value, .. } => value as i8,
-            Claim::None => continue,
-        };
-        let new_val = base_value + offset;
-        if new_val < 0 || new_val > n as i8 {
-            continue;
-        }
-        let fc = set_claim_value(base, new_val as u8);
-        if !evaluate_claim(&fc, opt_sol, n) {
-            return fc;
+        let fc = perturb_claim(base, n, rng);
+        if let Some(fc) = fc {
+            if !evaluate_claim(&fc, opt_sol, n) {
+                return fc;
+            }
         }
     }
     Claim::CountAnswerEquals {
         answer: Answer::A,
         value: n as u8 + 1,
+    }
+}
+
+fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
+    match claim {
+        Claim::CountAnswerEquals { value, .. }
+        | Claim::CountConsonantEquals { value }
+        | Claim::CountVowelEquals { value }
+        | Claim::CountAnswerAfterEquals { value, .. }
+        | Claim::CountAnswerBeforeEquals { value, .. } => {
+            let offset = rng.pick(&[-2i8, -1, 1, 2]);
+            let new_val = value as i8 + offset;
+            if new_val < 0 || new_val > n as i8 {
+                return None;
+            }
+            Some(set_claim_value(claim, new_val as u8))
+        }
+        Claim::ClaimAnswerOf { question_index, .. } => {
+            let wrong = rng.pick(&LETTERS);
+            Some(Claim::ClaimAnswerOf {
+                question_index,
+                value: wrong,
+            })
+        }
+        Claim::FirstWithAnswer { value, .. } => {
+            let wrong_qi = rng.int(0, n as i32 - 1) as u8;
+            Some(Claim::FirstWithAnswer {
+                value,
+                question_index: wrong_qi,
+            })
+        }
+        Claim::LastWithAnswer { value, .. } => {
+            let wrong_qi = rng.int(0, n as i32 - 1) as u8;
+            Some(Claim::LastWithAnswer {
+                value,
+                question_index: wrong_qi,
+            })
+        }
+        Claim::MostCommonAnswer { .. } => {
+            let wrong = rng.pick(&LETTERS);
+            Some(Claim::MostCommonAnswer { value: wrong })
+        }
+        Claim::None => None,
     }
 }
 
@@ -966,6 +1075,10 @@ fn set_claim_value(claim: Claim, value: u8) -> Claim {
             before_index,
             value,
         },
-        Claim::None => Claim::None,
+        Claim::None
+        | Claim::ClaimAnswerOf { .. }
+        | Claim::FirstWithAnswer { .. }
+        | Claim::LastWithAnswer { .. }
+        | Claim::MostCommonAnswer { .. } => claim,
     }
 }

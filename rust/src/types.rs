@@ -154,6 +154,21 @@ pub enum Claim {
         before_index: u8,
         value: u8,
     },
+    ClaimAnswerOf {
+        question_index: u8,
+        value: Answer,
+    },
+    FirstWithAnswer {
+        value: Answer,
+        question_index: u8,
+    },
+    LastWithAnswer {
+        value: Answer,
+        question_index: u8,
+    },
+    MostCommonAnswer {
+        value: Answer,
+    },
 }
 
 #[derive(Clone)]

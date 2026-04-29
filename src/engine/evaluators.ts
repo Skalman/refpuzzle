@@ -1,6 +1,7 @@
 import type { AnswerLetter, FlatPuzzle, FlatRule, Claim } from "./types.ts";
 import {
   LETTERS,
+  L2I,
   VOWELS,
   letterIdx,
   RT_COUNT_ANSWER,
@@ -254,6 +255,34 @@ export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): b
 
     case "count_answer_before":
       return countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) === claim.value;
+
+    case "answer_of_question":
+      return answers[claim.questionIndex] === LETTERS[claim.value];
+
+    case "first_with_answer": {
+      for (let i = 0; i < answers.length; i++) {
+        if (answers[i] === claim.answer) return i === claim.value;
+      }
+      return false;
+    }
+
+    case "last_with_answer": {
+      let last = -1;
+      for (let i = 0; i < answers.length; i++) {
+        if (answers[i] === claim.answer) last = i;
+      }
+      return last === claim.value;
+    }
+
+    case "most_common_answer": {
+      const counts = [0, 0, 0, 0, 0];
+      for (const a of answers) {
+        if (a !== null) counts[L2I[a]] += 1;
+      }
+      const max = Math.max(...counts);
+      return counts[claim.value] === max
+        && counts.filter((c) => c === max).length === 1;
+    }
   }
   claim satisfies never;
   return false;

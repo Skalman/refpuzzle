@@ -272,5 +272,42 @@ pub fn evaluate_claim(claim: &Claim, answers: &[Option<Answer>; MAX_N], n: usize
             before_index,
             value,
         } => count_answer(answers, answer, 0, before_index as usize) == value as i16,
+        Claim::ClaimAnswerOf {
+            question_index,
+            value,
+        } => answers[question_index as usize] == Some(value),
+        Claim::FirstWithAnswer {
+            question_index,
+            value,
+        } => {
+            for i in 0..n {
+                if answers[i] == Some(value) {
+                    return i == question_index as usize;
+                }
+            }
+            false
+        }
+        Claim::LastWithAnswer {
+            question_index,
+            value,
+        } => {
+            let mut last = None;
+            for i in 0..n {
+                if answers[i] == Some(value) {
+                    last = Some(i);
+                }
+            }
+            last == Some(question_index as usize)
+        }
+        Claim::MostCommonAnswer { value } => {
+            let mut counts = [0i16; 5];
+            for i in 0..n {
+                if let Some(a) = answers[i] {
+                    counts[a.idx()] += 1;
+                }
+            }
+            let max = *counts.iter().max().unwrap_or(&0);
+            counts[value.idx()] == max && counts.iter().filter(|&&c| c == max).count() == 1
+        }
     }
 }

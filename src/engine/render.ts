@@ -68,7 +68,11 @@ const POSITIONAL_RULES = new Set([
   "consecutive_identical",
 ]);
 
-export function renderOptionLabel(rule: ValidationRule, value: number | null, _qi: number): string {
+export function renderOptionLabel(
+  rule: ValidationRule,
+  value: number | null,
+  _qi: number,
+): string {
   if (rule.type === "only_true_statement") return "";
 
   if (isLetterRule(rule.type)) return value != null ? LETTERS[value] : "?";
@@ -85,19 +89,9 @@ export function renderOptionLabel(rule: ValidationRule, value: number | null, _q
 }
 
 export function renderClaimLabel(claim: Claim): string {
-  switch (claim.type) {
-    case "count_answer":
-      return `How many questions have answer ${claim.answer}? ${claim.value}`;
-    case "count_consonant_answers":
-      return `How many questions have a consonant as the answer? ${claim.value}`;
-    case "count_vowel_answers":
-      return `How many questions have a vowel as the answer? ${claim.value}`;
-    case "count_answer_after":
-      return `How many questions after #${claim.afterIndex + 1} have answer ${claim.answer}? ${claim.value}`;
-    case "count_answer_before":
-      return `How many questions before #${claim.beforeIndex + 1} have answer ${claim.answer}? ${claim.value}`;
-  }
-  return "";
+  return (
+    renderQuestionText(claim) + " " + renderOptionLabel(claim, claim.value, -1)
+  );
 }
 
 const LETTER_RULES = new Set([

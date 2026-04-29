@@ -354,5 +354,20 @@ fn claim_to_json(claim: &Claim) -> Value {
             before_index,
             value,
         } => json!({"t": "count_answer_before", "a": answer.idx(), "q": before_index, "v": value}),
+        Claim::ClaimAnswerOf {
+            question_index,
+            value,
+        } => json!({"t": "answer_of_question", "q": question_index, "v": value.idx()}),
+        Claim::FirstWithAnswer {
+            value,
+            question_index,
+        } => json!({"t": "first_with_answer", "v": question_index, "a": value.idx()}),
+        Claim::LastWithAnswer {
+            value,
+            question_index,
+        } => json!({"t": "last_with_answer", "v": question_index, "a": value.idx()}),
+        Claim::MostCommonAnswer { value } => {
+            json!({"t": "most_common_answer", "v": value.idx()})
+        }
     }
 }
