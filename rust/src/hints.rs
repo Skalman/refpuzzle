@@ -642,24 +642,33 @@ pub fn find_action_fast(
                     }
                 }
                 Rule::PrevSame if on != NONE_VAL => {
-                    let pos = (on) as usize;
-                    // Must point to a position before qi
+                    let pos = on as usize;
                     if pos >= qi {
                         return Some(Action::Eliminate { qi, oi });
                     }
-                    // If that position is answered, it must match our letter
                     if let Some(pa) = answers[pos]
                         && let Some(my) = answers[qi]
                         && pa != my
                     {
                         return Some(Action::Eliminate { qi, oi });
                     }
+                    // Closer match exists?
+                    for j in ((pos + 1)..qi).rev() {
+                        if answers[j] == Some(LETTERS[oi]) {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
+                    }
                 }
                 Rule::NextSame if on != NONE_VAL => {
-                    let pos = (on) as usize;
-                    // Must point to a position after qi
+                    let pos = on as usize;
                     if pos <= qi || pos >= n {
                         return Some(Action::Eliminate { qi, oi });
+                    }
+                    // Closer match exists?
+                    for j in (qi + 1)..pos {
+                        if answers[j] == Some(LETTERS[oi]) {
+                            return Some(Action::Eliminate { qi, oi });
+                        }
                     }
                 }
                 Rule::OnlySame | Rule::SameAs if on != NONE_VAL => {
@@ -1614,6 +1623,81 @@ mod tests {
                 eprintln!("  Q{}: remaining: {remaining:?}", qi + 1);
             }
         }
+    }
+
+    #[test]
+    fn test_shared_hint_checks() {
+        use serde_json::Value;
+        let json_str = std::fs::read_to_string("../tests/hint-checks.json")
+            .expect("can't read tests/hint-checks.json");
+        let suite: Value = serde_json::from_str(&json_str).unwrap();
+        let tests = suite["tests"].as_array().unwrap();
+
+        let mut passed = 0;
+        let mut failed = 0;
+
+        for test in tests {
+            if test.get("section").is_some() {
+                continue;
+            }
+            let name = test["name"].as_str().unwrap();
+            let qs = test["puzzle"]["q"].as_array().unwrap();
+            let n = qs.len();
+            let states = test["state"].as_array().unwrap();
+            let expect = test["expect"].as_str();
+
+            // Parse puzzle using serde
+            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = match fp {
+                Some(fp) => fp,
+                None => {
+                    eprintln!("SKIP: {name}: parse failed");
+                    continue;
+                }
+            };
+
+            // Apply state
+            let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+            let mut eliminated = [0u8; MAX_N];
+            for qi in 0..n {
+                let s = states[qi].as_str().unwrap_or("");
+                for ch in s.chars() {
+                    if ch.is_ascii_uppercase() {
+                        let oi = (ch as u8 - b'A') as usize;
+                        answers[qi] = Some(LETTERS[oi]);
+                        eliminated[qi] = 0b11111 ^ (1 << oi);
+                    } else if ch.is_ascii_lowercase() {
+                        let oi = (ch as u8 - b'a') as usize;
+                        eliminated[qi] |= 1 << oi;
+                    }
+                }
+            }
+
+            let action = find_action_fast(&fp, &answers, &eliminated);
+            let got = match action {
+                Some(Action::Contradiction { qi }) => format!("!{}", qi + 1),
+                Some(Action::Force { qi, answer }) => {
+                    format!("{}{}", qi + 1, answer.as_char())
+                }
+                Some(Action::Eliminate { qi, oi }) => {
+                    format!("{}{}", qi + 1, (b'a' + oi as u8) as char)
+                }
+                None => "null".to_string(),
+            };
+            let expected = expect.unwrap_or("null");
+
+            if got == expected {
+                passed += 1;
+            } else {
+                failed += 1;
+                eprintln!("FAIL: {name}");
+                eprintln!("  expected: {expected}");
+                eprintln!("  got:      {got}");
+            }
+        }
+
+        eprintln!("{passed}/{} passed", passed + failed);
+        assert_eq!(failed, 0, "{failed} test(s) failed");
     }
 }
 

@@ -1,0 +1,431 @@
+{
+  "tests": [
+    {"section": "=== Contradictions ==="},
+
+    {
+      "name": "CountAnswer contradiction: count already exceeds value",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "CountAnswer contradiction: count+remaining < value",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 3, 0, 1, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "AnswerOf contradiction: target has different answer",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "C", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "LetterDist contradiction: distance doesn't match",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "D", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "Unique contradiction: answer appears twice",
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "FirstWith contradiction: position has wrong answer",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, null, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "C", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "FirstWith contradiction: earlier match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "C", "", ""],
+      "expect": "!2"
+    },
+    {
+      "name": "LastWith contradiction: later match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, null, 2, 3, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "", "A"],
+      "expect": "!2"
+    },
+    {
+      "name": "FirstWith None contradiction: a match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [1, 2, null, 0, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", ""],
+      "expect": "!1"
+    },
+    {
+      "name": "SameAs contradiction: target has different answer",
+      "puzzle": {"q": [
+        {"r": {"t": "same_answer_as"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "", "B"],
+      "expect": "!1"
+    },
+    {
+      "name": "Evaluate fallback: PrevSame wrong when all answered",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, null, 2]}
+      ]},
+      "state": ["A", "C", "B"],
+      "expect": "!3"
+    },
+    {
+      "name": "Evaluate fallback: ConsecIdent wrong when all answered",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, null, 2, 3]}
+      ]},
+      "state": ["C", "D", "E", "A"],
+      "expect": "!4"
+    },
+
+    {"section": "=== Contradictions (JS-added) ==="},
+
+    {
+      "name": "PrevSame contradiction: position at/after self",
+      "description": "Handled by JS explicit check, Rust via elimination section",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, null, 2]}
+      ]},
+      "state": ["", "C"],
+      "expect": "!2"
+    },
+    {
+      "name": "NextSame contradiction: position before/at self",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 0, null, 1, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "", ""],
+      "expect": "!1"
+    },
+
+    {"section": "=== Count saturation ==="},
+
+    {
+      "name": "Count saturation: count met, eliminate remaining matches",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", ""],
+      "expect": "3a"
+    },
+    {
+      "name": "Count saturation: remaining must all match",
+      "description": "count_answer A=3, 2 A's found, 1 remaining unanswered → must be A, eliminate non-A",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "A", "A", ""],
+      "expect": "4b"
+    },
+
+    {"section": "=== Forced values ==="},
+
+    {
+      "name": "Forced: only 1 option remaining",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "abde"],
+      "expect": "2C"
+    },
+    {
+      "name": "Forced: AnswerOf forward (target known)",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B"],
+      "expect": "1B"
+    },
+    {
+      "name": "Forced: AnswerOf reverse (other question references this one)",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_of_question", "q": 0}, "o": [2, 0, 1, 3, 4]}
+      ]},
+      "state": ["", "A"],
+      "expect": "1B"
+    },
+    {
+      "name": "Forced: LetterDist only 1 option matches distance",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["abde", "C"],
+      "expect": "1C"
+    },
+
+    {"section": "=== Eliminations: positional ==="},
+
+    {
+      "name": "FirstWith elimination: position has wrong answer",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, null, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B", "", ""],
+      "expect": "1b"
+    },
+    {
+      "name": "FirstWith elimination: answer eliminated from target",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 2}, "o": [1, 2, null, 0, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "c", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "FirstWith elimination: earlier match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "", ""],
+      "expect": "2b"
+    },
+    {
+      "name": "FirstWith None elimination: match exists so None is wrong",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, null, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "A"],
+      "expect": "1c"
+    },
+    {
+      "name": "LastWith elimination: later match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, null, 2, 3, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "A"],
+      "expect": "2a"
+    },
+    {
+      "name": "ClosestAfter elimination: position out of range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 1}, "o": [0, 1, null, 2, 3]}
+      ]},
+      "state": ["", "", ""],
+      "expect": "3a"
+    },
+
+    {"section": "=== Eliminations: AnswerOf ==="},
+
+    {
+      "name": "AnswerOf elimination: target answered with different letter",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "C"],
+      "expect": "1a"
+    },
+    {
+      "name": "AnswerOf elimination: claimed letter eliminated from target",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "b"],
+      "expect": "1a"
+    },
+
+    {"section": "=== Eliminations: structural ==="},
+
+    {
+      "name": "PrevSame elimination: position after self",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "3e"
+    },
+    {
+      "name": "PrevSame elimination: closer match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 2, 3, null]}
+      ]},
+      "state": ["", "", "", "B", ""],
+      "expect": "5b"
+    },
+    {
+      "name": "NextSame elimination: position before self",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 0, null, 1, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", ""],
+      "expect": "1b"
+    },
+    {
+      "name": "NextSame elimination: closer match exists",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "D", "", ""],
+      "expect": "1d"
+    },
+    {
+      "name": "OnlySame elimination: self-reference",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_same_answer"}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "2b"
+    },
+    {
+      "name": "ConsecIdent elimination: pair has different answers",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, null, 2, 3]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "4a"
+    },
+    {
+      "name": "ConsecIdent None elimination: consecutive pair exists",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, null, 1, 2, 3]}
+      ]},
+      "state": ["A", "A", ""],
+      "expect": "3b"
+    },
+    {
+      "name": "OnlyOdd elimination: even position",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, null, 2, 3]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "4b"
+    },
+    {
+      "name": "OnlyOdd elimination: target has wrong answer",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 2, null, 4, 1]}
+      ]},
+      "state": ["B", "", "", ""],
+      "expect": "4a"
+    },
+
+    {"section": "=== Eliminations: counting ==="},
+
+    {
+      "name": "CountAnswer elimination: count already exceeds option value",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "A", ""],
+      "expect": "1c"
+    },
+    {
+      "name": "LetterDist elimination: distance doesn't match",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "C"],
+      "expect": "1a"
+    }
+  ]
+}

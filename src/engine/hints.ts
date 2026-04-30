@@ -782,17 +782,27 @@ function canEliminate(
     }
   }
 
-  // PrevSame: must point before this question
+  // PrevSame: must point before this question, no closer match
   if (rule.type === "previous_same_answer" && v != null) {
     if (v >= qi) return `says ${Q(v)}, but that's not before ${Q(qi)}.`;
     if (v >= 0 && v < n && answers[v] != null && answers[qi] != null && answers[v] !== answers[qi]) {
       return `says ${Q(v)}, but ${Q(v)} is ${answers[v]} while this is ${answers[qi]}.`;
     }
+    for (let j = qi - 1; j > v; j--) {
+      if (answers[j] === LETTERS[oi]) {
+        return `says ${Q(v)}, but ${Q(j)} also has answer ${LETTERS[oi]} and is closer.`;
+      }
+    }
   }
 
-  // NextSame: must point after this question
+  // NextSame: must point after this question, no closer match
   if (rule.type === "next_same_answer" && v != null) {
     if (v <= qi || v >= n) return `says ${Q(v)}, but that's not after ${Q(qi)}.`;
+    for (let j = qi + 1; j < v; j++) {
+      if (answers[j] === LETTERS[oi]) {
+        return `says ${Q(v)}, but ${Q(j)} also has answer ${LETTERS[oi]} and is closer.`;
+      }
+    }
   }
 
   // ConsecIdent: pair must have same answer
@@ -1338,15 +1348,25 @@ function findActionFp(
         }
       }
 
-      // PrevSame: must point before qi
+      // PrevSame: must point before qi, and no closer match can exist
       if (r.t === RT_PREV_SAME && v != null) {
         if (v >= qi) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+        for (let j = qi - 1; j > v; j--) {
+          if (answers[j] === LETTERS[oi]) {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
+        }
       }
 
-      // NextSame: must point after qi
+      // NextSame: must point after qi, and no closer match can exist
       if (r.t === RT_NEXT_SAME && v != null) {
         if (v <= qi || v >= n)
           return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+        for (let j = qi + 1; j < v; j++) {
+          if (answers[j] === LETTERS[oi]) {
+            return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          }
+        }
       }
 
       // OnlySame/SameAs: can't point to self

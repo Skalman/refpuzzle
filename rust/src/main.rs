@@ -406,7 +406,7 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
     (false, steps)
 }
 
-fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
+pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     let qs = v.get("q")?.as_array()?;
     let n = qs.len();
     if n == 0 || n > MAX_N {
