@@ -1,26 +1,64 @@
 # Hint Engine Design
 
+## Terminology
+
+| Term | Meaning |
+|---|---|
+| **question type** | What kind of question it is: count_answer, first_with_answer, etc. |
+| **option** | One of the 5 choices (A–E) for a question |
+| **deduction rule** | A specific logical check that can eliminate an option or force an answer |
+| **DeduceResult** | The output of a deduction rule: action (eliminate/force) + which rule + why |
+| **lookahead** | Hypothetical reasoning: assume an option, deduce, check answer validity |
+
+### Functions
+
+| Function | Returns | Purpose |
+|---|---|---|
+| `checkAnswerValidity(state, qi)` | valid / invalid / pending | Is this answer consistent with current state? Used by UI (validity bar) and by lookahead to detect contradictions. |
+| `deduce(state)` | DeduceResult or null | Apply deduction rules to find next elimination or force. |
+| `lookahead(state)` | LookaheadResult or null | Assume an option, deduce, checkAnswerValidity. If invalid → eliminate. |
+| `checkQuestionAgainstSolution(puzzle, qi, solution)` | bool | Generation: is the puzzle well-formed for this question? |
+| `checkUniqueSolution(puzzle)` | bool | Generation: brute-force solver, exactly 1 solution? |
+| `checkSolvable(puzzle)` | bool | Generation: can the engine solve from blank? Uses deduce + lookahead (which uses checkAnswerValidity). |
+| `checkPuzzleSolved(state)` | bool | Are all questions answered and valid? |
+| `explain(DeduceResult or LookaheadResult)` | string | Human-readable hint text. JS only. |
+
+### Legacy names in current code
+
+| Current code | This doc | Notes |
+|---|---|---|
+| `Rule` / `RuleKind` | question type | e.g. `Rule::CountAnswer` = the count_answer question type |
+| `find_action_fast` / `findActionFp` | deduce | currently also contains checkAnswerValidity (contradiction checks) |
+| `Action::Contradiction` | checkAnswerValidity result | will be separated out |
+| `Action::Eliminate` / `Action::Force` | deduce action | stays in deduce |
+| `find_lookahead_action` / `findLookahead` | lookahead | |
+| `canEliminate` / `findEliminable` | explain (JS) | duplicate logic, will be removed |
+| `findSimpleDeduction` | deduce + explain | currently delegates to findActionFast |
+| `option_nums` / `option_answers` | option values | semantic meaning depends on question type |
+| `evaluate()` | checkQuestionAgainstSolution | generation only, full rule evaluation |
+| `validate_and_check()` | checkSolvable pipeline | generation: evaluate + solver + hint engine + repair |
+
 ## Overview
 
-The hint engine has three layers, each independent and simple:
+The hint engine has three layers:
 
-1. **Validate** — is each answered question valid, invalid, or pending?
-2. **Deduce** — can we eliminate an option or force an answer?
-3. **Lookahead** — assume an option, deduce, then validate. If invalid → eliminate.
+1. **checkAnswerValidity** — is each answered question valid, invalid, or pending?
+2. **deduce** — apply deduction rules to eliminate an option or force an answer
+3. **lookahead** — assume an option, deduce, then checkAnswerValidity. If invalid → eliminate.
 
 ## Mental model (how a human solves)
 
 1. Look at each question. Apply **deduction rules** to cross out options or determine answers.
-2. When no rule helps, try a **hypothetical**: pick an option, assume it, keep deducing.
-3. After each hypothetical step, **validate** all answered questions. If any is invalid, the hypothesis was wrong — cross out that option.
+2. When no deduction rule helps, try a **hypothetical**: pick an option, assume it, keep deducing.
+3. After deducing under the hypothesis, **check answer validity** for all answered questions. If any is invalid, the hypothesis was wrong — cross out that option.
 4. If no contradiction found, abandon the hypothesis (don't commit it).
 
-The validity bar next to each question directly reflects the **validate** layer:
-- Green: answer is provably correct
-- Red: answer is provably wrong
-- Amber: not enough information yet
+The validity bar next to each question directly reflects **checkAnswerValidity**:
+- Green: answer is provably correct (valid)
+- Red: answer is provably wrong (invalid)
+- Amber: not enough information yet (pending)
 
-## Layer 1: Validate
+## checkAnswerValidity
 
 For each answered question, check whether the selected option's claim holds against the current state.
 
@@ -29,9 +67,9 @@ Returns one of three values per question:
 - **Invalid** — the claim is provably false
 - **Pending** — not enough information to decide
 
-This is intentionally simple — just evaluate the rule against known answers:
+This is intentionally simple — just evaluate the question type against known answers:
 
-| Rule type | Invalid when | Valid when |
+| Question type | Invalid when | Valid when |
 |---|---|---|
 | count_answer (value=V) | count > V | count = V and no remaining unknowns can match |
 | count_answer_before/after | same, within range | same, within range |
@@ -52,9 +90,20 @@ This is intentionally simple — just evaluate the rule against known answers:
 | only_true_statement | selected claim evaluates false (needs all answered) | selected claim is true and all others false |
 | answer_is_self | never invalid | always valid |
 
-**Key property**: validate never modifies state. It's a pure read-only check. It can be called at any time without side effects.
+**Key property**: checkAnswerValidity never modifies state. It's a pure read-only check.
 
-## Layer 2: Deduce
+### Return type
+
+```
+CheckAnswerValidityResult =
+  | Valid { reason }      // green bar
+  | Invalid { reason }    // red bar
+  | Pending               // amber bar
+```
+
+The `reason` explains why (e.g. "count is 3 but you said 2", "Q3 is C not A"). Used by explain for error messages and by lookahead to explain contradictions.
+
+## deduce
 
 Apply deduction rules to find one action: eliminate an option or force an answer. Returns null if nothing can be deduced.
 
@@ -83,21 +132,67 @@ Apply deduction rules to find one action: eliminate an option or force an answer
 - ConsecIdent: pair has different answers, None but pair exists
 - OnlyOdd: even position, wrong answer at target, answer eliminated from target, None but odd match exists
 
-**Key property**: deduce never returns contradictions. It only returns eliminations and forces. Contradictions are handled by validate, not deduce.
+**Key property**: deduce never returns contradictions. It only returns eliminations and forces. Contradictions are detected by checkAnswerValidity, not by deduce.
 
-## Layer 3: Lookahead
+### Return type
+
+```
+DeduceResult {
+    action: Action               // eliminate Q3 option B, or force Q5=A
+    rule: DeduceRule             // "count_saturation", "forced_answer_of", etc.
+    reason: Reason               // rule-specific detail (shared with checkAnswerValidity)
+}
+```
+
+### Rule filter for testing
+
+`deduce` accepts an optional rule filter so tests can exercise one deduction rule in isolation:
+
+```rust
+fn deduce(fp, answers, eliminated) -> Option<DeduceResult> {
+    deduce_with_rule(fp, answers, eliminated, DeduceRule::All)
+}
+
+#[inline(always)]
+fn deduce_with_rule(fp, answers, eliminated, rule: DeduceRule) -> Option<DeduceResult> {
+    if rule == DeduceRule::All || rule == DeduceRule::CountSaturation {
+        // ...
+    }
+    if rule == DeduceRule::All || rule == DeduceRule::ForcedValues {
+        // ...
+    }
+    // ...
+}
+```
+
+Production calls `deduce()` which passes `All`. `#[inline(always)]` on `deduce_with_rule` ensures the constant propagates and the compiler eliminates dead branches. Tests call `deduce_with_rule()` directly with a specific rule.
+
+JS uses a string parameter (`null` for all, `"count_saturation"` etc. for specific).
+
+## lookahead
 
 When deduce returns null:
 
 1. For each unanswered question, for each remaining option:
    a. Copy the state
    b. Set this option as the answer
-   c. Loop: call deduce, apply the action, repeat until deduce returns null
-   d. Call validate on all answered questions
+   c. Loop: call deduce, apply the action, accumulate into chain. Repeat until deduce returns null.
+   d. Call checkAnswerValidity on all answered questions (including ones deduced in step c)
    e. If any question is **invalid** → this option is wrong, eliminate it from the original state
-2. Return the first elimination found
+2. Return the first elimination found (as a LookaheadResult with the full chain)
 
-Single-level only: assume one option, deduce consequences, validate. No nested hypotheticals.
+Single-assumption: only one option is hypothesized, but the deduction chain can go arbitrarily deep (potentially solving the entire puzzle). No branching — it never assumes a second option on top of the first.
+
+### Return type
+
+```
+LookaheadResult {
+    eliminate: (qi, oi)                // what to eliminate from the real state
+    assumption: (qi, Answer)           // "assume Q3=A"
+    chain: [DeduceResult, ...]         // deductions made under the assumption
+    contradiction: (qi, CheckAnswerValidityResult)  // which question became invalid and why
+}
+```
 
 ### Future: prioritization
 Currently iterates Q1→Qn, A→E. Could prioritize:
@@ -105,61 +200,105 @@ Currently iterates Q1→Qn, A→E. Could prioritize:
 - Options that seem unlikely (extreme values)
 - Questions whose rules reference already-answered questions
 
-## Solve loop
+## checkSolvable (solve loop)
 
 The top-level loop that solves a puzzle from blank:
 
 ```
 loop:
   if all answered: return solved
-  action = deduce(state)
-  if action: apply(action); continue
-  action = lookahead(state)  // internally uses deduce + validate
-  if action: apply(action); continue
+  result = deduce(state)
+  if result: apply(result.action); continue
+  result = lookahead(state)  // internally uses deduce + checkAnswerValidity
+  if result: apply(result.eliminate); continue
   return stuck
 ```
 
-Note: the solve loop never calls validate directly. Validate is only used inside lookahead (to detect contradictions in hypothetical states) and by the UI (to show the validity bar).
+Note: the solve loop never calls checkAnswerValidity directly. It's only used inside lookahead (to detect contradictions in hypothetical states) and by the UI (to show the validity bar).
 
-During normal solving from blank, contradictions should never occur in the main state — every answer is deduced, not guessed. If validate finds an invalid answer in the main state, it indicates a bug in deduce (it forced a wrong answer) or a bug in the puzzle.
+During normal solving from blank, contradictions should never occur in the main state — every answer is deduced, not guessed. If checkAnswerValidity finds an invalid answer in the main state, it indicates a bug in deduce (it forced a wrong answer) or a bug in the puzzle.
+
+## explain
+
+The explain layer converts results into human-readable hint text. It is JS-only (player-facing) and contains no game logic — just text formatting.
+
+### From deduce
+
+`explain(DeduceResult)` formats the action + rule + reason into text:
+
+- "Q3 can't be B: says Q5, but Q5 is C not A."
+- "Q5 must be A: only option remaining."
+
+### From lookahead
+
+`explain(LookaheadResult)` produces multi-step hints:
+
+- Step 1: "Try looking at Q3."
+- Step 2: "What if Q3 is A?"
+- Step 3: "Then Q5 must be B (answer to Q5 matches Q3), and Q7 must be C (only option left) — but Q7 says 2 consonants and there are already 3."
+- Step 4: "So Q3 can't be A."
+
+### From checkAnswerValidity
+
+When the player asks "why is this red?", explain formats the CheckAnswerValidityResult's reason:
+
+- "You said 2 questions have answer A, but there are already 3."
+
+### Shared Reason type
+
+`DeduceResult` and `CheckAnswerValidityResult` share the same `Reason` type — many reasons apply to both (e.g. `CountExceedsValue` explains both "this option is wrong" in deduce and "this answer is wrong" in checkAnswerValidity).
+
+## Generation pipeline
+
+1. **Construct** — build puzzle: pick solution, place rules, generate distractors
+2. **checkQuestionAgainstSolution** — verify each question type is correct for the solution
+3. **checkSolvable** — verify puzzle is solvable by deduction from blank (uses deduce + lookahead)
+4. **Repair** — if checkSolvable fails, tweak distractors, retry
+5. **checkUniqueSolution** — brute-force solver, verify exactly 1 solution (safety net)
+
+The hint engine (step 3) is the main filter — most rejected puzzles fail here. Running it before the expensive brute-force solver avoids wasting time checking uniqueness of puzzles that can't be solved by deduction anyway.
+
+The brute-force solver (step 5) is a safety net that runs last, only on puzzles the hint engine already solves. Deduction rules may assume the puzzle has a unique solution — for example, a lookahead that reaches a complete valid solution could accept it as correct. This is only sound if uniqueness is guaranteed. The solver provides that guarantee.
 
 ## Architecture
 
 ### Separation of concerns
 
-| Component | Purpose | Used by |
+| Component | Returns | Used by |
 |---|---|---|
-| `validate(state, qi)` | Check if Q's answer is valid/invalid/pending | UI (validity bar), lookahead |
-| `deduce(state)` | Find next elimination or force | Solve loop, lookahead |
-| `lookahead(state)` | Hypothetical deduction + validation | Solve loop |
-| `explain(state, action)` | Human-readable hint text | UI (hint button), JS only |
+| `checkAnswerValidity(state, qi)` | valid/invalid/pending + reason | UI (validity bar), lookahead |
+| `deduce(state)` | DeduceResult (action + rule + reason) | checkSolvable loop, lookahead |
+| `lookahead(state)` | LookaheadResult (elimination + chain + contradiction) | checkSolvable loop |
+| `explain(result)` | string | UI (hint button), JS only |
 
 ### Single source of truth
-Both Rust and JS implement validate and deduce. The shared test suite (`tests/hint-checks.json`) verifies they agree.
+Both Rust and JS implement checkAnswerValidity and deduce. The shared test suite (`tests/hint-checks.json`) verifies they agree.
 
 Currently these are mixed into a single `find_action_fast` function. The refactor path:
-1. Extract validate as a separate function
-2. Remove contradiction checks from deduce (they move to validate)
-3. Lookahead calls deduce in a loop, then validate to check for contradictions
-4. Solve loop calls deduce, then lookahead. Never calls validate directly.
+1. Extract checkAnswerValidity as a separate function
+2. Remove contradiction checks from deduce (they move to checkAnswerValidity)
+3. Update lookahead: call deduce in a loop, then checkAnswerValidity to detect contradictions
+4. Add rule filter parameter to deduce
+5. Rewrite test suite to the new format
+6. Add checkAnswerValidity-specific tests
 
 ## Data model
 
 ### FlatPuzzle
 Pre-computed structure:
-- `rules[qi]`: rule type + parameters
+- `rules[qi]`: question type + parameters
 - `option_nums[qi][oi]`: numeric value per option (count, position, distance)
 - `option_answers[qi][oi]`: letter index for AnswerOf/LeastCommon/MostCommon
 - `option_claims[qi][oi]`: claim data for TrueStmt
 - `affected_by[qi]`: dependency graph
-- `global_indices`: questions with global rules
+- `global_indices`: questions with global question types
 
 ### State
 - `answers[qi]`: answer letter or null
 - `eliminated[qi]`: bitmask (Rust) or marks array (JS)
 
 ### Option value semantics
-Values in `option_nums` depend on rule type:
+Values in `option_nums` depend on question type:
 - Counting: claimed count (integer)
 - Positional: claimed question index (0-based), NONE_VAL for "None"
 - LetterDist: claimed distance
@@ -171,159 +310,13 @@ Values in `option_nums` depend on rule type:
 ## Testing
 
 ### Shared test suite (`tests/hint-checks.json`)
-Each test: puzzle + state → expected action. Both engines must agree.
 
-Organized by deduction rule type. Covers happy paths, edge cases, boundary conditions, and no-action cases.
+Three test types:
 
-### Solvability checking (`--check` / `check-solvable.mts`)
-Verifies the engine solves every puzzle in a JSON file from blank.
-Single-puzzle mode outputs step trace: `1a.2b.3C` (eliminate/force notation).
-
-### Adding a new deduction rule
-1. Add to both Rust and JS deduce functions
-2. Add test cases to `tests/hint-checks.json`
-3. Run shared tests (both engines)
-4. Run solvability check on all puzzle files
-5. Add explanation text to JS (for player-facing hints)
-
-### Adding validation for a rule type
-1. Add to both Rust and JS validate functions
-2. Add test cases (validate tests, separate from deduce tests)
-3. Verify lookahead still works (it depends on validate)
-
-## Explain
-
-The explain layer converts actions into human-readable hint text. It is JS-only (player-facing) and contains no game logic — just text formatting.
-
-### Deduce returns its reasoning
-
-`deduce` doesn't just return an action — it returns which rule fired and why:
-
-```
-DeduceResult {
-    action: Action               // eliminate Q3 option B, or force Q5=A
-    rule: DeduceRule             // "count_saturation", "forced_answer_of", etc.
-    reason: Reason               // rule-specific detail
-}
-```
-
-The `reason` captures the specific observation that triggered the deduction:
-
-```
-Reason =
-  | CountSaturated { letter, count }               // "A count reached 2"
-  | ForcedLastOption                                // "only option left"
-  | ForcedAnswerOf { target_qi, target_answer }     // "Q3 is answered B"
-  | ForcedLetterDist { other_qi, distance }         // "distance to Q2 must be 3"
-  | PositionHasWrongAnswer { pos, expected, found } // "Q3 is C, not A"
-  | AnswerEliminatedFromTarget { pos, letter }      // "A is crossed out on Q3"
-  | CloserMatchExists { claimed, closer }           // "Q4 is closer than Q2"
-  | TargetAnswerMismatch { pos, expected, found }   // "Q3 is A, not B"
-  | SelfReference                                   // "can't point to itself"
-  | PositionOutOfRange { pos }                      // "Q5 is after this question"
-  | PairDifferent { pos, a, b }                     // "Q1=A and Q2=B differ"
-  | EvenPosition { pos }                            // "Q2 is even-numbered"
-  | CountExceedsValue { count, value }              // "already 3, but says 2"
-  | CountTooLow { count, remaining, value }         // "at most 2 possible, but says 3"
-  | NoneButMatchExists { pos }                      // "says None but Q3=A exists"
-  | CrossEliminationNoComplement { value }          // "vowel=3 but consonant has no 9"
-  | ...
-```
-
-`explain(result)` is then pure text formatting — pattern match on `(rule, reason)` and produce a string. No game logic, no re-derivation.
-
-### Lookahead returns its chain
-
-Lookahead returns the full reasoning chain:
-
-```
-LookaheadResult {
-    eliminate: (qi, oi)                // what to eliminate from the real state
-    assumption: (qi, Answer)           // "assume Q3=A"
-    chain: [DeduceResult, ...]         // deductions made under the assumption
-    contradiction: (qi, ValidateResult)// which question became invalid and why
-}
-```
-
-`explain(lookahead_result)` produces multi-step hints:
-
-- Step 1: "Try looking at Q3."
-- Step 2: "What if Q3 is A?"
-- Step 3: "Then Q5 must be B (answer to Q5 matches Q3), and Q7 must be C (only option left) — but Q7 says 2 consonants and there are already 3."
-- Step 4: "So Q3 can't be A."
-
-The current JS code tries to reconstruct this chain after the fact by re-running `findContradiction` and `canEliminate`. This is why the explain code diverged from the action-finding code. With the chain returned directly, explain is just formatting.
-
-### Validate also returns a reason
-
-For the validity bar and error detection:
-
-```
-ValidateResult =
-  | Valid { reason: Reason }     // green bar, with explanation of why
-  | Invalid { reason: Reason }   // red bar, with explanation of what's wrong
-  | Pending                      // amber bar, not enough info
-```
-
-When the player asks "why is this red?", explain just formats the reason. When lookahead finds a contradiction, it uses the ValidateResult's reason to explain what went wrong.
-
-## Generation pipeline
-
-1. **Construct** — build puzzle: pick solution, place rules, generate distractors
-2. **Evaluate** — verify each rule is correct for the solution
-3. **Hint engine** — verify puzzle is solvable by deduction from blank
-4. **Repair** — if hint engine gets stuck, tweak distractors, re-run hint engine
-5. **Brute-force solver** — verify exactly 1 solution exists (safety net)
-
-The hint engine (step 3) is the main filter — most rejected puzzles fail here. Running it before the expensive brute-force solver avoids wasting time checking uniqueness of puzzles that can't be solved by deduction anyway.
-
-The brute-force solver (step 5) is a safety net that runs last, only on puzzles the hint engine already solves. Deduction rules may assume the puzzle has a unique solution — for example, a lookahead that reaches a complete valid solution could accept it as correct. This is only sound if uniqueness is guaranteed. The solver provides that guarantee.
-
-## Implementation notes for refactor
-
-### Deduce with rule filter
-
-`deduce` accepts an optional rule filter so tests can exercise one deduction rule in isolation:
-
-```rust
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum DeduceRule {
-    All,
-    CountSaturation,
-    VowelConsonantCross,
-    ForcedValues,
-    Eliminations,
-    // ... one per section
-}
-
-#[inline(always)]
-fn deduce(fp, answers, eliminated) -> Option<Action> {
-    deduce_with_rule(fp, answers, eliminated, DeduceRule::All)
-}
-
-fn deduce_with_rule(fp, answers, eliminated, rule: DeduceRule) -> Option<Action> {
-    if rule == DeduceRule::All || rule == DeduceRule::CountSaturation {
-        // count saturation logic
-    }
-    if rule == DeduceRule::All || rule == DeduceRule::ForcedValues {
-        // forced values logic
-    }
-    // ...
-}
-```
-
-Production calls `deduce()` — inlined with `All`, compiler eliminates branches. Tests call `deduce_with_rule()` with a specific rule. Zero overhead in production.
-
-JS uses a string parameter (`null` for all, `"count_saturation"` etc. for specific).
-
-### Test format (after refactor)
-
-Three test types in `tests/hint-checks.json`:
-
-**Validate tests** — check validity of an answered question:
+**checkAnswerValidity tests** — check validity of an answered question:
 ```json
 {
-  "test": "validate",
+  "test": "checkAnswerValidity",
   "name": "CountAnswer: count exceeds value",
   "qi": 0,
   "puzzle": { ... },
@@ -332,7 +325,7 @@ Three test types in `tests/hint-checks.json`:
 }
 ```
 
-**Deduce tests** — check that a specific rule produces the expected action:
+**deduce tests** — check that a specific deduction rule produces the expected action:
 ```json
 {
   "test": "deduce",
@@ -344,7 +337,7 @@ Three test types in `tests/hint-checks.json`:
 }
 ```
 
-**Solve tests** — end-to-end, verify the engine solves a puzzle:
+**solve tests** — end-to-end, verify the engine solves a puzzle:
 ```json
 {
   "test": "solve",
@@ -354,15 +347,21 @@ Three test types in `tests/hint-checks.json`:
 }
 ```
 
-Each test type exercises one layer. Deduce tests no longer need carefully crafted puzzles where only one check fires — the rule filter handles isolation.
+Each test type exercises one layer. Deduce tests use the rule filter for isolation — no need to carefully craft puzzles where only one deduction rule fires.
 
-### Current state (pre-refactor)
+### Solvability checking (`--check` / `check-solvable.mts`)
+Verifies the engine solves every puzzle in a JSON file from blank.
+Single-puzzle mode outputs step trace: `1a.2b.3C` (eliminate/force notation).
 
-The code currently mixes validate and deduce into `find_action_fast` / `findActionFp`. The contradiction section IS validate, the rest IS deduce. Refactor steps:
+### Adding a new deduction rule
+1. Add to both Rust and JS deduce functions
+2. Add a DeduceRule enum variant
+3. Add test cases to `tests/hint-checks.json` (using the rule filter)
+4. Run shared tests (both engines)
+5. Run solvability check on all puzzle files
+6. Add explanation text to JS explain layer
 
-1. Extract validate as a separate function (for each qi: valid/invalid/pending)
-2. Remove contradiction checks from deduce
-3. Update lookahead: call deduce in a loop, then validate to detect contradictions
-4. Add rule filter parameter to deduce
-5. Rewrite test suite to the new format
-6. Add validate-specific tests
+### Adding checkAnswerValidity for a question type
+1. Add to both Rust and JS checkAnswerValidity functions
+2. Add test cases (checkAnswerValidity tests)
+3. Verify lookahead still works (it depends on checkAnswerValidity)
