@@ -267,6 +267,18 @@ ValidateResult =
 
 When the player asks "why is this red?", explain just formats the reason. When lookahead finds a contradiction, it uses the ValidateResult's reason to explain what went wrong.
 
+## Generation pipeline
+
+1. **Construct** — build puzzle: pick solution, place rules, generate distractors
+2. **Evaluate** — verify each rule is correct for the solution
+3. **Hint engine** — verify puzzle is solvable by deduction from blank
+4. **Repair** — if hint engine gets stuck, tweak distractors, re-run hint engine
+5. **Brute-force solver** — verify exactly 1 solution exists (safety net)
+
+The hint engine (step 3) is the main filter — most rejected puzzles fail here. Running it before the expensive brute-force solver avoids wasting time checking uniqueness of puzzles that can't be solved by deduction anyway.
+
+The brute-force solver (step 5) is a safety net that runs last, only on puzzles the hint engine already solves. Deduction rules may assume the puzzle has a unique solution — for example, a lookahead that reaches a complete valid solution could accept it as correct. This is only sound if uniqueness is guaranteed. The solver provides that guarantee.
+
 ## Implementation notes for refactor
 
 ### Deduce with rule filter
