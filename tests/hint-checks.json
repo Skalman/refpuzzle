@@ -766,6 +766,586 @@
       ]},
       "state": ["", ""],
       "expect": null
+    },
+
+    {"section": "=== NEW: Contradiction edge cases ==="},
+
+    {
+      "name": "CountAnswerAfter contradiction: count exceeds in after range",
+      "description": "count_answer_after A (>Q1), answered C (value=0). But Q3=A and Q4=A → count=2 > 0",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_after", "a": 0, "q": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "C", "A", "A"],
+      "expect": "!2"
+    },
+    {
+      "name": "ClosestAfter None contradiction: answered None but match exists after index",
+      "description": "closest_after A (>Q1), answered E (None). But Q3=A exists after Q1",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, 3, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "E", "A", "C"],
+      "expect": "!2"
+    },
+    {
+      "name": "ClosestBefore None contradiction: answered None but match exists before index",
+      "description": "closest_before A (<Q4), answered E (None). But Q2=A exists before Q4",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 3}, "o": [0, 1, null, 2, null]}
+      ]},
+      "state": ["C", "A", "B", "E"],
+      "expect": "!4"
+    },
+
+    {"section": "=== NEW: Saturation edge cases ==="},
+
+    {
+      "name": "CountConsonant saturation: consonant count met, eliminate remaining consonants",
+      "description": "count_consonant=2. Q1=A(vowel). Q2=B, Q3=D → 2 consonants. Eliminate consonants from Q4.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_consonant_answers"}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "D", ""],
+      "expect": "4b"
+    },
+    {
+      "name": "CountAnswerAfter saturation: partial range, count met",
+      "description": "count_answer_after A (>Q1)=1, Q3=A. Eliminate A from Q4.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_after", "a": 0, "q": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "A", ""],
+      "expect": "4a"
+    },
+    {
+      "name": "Count saturation: remaining=0 and count matches, no action needed",
+      "description": "count_answer A=2, Q2=A,Q3=A,Q4=B. count=2, remaining=0. 2==2, valid.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [3, 2, 1, 0, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", "B"],
+      "expect": null
+    },
+
+    {"section": "=== NEW: Forced value edge cases ==="},
+
+    {
+      "name": "Forced: LetterDist with 2+ options but only 1 satisfies distance",
+      "description": "letter_dist Q2, Q2=D. Options: A=3, B=1, C=0, D=1, E=2. |A-D|=3 matches A. |B-D|=2!=1. |C-D|=1!=0. |D-D|=0!=1. |E-D|=1!=2. Only A works.",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [3, 1, 0, 1, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "D", ""],
+      "expect": "1A"
+    },
+    {
+      "name": "Forced: SameAs reverse (another SameAs references this one)",
+      "description": "Q2=same_answer_as, answered C. Option C value=0 (→Q1). So Q1 must be C.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "same_answer_as"}, "o": [0, 1, 0, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "C", ""],
+      "expect": "1C"
+    },
+    {
+      "name": "Forced: only 1 option remaining after multiple eliminations",
+      "description": "Q2 has A,B,C,D eliminated, only E remains.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "abcd", ""],
+      "expect": "2E"
+    },
+
+    {"section": "=== NEW: Elimination edge cases ==="},
+
+    {
+      "name": "ClosestAfter elimination: position has wrong answer",
+      "description": "closest_after A (>Q1), option B → Q3 (index 2). Q3=C ≠ A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, null, 3, null]}
+      ]},
+      "state": ["B", "", "C", ""],
+      "expect": "4b"
+    },
+    {
+      "name": "ClosestAfter elimination: answer eliminated from target position",
+      "description": "closest_after A (>Q1), option A → Q2 (index 1). A eliminated from Q2.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, null, 3, null]}
+      ]},
+      "state": ["B", "a", "", ""],
+      "expect": "4a"
+    },
+    {
+      "name": "ClosestBefore elimination: closer match exists in range",
+      "description": "closest_before A (<Q5), option A → Q1 (index 0). Q3=A is closer to Q5 than Q1.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 4}, "o": [0, 1, null, 3, null]}
+      ]},
+      "state": ["", "", "A", "", ""],
+      "expect": "5a"
+    },
+    {
+      "name": "ClosestBefore elimination: answer eliminated from target position",
+      "description": "closest_before A (<Q4), option A → Q1 (index 0). A eliminated from Q1.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 3}, "o": [0, 1, null, 2, null]}
+      ]},
+      "state": ["a", "", "", ""],
+      "expect": "4a"
+    },
+    {
+      "name": "LastWith elimination: position has wrong answer",
+      "description": "last_with A, option C → Q3 (index 2). Q3=B ≠ A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, null, 2, 3, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "B", ""],
+      "expect": "2c"
+    },
+    {
+      "name": "FirstWith elimination: position out of range (>= n)",
+      "description": "first_with A, option D → index 5. But n=4, so 5 >= 4 → out of range.",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, 5, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1d"
+    },
+    {
+      "name": "LetterDist elimination: multiple options, only eliminate mismatches",
+      "description": "letter_dist Q2, Q2=C. A: |0-2|=2, opt=3 → mismatch (elim). B: |1-2|=1, opt=1 → ok. Engine hits A first.",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [3, 1, 0, 2, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "C", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "PrevSame elimination: target answered with different letter (all answered)",
+      "description": "prev_same Q3, answered B. Option B → Q2 (index 1). Q2=D, Q3=B. D≠B. All answered → evaluate fallback catches it.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 1, null, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "D", "B", "A"],
+      "expect": "!3"
+    },
+    {
+      "name": "NextSame contradiction: target answered with different letter (all answered)",
+      "description": "next_same Q1, answered C. Option C → Q3 (index 2). Q3=A ≠ C. All answered → evaluate fallback.",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 3, 2, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "D", "A", "B"],
+      "expect": "!1"
+    },
+    {
+      "name": "OnlySame elimination: target answered with different letter (both answered)",
+      "description": "only_same Q2, answered D. Option D → Q1 (index 0). Q1=A, Q2=D. A ≠ D. But Q2 is answered and OnlySame self-ref check: v=0 ≠ qi=1, so not self. Then check OnlySame with all answered: evaluate checks if exactly 1 other Q matches Q2's answer.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_same_answer"}, "o": [2, 0, null, 0, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "D", "D"],
+      "expect": "!2"
+    },
+
+    {"section": "=== NEW: Vowel/consonant cross-elimination ==="},
+
+    {
+      "name": "Vowel/consonant cross: consonant option has no vowel complement",
+      "description": "n=4. Q1=count_vowel options [0,1,2,3,5]. Q2=count_consonant options [0,1,2,3,4]. Q2 option A=0 consonants → needs 4 vowels. Q1 has no 4 option → eliminate Q2 A.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [0, 1, 2, 3, 5]},
+        {"r": {"t": "count_consonant_answers"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1e"
+    },
+    {
+      "name": "Vowel/consonant cross: both answered consistently, no action",
+      "description": "n=4. Q1=count_vowel=B (1 vowel). n-1=3 consonants. Q2=count_consonant has option D=3. Both consistent.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "count_consonant_answers"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "D", "", ""],
+      "expect": null
+    },
+    {
+      "name": "Vowel/consonant cross: vowel answered, eliminate consonant with no complement",
+      "description": "n=4. Q1=count_vowel=A (0 vowels). n-0=4 consonants needed. Q2=count_consonant has no 4 option → eliminate Q1 option A.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [0, 1, 2, 3, 5]},
+        {"r": {"t": "count_consonant_answers"}, "o": [0, 1, 2, 3, 5]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1a"
+    },
+
+    {"section": "=== NEW: Boundary/edge cases ==="},
+
+    {
+      "name": "Boundary: puzzle with exactly 2 questions, saturation eliminates",
+      "description": "count_answer A=0. Q1=B (answered). Q2 unknown. count=0, remaining=1 (Q2). count==0 → eliminate A from Q2.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", ""],
+      "expect": "2a"
+    },
+    {
+      "name": "Boundary: question at index 0 with closest_after positional rule",
+      "description": "Q1=closest_after A (>Q1, afterIndex=0). Option A → Q2 (index 1). Q2=B ≠ A.",
+      "puzzle": {"q": [
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, null, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "Boundary: question at last index with PrevSame",
+      "description": "Q4 (last) has prev_same. Option A → Q3 (index 2). Q3=B, Q4 unanswered. No contradiction (Q4 not answered). Elim: v=2 < qi=3 (ok). Closer match check: j=2 already is target. No closer match in (2,3). But Q3=B and LETTERS[oi=0]='A'. Q3≠A so no closer match found. Passes. Option B → Q1 (index 0). v=0 < qi=3 ok. Closer match j in (0..3): Q2 not answered, Q3=B. LETTERS[oi=1]='B'. Q3=B and j=2 > v=0 → closer match exists → eliminate B.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [2, 0, null, 1, null]}
+      ]},
+      "state": ["", "", "B", ""],
+      "expect": "4b"
+    },
+    {
+      "name": "Boundary: count saturation with count=0 (eliminate all matching)",
+      "description": "count_answer A=0. No A's should exist. Q2,Q3 unknown → eliminate A from both. First hit: Q2 option A.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "",""],
+      "expect": "2a"
+    },
+    {
+      "name": "Boundary: FirstWith where all positions have the answer → first position wins",
+      "description": "first_with A, Q1=A, Q2=A, Q3=A. First is Q1 (index 0). Option A maps to Q1 → force A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "A"],
+      "expect": "2b"
+    },
+    {
+      "name": "Boundary: LastWith where multiple positions have answer → last wins",
+      "description": "last_with A. Q1=A, Q3=A. Last A is Q3 (index 2). Option A → Q1 (index 0). Closer match Q3 exists → eliminate A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, null, 2, 3, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "A"],
+      "expect": "2a"
+    },
+    {
+      "name": "Boundary: ConsecIdent with pair at boundary (last two, all answered)",
+      "description": "consec_ident Q4, answered C → pair at index 2 (Q3&Q4). Q3=A, Q4=B → different. All answered → evaluate fallback.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, 2, null, 3]}
+      ]},
+      "state": ["D", "E", "A", "C"],
+      "expect": "!4"
+    },
+
+    {"section": "=== NEW: No-action cases ==="},
+
+    {
+      "name": "No action: consistent state, no deductions possible",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", ""],
+      "expect": null
+    },
+    {
+      "name": "No action: all questions answered correctly (no contradictions)",
+      "description": "count_answer A=2. Q2=A, Q3=A, Q4=B. count=2, matches. All answered.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [3, 2, 1, 0, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", "B"],
+      "expect": null
+    },
+    {
+      "name": "No action: correctly answered LetterDist (all answered)",
+      "description": "letter_dist Q2, Q1=A, Q2=C. |A-C|=2, option A value=2. Correct, no contradiction.",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "C", "B"],
+      "expect": null
+    },
+    {
+      "name": "No action: correctly answered first_with (all answered)",
+      "description": "first_with A, answered A (→ Q1). Q1=A. No earlier match. Correct.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "B"],
+      "expect": null
+    },
+
+    {"section": "=== NEW: Additional edge cases ==="},
+
+    {
+      "name": "ClosestAfter None elimination: match exists after index",
+      "description": "closest_after A (>Q1), option C is None. But Q3=A exists after Q1.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, null, null, 3]}
+      ]},
+      "state": ["B", "", "A", ""],
+      "expect": "4c"
+    },
+    {
+      "name": "ClosestBefore None elimination: match exists before index",
+      "description": "closest_before A (<Q4), option C is None. But Q1=A exists before Q4.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 3}, "o": [0, 1, null, 2, null]}
+      ]},
+      "state": ["A", "", "", ""],
+      "expect": "4c"
+    },
+    {
+      "name": "LastWith elimination: answer eliminated from target",
+      "description": "last_with A, option C → Q3 (index 2). A eliminated from Q3.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, null, 2, 3, 1]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "a", ""],
+      "expect": "2c"
+    },
+    {
+      "name": "FirstWith elimination: answer eliminated from target",
+      "description": "first_with A, option B → Q2 (index 1). A eliminated from Q2.",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "a", ""],
+      "expect": "1b"
+    },
+    {
+      "name": "Unique contradiction: same answer appears in 3 questions",
+      "description": "unique_answer Q1=A. Q2=A, Q3=A. count=3 > 1.",
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "A"],
+      "expect": "!1"
+    },
+    {
+      "name": "SameAs elimination: self-reference in option value",
+      "description": "same_as Q2 (qi=1), unanswered. Option B value=1 (self). Can't point to self → eliminate B.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "same_answer_as"}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", ""],
+      "expect": "2b"
+    },
+    {
+      "name": "CountAnswerAfter elimination: count+remaining too low for option",
+      "description": "count_answer_after A (>Q1). Q3=B, Q4=C. count=0, remaining=0. Only option C=0 matches.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_after", "a": 0, "q": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "", "B", "C"],
+      "expect": "2a"
+    },
+    {
+      "name": "Forced: AnswerOf when only 1 option maps to target (not first option)",
+      "description": "answer_of Q2, Q2=D. Options map: A→B, B→A, C→D, D→C, E→E. Only C maps to D → force C.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 3, 2, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "D", ""],
+      "expect": "1C"
+    },
+    {
+      "name": "ClosestAfter elimination: earlier match makes option impossible",
+      "description": "closest_after A (>Q1), option B → Q3 (index 2). But Q2=A (index 1) is closer. Eliminate B first.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [1, 2, 3, 4, null]}
+      ]},
+      "state": ["B", "A", "", "", ""],
+      "expect": "5b"
+    },
+    {
+      "name": "OnlyOdd elimination: even-indexed position (4th question)",
+      "description": "only_odd A, option D → index 3 (Q4). (3+1)%2=0 (even) → eliminate D.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 2, null, 3, 4]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "4d"
+    },
+    {
+      "name": "ConsecIdent elimination: None option but pair exists (partial state)",
+      "description": "consec_ident Q3. Q1=C, Q2=C form a pair. Option C is None → eliminate (pair exists). Option C checked before D.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, null, null, 2]}
+      ]},
+      "state": ["C", "C", ""],
+      "expect": "3c"
+    },
+    {
+      "name": "Forced: counting rule with count_answer_before all answered",
+      "description": "count_answer_before A (<Q3). Q1=A, Q2=B → 1 A before Q3. Only option B=1 matches → force B.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_before", "a": 0, "q": 2}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "3B"
+    },
+    {
+      "name": "Saturation: count_answer remaining must match, eliminate non-matching",
+      "description": "count_answer B=2. Q1=A (value=2, not a B). Q2=B, Q3=C. count=1 (Q2), remaining=1 (Q4). 1+1=2==value → Q4 must be B → eliminate A from Q4.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 1}, "o": [2, 3, 1, 0, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", ""],
+      "expect": "4a"
+    },
+    {
+      "name": "Boundary: ClosestBefore with beforeIndex=1 (only Q1 in range)",
+      "description": "closest_before A (<Q2, beforeIndex=1). Range is [0,1). Only Q1 (index 0). Option B → Q1 (index 0). Q1=B ≠ A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 1}, "o": [0, null, null, 1, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "", ""],
+      "expect": "2a"
+    },
+    {
+      "name": "Boundary: FirstWith where target is Q1 (index 0, answer matches)",
+      "description": "first_with A, option A → Q1 (index 0). Q1=A. Correct, no earlier match possible. No elimination for option A.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", ""],
+      "expect": "2b"
     }
   ]
 }
