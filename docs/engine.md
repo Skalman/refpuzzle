@@ -190,3 +190,91 @@ Single-puzzle mode outputs step trace: `1a.2b.3C` (eliminate/force notation).
 1. Add to both Rust and JS validate functions
 2. Add test cases (validate tests, separate from deduce tests)
 3. Verify lookahead still works (it depends on validate)
+
+## Implementation notes for refactor
+
+### Deduce with rule filter
+
+`deduce` accepts an optional rule filter so tests can exercise one deduction rule in isolation:
+
+```rust
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum DeduceRule {
+    All,
+    CountSaturation,
+    VowelConsonantCross,
+    ForcedValues,
+    Eliminations,
+    // ... one per section
+}
+
+#[inline(always)]
+fn deduce(fp, answers, eliminated) -> Option<Action> {
+    deduce_with_rule(fp, answers, eliminated, DeduceRule::All)
+}
+
+fn deduce_with_rule(fp, answers, eliminated, rule: DeduceRule) -> Option<Action> {
+    if rule == DeduceRule::All || rule == DeduceRule::CountSaturation {
+        // count saturation logic
+    }
+    if rule == DeduceRule::All || rule == DeduceRule::ForcedValues {
+        // forced values logic
+    }
+    // ...
+}
+```
+
+Production calls `deduce()` — inlined with `All`, compiler eliminates branches. Tests call `deduce_with_rule()` with a specific rule. Zero overhead in production.
+
+JS uses a string parameter (`null` for all, `"count_saturation"` etc. for specific).
+
+### Test format (after refactor)
+
+Three test types in `tests/hint-checks.json`:
+
+**Validate tests** — check validity of an answered question:
+```json
+{
+  "test": "validate",
+  "name": "CountAnswer: count exceeds value",
+  "qi": 0,
+  "puzzle": { ... },
+  "state": ["C", "A", "A", ""],
+  "expect": "invalid"
+}
+```
+
+**Deduce tests** — check that a specific rule produces the expected action:
+```json
+{
+  "test": "deduce",
+  "rule": "count_saturation",
+  "name": "Count met, eliminate remaining matches",
+  "puzzle": { ... },
+  "state": ["B", "A", "", ""],
+  "expect": "3a"
+}
+```
+
+**Solve tests** — end-to-end, verify the engine solves a puzzle:
+```json
+{
+  "test": "solve",
+  "name": "Simple 4-question puzzle",
+  "puzzle": { ... },
+  "expect": "solved"
+}
+```
+
+Each test type exercises one layer. Deduce tests no longer need carefully crafted puzzles where only one check fires — the rule filter handles isolation.
+
+### Current state (pre-refactor)
+
+The code currently mixes validate and deduce into `find_action_fast` / `findActionFp`. The contradiction section IS validate, the rest IS deduce. Refactor steps:
+
+1. Extract validate as a separate function (for each qi: valid/invalid/pending)
+2. Remove contradiction checks from deduce
+3. Update lookahead: call deduce in a loop, then validate to detect contradictions
+4. Add rule filter parameter to deduce
+5. Rewrite test suite to the new format
+6. Add validate-specific tests
