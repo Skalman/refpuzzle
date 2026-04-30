@@ -191,6 +191,82 @@ Single-puzzle mode outputs step trace: `1a.2b.3C` (eliminate/force notation).
 2. Add test cases (validate tests, separate from deduce tests)
 3. Verify lookahead still works (it depends on validate)
 
+## Explain
+
+The explain layer converts actions into human-readable hint text. It is JS-only (player-facing) and contains no game logic — just text formatting.
+
+### Deduce returns its reasoning
+
+`deduce` doesn't just return an action — it returns which rule fired and why:
+
+```
+DeduceResult {
+    action: Action               // eliminate Q3 option B, or force Q5=A
+    rule: DeduceRule             // "count_saturation", "forced_answer_of", etc.
+    reason: Reason               // rule-specific detail
+}
+```
+
+The `reason` captures the specific observation that triggered the deduction:
+
+```
+Reason =
+  | CountSaturated { letter, count }               // "A count reached 2"
+  | ForcedLastOption                                // "only option left"
+  | ForcedAnswerOf { target_qi, target_answer }     // "Q3 is answered B"
+  | ForcedLetterDist { other_qi, distance }         // "distance to Q2 must be 3"
+  | PositionHasWrongAnswer { pos, expected, found } // "Q3 is C, not A"
+  | AnswerEliminatedFromTarget { pos, letter }      // "A is crossed out on Q3"
+  | CloserMatchExists { claimed, closer }           // "Q4 is closer than Q2"
+  | TargetAnswerMismatch { pos, expected, found }   // "Q3 is A, not B"
+  | SelfReference                                   // "can't point to itself"
+  | PositionOutOfRange { pos }                      // "Q5 is after this question"
+  | PairDifferent { pos, a, b }                     // "Q1=A and Q2=B differ"
+  | EvenPosition { pos }                            // "Q2 is even-numbered"
+  | CountExceedsValue { count, value }              // "already 3, but says 2"
+  | CountTooLow { count, remaining, value }         // "at most 2 possible, but says 3"
+  | NoneButMatchExists { pos }                      // "says None but Q3=A exists"
+  | CrossEliminationNoComplement { value }          // "vowel=3 but consonant has no 9"
+  | ...
+```
+
+`explain(result)` is then pure text formatting — pattern match on `(rule, reason)` and produce a string. No game logic, no re-derivation.
+
+### Lookahead returns its chain
+
+Lookahead returns the full reasoning chain:
+
+```
+LookaheadResult {
+    eliminate: (qi, oi)                // what to eliminate from the real state
+    assumption: (qi, Answer)           // "assume Q3=A"
+    chain: [DeduceResult, ...]         // deductions made under the assumption
+    contradiction: (qi, ValidateResult)// which question became invalid and why
+}
+```
+
+`explain(lookahead_result)` produces multi-step hints:
+
+- Step 1: "Try looking at Q3."
+- Step 2: "What if Q3 is A?"
+- Step 3: "Then Q5 must be B (answer to Q5 matches Q3), and Q7 must be C (only option left) — but Q7 says 2 consonants and there are already 3."
+- Step 4: "So Q3 can't be A."
+
+The current JS code tries to reconstruct this chain after the fact by re-running `findContradiction` and `canEliminate`. This is why the explain code diverged from the action-finding code. With the chain returned directly, explain is just formatting.
+
+### Validate also returns a reason
+
+For the validity bar and error detection:
+
+```
+ValidateResult =
+  | Valid { reason: Reason }     // green bar, with explanation of why
+  | Invalid { reason: Reason }   // red bar, with explanation of what's wrong
+  | Pending                      // amber bar, not enough info
+```
+
+When the player asks "why is this red?", explain just formats the reason. When lookahead finds a contradiction, it uses the ValidateResult's reason to explain what went wrong.
+
 ## Implementation notes for refactor
 
 ### Deduce with rule filter
