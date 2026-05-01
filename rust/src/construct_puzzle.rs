@@ -449,6 +449,10 @@ fn solution_fits_type(kind: QuestionTypeKind, qi: usize, sol: &[Answer; MAX_N], 
             counts.iter().filter(|&&c| c == max).count() == 1
         }
         QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
+        QuestionTypeKind::Unique => {
+            let counts = letter_counts(sol, n);
+            counts.iter().filter(|&&c| c == 1).count() == 1
+        }
         QuestionTypeKind::EqualCount => {
             let counts = letter_counts(sol, n);
             let qi_count = counts[sol[qi].idx()];
