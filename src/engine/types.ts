@@ -1,16 +1,7 @@
 export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>([
-  "A",
-  "E",
-]);
+export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
-export type Marks = [
-  OptionMark,
-  OptionMark,
-  OptionMark,
-  OptionMark,
-  OptionMark,
-];
+export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
 
 export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
@@ -35,7 +26,7 @@ export interface Puzzle {
 
 export interface QuestionDef {
   options: OptionDef[];
-  rule: ValidationRule;
+  questionType: QuestionTypeDef;
 }
 
 export type OptionDef = SimpleOption | StatementOption;
@@ -70,7 +61,7 @@ export type Claim =
   | { type: "last_with_answer"; answer: AnswerLetter; value: number }
   | { type: "most_common_answer"; value: number };
 
-export type ValidationRule =
+export type QuestionTypeDef =
   // ── Counting ──
   | { type: "count_answer"; answer: AnswerLetter }
   | { type: "count_answer_before"; answer: AnswerLetter; beforeIndex: number }
@@ -105,7 +96,7 @@ export type ValidationRule =
   // ── Compound ──
   | { type: "only_true_statement" };
 
-// Numeric rule type IDs — top-level constants for V8 inlining
+// Numeric question type IDs — top-level constants for V8 inlining
 export const RT_COUNT_ANSWER = 0;
 export const RT_COUNT_ANSWER_BEFORE = 1;
 export const RT_COUNT_ANSWER_AFTER = 2;
@@ -131,10 +122,10 @@ export const RT_SELF = 21;
 export const RT_LETTER_DIST = 22;
 export const RT_TRUE_STMT = 23;
 
-export type RuleTypeId = number;
+export type QuestionTypeId = number;
 
 // Mapping from string type names to numeric IDs (used in flattenRule)
-const RT_MAP: Record<string, RuleTypeId> = {
+const RT_MAP: Record<string, QuestionTypeId> = {
   count_answer: RT_COUNT_ANSWER,
   count_answer_before: RT_COUNT_ANSWER_BEFORE,
   count_answer_after: RT_COUNT_ANSWER_AFTER,
@@ -162,15 +153,15 @@ const RT_MAP: Record<string, RuleTypeId> = {
 };
 
 // Flat representation for hot-path performance (single V8 hidden class)
-export interface FlatRule {
-  t: RuleTypeId;
+export interface FlatQuestion {
+  t: QuestionTypeId;
   answer: string | null;
   questionIndex: number;
   afterIndex: number;
   beforeIndex: number;
 }
 
-function flattenRule(r: ValidationRule): FlatRule {
+function flattenQuestion(r: QuestionTypeDef): FlatQuestion {
   return {
     t: RT_MAP[r.type],
     answer: "answer" in r ? r.answer : null,
@@ -182,7 +173,7 @@ function flattenRule(r: ValidationRule): FlatRule {
 
 // Pre-flattened puzzle for solver/evaluator
 export interface FlatPuzzle {
-  rules: FlatRule[];
+  questions: FlatQuestion[];
   optionValues: (number | null)[][]; // [questionIdx][optionIdx] → semantic value
   optionClaims: (Claim | null)[][]; // for only_true_statement
   affectedBy: number[][]; // affectedBy[j] = question indices to re-check when Q_j changes
@@ -190,7 +181,7 @@ export interface FlatPuzzle {
   n: number;
 }
 
-const GLOBAL_RULE_IDS = new Set<RuleTypeId>([
+const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
   RT_COUNT_ANSWER,
   RT_COUNT_VOWEL,
   RT_COUNT_CONSONANT,
@@ -219,14 +210,14 @@ export function getFlatPuzzle(puzzle: Puzzle): FlatPuzzle {
 
 export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
   const n = puzzle.questions.length;
-  const rules = puzzle.questions.map((q) => flattenRule(q.rule));
+  const questions = puzzle.questions.map((q) => flattenQuestion(q.questionType));
 
   // Build dependency map: affectedBy[j] = local rules to re-check when Q_j changes
   const affectedBy: number[][] = Array.from({ length: n }, () => []);
   const globalIndices: number[] = [];
 
   for (let i = 0; i < n; i++) {
-    const r = rules[i];
+    const r = questions[i];
     if (GLOBAL_RULE_IDS.has(r.t)) {
       globalIndices.push(i);
     } else if (r.t === RT_ANSWER_OF) {
@@ -249,7 +240,7 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
   }
 
   return {
-    rules,
+    questions,
     optionValues: puzzle.questions.map((q) => q.options.map((o) => o.value)),
     optionClaims: puzzle.questions.map((q) =>
       q.options.map((o) => ("claim" in o ? o.claim : null)),

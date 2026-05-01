@@ -1,5 +1,7 @@
-use crate::evaluate::{evaluate, evaluate_claim};
-use crate::hints::{apply_action, find_action_fast, find_lookahead_action};
+use crate::check_validity::check_question_against_solution;
+use crate::deduce::{DeduceAction, deduce};
+use crate::evaluate::evaluate_claim;
+use crate::lookahead::lookahead;
 use crate::rng::Rng;
 use crate::solver::solve;
 use crate::types::*;
@@ -37,7 +39,7 @@ fn us(t: std::time::Instant) -> u64 {
 }
 
 pub struct GenerateResult {
-    pub rules: [Rule; MAX_N],
+    pub question_types: [QuestionType; MAX_N],
     pub fp: FlatPuzzle,
     pub n: usize,
 }
@@ -50,9 +52,14 @@ pub fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
     arr
 }
 
-pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
-    match *rule {
-        Rule::OnlySame => {
+pub fn solution_satisfies_type(
+    qt: &QuestionType,
+    qi: usize,
+    sol: &[Answer; MAX_N],
+    n: usize,
+) -> bool {
+    match *qt {
+        QuestionType::OnlySame => {
             let mut matches = 0;
             for i in 0..n {
                 if i != qi && sol[i] == sol[qi] {
@@ -61,7 +68,7 @@ pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize)
             }
             matches == 1
         }
-        Rule::ConsecIdent => {
+        QuestionType::ConsecIdent => {
             let mut pairs = 0;
             for i in 0..n.saturating_sub(1) {
                 if sol[i] == sol[i + 1] {
@@ -70,7 +77,7 @@ pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize)
             }
             pairs == 1
         }
-        Rule::OnlyOdd { answer } => {
+        QuestionType::OnlyOdd { answer } => {
             let mut matches = 0;
             for i in 0..n {
                 if (i + 1) % 2 == 1 && sol[i] == answer {
@@ -79,8 +86,8 @@ pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize)
             }
             matches == 1
         }
-        Rule::Unique => count_letter(sol, sol[qi], n) == 1,
-        Rule::EqualCount { answer } => {
+        QuestionType::Unique => count_letter(sol, sol[qi], n) == 1,
+        QuestionType::EqualCount { answer } => {
             let ref_count = count_letter(sol, answer, n);
             LETTERS
                 .iter()
@@ -90,11 +97,11 @@ pub fn check_structural(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize)
     }
 }
 
-fn run_hint_engine(fp: &FlatPuzzle) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
-    run_hint_engine_from(fp, [None; MAX_N], [0u8; MAX_N])
+fn try_solve(fp: &FlatPuzzle) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+    try_solve_from(fp, [None; MAX_N], [0u8; MAX_N])
 }
 
-fn run_hint_engine_from(
+fn try_solve_from(
     fp: &FlatPuzzle,
     mut answers: [Option<Answer>; MAX_N],
     mut eliminated: [u8; MAX_N],
@@ -106,16 +113,21 @@ fn run_hint_engine_from(
             return (true, answers, eliminated);
         }
 
-        if let Some(action) = find_action_fast(fp, &answers, &eliminated) {
-            if let crate::hints::Action::Contradiction { .. } = action {
-                return (false, answers, eliminated);
+        if let Some(dr) = deduce(fp, &answers, &eliminated) {
+            match dr.action {
+                DeduceAction::Force { qi, answer } => {
+                    eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                    answers[qi] = Some(answer);
+                }
+                DeduceAction::Eliminate { qi, oi } => {
+                    eliminated[qi] |= 1 << oi;
+                }
             }
-            apply_action(&action, &mut answers, &mut eliminated);
             continue;
         }
 
-        if let Some(action) = find_lookahead_action(fp, &answers, &eliminated) {
-            apply_action(&action, &mut answers, &mut eliminated);
+        if let Some(lr) = lookahead(fp, &answers, &eliminated) {
+            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }
 
@@ -124,8 +136,8 @@ fn run_hint_engine_from(
     (false, answers, eliminated)
 }
 
-pub fn validate_and_check(
-    rules: &[Rule; MAX_N],
+pub fn validate_and_repair(
+    question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
     fp: &mut FlatPuzzle,
     n: usize,
@@ -133,37 +145,37 @@ pub fn validate_and_check(
 ) -> bool {
     STATS[0].fetch_add(1, Ordering::Relaxed);
 
-    for i in 0..n {
-        for j in (i + 1)..n {
-            if rules[i] == rules[j] {
-                STATS[1].fetch_add(1, Ordering::Relaxed);
-                return false;
-            }
-        }
-    }
-
+    // Assert construction correctness
     let opt_solution = to_optional(solution, n);
     for i in 0..n {
-        if !evaluate(fp, i, solution[i], &opt_solution) {
-            STATS[1].fetch_add(1, Ordering::Relaxed);
-            return false;
+        if !check_question_against_solution(fp, i, solution[i], &opt_solution) {
+            panic!(
+                "BUG: check_question_against_solution failed for Q{} type={:?} answer={:?} solution={:?}",
+                i + 1,
+                question_types[i],
+                solution[i],
+                &solution[..n]
+            );
         }
     }
 
+    // Step 1: Can the engine solve it? (fast, rejects most bad puzzles)
     let t0 = std::time::Instant::now();
-    let solutions = solve(fp, None, 2);
-    STATS[6].fetch_add(us(t0), Ordering::Relaxed);
-    if solutions.len() != 1 {
+    let (ok, stuck_answers, stuck_elim) = try_solve(fp);
+    STATS[7].fetch_add(us(t0), Ordering::Relaxed);
+    if ok {
+        // Step 2: Is the solution unique? (expensive, only for solvable puzzles)
+        let t0 = std::time::Instant::now();
+        let solutions = solve(fp, None, 2);
+        STATS[6].fetch_add(us(t0), Ordering::Relaxed);
+        if solutions.len() == 1 {
+            return true;
+        }
         STATS[2].fetch_add(1, Ordering::Relaxed);
         return false;
     }
 
-    let t0 = std::time::Instant::now();
-    let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp);
-    STATS[7].fetch_add(us(t0), Ordering::Relaxed);
-    if ok {
-        return true;
-    }
+    // Step 3: Repair — tweak distractors and retry
     let solved_before = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
     STATS[3].fetch_add(1, Ordering::Relaxed);
     if solved_before == 0 {
@@ -171,7 +183,7 @@ pub fn validate_and_check(
     }
 
     let candidates = rank_repair_candidates(fp, &stuck_answers);
-    let mut maybe_solved = false;
+    let mut repaired = false;
 
     for &qi in &candidates {
         STATS[4].fetch_add(1, Ordering::Relaxed);
@@ -179,44 +191,36 @@ pub fn validate_and_check(
 
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
-            run_hint_engine(fp)
+            try_solve(fp)
         } else {
-            run_hint_engine_from(fp, stuck_answers, stuck_elim)
+            try_solve_from(fp, stuck_answers, stuck_elim)
         };
         STATS[7].fetch_add(us(t0), Ordering::Relaxed);
 
         if ok {
-            maybe_solved = true;
+            repaired = true;
             break;
         }
     }
 
-    if !maybe_solved {
+    if !repaired {
         let t0 = std::time::Instant::now();
-        let (ok, _, _) = run_hint_engine(fp);
+        let (ok, _, _) = try_solve(fp);
         STATS[7].fetch_add(us(t0), Ordering::Relaxed);
-        maybe_solved = ok;
+        repaired = ok;
     }
 
-    if maybe_solved {
-        for i in 0..n {
-            if !evaluate(fp, i, solution[i], &opt_solution) {
-                return false;
-            }
-        }
-        let t0 = std::time::Instant::now();
-        let (ok, _, _) = run_hint_engine(fp);
-        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
-        if !ok {
-            return false;
-        }
-        let t0 = std::time::Instant::now();
-        let solutions = solve(fp, None, 2);
-        STATS[6].fetch_add(us(t0), Ordering::Relaxed);
-        if solutions.len() == 1 {
-            STATS[5].fetch_add(1, Ordering::Relaxed);
-            return true;
-        }
+    if !repaired {
+        return false;
+    }
+
+    // Step 4: After repair, verify uniqueness
+    let t0 = std::time::Instant::now();
+    let solutions = solve(fp, None, 2);
+    STATS[6].fetch_add(us(t0), Ordering::Relaxed);
+    if solutions.len() == 1 {
+        STATS[5].fetch_add(1, Ordering::Relaxed);
+        return true;
     }
 
     false
@@ -224,7 +228,7 @@ pub fn validate_and_check(
 
 // ── Distractor repair ──
 // When solvability fails, repair one question at a time with extreme-but-valid
-// distractor values (0, max, edge positions). Prioritize counting rules since
+// distractor values (0, max, edge positions). Prioritize counting types since
 // extreme counts are easy for the hint engine to disprove.
 
 fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_N]) -> Vec<usize> {
@@ -234,20 +238,20 @@ fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_
         if stuck_answers[qi].is_some() {
             continue;
         }
-        let rule = fp.rules[qi];
-        if rule.is_constrained() || matches!(rule, Rule::TrueStmt) {
+        let qt = fp.question_types[qi];
+        if qt.is_constrained() || matches!(qt, QuestionType::TrueStmt) {
             continue;
         }
-        let score = match rule {
-            _ if is_counting_type(&rule) => 3,
-            Rule::AnswerOf { question_index } => {
+        let score = match qt {
+            _ if is_counting_type(&qt) => 3,
+            QuestionType::AnswerOf { question_index } => {
                 if stuck_answers[question_index as usize].is_some() {
                     2
                 } else {
                     0
                 }
             }
-            Rule::LetterDist { question_index } => {
+            QuestionType::LetterDist { question_index } => {
                 if stuck_answers[question_index as usize].is_some() {
                     2
                 } else {
@@ -274,13 +278,13 @@ pub fn repair_one_question(
     let n = fp.n;
     let correct_oi = solution[qi].idx();
     let elim = stuck_elim[qi];
-    let rule = fp.rules[qi];
+    let qt = fp.question_types[qi];
 
     // Only repair non-eliminated wrong options — leave eliminated ones untouched
     // to preserve puzzle quality.
 
-    match rule {
-        Rule::AnswerOf { question_index } => {
+    match qt {
+        QuestionType::AnswerOf { question_index } => {
             let correct_answer = solution[question_index as usize];
             let mut pool = [Answer::A; 4];
             let mut plen = 0;
@@ -299,7 +303,7 @@ pub fn repair_one_question(
                 }
             }
         }
-        Rule::LetterDist { .. } => {
+        QuestionType::LetterDist { .. } => {
             let correct_val = fp.option_nums[qi][correct_oi];
             // Find closest non-eliminated wrong option, replace with furthest value
             let mut best_oi = None;
@@ -337,9 +341,9 @@ pub fn repair_one_question(
                 fp.option_nums[qi][oi] = best_new;
             }
         }
-        _ if is_counting_type(&rule) => {
+        _ if is_counting_type(&qt) => {
             let correct_val = fp.option_nums[qi][correct_oi];
-            let max = count_max(&rule, n) as i16;
+            let max = count_max(&qt, n) as i16;
             // Find the non-eliminated wrong option closest to correct — that's
             // the one the hint engine can't distinguish. Replace just that one.
             let mut best_oi = None;
@@ -399,23 +403,27 @@ pub fn repair_one_question(
                 }
             }
             if let Some(oi) = best_oi {
-                let (min_val, max_val) = match rule {
-                    Rule::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
-                    Rule::PrevSame => (0, qi as i16 - 1),
-                    Rule::NextSame => (qi as i16 + 1, n as i16 - 1),
+                let (min_val, max_val) = match qt {
+                    QuestionType::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
+                    QuestionType::PrevSame => (0, qi as i16 - 1),
+                    QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1),
                     _ => {
-                        let min_p = match rule {
-                            Rule::ClosestAfter { after_index, .. } => after_index as i16 + 1,
+                        let min_p = match qt {
+                            QuestionType::ClosestAfter { after_index, .. } => {
+                                after_index as i16 + 1
+                            }
                             _ => 0,
                         };
-                        let max_p = match rule {
-                            Rule::ClosestBefore { before_index, .. } => before_index as i16 - 1,
+                        let max_p = match qt {
+                            QuestionType::ClosestBefore { before_index, .. } => {
+                                before_index as i16 - 1
+                            }
                             _ => n as i16 - 1,
                         };
                         (min_p, max_p)
                     }
                 };
-                let exclude_self = matches!(rule, Rule::OnlySame | Rule::SameAs);
+                let exclude_self = matches!(qt, QuestionType::OnlySame | QuestionType::SameAs);
                 let old_val = fp.option_nums[qi][oi];
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
@@ -453,7 +461,7 @@ pub fn repair_one_question(
 // ── Build FlatPuzzle with options ──
 
 pub fn build_flat_puzzle(
-    rules: &[Rule; MAX_N],
+    question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
     n: usize,
     rng: &mut Rng,
@@ -463,17 +471,17 @@ pub fn build_flat_puzzle(
     let mut option_claims = [[Claim::None; 5]; MAX_N];
 
     for qi in 0..n {
-        let rule = &rules[qi];
+        let qt = &question_types[qi];
         let correct_oi = solution[qi].idx();
 
-        if rule.is_constrained() {
+        if qt.is_constrained() {
             for oi in 0..5 {
                 option_answers[qi][oi] = oi as u8;
             }
             continue;
         }
 
-        if matches!(rule, Rule::TrueStmt) {
+        if matches!(qt, QuestionType::TrueStmt) {
             build_claims(
                 qi,
                 solution,
@@ -485,10 +493,10 @@ pub fn build_flat_puzzle(
             continue;
         }
 
-        let correct_val = compute_value(rule, qi, solution, n);
+        let correct_val = correct_option_value(qt, qi, solution, n);
 
-        match *rule {
-            Rule::AnswerOf { question_index } => {
+        match *qt {
+            QuestionType::AnswerOf { question_index } => {
                 option_answers[qi][correct_oi] = solution[question_index as usize] as u8;
                 let correct_answer = solution[question_index as usize];
                 let mut pool = [Answer::A; 4];
@@ -508,10 +516,10 @@ pub fn build_flat_puzzle(
                     }
                 }
             }
-            Rule::LeastCommon | Rule::MostCommon => {
+            QuestionType::LeastCommon | QuestionType::MostCommon => {
                 // Find the correct letter (least/most common) and build shuffled options
                 let counts = letter_counts(solution, n);
-                let target_count = if matches!(*rule, Rule::LeastCommon) {
+                let target_count = if matches!(*qt, QuestionType::LeastCommon) {
                     *counts.iter().min().unwrap()
                 } else {
                     *counts.iter().max().unwrap()
@@ -538,12 +546,12 @@ pub fn build_flat_puzzle(
                     }
                 }
             }
-            Rule::ConsecIdent => {
+            QuestionType::ConsecIdent => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = pair_distractors(correct_val, n, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
-            Rule::LetterDist { .. } => {
+            QuestionType::LetterDist { .. } => {
                 option_nums[qi][correct_oi] = correct_val;
                 let mut pool = [0i16; 4];
                 let mut plen = 0;
@@ -556,29 +564,29 @@ pub fn build_flat_puzzle(
                 rng.shuffle(&mut pool[..plen]);
                 place_distractors(&pool, &mut option_nums[qi], correct_oi);
             }
-            _ if is_counting_type(rule) => {
+            _ if is_counting_type(qt) => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors =
-                    count_distractors(correct_val as i32, count_max(rule, n) as i32, rng);
+                    count_distractors(correct_val as i32, count_max(qt, n) as i32, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
-            Rule::OnlyOdd { .. } => {
+            QuestionType::OnlyOdd { .. } => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = odd_position_distractors(correct_val, n, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, qi, n, rule, rng);
+                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
         }
     }
 
-    let (affected_by, global_indices) = FlatPuzzle::build_deps(rules, n);
+    let (affected_by, global_indices) = FlatPuzzle::build_deps(question_types, n);
 
     Some(FlatPuzzle {
-        rules: *rules,
+        question_types: *question_types,
         option_nums,
         option_answers,
         option_claims,
@@ -598,29 +606,29 @@ fn place_distractors(distractors: &[i16; 4], nums: &mut [i16; 5], correct_oi: us
     }
 }
 
-pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) -> i16 {
-    match *rule {
-        Rule::AnswerOf { question_index } => sol[question_index as usize] as i16,
-        Rule::CountAnswer { answer } => count_letter(sol, answer, n) as i16,
-        Rule::CountAnswerBefore {
+pub fn correct_option_value(qt: &QuestionType, qi: usize, sol: &[Answer; MAX_N], n: usize) -> i16 {
+    match *qt {
+        QuestionType::AnswerOf { question_index } => sol[question_index as usize] as i16,
+        QuestionType::CountAnswer { answer } => count_letter(sol, answer, n) as i16,
+        QuestionType::CountAnswerBefore {
             answer,
             before_index,
         } => (0..before_index as usize)
             .filter(|&i| sol[i] == answer)
             .count() as i16,
-        Rule::CountAnswerAfter {
+        QuestionType::CountAnswerAfter {
             answer,
             after_index,
         } => ((after_index as usize + 1)..n)
             .filter(|&i| sol[i] == answer)
             .count() as i16,
-        Rule::CountVowel => (0..n).filter(|&i| sol[i].is_vowel()).count() as i16,
-        Rule::CountConsonant => (0..n).filter(|&i| !sol[i].is_vowel()).count() as i16,
-        Rule::MostCommonCount => {
+        QuestionType::CountVowel => (0..n).filter(|&i| sol[i].is_vowel()).count() as i16,
+        QuestionType::CountConsonant => (0..n).filter(|&i| !sol[i].is_vowel()).count() as i16,
+        QuestionType::MostCommonCount => {
             let c = letter_counts(sol, n);
             *c.iter().max().unwrap() as i16
         }
-        Rule::ClosestAfter {
+        QuestionType::ClosestAfter {
             after_index,
             answer,
         } => {
@@ -631,7 +639,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::ClosestBefore {
+        QuestionType::ClosestBefore {
             before_index,
             answer,
         } => {
@@ -642,7 +650,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::FirstWith { answer } => {
+        QuestionType::FirstWith { answer } => {
             for i in 0..n {
                 if sol[i] == answer {
                     return i as i16;
@@ -650,7 +658,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::LastWith { answer } => {
+        QuestionType::LastWith { answer } => {
             for i in (0..n).rev() {
                 if sol[i] == answer {
                     return i as i16;
@@ -658,7 +666,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::PrevSame => {
+        QuestionType::PrevSame => {
             for i in (0..qi).rev() {
                 if sol[i] == sol[qi] {
                     return i as i16;
@@ -666,7 +674,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::NextSame => {
+        QuestionType::NextSame => {
             for i in (qi + 1)..n {
                 if sol[i] == sol[qi] {
                     return i as i16;
@@ -674,7 +682,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::OnlySame | Rule::SameAs => {
+        QuestionType::OnlySame | QuestionType::SameAs => {
             for i in 0..n {
                 if i != qi && sol[i] == sol[qi] {
                     return i as i16;
@@ -682,7 +690,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::OnlyOdd { answer } => {
+        QuestionType::OnlyOdd { answer } => {
             for i in 0..n {
                 if (i + 1) % 2 == 1 && sol[i] == answer {
                     return i as i16;
@@ -690,7 +698,7 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::ConsecIdent => {
+        QuestionType::ConsecIdent => {
             for i in 0..n.saturating_sub(1) {
                 if sol[i] == sol[i + 1] {
                     return i as i16;
@@ -698,29 +706,29 @@ pub fn compute_value(rule: &Rule, qi: usize, sol: &[Answer; MAX_N], n: usize) ->
             }
             NONE_VAL
         }
-        Rule::LetterDist { question_index } => {
+        QuestionType::LetterDist { question_index } => {
             (sol[qi].idx() as i16 - sol[question_index as usize].idx() as i16).abs()
         }
         _ => NAN_VAL,
     }
 }
 
-fn is_counting_type(rule: &Rule) -> bool {
+fn is_counting_type(qt: &QuestionType) -> bool {
     matches!(
-        rule,
-        Rule::CountAnswer { .. }
-            | Rule::CountAnswerBefore { .. }
-            | Rule::CountAnswerAfter { .. }
-            | Rule::CountVowel
-            | Rule::CountConsonant
-            | Rule::MostCommonCount
+        qt,
+        QuestionType::CountAnswer { .. }
+            | QuestionType::CountAnswerBefore { .. }
+            | QuestionType::CountAnswerAfter { .. }
+            | QuestionType::CountVowel
+            | QuestionType::CountConsonant
+            | QuestionType::MostCommonCount
     )
 }
 
-fn count_max(rule: &Rule, n: usize) -> usize {
-    match *rule {
-        Rule::CountAnswerBefore { before_index, .. } => before_index as usize,
-        Rule::CountAnswerAfter { after_index, .. } => n - after_index as usize - 1,
+fn count_max(qt: &QuestionType, n: usize) -> usize {
+    match *qt {
+        QuestionType::CountAnswerBefore { before_index, .. } => before_index as usize,
+        QuestionType::CountAnswerAfter { after_index, .. } => n - after_index as usize - 1,
         _ => n,
     }
 }
@@ -745,26 +753,28 @@ fn positional_distractors(
     correct: i16,
     qi: usize,
     n: usize,
-    rule: &Rule,
+    qt: &QuestionType,
     rng: &mut Rng,
 ) -> [i16; 4] {
     let mut min_pos: i16 = 0;
     let mut max_pos = n as i16 - 1;
 
-    match *rule {
-        Rule::ClosestAfter { after_index, .. } | Rule::CountAnswerAfter { after_index, .. } => {
+    match *qt {
+        QuestionType::ClosestAfter { after_index, .. }
+        | QuestionType::CountAnswerAfter { after_index, .. } => {
             min_pos = after_index as i16 + 1;
         }
-        Rule::ClosestBefore { before_index, .. } | Rule::CountAnswerBefore { before_index, .. } => {
+        QuestionType::ClosestBefore { before_index, .. }
+        | QuestionType::CountAnswerBefore { before_index, .. } => {
             max_pos = before_index as i16 - 1;
         }
-        Rule::PrevSame => {
+        QuestionType::PrevSame => {
             max_pos = qi as i16 - 1;
         }
-        Rule::NextSame => {
+        QuestionType::NextSame => {
             min_pos = qi as i16 + 1;
         }
-        Rule::ConsecIdent => {
+        QuestionType::ConsecIdent => {
             max_pos = n as i16 - 2;
         }
         _ => {}
@@ -773,7 +783,9 @@ fn positional_distractors(
     let mut pool = [0i16; 20];
     let mut plen = 0;
     for i in min_pos..=max_pos {
-        if i != correct && !matches!(*rule, Rule::OnlySame | Rule::SameAs if i as usize == qi) {
+        if i != correct
+            && !matches!(*qt, QuestionType::OnlySame | QuestionType::SameAs if i as usize == qi)
+        {
             pool[plen] = i;
             plen += 1;
         }

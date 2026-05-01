@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle, FlatRule, Claim } from "./types.ts";
+import type { AnswerLetter, FlatPuzzle, FlatQuestion, Claim } from "./types.ts";
 import {
   LETTERS,
   L2I,
@@ -71,8 +71,8 @@ function countConsonants(answers: (AnswerLetter | null)[]): number {
   return c;
 }
 
-export function evaluate(
-  rule: FlatRule,
+export function checkQuestionAgainstSolution(
+  rule: FlatQuestion,
   questionIdx: number,
   selectedAnswer: AnswerLetter,
   answers: (AnswerLetter | null)[],
@@ -153,6 +153,7 @@ export function evaluate(
       for (let i = 0; i < n; i++) {
         if (i !== questionIdx && answers[i] === selectedAnswer) matches.push(i);
       }
+      if (v == null) return matches.length === 0;
       return matches.length === 1 && matches[0] === v;
     }
 
@@ -166,6 +167,7 @@ export function evaluate(
       for (let i = 0; i < n; i++) {
         if ((i + 1) % 2 === 1 && answers[i] === r.answer) matches.push(i);
       }
+      if (v == null) return matches.length === 0;
       return matches.length === 1 && matches[0] === v;
     }
 
@@ -174,6 +176,7 @@ export function evaluate(
       for (let i = 0; i < n - 1; i++) {
         if (answers[i] != null && answers[i] === answers[i + 1]) pairs.push(i);
       }
+      if (v == null) return pairs.length === 0;
       return pairs.length === 1 && pairs[0] === v;
     }
 
@@ -280,8 +283,7 @@ export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): b
         if (a !== null) counts[L2I[a]] += 1;
       }
       const max = Math.max(...counts);
-      return counts[claim.value] === max
-        && counts.filter((c) => c === max).length === 1;
+      return counts[claim.value] === max && counts.filter((c) => c === max).length === 1;
     }
   }
   claim satisfies never;

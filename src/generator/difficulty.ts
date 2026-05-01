@@ -1,10 +1,10 @@
-import type { ValidationRule } from "../engine/types.ts";
+import type { QuestionTypeDef } from "../engine/types.ts";
 
 export interface DifficultyProfile {
   level: 1 | 2 | 3 | 4 | 5;
   name: string;
   questionCount: number;
-  allowedTypes: ValidationRule["type"][];
+  allowedTypes: QuestionTypeDef["type"][];
 }
 
 export const profiles: DifficultyProfile[] = [
@@ -12,7 +12,13 @@ export const profiles: DifficultyProfile[] = [
     level: 1,
     name: "Beginner",
     questionCount: 4,
-    allowedTypes: ["count_answer", "answer_of_question", "answer_is_self", "first_with_answer", "last_with_answer"],
+    allowedTypes: [
+      "count_answer",
+      "answer_of_question",
+      "answer_is_self",
+      "first_with_answer",
+      "last_with_answer",
+    ],
   },
   {
     level: 2,

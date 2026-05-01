@@ -1,9 +1,9 @@
-use crate::types::RuleKind;
-use crate::types::RuleKind::*;
+use crate::types::QuestionTypeKind;
+use crate::types::QuestionTypeKind::*;
 
 pub struct DifficultyProfile {
     pub question_count: usize,
-    pub allowed_types: &'static [RuleKind],
+    pub allowed_types: &'static [QuestionTypeKind],
 }
 
 pub static PROFILES: [DifficultyProfile; 5] = [

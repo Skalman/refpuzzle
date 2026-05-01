@@ -27,7 +27,7 @@ export function QuestionRow({
   defaultFocus,
   onOptionClick,
 }: Props) {
-  const rule = question.rule;
+  const rule = question.questionType;
   const labels = question.options.map((opt, oi) => {
     if ("claim" in opt) return renderClaimLabel(opt.claim);
     return renderOptionLabel(rule, opt.value, oi);

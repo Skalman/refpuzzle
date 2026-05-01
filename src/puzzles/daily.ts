@@ -1,7 +1,7 @@
 import type {
   Puzzle,
   QuestionDef,
-  ValidationRule,
+  QuestionTypeDef,
   OptionDef,
   Claim,
   AnswerLetter,
@@ -9,10 +9,7 @@ import type {
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const YEAR_RAW = new Map<
-  string,
-  Record<string, Record<string, CompactPuzzle>> | null
->();
+const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
 interface CompactRule {
@@ -42,12 +39,12 @@ export function parseCompactYear(
   for (const [mmdd, levels] of Object.entries(data)) {
     result[mmdd] = {};
     for (const [lvl, compact] of Object.entries(levels)) {
-      const questions: QuestionDef[] = compact.q.map((cq) => {
-        const rule = expandRule(cq.r);
+      const questions = compact.q.map<QuestionDef>((cq) => {
+        const questionType = expandQuestion(cq.r);
         const options: OptionDef[] = cq.c
           ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
           : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
-        return { options, rule };
+        return { options, questionType };
       });
       result[mmdd][lvl] = {
         id: "",
@@ -73,9 +70,9 @@ function L(i: number | undefined): AnswerLetter {
   return LETTERS[i ?? 0];
 }
 
-function expandRule(r: CompactRule): ValidationRule {
+function expandQuestion(r: CompactRule): QuestionTypeDef {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const type = r.t as ValidationRule["type"];
+  const type = r.t as QuestionTypeDef["type"];
   switch (type) {
     case "count_vowel_answers":
     case "count_consonant_answers":
@@ -116,7 +113,7 @@ function expandRule(r: CompactRule): ValidationRule {
 
 function expandClaim(c: CompactClaim): Claim {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const rule = expandRule(c) as ValidationRule & { type: Claim["type"] };
+  const rule = expandQuestion(c) as QuestionTypeDef & { type: Claim["type"] };
   return { ...rule, value: c.v };
 }
 
@@ -135,10 +132,7 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).has("preview")
-  ) {
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview")) {
     return true;
   }
   const today = new Date();
@@ -174,9 +168,7 @@ async function fetchYearRaw(
   }
 }
 
-export async function fetchDaily(
-  dateStr: string,
-): Promise<Record<string, Puzzle> | null> {
+export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
   const key = dateStr;
   if (DAY_CACHE.has(key)) return DAY_CACHE.get(key)!;
   const year = dateStr.slice(0, 4);

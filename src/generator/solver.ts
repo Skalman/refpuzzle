@@ -1,4 +1,10 @@
-import type { AnswerLetter, Puzzle, FlatPuzzle, FlatRule, RuleTypeId } from "../engine/types.ts";
+import type {
+  AnswerLetter,
+  Puzzle,
+  FlatPuzzle,
+  FlatQuestion,
+  QuestionTypeId,
+} from "../engine/types.ts";
 import {
   LETTERS,
   letterIdx,
@@ -25,7 +31,7 @@ import {
   RT_LETTER_DIST,
   RT_TRUE_STMT,
 } from "../engine/types.ts";
-import { evaluate } from "../engine/evaluators.ts";
+import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
 
 export function solve(
   puzzle: Puzzle,
@@ -35,7 +41,7 @@ export function solve(
   return solveFp(flattenPuzzle(puzzle), fixedAnswers, maxSolutions);
 }
 
-const SOLVER_GLOBAL_IDS: Set<RuleTypeId> = new Set([
+const SOLVER_GLOBAL_IDS: Set<QuestionTypeId> = new Set([
   RT_COUNT_ANSWER,
   RT_COUNT_VOWEL,
   RT_COUNT_CONSONANT,
@@ -55,7 +61,7 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
 
   // Count how many answer_of_question rules point to each question
   const refCount = new Array<number>(n).fill(0);
-  for (const r of fp.rules) {
+  for (const r of fp.questions) {
     if (r.t === RT_ANSWER_OF && r.questionIndex >= 0) {
       refCount[r.questionIndex]++;
     }
@@ -67,8 +73,8 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
     // Most-referenced questions first (they unlock answer_of_question chains)
     if (refCount[b] !== refCount[a]) return refCount[b] - refCount[a];
     // Non-global rules before global (global needs all answers)
-    const aGlobal = SOLVER_GLOBAL_IDS.has(fp.rules[a].t) ? 1 : 0;
-    const bGlobal = SOLVER_GLOBAL_IDS.has(fp.rules[b].t) ? 1 : 0;
+    const aGlobal = SOLVER_GLOBAL_IDS.has(fp.questions[a].t) ? 1 : 0;
+    const bGlobal = SOLVER_GLOBAL_IDS.has(fp.questions[b].t) ? 1 : 0;
     return aGlobal - bGlobal;
   });
 
@@ -91,7 +97,7 @@ function solveFp(
   // Pre-compute bitmasks for range checks in canFullyEvaluateLocal
   const rangeMasks: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
-    const r = fp.rules[i];
+    const r = fp.questions[i];
     if (r.t === RT_NEXT_SAME) {
       let m = 0;
       for (let j = i + 1; j < n; j++) m |= 1 << j;
@@ -119,7 +125,7 @@ function solveFp(
     if (depth === n) {
       let valid = true;
       for (let i = 0; i < n; i++) {
-        if (!evaluate(fp.rules[i], i, current[i]!, current, fp)) {
+        if (!evaluate(fp, i, current[i]!, current)) {
           valid = false;
           break;
         }
@@ -180,7 +186,7 @@ function hasContradiction(
   // When all answered, full check (correctness guarantee)
   if (allAnswered) {
     for (let i = 0; i < n; i++) {
-      if (!evaluate(fp.rules[i], i, answers[i]!, answers, fp)) return true;
+      if (!evaluate(fp, i, answers[i]!, answers)) return true;
     }
     return false;
   }
@@ -214,10 +220,10 @@ function checkRule(
   assigned: number,
   rangeMasks: number[],
 ): boolean {
-  const r = fp.rules[i];
+  const r = fp.questions[i];
 
   if (allAnswered || canFullyEvaluateLocal(r, answers, assigned, rangeMasks, i)) {
-    if (!evaluate(r, i, answers[i]!, answers, fp)) return true;
+    if (!evaluate(fp, i, answers[i]!, answers)) return true;
   }
 
   // Forward checking for counting rules
@@ -273,7 +279,7 @@ function checkRule(
 
 // Lightweight canFullyEvaluate for non-global rules only
 function canFullyEvaluateLocal(
-  r: FlatRule,
+  r: FlatQuestion,
   _answers: (AnswerLetter | null)[],
   assigned: number,
   rangeMasks: number[],

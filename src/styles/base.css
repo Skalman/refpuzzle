@@ -1,5 +1,9 @@
-.nowrap { white-space: nowrap; }
-.nowrap svg { vertical-align: -0.125em; }
+.nowrap {
+  white-space: nowrap;
+}
+.nowrap svg {
+  vertical-align: -0.125em;
+}
 
 .loading {
   display: flex;
@@ -13,16 +17,22 @@
   border: 2px solid var(--border);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.6s linear infinite, fade-in 0s 0.4s both;
+  animation:
+    spin 0.6s linear infinite,
+    fade-in 0s 0.4s both;
   opacity: 0;
 }
 
 @keyframes fade-in {
-  to { opacity: 1; }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ── Reset ── */

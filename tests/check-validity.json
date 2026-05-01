@@ -1,0 +1,1104 @@
+{
+  "tests": [
+    {"section": "=== count_answer ==="},
+
+    {
+      "name": "count_answer: count exceeds value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_answer: count + remaining < value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", "D"],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_answer: exact count, no remaining → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "count_answer: count < value, remaining could match → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 2, 3, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "count_answer: count equals value but remaining > 0 → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 1, 3, 2, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", "B"],
+      "expect": "pending"
+    },
+    {
+      "name": "count_answer: count matches, remaining eliminated → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 1, 3, 2, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "a", "B"],
+      "expect": "valid"
+    },
+
+    {"section": "=== count_answer_before / count_answer_after ==="},
+
+    {
+      "name": "count_answer_before: count in range exceeds value → invalid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_before", "a": 0, "q": 2}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_answer_before: exact count in range → valid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "count_answer_before", "a": 0, "q": 2}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "B", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "count_answer_after: count + remaining < value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer_after", "a": 0, "q": 1}, "o": [4, 3, 2, 3, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "B", "B", "C"],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_answer_after: exact count → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer_after", "a": 0, "q": 1}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "B", "A", "B"],
+      "expect": "valid"
+    },
+
+    {"section": "=== count_vowel / count_consonant ==="},
+
+    {
+      "name": "count_vowel: count exceeds value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "E", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_vowel: exact count → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [4, 2, 3, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "E", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "count_vowel: unanswered could be vowels → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_vowel_answers"}, "o": [4, 2, 3, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "count_consonant: count + remaining < value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_consonant_answers"}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "E", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "count_consonant: exact count → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_consonant_answers"}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "C", "A"],
+      "expect": "valid"
+    },
+
+    {"section": "=== answer_of_question ==="},
+
+    {
+      "name": "answer_of: target has different answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "C", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "answer_of: target matches → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "answer_of: target not answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== letter_distance ==="},
+
+    {
+      "name": "letter_distance: distance doesn't match → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "letter_distance: distance matches → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "letter_distance: other not answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== same_answer_as ==="},
+
+    {
+      "name": "same_answer_as: target has different answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "same_answer_as"}, "o": [1, 2, 0, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_as: target has same answer → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "same_answer_as"}, "o": [1, 2, 0, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "same_answer_as: target not answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "same_answer_as"}, "o": [1, 2, 0, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== unique_answer ==="},
+
+    {
+      "name": "unique_answer: duplicate exists → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "B", "C"],
+      "expect": "invalid"
+    },
+    {
+      "name": "unique_answer: all answered, no duplicate → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", "D"],
+      "expect": "valid"
+    },
+    {
+      "name": "unique_answer: no duplicate yet, unanswered could match → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "unique_answer: unanswered but answer eliminated → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "a", "a"],
+      "expect": "valid"
+    },
+
+    {"section": "=== first_with_answer ==="},
+
+    {
+      "name": "first_with: claimed position has wrong answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, null, 1, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "first_with: earlier question has the answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "first_with: claims None but A exists → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "A", "B", "C"],
+      "expect": "invalid"
+    },
+    {
+      "name": "first_with: correct first, all earlier answered → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "A", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "first_with: claims None, no A exists → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "B", "C", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "first_with: position has A but earlier unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "", "A", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "first_with: claimed position unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "first_with: earlier unanswered has A eliminated → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "a", "A", ""],
+      "expect": "valid"
+    },
+
+    {"section": "=== last_with_answer ==="},
+
+    {
+      "name": "last_with: later question has the answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "last_with: correct last, all later answered → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "C"],
+      "expect": "valid"
+    },
+    {
+      "name": "last_with: correct position but later unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [0, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", "C"],
+      "expect": "pending"
+    },
+
+    {"section": "=== closest_after ==="},
+
+    {
+      "name": "closest_after: correct closest → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [null, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "C"],
+      "expect": "valid"
+    },
+    {
+      "name": "closest_after: earlier match in range → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "closest_after", "a": 0, "q": 0}, "o": [null, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", "B"],
+      "expect": "invalid"
+    },
+
+    {"section": "=== closest_before ==="},
+
+    {
+      "name": "closest_before: correct closest → valid",
+      "qi": 3,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 3}, "o": [0, 1, 2, null, null]}
+      ]},
+      "state": ["B", "A", "B", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "closest_before: later match in range → invalid",
+      "qi": 3,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "closest_before", "a": 0, "q": 3}, "o": [0, 1, 2, null, null]}
+      ]},
+      "state": ["A", "A", "A", "A"],
+      "expect": "invalid"
+    },
+
+    {"section": "=== previous_same_answer ==="},
+
+    {
+      "name": "prev_same: target >= self → invalid",
+      "qi": 1,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 2, 1, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "prev_same: target has different answer → invalid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "prev_same: closer match exists → invalid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "A", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "prev_same: claims None but match exists → invalid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "C", "C", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "prev_same: correct target, no closer → valid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "A", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "prev_same: claims None, no match → valid",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "C", ""],
+      "expect": "valid"
+    },
+    {
+      "name": "prev_same: target ok but closer unanswered → pending",
+      "qi": 2,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [0, 1, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "A", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== next_same_answer ==="},
+
+    {
+      "name": "next_same: target <= self → invalid",
+      "qi": 1,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "next_same_answer"}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "next_same: correct next, no closer → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, null, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "C", "D"],
+      "expect": "valid"
+    },
+    {
+      "name": "next_same: target unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, null, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== only_same_answer ==="},
+
+    {
+      "name": "only_same: target has different answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_same_answer"}, "o": [1, 2, 3, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", "D"],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_same: non-target also has same answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_same_answer"}, "o": [1, 2, 3, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "A", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_same: exactly one match at target → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_same_answer"}, "o": [1, 2, 3, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "B", "C"],
+      "expect": "valid"
+    },
+    {
+      "name": "only_same: target matches but others unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_same_answer"}, "o": [1, 2, 3, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== consecutive_identical ==="},
+
+    {
+      "name": "consec_ident: claimed pair has different answers → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "consecutive_identical"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "A", "B", "C"],
+      "expect": "invalid"
+    },
+    {
+      "name": "consec_ident: claims None but pair exists → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "consecutive_identical"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "B", "C"],
+      "expect": "invalid"
+    },
+    {
+      "name": "consec_ident: one matching pair, all others different → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "consecutive_identical"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "consec_ident: claims None, all answered differently → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "consecutive_identical"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", "D"],
+      "expect": "valid"
+    },
+    {
+      "name": "consec_ident: pair matches but others uncertain → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "consecutive_identical"}, "o": [null, 1, 2, 0, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== only_odd_with_answer ==="},
+
+    {
+      "name": "only_odd: claimed position is even (1-indexed) → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_odd: claimed position has wrong answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "B", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_odd: another odd position has the answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "A", "B", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_odd: only one odd position has A → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "A", "B", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "only_odd: correct position but other odd unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "B", "A", "B", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "only_odd: claims None but odd position has A → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_odd_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["E", "B", "A", "B"],
+      "expect": "invalid"
+    },
+
+    {"section": "=== only_true_statement ==="},
+
+    {
+      "name": "only_true_stmt: selected claim is only true one → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_true_statement"}, "c": [
+          {"t": "count_answer", "a": 0, "v": 2},
+          {"t": "count_answer", "a": 0, "v": 0},
+          {"t": "count_consonant_answers", "v": 3},
+          {"t": "count_consonant_answers", "v": 1},
+          {"t": "count_vowel_answers", "v": 1}
+        ]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "D", "D"],
+      "expect": "valid"
+    },
+    {
+      "name": "only_true_stmt: selected claim is false → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_true_statement"}, "c": [
+          {"t": "count_answer", "a": 0, "v": 2},
+          {"t": "count_answer", "a": 0, "v": 0},
+          {"t": "count_consonant_answers", "v": 3},
+          {"t": "count_consonant_answers", "v": 1},
+          {"t": "count_vowel_answers", "v": 1}
+        ]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "D", "D"],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_true_stmt: not all answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_true_statement"}, "c": [
+          {"t": "count_answer", "a": 0, "v": 2},
+          {"t": "count_answer", "a": 0, "v": 0},
+          {"t": "count_consonant_answers", "v": 3},
+          {"t": "count_consonant_answers", "v": 1},
+          {"t": "count_vowel_answers", "v": 1}
+        ]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== answer_is_self ==="},
+
+    {
+      "name": "answer_is_self: always valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "", ""],
+      "expect": "valid"
+    },
+
+    {"section": "=== most_common_count ==="},
+
+    {
+      "name": "most_common_count: letter already exceeds value → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_count"}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "A", "A", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "most_common_count: all answered, max matches → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_count"}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "most_common_count: unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_count"}, "o": [4, 3, 2, 1, 0]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== least_common_answer / most_common_answer ==="},
+
+    {
+      "name": "least_common: all answered, correct → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "least_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "C", "D", "E"],
+      "expect": "valid"
+    },
+    {
+      "name": "least_common: all answered, wrong → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "least_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "B", "C", "D"],
+      "expect": "invalid"
+    },
+    {
+      "name": "least_common: not all answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "least_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "most_common: all answered, correct → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "A", "A", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "most_common: all answered, wrong → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "B", "B"],
+      "expect": "invalid"
+    },
+
+    {"section": "=== equal_count_as ==="},
+
+    {
+      "name": "equal_count: selected IS reference answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "B", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "equal_count: all answered, counts equal → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "A"],
+      "expect": "valid"
+    },
+    {
+      "name": "equal_count: all answered, counts differ → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "A", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "equal_count: not all answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "", ""],
+      "expect": "pending"
+    },
+
+    {"section": "=== unanswered question ==="},
+
+    {
+      "name": "unanswered question → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 1, 0, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "B"],
+      "expect": "pending"
+    }
+  ]
+}

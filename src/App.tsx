@@ -145,11 +145,15 @@ function OnboardingBanner() {
         <ul>
           <li>
             {s.onboarding.step1}{" "}
-            <span class="nowrap">(<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</span>
+            <span class="nowrap">
+              (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+            </span>
           </li>
           <li>
             {s.onboarding.step2}{" "}
-            <span class="nowrap">(<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</span>
+            <span class="nowrap">
+              (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+            </span>
           </li>
           <li>{s.onboarding.step3}</li>
         </ul>
@@ -190,13 +194,19 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
               {i === 0 && (
                 <>
                   {" "}
-                  <span class="nowrap">(<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)</span>
+                  <span class="nowrap">
+                    (
+                    <IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+                  </span>
                 </>
               )}
               {i === 1 && (
                 <>
                   {" "}
-                  <span class="nowrap">(<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)</span>
+                  <span class="nowrap">
+                    (
+                    <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+                  </span>
                 </>
               )}
             </li>
@@ -423,12 +433,15 @@ function AppHeader({
               </button>
             )}
             <p>{s.install.qrPrompt}</p>
-            <div class="qr-image" ref={(el) => {
-              if (!el) return;
-              import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
-                el.innerHTML = renderQrSvg(window.location.origin + "/");
-              });
-            }} />
+            <div
+              class="qr-image"
+              ref={(el) => {
+                if (!el) return;
+                import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
+                  el.innerHTML = renderQrSvg(window.location.origin + "/");
+                });
+              }}
+            />
             <p class="install-domain">{window.location.host}</p>
             {install?.type === "instructions" && <p>{install.message}</p>}
           </div>
@@ -622,7 +635,11 @@ function DayView({ dateStr }: { dateStr: string }) {
         })}
       </div>
 
-      {loading && <div class="loading"><span class="spinner" /></div>}
+      {loading && (
+        <div class="loading">
+          <span class="spinner" />
+        </div>
+      )}
 
       {!loading && !currentPuzzle && <div class="loading">{s.app.noPuzzle}</div>}
 
@@ -676,13 +693,13 @@ function DayView({ dateStr }: { dateStr: string }) {
                   const labels = q.options.map((opt, oi) =>
                     "claim" in opt
                       ? renderClaimLabel(opt.claim)
-                      : renderOptionLabel(q.rule, opt.value, oi),
+                      : renderOptionLabel(q.questionType, opt.value, oi),
                   );
                   return (
                     // oxlint-disable-next-line react/no-array-index-key
                     <div key={qi} class="print-question">
                       <div class="print-question-text">
-                        {qi + 1}. {renderQuestionText(q.rule)}
+                        {qi + 1}. {renderQuestionText(q.questionType)}
                       </div>
                       <div
                         class={`print-options ${labels.some((l) => l.length > 12) ? "print-options-long" : ""}`}
@@ -706,8 +723,14 @@ function DayView({ dateStr }: { dateStr: string }) {
       {showBackup && (
         <BackupDialog
           onExport={handleExport}
-          onImport={(e) => { setShowBackup(false); handleImport(e); }}
-          onSync={() => { setShowBackup(false); setShowSync(true); }}
+          onImport={(e) => {
+            setShowBackup(false);
+            handleImport(e);
+          }}
+          onSync={() => {
+            setShowBackup(false);
+            setShowSync(true);
+          }}
           onClose={() => setShowBackup(false)}
         />
       )}
@@ -839,14 +862,18 @@ function BackupDialog({
 }) {
   const s = t();
   const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => { ref.current?.showModal(); }, []);
+  useEffect(() => {
+    ref.current?.showModal();
+  }, []);
 
   return (
     <dialog
       ref={ref}
       class="help-panel sync-dialog"
       onClose={onClose}
-      onClick={(e) => { if (e.target === ref.current) onClose(); }}
+      onClick={(e) => {
+        if (e.target === ref.current) onClose();
+      }}
     >
       <div class="help-panel-inner">
         <div class="help-panel-header">
@@ -856,17 +883,18 @@ function BackupDialog({
           </button>
         </div>
         <div class="backup-actions">
-          <button class="onboarding-dismiss backup-action-btn" onClick={() => { onClose(); onExport(); }}>
+          <button
+            class="onboarding-dismiss backup-action-btn"
+            onClick={() => {
+              onClose();
+              onExport();
+            }}
+          >
             {s.backup.exportBackup}
           </button>
           <label class="onboarding-dismiss backup-action-btn">
             {s.backup.importBackup}
-            <input
-              type="file"
-              accept=".json"
-              class="file-input"
-              onChange={(e) => onImport(e)}
-            />
+            <input type="file" accept=".json" class="file-input" onChange={(e) => onImport(e)} />
           </label>
           <button class="onboarding-dismiss backup-action-btn" onClick={onSync}>
             {s.sync.title}
@@ -1001,7 +1029,8 @@ function SyncDialog({
                   }
                 }}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && inputCode.trim().length === 6) handleJoinCode(inputCode.trim());
+                  if (e.key === "Enter" && inputCode.trim().length === 6)
+                    handleJoinCode(inputCode.trim());
                 }}
               />
               <button
@@ -1013,10 +1042,7 @@ function SyncDialog({
               </button>
             </div>
 
-            <button
-              class="sync-scan-btn"
-              onClick={() => setScanning(true)}
-            >
+            <button class="sync-scan-btn" onClick={() => setScanning(true)}>
               {s.sync.scanQr}
             </button>
           </>
@@ -1024,18 +1050,27 @@ function SyncDialog({
 
         {!code && scanning && (
           <>
-            <div class="qr-scanner" ref={(el) => {
-              if (!el) return;
-              import("./components/QrScanner.tsx").then(({ default: startScan }) => {
+            <div
+              class="qr-scanner"
+              ref={(el) => {
+                if (!el) return;
+                import("./components/QrScanner.tsx").then(({ default: startScan }) => {
+                  stopScanRef.current?.();
+                  stopScanRef.current = startScan(el, handleScan, (msg) => {
+                    setError(msg);
+                    setScanning(false);
+                  });
+                });
+              }}
+            />
+            <button
+              class="sync-scan-btn"
+              onClick={() => {
                 stopScanRef.current?.();
-                stopScanRef.current = startScan(
-                  el,
-                  handleScan,
-                  (msg) => { setError(msg); setScanning(false); },
-                );
-              });
-            }} />
-            <button class="sync-scan-btn" onClick={() => { stopScanRef.current?.(); stopScanRef.current = null; setScanning(false); }}>
+                stopScanRef.current = null;
+                setScanning(false);
+              }}
+            >
               {s.sync.enterCode}
             </button>
           </>
@@ -1043,12 +1078,15 @@ function SyncDialog({
 
         {code && (
           <div class="sync-waiting">
-            <div class="qr-image" ref={(el) => {
-              if (!el) return;
-              import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
-                el.innerHTML = renderQrSvg(syncUrl(code));
-              });
-            }} />
+            <div
+              class="qr-image"
+              ref={(el) => {
+                if (!el) return;
+                import("./components/QrCode.tsx").then(({ default: renderQrSvg }) => {
+                  el.innerHTML = renderQrSvg(syncUrl(code));
+                });
+              }}
+            />
             <div class="sync-code-display">{code}</div>
             <p class="sync-waiting-text">{s.sync.waiting}</p>
           </div>
@@ -1139,10 +1177,7 @@ function PastPuzzlesPage() {
 
   return (
     <>
-      <AppHeader
-        onHelp={() => setShowHelp(true)}
-        onBackup={() => setShowBackup(true)}
-      />
+      <AppHeader onHelp={() => setShowHelp(true)} onBackup={() => setShowBackup(true)} />
 
       <div class="history-page">
         <h2>{s.daily.pastPuzzles}</h2>
@@ -1199,7 +1234,10 @@ function PastPuzzlesPage() {
             reader.readAsText(file);
             input.value = "";
           }}
-          onSync={() => { setShowBackup(false); setShowSync(true); }}
+          onSync={() => {
+            setShowBackup(false);
+            setShowSync(true);
+          }}
           onClose={() => setShowBackup(false)}
         />
       )}
@@ -1273,7 +1311,11 @@ function SyncRoute() {
 
   return (
     <div class="not-found">
-      {status === "joining" && <div class="loading"><span class="spinner" /></div>}
+      {status === "joining" && (
+        <div class="loading">
+          <span class="spinner" />
+        </div>
+      )}
       {status === "error" && (
         <>
           <h1>{s.sync.expired}</h1>
@@ -1288,7 +1330,9 @@ function SyncRoute() {
             setImportPlan(null);
             window.location.href = "/";
           }}
-          onCancel={() => { window.location.href = "/"; }}
+          onCancel={() => {
+            window.location.href = "/";
+          }}
         />
       )}
     </div>

@@ -50,7 +50,7 @@ impl<'de> Deserialize<'de> for Answer {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
-pub enum RuleKind {
+pub enum QuestionTypeKind {
     CountAnswer,
     CountAnswerBefore,
     CountAnswerAfter,
@@ -79,7 +79,7 @@ pub enum RuleKind {
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
-pub enum Rule {
+pub enum QuestionType {
     #[serde(rename = "count_answer")]
     CountAnswer {
         #[serde(rename = "a")]
@@ -171,50 +171,50 @@ pub enum Rule {
     TrueStmt,
 }
 
-impl Rule {
+impl QuestionType {
     pub fn is_constrained(&self) -> bool {
         matches!(
             self,
-            Rule::Unique | Rule::EqualCount { .. } | Rule::AnswerIsSelf
+            QuestionType::Unique | QuestionType::EqualCount { .. } | QuestionType::AnswerIsSelf
         )
     }
 
     pub fn is_global(&self) -> bool {
         matches!(
             self,
-            Rule::CountAnswer { .. }
-                | Rule::CountVowel
-                | Rule::CountConsonant
-                | Rule::LeastCommon
-                | Rule::MostCommon
-                | Rule::MostCommonCount
-                | Rule::Unique
-                | Rule::EqualCount { .. }
-                | Rule::TrueStmt
-                | Rule::OnlySame
-                | Rule::ConsecIdent
-                | Rule::OnlyOdd { .. }
-                | Rule::FirstWith { .. }
-                | Rule::LastWith { .. }
-                | Rule::SameAs
+            QuestionType::CountAnswer { .. }
+                | QuestionType::CountVowel
+                | QuestionType::CountConsonant
+                | QuestionType::LeastCommon
+                | QuestionType::MostCommon
+                | QuestionType::MostCommonCount
+                | QuestionType::Unique
+                | QuestionType::EqualCount { .. }
+                | QuestionType::TrueStmt
+                | QuestionType::OnlySame
+                | QuestionType::ConsecIdent
+                | QuestionType::OnlyOdd { .. }
+                | QuestionType::FirstWith { .. }
+                | QuestionType::LastWith { .. }
+                | QuestionType::SameAs
         )
     }
 
     pub fn is_solver_global(&self) -> bool {
         matches!(
             self,
-            Rule::CountAnswer { .. }
-                | Rule::CountVowel
-                | Rule::CountConsonant
-                | Rule::LeastCommon
-                | Rule::MostCommon
-                | Rule::MostCommonCount
-                | Rule::Unique
-                | Rule::EqualCount { .. }
-                | Rule::TrueStmt
-                | Rule::OnlySame
-                | Rule::ConsecIdent
-                | Rule::OnlyOdd { .. }
+            QuestionType::CountAnswer { .. }
+                | QuestionType::CountVowel
+                | QuestionType::CountConsonant
+                | QuestionType::LeastCommon
+                | QuestionType::MostCommon
+                | QuestionType::MostCommonCount
+                | QuestionType::Unique
+                | QuestionType::EqualCount { .. }
+                | QuestionType::TrueStmt
+                | QuestionType::OnlySame
+                | QuestionType::ConsecIdent
+                | QuestionType::OnlyOdd { .. }
         )
     }
 }
@@ -307,7 +307,7 @@ impl SmallList {
 }
 
 pub struct FlatPuzzle {
-    pub rules: [Rule; MAX_N],
+    pub question_types: [QuestionType; MAX_N],
     pub option_nums: [[i16; 5]; MAX_N],
     pub option_answers: [[u8; 5]; MAX_N],
     pub option_claims: [[Claim; 5]; MAX_N],
@@ -317,40 +317,43 @@ pub struct FlatPuzzle {
 }
 
 impl FlatPuzzle {
-    pub fn build_deps(rules: &[Rule], n: usize) -> ([SmallList; MAX_N], SmallList) {
+    pub fn build_deps(
+        question_types: &[QuestionType],
+        n: usize,
+    ) -> ([SmallList; MAX_N], SmallList) {
         let mut affected_by: [SmallList; MAX_N] = std::array::from_fn(|_| SmallList::new());
         let mut global_indices = SmallList::new();
 
         for i in 0..n {
-            let r = &rules[i];
+            let r = &question_types[i];
             if r.is_global() {
                 global_indices.push(i as u8);
             } else {
                 match *r {
-                    Rule::AnswerOf { question_index } => {
+                    QuestionType::AnswerOf { question_index } => {
                         affected_by[question_index as usize].push(i as u8);
                     }
-                    Rule::LetterDist { question_index } => {
+                    QuestionType::LetterDist { question_index } => {
                         affected_by[question_index as usize].push(i as u8);
                     }
-                    Rule::ClosestAfter { after_index, .. }
-                    | Rule::CountAnswerAfter { after_index, .. } => {
+                    QuestionType::ClosestAfter { after_index, .. }
+                    | QuestionType::CountAnswerAfter { after_index, .. } => {
                         for j in (after_index as usize + 1)..n {
                             affected_by[j].push(i as u8);
                         }
                     }
-                    Rule::ClosestBefore { before_index, .. }
-                    | Rule::CountAnswerBefore { before_index, .. } => {
+                    QuestionType::ClosestBefore { before_index, .. }
+                    | QuestionType::CountAnswerBefore { before_index, .. } => {
                         for j in 0..before_index as usize {
                             affected_by[j].push(i as u8);
                         }
                     }
-                    Rule::PrevSame => {
+                    QuestionType::PrevSame => {
                         for j in 0..i {
                             affected_by[j].push(i as u8);
                         }
                     }
-                    Rule::NextSame => {
+                    QuestionType::NextSame => {
                         for j in (i + 1)..n {
                             affected_by[j].push(i as u8);
                         }

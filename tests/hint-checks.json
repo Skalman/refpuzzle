@@ -1346,6 +1346,65 @@
       ]},
       "state": ["A", "", ""],
       "expect": "2b"
+    },
+
+    {"section": "=== Partial-state contradictions (JS-only; Rust uses evaluate fallback for these) ==="},
+
+    {
+      "name": "PrevSame partial contradiction: target answered differently",
+      "js_only": true,
+      "description": "Q3=prev_same answered B, claims Q1. Q1=A ≠ B. Q2 unknown. Should contradict without needing all answered.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, null, 2]}
+      ]},
+      "state": ["A", "", "B"],
+      "expect": "!3"
+    },
+    {
+      "name": "NextSame partial contradiction: target answered differently",
+      "description": "Q1=next_same answered C, option C claims Q3 (index 2). Q3=A ≠ C. Q2 unknown.",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 1, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "", "A"],
+      "expect": "!1"
+    },
+    {
+      "name": "OnlySame partial contradiction: target answered differently",
+      "description": "Q2=only_same answered C, claims Q3. Q3=A ≠ C. Q1 unknown.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_same_answer"}, "o": [0, null, 2, 1, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "C", "A"],
+      "expect": "!2"
+    },
+    {
+      "name": "ConsecIdent partial contradiction: pair has different answers",
+      "description": "Q4=consec_ident answered A, claims Q1&Q2 pair. Q1=C, Q2=D. Q3 unknown.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, null, 2, 3]}
+      ]},
+      "state": ["C", "D", "", "A"],
+      "expect": "!4"
+    },
+    {
+      "name": "PrevSame partial contradiction: position at self",
+      "description": "Q2=prev_same answered C, option C value=1 (Q2 itself). Self-reference. Q1 unknown.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, null, 2]}
+      ]},
+      "state": ["", "C"],
+      "expect": "!2"
     }
   ]
 }

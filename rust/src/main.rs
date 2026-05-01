@@ -1,11 +1,15 @@
 #![allow(clippy::needless_range_loop)]
 
-mod construct;
+mod check_validity;
+mod construct_puzzle;
+mod deduce;
 mod difficulty;
 mod evaluate;
 mod gen_common;
-mod hints;
+mod lookahead;
 mod rng;
+#[allow(dead_code)]
+mod solve;
 mod solver;
 mod types;
 
@@ -143,7 +147,7 @@ fn main() {
             let mut result = None;
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) = construct::generate(profile, &mut rng, max_attempts) {
+                if let Some(r) = construct_puzzle::generate(profile, &mut rng, max_attempts) {
                     result = Some(r);
                     break;
                 }
@@ -222,11 +226,11 @@ fn main() {
     println!("{json_out}");
 }
 
-fn option_value_json(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
-    // Letter-type rules store values in option_answers as letter indices (already 0-based)
+fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
+    // Letter-type question types store values in option_answers as letter indices (already 0-based)
     if matches!(
-        rule,
-        Rule::AnswerOf { .. } | Rule::LeastCommon | Rule::MostCommon
+        qt,
+        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon
     ) {
         let a = fp.option_answers[qi][oi];
         if a > 4 {
@@ -235,7 +239,7 @@ fn option_value_json(rule: &Rule, qi: usize, oi: usize, fp: &FlatPuzzle) -> Valu
         return json!(a);
     }
     // Constrained types always have A-E (0-4)
-    if rule.is_constrained() {
+    if qt.is_constrained() {
         return json!(oi);
     }
     let v = fp.option_nums[qi][oi];
@@ -249,20 +253,20 @@ fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
     let n = result.n;
     let questions: Vec<Value> = (0..n)
         .map(|qi| {
-            let rule = &result.rules[qi];
+            let qt = &result.question_types[qi];
             let mut q = serde_json::Map::new();
-            if let Rule::TrueStmt = rule {
+            if let QuestionType::TrueStmt = qt {
                 let claims: Vec<Value> = (0..5)
                     .map(|oi| claim_to_json(&result.fp.option_claims[qi][oi]))
                     .collect();
                 q.insert("c".into(), json!(claims));
             } else {
                 let options: Vec<Value> = (0..5)
-                    .map(|oi| option_value_json(rule, qi, oi, &result.fp))
+                    .map(|oi| option_value_json(qt, qi, oi, &result.fp))
                     .collect();
                 q.insert("o".into(), json!(options));
             }
-            q.insert("r".into(), rule_to_json(rule));
+            q.insert("r".into(), question_type_to_json(qt));
             Value::Object(q)
         })
         .collect();
@@ -300,8 +304,8 @@ fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
     result
 }
 
-fn rule_to_json(rule: &Rule) -> Value {
-    serde_json::to_value(rule).unwrap()
+fn question_type_to_json(qt: &QuestionType) -> Value {
+    serde_json::to_value(qt).unwrap()
 }
 
 fn check_json(path: &str, target: Option<&str>) {
@@ -372,33 +376,27 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
         if (0..n).all(|i| answers[i].is_some()) {
             return (true, steps);
         }
-        if let Some(action) = hints::find_action_fast(fp, &answers, &eliminated) {
-            match action {
-                hints::Action::Contradiction { .. } => return (false, steps),
-                hints::Action::Force { qi, answer } => {
-                    let oi = answer.idx();
-                    eliminated[qi] = 0b11111 ^ (1 << oi);
+        if let Some(dr) = deduce::deduce(fp, &answers, &eliminated) {
+            match dr.action {
+                deduce::DeduceAction::Force { qi, answer } => {
+                    eliminated[qi] = 0b11111 ^ (1 << answer.idx());
                     answers[qi] = Some(answer);
                     steps.push(format!("{}{}", qi + 1, answer.as_char()));
                 }
-                hints::Action::Eliminate { qi, oi } => {
+                deduce::DeduceAction::Eliminate { qi, oi } => {
                     eliminated[qi] |= 1 << oi;
                     steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
                 }
             }
             continue;
         }
-        if let Some(action) = hints::find_lookahead_action(fp, &answers, &eliminated) {
-            hints::apply_action(&action, &mut answers, &mut eliminated);
-            match action {
-                hints::Action::Force { qi, answer } => {
-                    steps.push(format!("{}{}", qi + 1, answer.as_char()));
-                }
-                hints::Action::Eliminate { qi, oi } => {
-                    steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
-                }
-                _ => {}
-            }
+        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated) {
+            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+            steps.push(format!(
+                "{}{}",
+                lr.eliminate_qi + 1,
+                letters_lower[lr.eliminate_oi]
+            ));
             continue;
         }
         break;
@@ -413,14 +411,14 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         return None;
     }
 
-    let mut rules = [Rule::AnswerIsSelf; MAX_N];
+    let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
     let mut option_answers = [[0xFFu8; 5]; MAX_N];
     let mut option_claims = [[Claim::None; 5]; MAX_N];
 
     for (qi, q) in qs.iter().enumerate() {
         let r = q.get("r")?;
-        rules[qi] = serde_json::from_value(r.clone()).ok()?;
+        question_types[qi] = serde_json::from_value(r.clone()).ok()?;
 
         if let Some(claims) = q.get("c") {
             let claims = claims.as_array()?;
@@ -441,8 +439,10 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                 }
             }
             if matches!(
-                rules[qi],
-                Rule::AnswerOf { .. } | Rule::LeastCommon | Rule::MostCommon
+                question_types[qi],
+                QuestionType::AnswerOf { .. }
+                    | QuestionType::LeastCommon
+                    | QuestionType::MostCommon
             ) {
                 for oi in 0..5 {
                     option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
@@ -454,7 +454,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                     option_nums[qi][oi] = NAN_VAL;
                 }
             }
-            if rules[qi].is_constrained() {
+            if question_types[qi].is_constrained() {
                 for oi in 0..5 {
                     option_answers[qi][oi] = oi as u8;
                     option_nums[qi][oi] = NAN_VAL;
@@ -463,9 +463,9 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         }
     }
 
-    let (affected_by, global_indices) = FlatPuzzle::build_deps(&rules, n);
+    let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
     Some(FlatPuzzle {
-        rules,
+        question_types,
         option_nums,
         option_answers,
         option_claims,

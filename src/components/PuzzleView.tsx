@@ -7,17 +7,8 @@ import type { Validity } from "../engine/validate.ts";
 import { findHint } from "../engine/hints.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import {
-  decodeShareHash,
-  getShareUrl,
-  getPuzzleUrl,
-  sharePuzzleLink,
-} from "../lib/share.ts";
-import {
-  guarded,
-  arrowNavHandler,
-  initRovingTabindex,
-} from "../lib/keyboard.ts";
+import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
+import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import {
@@ -33,13 +24,7 @@ import {
   IconPlay,
 } from "./Icons.tsx";
 
-const FRESH_MARKS: Marks = [
-  "unmarked",
-  "unmarked",
-  "unmarked",
-  "unmarked",
-  "unmarked",
-];
+const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 
 function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
@@ -185,8 +170,7 @@ function HistoryStrip({
       })}
       {completed && (
         <span class="history-step completed-step" aria-hidden="true">
-          <IconCheck size="1.5em" strokeWidth={3} class="icon-correct" />{" "}
-          {s.puzzle.solvedBadge}
+          <IconCheck size="1.5em" strokeWidth={3} class="icon-correct" /> {s.puzzle.solvedBadge}
         </span>
       )}
     </div>
@@ -215,9 +199,7 @@ export function PuzzleView({
   // Initialize synchronously to avoid flicker
   const initState = (() => {
     const n = puzzle.questions.length;
-    const saved = initialHash
-      ? decodeShareHash(initialHash, n)
-      : loadState(puzzle.id, n);
+    const saved = initialHash ? decodeShareHash(initialHash, n) : loadState(puzzle.id, n);
     if (saved && saved.history.length > 0) {
       return saved;
     }
@@ -234,9 +216,7 @@ export function PuzzleView({
     };
   })();
 
-  const [questions, setQuestionsRaw] = useState<QuestionState[]>(
-    initState.questions,
-  );
+  const [questions, setQuestionsRaw] = useState<QuestionState[]>(initState.questions);
   const questionsRef = useRef<QuestionState[]>(initState.questions);
   function setQuestions(qs: QuestionState[]) {
     questionsRef.current = qs;
@@ -265,9 +245,7 @@ export function PuzzleView({
   const [shareMenu, setShareMenu] = useState(false);
   const shareMenuRef = useRef(false);
 
-  const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(
-    null,
-  );
+  const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(null);
   const [focusedOption, setFocusedOptionRaw] = useState<number | null>(null);
   const focusedQuestionRef = useRef<number | null>(null);
   const focusedOptionRef = useRef<number | null>(null);
@@ -316,11 +294,7 @@ export function PuzzleView({
       const last = historyRef.current[historyRef.current.length - 1];
       const lastDiff = describeDiff(prev, last);
       const newDiff = describeDiff(last, cloned);
-      if (
-        lastDiff.qi >= 0 &&
-        lastDiff.qi === newDiff.qi &&
-        lastDiff.oi === newDiff.oi
-      ) {
+      if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
         const merged = describeDiff(prev, cloned);
         if (merged.qi < 0) {
           historyRef.current.pop();
@@ -415,10 +389,7 @@ export function PuzzleView({
   function focusCurrentStep() {
     const idx = historyIdxRef.current;
     if (idx <= 0) return;
-    const diff = describeDiff(
-      historyRef.current[idx - 1],
-      historyRef.current[idx],
-    );
+    const diff = describeDiff(historyRef.current[idx - 1], historyRef.current[idx]);
     if (diff.qi >= 0) {
       setFocusedQuestion(diff.qi);
       setFocusedOption(diff.oi);
@@ -488,10 +459,7 @@ export function PuzzleView({
   }
 
   function handleHint() {
-    if (
-      hintRef.current &&
-      hintRef.current.step < hintRef.current.steps.length - 1
-    ) {
+    if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
       pushHintMarker(hintRef.current.step + 1);
@@ -559,20 +527,14 @@ export function PuzzleView({
 
   // Init roving tabindex on history strip
   useEffect(() => {
-    initRovingTabindex(
-      historyRef2.current,
-      "button.history-step:not(:disabled)",
-    );
+    initRovingTabindex(historyRef2.current, "button.history-step:not(:disabled)");
   });
 
   // Scroll focused question into view
   useEffect(() => {
     if (focusedQuestion == null) return;
-    const row = gridRef.current?.querySelector(
-      `[data-qi="${focusedQuestion}"]`,
-    );
-    if (row instanceof HTMLElement)
-      row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const row = gridRef.current?.querySelector(`[data-qi="${focusedQuestion}"]`);
+    if (row instanceof HTMLElement) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focusedQuestion]);
 
   // Focus the active option button when focus state changes
@@ -610,9 +572,7 @@ export function PuzzleView({
     setFocusedQuestion(qi);
     const marks = questionsRef.current[qi]?.marks;
     const correctIdx = marks?.indexOf("correct") ?? -1;
-    setFocusedOption(
-      correctIdx >= 0 ? correctIdx : (focusedOptionRef.current ?? 0),
-    );
+    setFocusedOption(correctIdx >= 0 ? correctIdx : (focusedOptionRef.current ?? 0));
   }
 
   function handleDigit(digit: number) {
@@ -674,15 +634,8 @@ export function PuzzleView({
       case "Enter":
       case " ":
         e.preventDefault();
-        if (
-          focusedQuestionRef.current != null &&
-          focusedOptionRef.current != null &&
-          !completed
-        ) {
-          handleOptionClick(
-            focusedQuestionRef.current,
-            focusedOptionRef.current,
-          );
+        if (focusedQuestionRef.current != null && focusedOptionRef.current != null && !completed) {
+          handleOptionClick(focusedQuestionRef.current, focusedOptionRef.current);
         }
         break;
     }
@@ -802,7 +755,7 @@ export function PuzzleView({
       >
         {puzzle.questions.map((qDef, qi) => (
           <QuestionRow
-            key={qDef.rule.type + JSON.stringify(qDef.rule)}
+            key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
             index={qi}
             question={qDef}
             marks={questions[qi]?.marks ?? FRESH_MARKS}
@@ -819,12 +772,11 @@ export function PuzzleView({
       {hintText && !completed && (
         <div class="puzzle-hint">
           {hintText}
-          {hintRef.current &&
-            hintRef.current.step < hintRef.current.steps.length - 1 && (
-              <button class="hint-more" onClick={handleHint}>
-                {s.puzzle.more}
-              </button>
-            )}
+          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
+            <button class="hint-more" onClick={handleHint}>
+              {s.puzzle.more}
+            </button>
+          )}
         </div>
       )}
 
@@ -833,11 +785,7 @@ export function PuzzleView({
         <div class="puzzle-complete">
           <span>{s.puzzle.solved}</span>
           {level < 5 && (
-            <button
-              ref={nextPuzzleRef}
-              class="next-puzzle-btn"
-              onClick={onNextPuzzle}
-            >
+            <button ref={nextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
               {s.puzzle.nextPuzzle} &rarr;
             </button>
           )}
@@ -867,11 +815,7 @@ export function PuzzleView({
         >
           <IconRedo />
         </button>
-        <button
-          class="toolbar-accent-btn"
-          onClick={handleSave}
-          disabled={completed}
-        >
+        <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
           <IconPin size="0.9em" /> {s.puzzle.checkpoint}
         </button>
         <button
@@ -901,11 +845,7 @@ export function PuzzleView({
                 });
               }}
               onKeyDown={(e) => {
-                if (
-                  e.key === "ArrowDown" ||
-                  e.key === "Enter" ||
-                  e.key === " "
-                ) {
+                if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
                   e.stopPropagation();
                   setShareMenu(true);
@@ -962,9 +902,7 @@ export function PuzzleView({
         >
           <IconReset size="0.9em" />
           <span>{s.puzzle.reset}</span>
-          {resetPending && (
-            <span class="reset-overlay">{s.puzzle.resetConfirm}</span>
-          )}
+          {resetPending && <span class="reset-overlay">{s.puzzle.resetConfirm}</span>}
         </button>
       </div>
 

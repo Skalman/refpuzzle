@@ -1,0 +1,96 @@
+{
+  "tests": [
+    {"section": "=== Direct contradiction from assumption ==="},
+
+    {
+      "name": "Assumption directly violates counting rule",
+      "description": "Q1=A would make count_answer A = 3, but Q1 claims 2. Deduce alone can't tell because Q1 is unanswered and v=2 is consistent with count=2,remaining=1.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 2, 2, 2, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "A", "B"],
+      "expect": "1a"
+    },
+    {
+      "name": "First option ok, later option contradicts",
+      "description": "Q1=A gives count=4,v=4→valid. Q1=B gives count=3,v=2→invalid.",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [4, 2, 3, 3, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "A", "A"],
+      "expect": "1b"
+    },
+
+    {"section": "=== Chain: assumption → deduce → contradiction ==="},
+
+    {
+      "name": "Assumption forces via reverse answer_of, then contradicts",
+      "description": "Assume Q1=A → reverse answer_of forces Q2=A → Q2 claims count_answer A=2 but count=4 → invalid.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 2, 2, 2, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "A", "A", "B"],
+      "expect": "1a"
+    },
+    {
+      "name": "Assumption chains through two answer_of, then unique_answer contradicts",
+      "description": "Assume Q1=A → force Q2=A (reverse answer_of) → force Q3=A (reverse answer_of) → Q3 unique_answer but 3 A's → invalid.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_of_question", "q": 1}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_of_question", "q": 2}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "B"],
+      "expect": "1a"
+    },
+
+    {"section": "=== No contradiction ==="},
+
+    {
+      "name": "All answer_is_self → no contradiction possible",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", ""],
+      "expect": null
+    },
+    {
+      "name": "All answered → nothing to assume",
+      "puzzle": {"q": [
+        {"r": {"t": "count_answer", "a": 0}, "o": [2, 2, 2, 2, 2]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["C", "A", "A"],
+      "expect": null
+    },
+
+    {"section": "=== Lookahead finds elimination on later question ==="},
+
+    {
+      "name": "Contradiction found on Q2, not Q1",
+      "description": "Q1 answer_is_self has no contradictions. Q2=A duplicates Q3's unique_answer.",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "unique_answer"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "A", "B"],
+      "expect": "2a"
+    }
+  ]
+}

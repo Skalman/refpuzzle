@@ -1,4 +1,4 @@
-use crate::evaluate::evaluate;
+use crate::check_validity::check_question_against_solution;
 use crate::types::*;
 
 pub fn solve(
@@ -37,7 +37,7 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
     let n = fp.n;
     let mut ref_count = [0u8; MAX_N];
     for i in 0..n {
-        if let Rule::AnswerOf { question_index } = fp.rules[i] {
+        if let QuestionType::AnswerOf { question_index } = fp.question_types[i] {
             ref_count[question_index as usize] += 1;
         }
     }
@@ -47,8 +47,8 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
         let a = a as usize;
         let b = b as usize;
         ref_count[b].cmp(&ref_count[a]).then_with(|| {
-            let a_global = fp.rules[a].is_solver_global() as u8;
-            let b_global = fp.rules[b].is_solver_global() as u8;
+            let a_global = fp.question_types[a].is_solver_global() as u8;
+            let b_global = fp.question_types[b].is_solver_global() as u8;
             a_global.cmp(&b_global)
         })
     });
@@ -60,23 +60,24 @@ fn compute_range_masks(fp: &FlatPuzzle) -> [u16; MAX_N] {
     let n = fp.n;
     let mut masks = [0u16; MAX_N];
     for i in 0..n {
-        masks[i] = match fp.rules[i] {
-            Rule::NextSame => {
+        masks[i] = match fp.question_types[i] {
+            QuestionType::NextSame => {
                 let mut m = 0u16;
                 for j in (i + 1)..n {
                     m |= 1 << j;
                 }
                 m
             }
-            Rule::ClosestAfter { after_index, .. } | Rule::CountAnswerAfter { after_index, .. } => {
+            QuestionType::ClosestAfter { after_index, .. }
+            | QuestionType::CountAnswerAfter { after_index, .. } => {
                 let mut m = 0u16;
                 for j in (after_index as usize + 1)..n {
                     m |= 1 << j;
                 }
                 m
             }
-            Rule::ClosestBefore { before_index, .. }
-            | Rule::CountAnswerBefore { before_index, .. } => {
+            QuestionType::ClosestBefore { before_index, .. }
+            | QuestionType::CountAnswerBefore { before_index, .. } => {
                 let mut m = 0u16;
                 for j in 0..before_index as usize {
                     m |= 1 << j;
@@ -110,7 +111,7 @@ fn search(
     if depth == n {
         let mut valid = true;
         for i in 0..n {
-            if !evaluate(fp, i, current[i].unwrap(), current) {
+            if !check_question_against_solution(fp, i, current[i].unwrap(), current) {
                 valid = false;
                 break;
             }
@@ -190,7 +191,7 @@ fn has_contradiction(
 
     if all_answered {
         for i in 0..n {
-            if !evaluate(fp, i, answers[i].unwrap(), answers) {
+            if !check_question_against_solution(fp, i, answers[i].unwrap(), answers) {
                 return true;
             }
         }
@@ -231,29 +232,29 @@ fn check_rule(
     assigned: u16,
     range_masks: &[u16; MAX_N],
 ) -> bool {
-    let r = &fp.rules[i];
+    let r = &fp.question_types[i];
     let answer_i = answers[i].unwrap();
 
     if (all_answered || can_fully_evaluate_local(r, assigned, range_masks, i))
-        && !evaluate(fp, i, answer_i, answers)
+        && !check_question_against_solution(fp, i, answer_i, answers)
     {
         return true;
     }
 
-    // Forward checking for counting rules
+    // Forward checking for counting types
     match *r {
-        Rule::CountAnswer { answer }
-        | Rule::CountAnswerBefore { answer, .. }
-        | Rule::CountAnswerAfter { answer, .. } => {
+        QuestionType::CountAnswer { answer }
+        | QuestionType::CountAnswerBefore { answer, .. }
+        | QuestionType::CountAnswerAfter { answer, .. } => {
             let opt_val = fp.option_nums[i][answer_i.idx()];
             if opt_val == NAN_VAL {
                 return false;
             }
 
             let (range_start, range_end) = match *r {
-                Rule::CountAnswer { .. } => (0, n),
-                Rule::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
-                Rule::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
+                QuestionType::CountAnswer { .. } => (0, n),
+                QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
+                QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
                 _ => unreachable!(),
             };
 
@@ -270,12 +271,12 @@ fn check_rule(
                 return true;
             }
         }
-        Rule::CountVowel | Rule::CountConsonant => {
+        QuestionType::CountVowel | QuestionType::CountConsonant => {
             let opt_val = fp.option_nums[i][answer_i.idx()];
             if opt_val == NAN_VAL {
                 return false;
             }
-            let is_vowel = matches!(*r, Rule::CountVowel);
+            let is_vowel = matches!(*r, QuestionType::CountVowel);
             let mut count: i16 = 0;
             let mut remaining: i16 = 0;
             for j in 0..n {
@@ -298,27 +299,27 @@ fn check_rule(
 }
 
 fn can_fully_evaluate_local(
-    r: &Rule,
+    r: &QuestionType,
     assigned: u16,
     range_masks: &[u16; MAX_N],
     qi: usize,
 ) -> bool {
     match *r {
-        Rule::AnswerIsSelf => true,
-        Rule::PrevSame => {
+        QuestionType::AnswerIsSelf => true,
+        QuestionType::PrevSame => {
             let mut mask = 0u16;
             for j in 0..qi {
                 mask |= 1 << j;
             }
             (assigned & mask) == mask
         }
-        Rule::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
-        Rule::LetterDist { question_index } => (assigned & (1 << question_index)) != 0,
-        Rule::NextSame
-        | Rule::ClosestAfter { .. }
-        | Rule::ClosestBefore { .. }
-        | Rule::CountAnswerBefore { .. }
-        | Rule::CountAnswerAfter { .. } => {
+        QuestionType::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
+        QuestionType::LetterDist { question_index } => (assigned & (1 << question_index)) != 0,
+        QuestionType::NextSame
+        | QuestionType::ClosestAfter { .. }
+        | QuestionType::ClosestBefore { .. }
+        | QuestionType::CountAnswerBefore { .. }
+        | QuestionType::CountAnswerAfter { .. } => {
             let mask = range_masks[qi];
             (assigned & mask) == mask
         }

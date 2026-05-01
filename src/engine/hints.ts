@@ -1,5 +1,7 @@
-import type { AnswerLetter, Puzzle, FlatPuzzle, ValidationRule, Marks } from "./types.ts";
-import { evaluate as evaluateRule } from "./evaluators.ts";
+// OLD — replaced by check-validity.ts, deduce.ts, lookahead.ts, explain.ts
+// Still used by: UI (PuzzleView.tsx), TS generator, debug scripts
+import type { AnswerLetter, Puzzle, FlatPuzzle, QuestionTypeDef, Marks } from "./types.ts";
+import { checkQuestionAgainstSolution as evaluateRule } from "./check-validity.ts";
 import { renderOptionLabel } from "./render.ts";
 import {
   LETTERS,
@@ -80,14 +82,10 @@ export function findHint(puzzle: Puzzle, markSets: Marks[]): Hint | null {
   );
 }
 
-function findError(
-  puzzle: Puzzle,
-  answers: (AnswerLetter | null)[],
-  n: number,
-): Hint | null {
+function findError(puzzle: Puzzle, answers: (AnswerLetter | null)[], n: number): Hint | null {
   const hasContradiction = answers.some((a, qi) => {
     if (a == null) return false;
-    const rule = puzzle.questions[qi].rule;
+    const rule = puzzle.questions[qi].questionType;
     const ov = optDisplay(puzzle, qi, a);
     const v = optValue(puzzle, qi, a);
     return explainContradiction(rule, qi, answers, ov, v, n) != null;
@@ -137,7 +135,7 @@ function autoSolve(puzzle: Puzzle, n: number): AnswerLetter[] | null {
     if (!hint?.action) return null;
     applyAutoAction(hint.action, answers, marks);
   }
-  return answers.every((a) => a != null) ? (answers) : null;
+  return answers.every((a) => a != null) ? answers : null;
 }
 
 function applyAutoAction(
@@ -227,7 +225,7 @@ function optValue(puzzle: Puzzle, qi: number, answer: AnswerLetter): number | nu
 
 // Get the display string for the selected answer
 function optDisplay(puzzle: Puzzle, qi: number, answer: AnswerLetter): string {
-  const rule = puzzle.questions[qi].rule;
+  const rule = puzzle.questions[qi].questionType;
   const v = puzzle.questions[qi].options[L2I[answer]].value;
   return renderOptionLabel(rule, v, qi);
 }
@@ -277,7 +275,7 @@ function countMatching(
   return { count, remaining };
 }
 
-function countPred(rule: ValidationRule): ((a: AnswerLetter) => boolean) | null {
+function countPred(rule: QuestionTypeDef): ((a: AnswerLetter) => boolean) | null {
   switch (rule.type) {
     case "count_answer":
     case "count_answer_before":
@@ -292,7 +290,7 @@ function countPred(rule: ValidationRule): ((a: AnswerLetter) => boolean) | null 
   }
 }
 
-function countRange(rule: ValidationRule, n: number): [number, number] {
+function countRange(rule: QuestionTypeDef, n: number): [number, number] {
   switch (rule.type) {
     case "count_answer_before":
       return [0, rule.beforeIndex];
@@ -303,7 +301,7 @@ function countRange(rule: ValidationRule, n: number): [number, number] {
   }
 }
 
-function countRuleLabel(rule: ValidationRule, count?: number): string {
+function countRuleLabel(rule: QuestionTypeDef, count?: number): string {
   const q = count === 1 ? "question" : "questions";
   switch (rule.type) {
     case "count_answer":
@@ -332,7 +330,7 @@ function findContradiction(
 ): Hint | null {
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] == null) continue;
-    const rule = puzzle.questions[qi].rule;
+    const rule = puzzle.questions[qi].questionType;
     const ov = optDisplay(puzzle, qi, answers[qi]!);
     const v = optValue(puzzle, qi, answers[qi]!);
     const msg = explainContradiction(rule, qi, answers, ov, v, n);
@@ -348,7 +346,7 @@ function findContradiction(
 }
 
 function explainContradiction(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   qi: number,
   answers: (AnswerLetter | null)[],
   ov: string,
@@ -403,7 +401,7 @@ function explainContradiction(
 }
 
 function explainPositionalContradiction(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   qi: number,
   answers: (AnswerLetter | null)[],
   v: number | null,
@@ -579,7 +577,7 @@ function findForced(
     }
 
     // Forced by answer_of_question (forward: target is known → this is forced)
-    const rule = puzzle.questions[qi].rule;
+    const rule = puzzle.questions[qi].questionType;
     if (rule.type === "answer_of_question" && answers[rule.questionIndex] != null) {
       const target = answers[rule.questionIndex]!;
       const targetIdx = letterIdx(target);
@@ -599,7 +597,7 @@ function findForced(
     for (let other = 0; other < n; other++) {
       const otherAns = answers[other];
       if (otherAns == null) continue;
-      const otherRule = puzzle.questions[other].rule;
+      const otherRule = puzzle.questions[other].questionType;
       if (otherRule.type === "answer_of_question" && otherRule.questionIndex === qi) {
         const impliedIdx = optValue(puzzle, other, otherAns);
         if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
@@ -681,7 +679,7 @@ function findEliminable(
 ): Hint | null {
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const rule = puzzle.questions[qi].rule;
+    const rule = puzzle.questions[qi].questionType;
 
     for (let oi = 0; oi < 5; oi++) {
       if (markSets[qi][oi] !== "unmarked") continue;
@@ -703,7 +701,7 @@ function findEliminable(
 }
 
 function canEliminate(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   qi: number,
   oi: number,
   ov: string,
@@ -777,7 +775,13 @@ function canEliminate(
   // OnlySame/SameAs: can't point to self
   if ((rule.type === "only_same_answer" || rule.type === "same_answer_as") && v != null) {
     if (v === qi) return `can't refer to itself.`;
-    if (v >= 0 && v < n && answers[v] != null && answers[qi] != null && answers[v] !== answers[qi]) {
+    if (
+      v >= 0 &&
+      v < n &&
+      answers[v] != null &&
+      answers[qi] != null &&
+      answers[v] !== answers[qi]
+    ) {
       return `says ${Q(v)}, but ${Q(v)} is ${answers[v]} while this is ${answers[qi]}.`;
     }
   }
@@ -785,7 +789,13 @@ function canEliminate(
   // PrevSame: must point before this question, no closer match
   if (rule.type === "previous_same_answer" && v != null) {
     if (v >= qi) return `says ${Q(v)}, but that's not before ${Q(qi)}.`;
-    if (v >= 0 && v < n && answers[v] != null && answers[qi] != null && answers[v] !== answers[qi]) {
+    if (
+      v >= 0 &&
+      v < n &&
+      answers[v] != null &&
+      answers[qi] != null &&
+      answers[v] !== answers[qi]
+    ) {
       return `says ${Q(v)}, but ${Q(v)} is ${answers[v]} while this is ${answers[qi]}.`;
     }
     for (let j = qi - 1; j > v; j--) {
@@ -807,7 +817,13 @@ function canEliminate(
 
   // ConsecIdent: pair must have same answer
   if (rule.type === "consecutive_identical" && v != null) {
-    if (v >= 0 && v + 1 < n && answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1]) {
+    if (
+      v >= 0 &&
+      v + 1 < n &&
+      answers[v] != null &&
+      answers[v + 1] != null &&
+      answers[v] !== answers[v + 1]
+    ) {
       return `says ${Q(v)} & ${Q(v + 1)}, but they have different answers.`;
     }
   } else if (rule.type === "consecutive_identical" && v == null) {
@@ -821,7 +837,7 @@ function canEliminate(
   return null;
 }
 
-function positionalAnswer(rule: ValidationRule): AnswerLetter | null {
+function positionalAnswer(rule: QuestionTypeDef): AnswerLetter | null {
   if ("answer" in rule && rule.answer) return rule.answer;
   return null;
 }
@@ -839,7 +855,7 @@ function isPositionalRule(type: string): boolean {
 }
 
 function checkPositionalElim(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   pos: number,
   posAnswer: AnswerLetter,
 ): string | null {
@@ -857,7 +873,7 @@ function checkPositionalElim(
 }
 
 function checkNoneElim(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   _qi: number,
   answers: (AnswerLetter | null)[],
   n: number,
@@ -887,7 +903,7 @@ function checkNoneElim(
 }
 
 function checkCloserExists(
-  rule: ValidationRule,
+  rule: QuestionTypeDef,
   pos: number,
   answers: (AnswerLetter | null)[],
   n: number,
@@ -947,7 +963,7 @@ function findActionFp(
   for (let qi = 0; qi < n; qi++) {
     const a = answers[qi];
     if (a == null) continue;
-    const r = fp.rules[qi];
+    const r = fp.questions[qi];
     const ai = letterIdx(a);
     const v = fp.optionValues[qi][ai];
 
@@ -971,7 +987,8 @@ function findActionFp(
     }
     if (r.t === RT_ANSWER_OF) {
       const target = answers[r.questionIndex];
-      if (target != null && v != null && letterIdx(target) !== v) return { type: "contradiction", questionIndex: qi };
+      if (target != null && v != null && letterIdx(target) !== v)
+        return { type: "contradiction", questionIndex: qi };
     }
     if (r.t === RT_LETTER_DIST) {
       const other = answers[r.questionIndex];
@@ -1037,7 +1054,13 @@ function findActionFp(
       return { type: "contradiction", questionIndex: qi };
     }
     if (r.t === RT_CONSEC_IDENT && v != null) {
-      if (v >= 0 && v + 1 < n && answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1]) {
+      if (
+        v >= 0 &&
+        v + 1 < n &&
+        answers[v] != null &&
+        answers[v + 1] != null &&
+        answers[v] !== answers[v + 1]
+      ) {
         return { type: "contradiction", questionIndex: qi };
       }
     }
@@ -1059,7 +1082,7 @@ function findActionFp(
       r.t !== RT_SAME_AS
     ) {
       if (answers.slice(0, n).every((x) => x != null)) {
-        if (!evaluateRule(r, qi, a, answers, fp)) {
+        if (!evaluateRule(fp, qi, a, answers)) {
           return { type: "contradiction", questionIndex: qi };
         }
       }
@@ -1069,7 +1092,7 @@ function findActionFp(
   // Count saturation
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] == null) continue;
-    const r = fp.rules[qi];
+    const r = fp.questions[qi];
     const pred = countPred2(r);
     if (!pred) continue;
     const ai = letterIdx(answers[qi]!);
@@ -1105,8 +1128,8 @@ function findActionFp(
     let consonantQi = -1;
     for (let i = 0; i < n; i++) {
       if (answers[i] != null) continue;
-      if (fp.rules[i].t === RT_COUNT_VOWEL) vowelQi = i;
-      if (fp.rules[i].t === RT_COUNT_CONSONANT) consonantQi = i;
+      if (fp.questions[i].t === RT_COUNT_VOWEL) vowelQi = i;
+      if (fp.questions[i].t === RT_COUNT_CONSONANT) consonantQi = i;
     }
     if (vowelQi >= 0 && consonantQi >= 0) {
       for (let oi = 0; oi < 5; oi++) {
@@ -1135,7 +1158,12 @@ function findActionFp(
             break;
           }
         }
-        if (!has) return { type: "eliminate", questionIndex: consonantQi, optionIndex: oi };
+        if (!has)
+          return {
+            type: "eliminate",
+            questionIndex: consonantQi,
+            optionIndex: oi,
+          };
       }
     }
   }
@@ -1143,7 +1171,7 @@ function findActionFp(
   // Forced values
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.rules[qi];
+    const r = fp.questions[qi];
 
     if (remCount(markSets, qi) === 0) {
       return { type: "contradiction", questionIndex: qi };
@@ -1153,7 +1181,11 @@ function findActionFp(
       if (!isElim(markSets, qi, oi)) remaining.push(oi);
     }
     if (remaining.length === 1) {
-      return { type: "force", questionIndex: qi, letter: LETTERS[remaining[0]] };
+      return {
+        type: "force",
+        questionIndex: qi,
+        letter: LETTERS[remaining[0]],
+      };
     }
 
     if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null) {
@@ -1170,11 +1202,15 @@ function findActionFp(
     for (let other = 0; other < n; other++) {
       const otherAns = answers[other];
       if (otherAns == null) continue;
-      const otherR = fp.rules[other];
+      const otherR = fp.questions[other];
       if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
         const impliedIdx = fp.optionValues[other][letterIdx(otherAns)];
         if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
-          return { type: "force", questionIndex: qi, letter: LETTERS[impliedIdx] };
+          return {
+            type: "force",
+            questionIndex: qi,
+            letter: LETTERS[impliedIdx],
+          };
         }
       }
       if (otherR.t === RT_SAME_AS) {
@@ -1224,7 +1260,7 @@ function findActionFp(
   // Eliminations
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.rules[qi];
+    const r = fp.questions[qi];
 
     for (let oi = 0; oi < 5; oi++) {
       if (markSets[qi][oi] !== "unmarked") continue;
@@ -1360,8 +1396,7 @@ function findActionFp(
 
       // NextSame: must point after qi, and no closer match can exist
       if (r.t === RT_NEXT_SAME && v != null) {
-        if (v <= qi || v >= n)
-          return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+        if (v <= qi || v >= n) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
         for (let j = qi + 1; j < v; j++) {
           if (answers[j] === LETTERS[oi]) {
             return { type: "eliminate", questionIndex: qi, optionIndex: oi };

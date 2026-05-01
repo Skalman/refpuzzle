@@ -1,4 +1,4 @@
-import type { AnswerLetter, Puzzle, FlatPuzzle, FlatRule, Marks } from "./types.ts";
+import type { AnswerLetter, Puzzle, FlatPuzzle, FlatQuestion, Marks } from "./types.ts";
 import {
   getFlatPuzzle,
   letterIdx,
@@ -24,7 +24,7 @@ import {
   RT_SELF,
 } from "./types.ts";
 import type { Claim } from "./types.ts";
-import { evaluate } from "./evaluators.ts";
+import { checkQuestionAgainstSolution } from "./check-validity.ts";
 
 export type Validity = "neutral" | "valid" | "invalid" | "pending";
 
@@ -35,11 +35,11 @@ export function validate(
 ): Validity[] {
   const fp = getFlatPuzzle(puzzle);
   const allAnswered = answers.every((a) => a != null);
-  return fp.rules.map((r, i) => {
+  return fp.questions.map((r, i) => {
     const answer = answers[i];
     if (answer == null) return "neutral";
     if (allAnswered) {
-      return evaluate(r, i, answer, answers, fp) ? "valid" : "invalid";
+      return checkQuestionAgainstSolution(fp, i, answer, answers) ? "valid" : "invalid";
     }
     // only_true_statement: if selected claim is definitively true, that's sufficient
     if (r.t === RT_TRUE_STMT) {
@@ -48,7 +48,7 @@ export function validate(
         return "valid";
       return "pending";
     }
-    const isValid = evaluate(r, i, answer, answers, fp);
+    const isValid = checkQuestionAgainstSolution(fp, i, answer, answers);
     if (isValid && isDefinitive(r, i, answers, fp, markSets)) return "valid";
     if (!isValid && isProvablyWrong(r, i, answer, answers, fp)) return "invalid";
     return "pending";
@@ -96,7 +96,7 @@ function vowelConsonantResolved(
 }
 
 function isDefinitive(
-  rule: FlatRule,
+  rule: FlatQuestion,
   qi: number,
   answers: (AnswerLetter | null)[],
   fp: FlatPuzzle,
@@ -270,7 +270,7 @@ function isClaimDefinitive(
 }
 
 function isProvablyWrong(
-  rule: FlatRule,
+  rule: FlatQuestion,
   qi: number,
   answer: AnswerLetter,
   answers: (AnswerLetter | null)[],
