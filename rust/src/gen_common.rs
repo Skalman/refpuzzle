@@ -77,10 +77,14 @@ pub fn solution_satisfies_type(
             }
             pairs == 1
         }
-        QuestionType::OnlyOdd { answer } => {
+        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+            let parity = match qt {
+                QuestionType::OnlyOdd { .. } => 1,
+                _ => 0,
+            };
             let mut matches = 0;
             for i in 0..n {
-                if (i + 1) % 2 == 1 && sol[i] == answer {
+                if (i + 1) % 2 == parity && sol[i] == answer {
                     matches += 1;
                 }
             }
@@ -408,6 +412,7 @@ pub fn repair_one_question(
                     QuestionType::PrevSame => (0, qi as i16 - 1, 1),
                     QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1, 1),
                     QuestionType::OnlyOdd { .. } => (0, n as i16 - 1, 2),
+                    QuestionType::OnlyEven { .. } => (1, n as i16 - 1, 2),
                     _ => {
                         let min_p = match qt {
                             QuestionType::ClosestAfter { after_index, .. } => {
@@ -573,9 +578,14 @@ pub fn build_flat_puzzle(
                     count_distractors(correct_val as i32, count_max(qt, n) as i32, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
-            QuestionType::OnlyOdd { .. } => {
+            QuestionType::OnlyOdd { .. } | QuestionType::OnlyEven { .. } => {
+                let start = if matches!(qt, QuestionType::OnlyOdd { .. }) {
+                    0
+                } else {
+                    1
+                };
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = odd_position_distractors(correct_val, n, rng);
+                let distractors = parity_position_distractors(correct_val, n, start, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             _ => {
@@ -693,9 +703,13 @@ pub fn correct_option_value(qt: &QuestionType, qi: usize, sol: &[Answer; MAX_N],
             }
             NONE_VAL
         }
-        QuestionType::OnlyOdd { answer } => {
+        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+            let parity = match qt {
+                QuestionType::OnlyOdd { .. } => 1,
+                _ => 0,
+            };
             for i in 0..n {
-                if (i + 1) % 2 == 1 && sol[i] == answer {
+                if (i + 1) % 2 == parity && sol[i] == answer {
                     return i as i16;
                 }
             }
@@ -803,12 +817,13 @@ fn positional_distractors(
     result
 }
 
-fn odd_position_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
+fn parity_position_distractors(correct: i16, n: usize, start: usize, rng: &mut Rng) -> [i16; 4] {
     let mut pool = [0i16; 16];
     let mut plen = 0;
-    for i in (0..n as i16).step_by(2) {
-        if i != correct {
-            pool[plen] = i;
+    for i in (start..n).step_by(2) {
+        let v = i as i16;
+        if v != correct {
+            pool[plen] = v;
             plen += 1;
         }
     }

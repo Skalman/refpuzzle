@@ -80,6 +80,7 @@ export type QuestionTypeDef =
   | { type: "only_same_answer" }
   | { type: "same_answer_as" }
   | { type: "only_odd_with_answer"; answer: AnswerLetter }
+  | { type: "only_even_with_answer"; answer: AnswerLetter }
   | { type: "consecutive_identical" }
 
   // ── Constrained (options always A-E, answer determined by solution) ──
@@ -112,6 +113,7 @@ export const RT_NEXT_SAME = 11;
 export const RT_ONLY_SAME = 12;
 export const RT_SAME_AS = 13;
 export const RT_ONLY_ODD = 14;
+export const RT_ONLY_EVEN = 24;
 export const RT_CONSEC_IDENT = 15;
 export const RT_ANSWER_OF = 16;
 export const RT_LEAST_COMMON = 17;
@@ -141,6 +143,7 @@ const RT_MAP: Record<string, QuestionTypeId> = {
   only_same_answer: RT_ONLY_SAME,
   same_answer_as: RT_SAME_AS,
   only_odd_with_answer: RT_ONLY_ODD,
+  only_even_with_answer: RT_ONLY_EVEN,
   consecutive_identical: RT_CONSEC_IDENT,
   answer_of_question: RT_ANSWER_OF,
   least_common_answer: RT_LEAST_COMMON,
@@ -194,6 +197,7 @@ const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
   RT_ONLY_SAME,
   RT_CONSEC_IDENT,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_FIRST_WITH,
   RT_LAST_WITH,
   RT_SAME_AS,

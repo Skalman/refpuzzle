@@ -66,6 +66,7 @@ pub enum QuestionTypeKind {
     OnlySame,
     SameAs,
     OnlyOdd,
+    OnlyEven,
     ConsecIdent,
     AnswerOf,
     LeastCommon,
@@ -142,6 +143,11 @@ pub enum QuestionType {
         #[serde(rename = "a")]
         answer: Answer,
     },
+    #[serde(rename = "only_even_with_answer")]
+    OnlyEven {
+        #[serde(rename = "a")]
+        answer: Answer,
+    },
     #[serde(rename = "consecutive_identical")]
     ConsecIdent,
     #[serde(rename = "answer_of_question")]
@@ -194,6 +200,7 @@ impl QuestionType {
                 | QuestionType::OnlySame
                 | QuestionType::ConsecIdent
                 | QuestionType::OnlyOdd { .. }
+                | QuestionType::OnlyEven { .. }
                 | QuestionType::FirstWith { .. }
                 | QuestionType::LastWith { .. }
                 | QuestionType::SameAs
@@ -215,6 +222,7 @@ impl QuestionType {
                 | QuestionType::OnlySame
                 | QuestionType::ConsecIdent
                 | QuestionType::OnlyOdd { .. }
+                | QuestionType::OnlyEven { .. }
         )
     }
 }

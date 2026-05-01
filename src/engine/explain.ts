@@ -19,6 +19,7 @@ import {
   RT_ONLY_SAME,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_ANSWER_OF,
   RT_UNIQUE,
@@ -361,16 +362,18 @@ function explainElimDetail(
     }
   }
 
-  if (r.t === RT_ONLY_ODD) {
+  if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
+    const parity = r.t === RT_ONLY_ODD ? 1 : 0;
+    const parityName = r.t === RT_ONLY_ODD ? "even" : "odd";
     if (v != null) {
-      if ((v + 1) % 2 === 0) return `says ${Q(v)}, but that's an even-numbered question.`;
+      if ((v + 1) % 2 !== parity) return `says ${Q(v)}, but that's an ${parityName}-numbered question.`;
       if (v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer)
         return `says ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
       if (v >= 0 && v < n && answers[v] == null && isElim(eliminated, v, L2I[r.answer!]))
         return `says ${Q(v)}, but ${r.answer} is already ruled out there.`;
     } else {
       for (let i = 0; i < n; i++) {
-        if ((i + 1) % 2 === 1 && answers[i] === r.answer)
+        if ((i + 1) % 2 === parity && answers[i] === r.answer)
           return `says "None", but ${Q(i)} has answer ${r.answer}.`;
       }
     }

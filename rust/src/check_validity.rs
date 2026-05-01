@@ -487,13 +487,17 @@ pub fn check_answer_validity(
             }
         }
 
-        // ── Only odd ──
-        QuestionType::OnlyOdd { answer } => {
+        // ── Only odd / only even ──
+        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+            let parity = match *r {
+                QuestionType::OnlyOdd { .. } => 1,
+                _ => 0,
+            };
             let amask = 1u8 << answer.idx();
 
             if on != NONE_VAL {
                 let p = on as usize;
-                if (p + 1) % 2 != 1 {
+                if (p + 1) % 2 != parity {
                     return Validity::Invalid;
                 }
 
@@ -506,7 +510,7 @@ pub fn check_answer_validity(
                 let mut other_matches: i16 = 0;
                 let mut other_remaining: i16 = 0;
                 for j in 0..n {
-                    if j == p || (j + 1) % 2 != 1 {
+                    if j == p || (j + 1) % 2 != parity {
                         continue;
                     }
                     match answers[j] {
@@ -528,7 +532,7 @@ pub fn check_answer_validity(
                 let mut any_match = false;
                 let mut any_could = false;
                 for j in 0..n {
-                    if (j + 1) % 2 != 1 {
+                    if (j + 1) % 2 != parity {
                         continue;
                     }
                     if answers[j] == Some(answer) {

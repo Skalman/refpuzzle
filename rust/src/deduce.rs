@@ -430,10 +430,14 @@ pub fn deduce_with_rule(
                         };
                         elim_last_in_range(answers, eliminated, answer, before_idx, on, oi)
                     }
-                    QuestionType::OnlyOdd { answer } => {
+                    QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+                        let parity = match r {
+                            QuestionType::OnlyOdd { .. } => 1,
+                            _ => 0,
+                        };
                         if on != NONE_VAL {
                             let pos = on as usize;
-                            if on % 2 != 0 {
+                            if (pos + 1) % 2 != parity {
                                 true
                             } else if pos < n {
                                 if let Some(pa) = answers[pos] {
@@ -445,7 +449,7 @@ pub fn deduce_with_rule(
                                 false
                             }
                         } else {
-                            (0..n).any(|i| (i + 1) % 2 == 1 && answers[i] == Some(answer))
+                            (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
                         }
                     }
                     QuestionType::ConsecIdent => {

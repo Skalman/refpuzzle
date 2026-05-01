@@ -33,6 +33,8 @@ export function renderQuestionText(qt: QuestionTypeDef): string {
       return "Which question has the same answer as this one?";
     case "only_odd_with_answer":
       return `Which is the only odd-numbered question with answer ${qt.answer}?`;
+    case "only_even_with_answer":
+      return `Which is the only even-numbered question with answer ${qt.answer}?`;
     case "consecutive_identical":
       return "Which are the only two consecutive questions with identical answers?";
     case "answer_of_question":
@@ -65,6 +67,7 @@ const POSITIONAL_RULES = new Set([
   "only_same_answer",
   "same_answer_as",
   "only_odd_with_answer",
+  "only_even_with_answer",
   "consecutive_identical",
 ]);
 

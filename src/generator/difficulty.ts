@@ -89,6 +89,8 @@ export const profiles: DifficultyProfile[] = [
       "letter_distance",
       "equal_count_as",
       "consecutive_identical",
+      "only_odd_with_answer",
+      "only_even_with_answer",
     ],
   },
   {
@@ -119,6 +121,7 @@ export const profiles: DifficultyProfile[] = [
       "equal_count_as",
       "consecutive_identical",
       "only_odd_with_answer",
+      "only_even_with_answer",
       "only_true_statement",
     ],
   },

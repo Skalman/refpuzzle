@@ -17,6 +17,7 @@ import {
   RT_ONLY_SAME,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_ANSWER_OF,
   RT_LEAST_COMMON,
@@ -316,19 +317,20 @@ export function checkAnswerValidity(
     }
   }
 
-  // ── Only odd ──
-  if (r.t === RT_ONLY_ODD) {
+  // ── Only odd / only even ──
+  if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
+    const parity = r.t === RT_ONLY_ODD ? 1 : 0;
     const answer = r.answer!;
     const amask = 1 << letterIdx(answer);
 
     if (v != null) {
-      if ((v + 1) % 2 !== 1) return "invalid";
+      if ((v + 1) % 2 !== parity) return "invalid";
       if (answers[v] != null && answers[v] !== answer) return "invalid";
 
       let otherMatches = 0;
       let otherRemaining = 0;
       for (let j = 0; j < n; j++) {
-        if (j === v || (j + 1) % 2 !== 1) continue;
+        if (j === v || (j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) otherMatches++;
         else if (answers[j] == null && (eliminated[j] & amask) === 0) otherRemaining++;
       }
@@ -340,7 +342,7 @@ export function checkAnswerValidity(
       let anyMatch = false;
       let anyCould = false;
       for (let j = 0; j < n; j++) {
-        if ((j + 1) % 2 !== 1) continue;
+        if ((j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) anyMatch = true;
         if (answers[j] == null && (eliminated[j] & amask) === 0) anyCould = true;
       }

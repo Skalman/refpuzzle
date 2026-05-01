@@ -18,6 +18,7 @@ import {
   RT_ONLY_SAME,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_ANSWER_OF,
   RT_LETTER_DIST,
@@ -415,9 +416,10 @@ export function deduceWithRule(
           }
         }
 
-        if (!elim && r.t === RT_ONLY_ODD) {
+        if (!elim && (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN)) {
+          const parity = r.t === RT_ONLY_ODD ? 1 : 0;
           if (v != null) {
-            if ((v + 1) % 2 === 0) {
+            if ((v + 1) % 2 !== parity) {
               elim = true;
             } else if (v >= 0 && v < n) {
               if (answers[v] != null && answers[v] !== r.answer) {
@@ -428,7 +430,7 @@ export function deduceWithRule(
             }
           } else {
             for (let i = 0; i < n; i++) {
-              if ((i + 1) % 2 === 1 && answers[i] === r.answer) {
+              if ((i + 1) % 2 === parity && answers[i] === r.answer) {
                 elim = true;
                 break;
               }

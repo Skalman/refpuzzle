@@ -71,6 +71,8 @@ pub static PROFILES: [DifficultyProfile; 5] = [
             LetterDist,
             EqualCount,
             ConsecIdent,
+            OnlyOdd,
+            OnlyEven,
         ],
     },
     DifficultyProfile {
@@ -98,6 +100,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
             EqualCount,
             ConsecIdent,
             OnlyOdd,
+            OnlyEven,
             TrueStmt,
         ],
     },

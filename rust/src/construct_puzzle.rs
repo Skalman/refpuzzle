@@ -45,6 +45,7 @@ const FILL_TYPES: &[QuestionTypeKind] = &[
     QuestionTypeKind::OnlySame,
     QuestionTypeKind::SameAs,
     QuestionTypeKind::OnlyOdd,
+    QuestionTypeKind::OnlyEven,
     QuestionTypeKind::LeastCommon,
     QuestionTypeKind::MostCommon,
     QuestionTypeKind::Unique,
@@ -431,6 +432,7 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
             | QuestionTypeKind::Unique
             | QuestionTypeKind::OnlySame
             | QuestionTypeKind::OnlyOdd
+            | QuestionTypeKind::OnlyEven
             | QuestionTypeKind::EqualCount
     )
 }
@@ -491,15 +493,22 @@ fn solution_satisfies_type_for_kind(
             }
             m == 1
         }
-        QuestionTypeKind::OnlyOdd => LETTERS.iter().any(|&letter| {
-            let mut m = 0;
-            for i in 0..n {
-                if (i + 1) % 2 == 1 && sol[i] == letter {
-                    m += 1;
+        QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
+            let parity = if kind == QuestionTypeKind::OnlyOdd {
+                1
+            } else {
+                0
+            };
+            LETTERS.iter().any(|&letter| {
+                let mut m = 0;
+                for i in 0..n {
+                    if (i + 1) % 2 == parity && sol[i] == letter {
+                        m += 1;
+                    }
                 }
-            }
-            m == 1
-        }),
+                m == 1
+            })
+        }
         QuestionTypeKind::EqualCount => {
             let counts = letter_counts(sol, n);
             for a in 0..5 {
@@ -619,9 +628,14 @@ fn random_type_params(
         QuestionTypeKind::OnlySame => Some(QuestionType::OnlySame),
         QuestionTypeKind::SameAs => Some(QuestionType::SameAs),
         QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
-        QuestionTypeKind::OnlyOdd => Some(QuestionType::OnlyOdd {
-            answer: rng.pick(&LETTERS),
-        }),
+        QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
+            let answer = rng.pick(&LETTERS);
+            Some(if kind == QuestionTypeKind::OnlyOdd {
+                QuestionType::OnlyOdd { answer }
+            } else {
+                QuestionType::OnlyEven { answer }
+            })
+        }
         QuestionTypeKind::LeastCommon => Some(QuestionType::LeastCommon),
         QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
         QuestionTypeKind::Unique => Some(QuestionType::Unique),

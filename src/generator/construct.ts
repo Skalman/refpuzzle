@@ -70,6 +70,7 @@ const VARIETY_TYPES: QuestionTypeDef["type"][] = [
   "only_same_answer",
   "same_answer_as",
   "only_odd_with_answer",
+  "only_even_with_answer",
   "least_common_answer",
   "most_common_answer",
   "unique_answer",
@@ -83,6 +84,7 @@ const STRUCTURAL_TYPES = new Set<QuestionTypeDef["type"]>([
   "unique_answer",
   "only_same_answer",
   "only_odd_with_answer",
+  "only_even_with_answer",
   "equal_count_as",
 ]);
 
@@ -685,6 +687,7 @@ function makeRule(
     case "equal_count_as":
       return { type, answer: rng.pick(LETTERS) };
     case "only_odd_with_answer":
+    case "only_even_with_answer":
       return { type, answer: rng.pick(LETTERS) };
     case "answer_is_self":
       return { type };
@@ -708,9 +711,11 @@ function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[])
       for (let i = 0; i < sol.length - 1; i++) if (sol[i] === sol[i + 1]) p++;
       return p === 1;
     }
-    case "only_odd_with_answer": {
+    case "only_odd_with_answer":
+    case "only_even_with_answer": {
+      const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
       let m = 0;
-      for (let i = 0; i < sol.length; i++) if ((i + 1) % 2 === 1 && sol[i] === rule.answer) m++;
+      for (let i = 0; i < sol.length; i++) if ((i + 1) % 2 === parity && sol[i] === rule.answer) m++;
       return m === 1;
     }
     case "unique_answer":
@@ -743,10 +748,12 @@ function solutionHasStructural(
       for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) m++;
       return m === 1;
     }
-    case "only_odd_with_answer": {
+    case "only_odd_with_answer":
+    case "only_even_with_answer": {
+      const parity = type === "only_odd_with_answer" ? 1 : 0;
       for (const letter of LETTERS) {
         let m = 0;
-        for (let i = 0; i < n; i++) if ((i + 1) % 2 === 1 && solution[i] === letter) m++;
+        for (let i = 0; i < n; i++) if ((i + 1) % 2 === parity && solution[i] === letter) m++;
         if (m === 1) return true;
       }
       return false;
@@ -871,9 +878,12 @@ function computeValue(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): n
       for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return i;
       return null;
     case "only_odd_with_answer":
+    case "only_even_with_answer": {
+      const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
       for (let i = 0; i < sol.length; i++)
-        if ((i + 1) % 2 === 1 && sol[i] === rule.answer) return i;
+        if ((i + 1) % 2 === parity && sol[i] === rule.answer) return i;
       return null;
+    }
     case "consecutive_identical":
       for (let i = 0; i < sol.length - 1; i++) if (sol[i] === sol[i + 1]) return i;
       return null;
@@ -919,10 +929,11 @@ function makeDistractors(
     for (let i = 0; i <= Math.max(max, 4); i++) if (i !== correct) pool.push(i);
     return rng.shuffle(pool).slice(0, 4);
   }
-  if (rule.type === "only_odd_with_answer") {
+  if (rule.type === "only_odd_with_answer" || rule.type === "only_even_with_answer") {
+    const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
     const pool: (number | null)[] = [];
     for (let i = 0; i < n; i++) {
-      if ((i + 1) % 2 === 1 && i !== correct) pool.push(i);
+      if ((i + 1) % 2 === parity && i !== correct) pool.push(i);
     }
     if (correct != null) pool.push(null);
     return rng.shuffle(pool).slice(0, 4);

@@ -861,6 +861,84 @@
       "expect": "invalid"
     },
 
+    {"section": "=== only_even_with_answer ==="},
+
+    {
+      "name": "only_even: claimed position is odd (1-indexed) → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_even: claimed position has wrong answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "B", "B", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_even: another even position has the answer → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "A", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_even: only one even position has A → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "B", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "only_even: correct position but other even unanswered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "A", "B", "", "B"],
+      "expect": "pending"
+    },
+    {
+      "name": "only_even: claims None but even position has A → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["E", "A", "B", "B"],
+      "expect": "invalid"
+    },
+
     {"section": "=== only_true_statement ==="},
 
     {

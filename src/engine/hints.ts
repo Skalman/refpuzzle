@@ -24,6 +24,7 @@ import {
   RT_UNIQUE,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_PREV_SAME,
   RT_NEXT_SAME,
@@ -850,6 +851,7 @@ function isPositionalRule(type: string): boolean {
     "last_with_answer",
     "only_same_answer",
     "only_odd_with_answer",
+    "only_even_with_answer",
     "same_answer_as",
   ].includes(type);
 }
@@ -1346,10 +1348,10 @@ function findActionFp(
         }
       }
 
-      // OnlyOdd: position must be odd, in range, and could have the answer
-      if (r.t === RT_ONLY_ODD) {
+      if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
+        const parity = r.t === RT_ONLY_ODD ? 1 : 0;
         if (v != null) {
-          if ((v + 1) % 2 === 0) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
+          if ((v + 1) % 2 !== parity) return { type: "eliminate", questionIndex: qi, optionIndex: oi };
           if (v >= 0 && v < n) {
             if (answers[v] != null && answers[v] !== r.answer) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
@@ -1360,7 +1362,7 @@ function findActionFp(
           }
         } else {
           for (let i = 0; i < n; i++) {
-            if ((i + 1) % 2 === 1 && answers[i] === r.answer) {
+            if ((i + 1) % 2 === parity && answers[i] === r.answer) {
               return { type: "eliminate", questionIndex: qi, optionIndex: oi };
             }
           }

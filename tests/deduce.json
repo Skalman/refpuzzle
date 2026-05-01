@@ -313,6 +313,42 @@
       "expect": "2a"
     },
     {
+      "name": "OnlyEven: position is odd (1-indexed) → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [1, 3, 2, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1c"
+    },
+    {
+      "name": "OnlyEven: position has wrong answer → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [1, 3, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "OnlyEven: answer eliminated from position → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [1, 3, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "a", "", ""],
+      "expect": "1a"
+    },
+    {
       "name": "ConsecIdent: pair has different answers → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [
@@ -494,6 +530,30 @@
       ]},
       "state": ["A", "bd", "", ""],
       "expect": "2e"
+    },
+    {
+      "name": "OnlyEven: claims None but even position has A → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [1, 3, 0, 2, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["B", "abcd", "B", "A"],
+      "expect": "2e"
+    },
+    {
+      "name": "OnlyEven: claims None, no even match → no elimination",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_even_with_answer", "a": 0}, "o": [1, 3, 0, 2, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "abcd", "A", "B"],
+      "expect": null
     },
     {
       "name": "NextSame: target >= n → eliminate",

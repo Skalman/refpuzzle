@@ -92,6 +92,7 @@ function expandQuestion(r: CompactRule): QuestionTypeDef {
     case "first_with_answer":
     case "last_with_answer":
     case "only_odd_with_answer":
+    case "only_even_with_answer":
     case "equal_count_as":
       return { type, answer: L(r.a) };
     case "count_answer_after":

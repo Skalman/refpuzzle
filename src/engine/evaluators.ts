@@ -19,6 +19,7 @@ import {
   RT_ONLY_SAME,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_ANSWER_OF,
   RT_LEAST_COMMON,
@@ -162,10 +163,12 @@ export function checkQuestionAgainstSolution(
       return answers[v] === selectedAnswer;
     }
 
-    case RT_ONLY_ODD: {
+    case RT_ONLY_ODD:
+    case RT_ONLY_EVEN: {
+      const parity = r.t === RT_ONLY_ODD ? 1 : 0;
       const matches: number[] = [];
       for (let i = 0; i < n; i++) {
-        if ((i + 1) % 2 === 1 && answers[i] === r.answer) matches.push(i);
+        if ((i + 1) % 2 === parity && answers[i] === r.answer) matches.push(i);
       }
       if (v == null) return matches.length === 0;
       return matches.length === 1 && matches[0] === v;

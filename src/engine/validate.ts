@@ -15,6 +15,7 @@ import {
   RT_LAST_WITH,
   RT_SAME_AS,
   RT_ONLY_ODD,
+  RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
   RT_PREV_SAME,
   RT_NEXT_SAME,
@@ -175,14 +176,16 @@ function isDefinitive(
       return true;
     }
 
-    case RT_ONLY_ODD: {
+    case RT_ONLY_ODD:
+    case RT_ONLY_EVEN: {
       const target = rule.answer!;
+      const start = rule.t === RT_ONLY_ODD ? 0 : 1;
       if (v == null) {
-        for (let j = 0; j < n; j += 2) if (!cantBe(j, target, answers, markSets)) return false;
+        for (let j = start; j < n; j += 2) if (!cantBe(j, target, answers, markSets)) return false;
         return true;
       }
       if (answers[v] == null) return false;
-      for (let j = 0; j < n; j += 2) {
+      for (let j = start; j < n; j += 2) {
         if (j === v) continue;
         if (!cantBe(j, target, answers, markSets)) return false;
       }
