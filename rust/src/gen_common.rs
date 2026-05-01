@@ -383,7 +383,7 @@ pub fn repair_one_question(
             }
         }
         _ => {
-            // Positional, ConsecIdent, etc.: same strategy — find closest-to-correct
+            // Positional, ConsecIdent, OnlyOdd, etc.: same strategy — find closest-to-correct
             // non-eliminated wrong option, replace with furthest available value.
             let correct_val = fp.option_nums[qi][correct_oi];
             let mut best_oi = None;
@@ -403,10 +403,11 @@ pub fn repair_one_question(
                 }
             }
             if let Some(oi) = best_oi {
-                let (min_val, max_val) = match qt {
-                    QuestionType::ConsecIdent => (0i16, (n as i16 - 2).max(0)),
-                    QuestionType::PrevSame => (0, qi as i16 - 1),
-                    QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1),
+                let (min_val, max_val, step) = match qt {
+                    QuestionType::ConsecIdent => (0i16, (n as i16 - 2).max(0), 1),
+                    QuestionType::PrevSame => (0, qi as i16 - 1, 1),
+                    QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1, 1),
+                    QuestionType::OnlyOdd { .. } => (0, n as i16 - 1, 2),
                     _ => {
                         let min_p = match qt {
                             QuestionType::ClosestAfter { after_index, .. } => {
@@ -420,7 +421,7 @@ pub fn repair_one_question(
                             }
                             _ => n as i16 - 1,
                         };
-                        (min_p, max_p)
+                        (min_p, max_p, 1)
                     }
                 };
                 let exclude_self = matches!(qt, QuestionType::OnlySame | QuestionType::SameAs);
@@ -428,7 +429,9 @@ pub fn repair_one_question(
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 // Try all values in range + NONE_VAL
-                let candidates_iter = (min_val..=max_val).chain(std::iter::once(NONE_VAL));
+                let candidates_iter = (min_val..=max_val)
+                    .step_by(step as usize)
+                    .chain(std::iter::once(NONE_VAL));
                 for v in candidates_iter {
                     if v == correct_val || v == old_val || (exclude_self && v == qi as i16) {
                         continue;
