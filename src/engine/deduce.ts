@@ -132,11 +132,13 @@ export function deduceWithRule(
   answers: (AnswerLetter | null)[],
   eliminated: number[],
   rule: DeduceRuleFilter,
+  exclude: DeduceRuleFilter = null,
 ): DeduceResult | null {
   const n = fp.n;
+  const run = (r: DeduceRuleFilter) => (rule === null || rule === r) && exclude !== r;
 
   // ── Count saturation ──
-  if (rule === null || rule === "count_saturation") {
+  if (run("count_saturation")) {
     for (let qi = 0; qi < n; qi++) {
       if (answers[qi] == null) continue;
       const r = fp.questions[qi];
@@ -197,7 +199,7 @@ export function deduceWithRule(
   }
 
   // ── Forced values ──
-  if (rule === null || rule === "forced_values") {
+  if (run("forced_values")) {
     for (let qi = 0; qi < n; qi++) {
       if (answers[qi] != null) continue;
       const r = fp.questions[qi];
@@ -341,7 +343,7 @@ export function deduceWithRule(
   }
 
   // ── Positional range elimination ──
-  if (rule === null || rule === "positional_range") {
+  if (run("positional_range")) {
     // Answered positional rules exclude answer from range
     for (let src = 0; src < n; src++) {
       const srcAns = answers[src];
@@ -436,7 +438,7 @@ export function deduceWithRule(
   }
 
   // ── Vowel/consonant cross-elimination ──
-  if (rule === null || rule === "vowel_consonant_cross") {
+  if (run("vowel_consonant_cross")) {
     let vowelQi = -1;
     let consonantQi = -1;
     for (let i = 0; i < n; i++) {
@@ -485,7 +487,7 @@ export function deduceWithRule(
   }
 
   // ── Eliminations ──
-  if (rule === null || rule === "eliminations") {
+  if (run("eliminations")) {
     for (let qi = 0; qi < n; qi++) {
       if (answers[qi] != null) continue;
       const r = fp.questions[qi];

@@ -130,10 +130,21 @@ pub fn deduce_with_rule(
     eliminated: &[u8; MAX_N],
     rule: DeduceRule,
 ) -> Option<DeduceResult> {
+    deduce_with_rule_exclude(fp, answers, eliminated, rule, None)
+}
+
+fn deduce_with_rule_exclude(
+    fp: &FlatPuzzle,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    rule: DeduceRule,
+    exclude: Option<DeduceRule>,
+) -> Option<DeduceResult> {
     let n = fp.n;
+    let run = |r: DeduceRule| (rule == DeduceRule::All || rule == r) && exclude != Some(r);
 
     // ── Count saturation ──
-    if rule == DeduceRule::All || rule == DeduceRule::CountSaturation {
+    if run(DeduceRule::CountSaturation) {
         for qi in 0..n {
             let Some(a) = answers[qi] else { continue };
             let r = &fp.question_types[qi];
@@ -200,7 +211,7 @@ pub fn deduce_with_rule(
     }
 
     // ── Forced values ──
-    if rule == DeduceRule::All || rule == DeduceRule::ForcedValues {
+    if run(DeduceRule::ForcedValues) {
         for qi in 0..n {
             if answers[qi].is_some() {
                 continue;
@@ -396,7 +407,7 @@ pub fn deduce_with_rule(
     }
 
     // ── Positional range elimination ──
-    if rule == DeduceRule::All || rule == DeduceRule::PositionalRange {
+    if run(DeduceRule::PositionalRange) {
         for src in 0..n {
             let Some(src_ans) = answers[src] else {
                 continue;
@@ -531,7 +542,7 @@ pub fn deduce_with_rule(
     }
 
     // ── Vowel/consonant cross-elimination ──
-    if rule == DeduceRule::All || rule == DeduceRule::VowelConsonantCross {
+    if run(DeduceRule::VowelConsonantCross) {
         let mut vowel_qi = None;
         let mut consonant_qi = None;
         for i in 0..n {
@@ -586,7 +597,7 @@ pub fn deduce_with_rule(
     }
 
     // ── Eliminations ──
-    if rule == DeduceRule::All || rule == DeduceRule::Eliminations {
+    if run(DeduceRule::Eliminations) {
         for qi in 0..n {
             if answers[qi].is_some() {
                 continue;

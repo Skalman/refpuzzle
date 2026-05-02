@@ -71,9 +71,11 @@ function hasGenericFallback(steps: ExplainStep[]): boolean {
   return false;
 }
 
+
 let passed = 0;
 let failed = 0;
 let explainFailed = 0;
+let dryFailed = 0;
 
 for (const test of suite.tests) {
   if ("section" in test) continue;
@@ -121,8 +123,19 @@ for (const test of suite.tests) {
       console.log(`EXPLAIN THROW: ${t.name}: ${e}`);
     }
   }
+  // DRY check: if test specifies a rule, running without that rule should not produce the same action
+  if (ruleFilter && result && got === expected) {
+    const withoutResult = deduceWithRule(fp, answers as any, eliminated, null, ruleFilter);
+    const withoutGot = formatAction(withoutResult);
+    if (withoutGot === got) {
+      dryFailed++;
+      console.log(`DRY: ${t.name}`);
+      console.log(`  excluding "${ruleFilter}" still produces: ${got} (via rule: ${withoutResult!.rule})`);
+    }
+  }
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
 if (explainFailed > 0) console.log(`${explainFailed} explain fallback(s)`);
+if (dryFailed > 0) console.log(`${dryFailed} DRY violation(s)`);
 if (failed > 0) process.exit(1);
