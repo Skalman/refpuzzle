@@ -46,7 +46,7 @@ export function renderQuestionText(qt: QuestionTypeDef): string {
     case "unique_answer":
       return "Which answer is not the answer to any other question?";
     case "equal_count_as":
-      return `The number of questions with answer ${qt.answer} equals the number of questions with answer?`;
+      return `Which answer appears the same number of times as ${qt.answer}?`;
     case "answer_is_self":
       return "What is the answer to this question?";
     case "letter_distance":
@@ -80,6 +80,10 @@ export function renderOptionLabel(qt: QuestionTypeDef, value: number | null, _qi
     return value != null ? `${value + 1}-${value + 2}` : "None";
   }
 
+  if (qt.type === "equal_count_as") {
+    return value != null ? LETTERS[value] : "None";
+  }
+
   if (POSITIONAL_RULES.has(qt.type)) {
     return value != null ? String(value + 1) : "None";
   }
@@ -96,7 +100,6 @@ const LETTER_RULES = new Set([
   "least_common_answer",
   "most_common_answer",
   "unique_answer",
-  "equal_count_as",
   "answer_is_self",
 ]);
 

@@ -179,10 +179,7 @@ pub enum QuestionType {
 
 impl QuestionType {
     pub fn is_constrained(&self) -> bool {
-        matches!(
-            self,
-            QuestionType::Unique | QuestionType::EqualCount { .. } | QuestionType::AnswerIsSelf
-        )
+        matches!(self, QuestionType::Unique | QuestionType::AnswerIsSelf)
     }
 
     pub fn is_global(&self) -> bool {

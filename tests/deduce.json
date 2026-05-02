@@ -349,6 +349,18 @@
       "expect": "1a"
     },
     {
+      "name": "EqualCount: option is reference letter → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1a"
+    },
+    {
       "name": "ConsecIdent: pair has different answers → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [

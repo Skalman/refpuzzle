@@ -471,6 +471,9 @@ pub fn deduce_with_rule(
                             })
                         }
                     }
+                    QuestionType::EqualCount { answer } if on != NONE_VAL => {
+                        LETTERS[on as usize] == answer
+                    }
                     QuestionType::PrevSame if on != NONE_VAL => {
                         let pos = on as usize;
                         if pos >= qi {

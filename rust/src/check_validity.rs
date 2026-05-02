@@ -578,20 +578,36 @@ pub fn check_answer_validity(
         // ── Always valid ──
         QuestionType::AnswerIsSelf => Validity::Valid,
 
-        // ── Equal count (can partially check) ──
+        // ── Equal count ──
         QuestionType::EqualCount { answer } => {
-            if a == answer {
-                return Validity::Invalid;
-            }
-            if !all_answered(answers, n) {
-                return Validity::Pending;
-            }
-            let ref_count = count_answer_simple(answers, answer, 0, n);
-            let sel_count = count_answer_simple(answers, a, 0, n);
-            if ref_count == sel_count {
-                Validity::Valid
+            if on != NONE_VAL {
+                let claimed = LETTERS[on as usize];
+                if claimed == answer {
+                    return Validity::Invalid;
+                }
+                if !all_answered(answers, n) {
+                    return Validity::Pending;
+                }
+                let ref_count = count_answer_simple(answers, answer, 0, n);
+                let sel_count = count_answer_simple(answers, claimed, 0, n);
+                if ref_count == sel_count {
+                    Validity::Valid
+                } else {
+                    Validity::Invalid
+                }
             } else {
-                Validity::Invalid
+                if !all_answered(answers, n) {
+                    return Validity::Pending;
+                }
+                let ref_count = count_answer_simple(answers, answer, 0, n);
+                let any_match = LETTERS
+                    .iter()
+                    .any(|&l| l != answer && count_answer_simple(answers, l, 0, n) == ref_count);
+                if any_match {
+                    Validity::Invalid
+                } else {
+                    Validity::Valid
+                }
             }
         }
 

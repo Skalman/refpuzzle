@@ -1,5 +1,6 @@
 import type { AnswerLetter, FlatPuzzle } from "./types.ts";
 import {
+  LETTERS,
   VOWELS,
   letterIdx,
   RT_COUNT_ANSWER,
@@ -372,18 +373,32 @@ export function checkAnswerValidity(
   // ── Always valid ──
   if (r.t === RT_SELF) return "valid";
 
-  // ── Equal count (can partially check) ──
+  // ── Equal count ──
   if (r.t === RT_EQUAL_COUNT) {
-    if (a === r.answer) return "invalid";
-    const allKnown = answers.slice(0, n).every((x) => x != null);
-    if (!allKnown) return "pending";
-    let refCount = 0;
-    let selCount = 0;
-    for (let i = 0; i < n; i++) {
-      if (answers[i] === r.answer) refCount++;
-      if (answers[i] === a) selCount++;
+    if (v != null) {
+      const claimed = LETTERS[v];
+      if (claimed === r.answer) return "invalid";
+      const allKnown = answers.slice(0, n).every((x) => x != null);
+      if (!allKnown) return "pending";
+      let refCount = 0;
+      let selCount = 0;
+      for (let i = 0; i < n; i++) {
+        if (answers[i] === r.answer) refCount++;
+        if (answers[i] === claimed) selCount++;
+      }
+      return refCount === selCount ? "valid" : "invalid";
+    } else {
+      const allKnown = answers.slice(0, n).every((x) => x != null);
+      if (!allKnown) return "pending";
+      const counts = [0, 0, 0, 0, 0];
+      for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
+      const refCount = counts[letterIdx(r.answer!)];
+      let anyMatch = false;
+      for (let i = 0; i < 5; i++) {
+        if (LETTERS[i] !== r.answer && counts[i] === refCount) anyMatch = true;
+      }
+      return anyMatch ? "invalid" : "valid";
     }
-    return refCount === selCount ? "valid" : "invalid";
   }
 
   // ── Global: need all answers ──

@@ -43,7 +43,7 @@ export function generateConstructive(
   return null;
 }
 
-const CONSTRAINED_TYPES = new Set<string>(["unique_answer", "equal_count_as", "answer_is_self"]);
+const CONSTRAINED_TYPES = new Set<string>(["unique_answer", "answer_is_self"]);
 
 // Rule types by category
 const ENTRY_TYPES: QuestionTypeDef["type"][] = [
@@ -85,7 +85,6 @@ const STRUCTURAL_TYPES = new Set<QuestionTypeDef["type"]>([
   "only_same_answer",
   "only_odd_with_answer",
   "only_even_with_answer",
-  "equal_count_as",
 ]);
 
 function typeCap(type: QuestionTypeDef["type"]): number {
@@ -615,7 +614,7 @@ function makeRule(
   type: QuestionTypeDef["type"],
   qi: number,
   n: number,
-  _solution: AnswerLetter[],
+  solution: AnswerLetter[],
   assigned: Set<number>,
   rng: RNG,
 ): QuestionTypeDef | null {
@@ -684,8 +683,15 @@ function makeRule(
     case "most_common_answer":
     case "unique_answer":
       return { type };
-    case "equal_count_as":
-      return { type, answer: rng.pick(LETTERS) };
+    case "equal_count_as": {
+      const refLetter = rng.pick(LETTERS);
+      const refCount = solution.filter((a) => a === refLetter).length;
+      const hasMatch = LETTERS.some(
+        (l) => l !== refLetter && solution.filter((a) => a === l).length === refCount,
+      );
+      if (!hasMatch && rng.int(0, 4) > 1) return null;
+      return { type, answer: refLetter };
+    }
     case "only_odd_with_answer":
     case "only_even_with_answer":
       return { type, answer: rng.pick(LETTERS) };
@@ -720,10 +726,6 @@ function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[])
     }
     case "unique_answer":
       return sol.filter((a) => a === sol[qi]).length === 1;
-    case "equal_count_as": {
-      const rc = sol.filter((a) => a === rule.answer).length;
-      return LETTERS.some((l) => l !== rule.answer && sol.filter((a) => a === l).length === rc);
-    }
     default:
       return true;
   }
@@ -758,12 +760,6 @@ function solutionHasStructural(
       }
       return false;
     }
-    case "equal_count_as": {
-      const c = [0, 0, 0, 0, 0];
-      for (let i = 0; i < n; i++) c[L2I[solution[i]]]++;
-      for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) if (c[a] === c[b]) return true;
-      return false;
-    }
   }
   return false;
 }
@@ -787,11 +783,8 @@ function solutionCompatible(
       for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
       return false;
     }
-    case "equal_count_as": {
-      const c = letterCounts(solution.slice(0, n));
-      const qiCount = c[L2I[solution[qi]]];
-      return LETTERS.some((l) => l !== solution[qi] && c[L2I[l]] === qiCount);
-    }
+    case "equal_count_as":
+      return true;
   }
   if (STRUCTURAL_TYPES.has(type)) return solutionHasStructural(type, qi, solution, n);
   return true;
@@ -887,6 +880,13 @@ function computeValue(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): n
     case "consecutive_identical":
       for (let i = 0; i < sol.length - 1; i++) if (sol[i] === sol[i + 1]) return i;
       return null;
+    case "equal_count_as": {
+      const refCount = sol.filter((a) => a === rule.answer).length;
+      for (const l of LETTERS) {
+        if (l !== rule.answer && sol.filter((a) => a === l).length === refCount) return L2I[l];
+      }
+      return null;
+    }
     case "letter_distance":
       return Math.abs(L2I[sol[qi]] - L2I[sol[rule.questionIndex]]);
   }
@@ -934,6 +934,15 @@ function makeDistractors(
     const pool: (number | null)[] = [];
     for (let i = 0; i < n; i++) {
       if ((i + 1) % 2 === parity && i !== correct) pool.push(i);
+    }
+    if (correct != null) pool.push(null);
+    return rng.shuffle(pool).slice(0, 4);
+  }
+  if (rule.type === "equal_count_as") {
+    const pool: (number | null)[] = [];
+    for (const l of LETTERS) {
+      const li = L2I[l];
+      if (l !== rule.answer && li !== correct) pool.push(li);
     }
     if (correct != null) pool.push(null);
     return rng.shuffle(pool).slice(0, 4);

@@ -20,6 +20,7 @@ import {
   RT_ONLY_ODD,
   RT_ONLY_EVEN,
   RT_CONSEC_IDENT,
+  RT_EQUAL_COUNT,
   RT_ANSWER_OF,
   RT_LETTER_DIST,
 } from "./types.ts";
@@ -455,6 +456,10 @@ export function deduceWithRule(
               }
             }
           }
+        }
+
+        if (!elim && r.t === RT_EQUAL_COUNT) {
+          if (v != null && LETTERS[v] === r.answer) elim = true;
         }
 
         if (!elim && r.t === RT_PREV_SAME && v != null) {

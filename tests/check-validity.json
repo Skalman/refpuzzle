@@ -1117,51 +1117,87 @@
     {"section": "=== equal_count_as ==="},
 
     {
-      "name": "equal_count: selected IS reference answer → invalid",
+      "name": "equal_count: option is reference answer → invalid",
       "qi": 0,
       "puzzle": {"q": [
-        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [0, 1, 2, 3, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
       ]},
-      "state": ["A", "B", "", ""],
+      "state": ["A", "B", "A", "B"],
       "expect": "invalid"
     },
     {
       "name": "equal_count: all answered, counts equal → valid",
       "qi": 0,
       "puzzle": {"q": [
-        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
       ]},
-      "state": ["B", "A", "B", "A"],
+      "state": ["A", "A", "B", "B"],
       "expect": "valid"
     },
     {
       "name": "equal_count: all answered, counts differ → invalid",
       "qi": 0,
       "puzzle": {"q": [
-        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
       ]},
-      "state": ["B", "A", "A", "A"],
+      "state": ["A", "A", "A", "B"],
       "expect": "invalid"
     },
     {
       "name": "equal_count: not all answered → pending",
       "qi": 0,
       "puzzle": {"q": [
-        {"r": {"t": "equal_count_as", "a": 0}, "o": [null, null, null, null, null]},
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
       ]},
-      "state": ["B", "A", "", ""],
+      "state": ["A", "A", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "equal_count: None correct, no other letter matches → valid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["E", "A", "A", "B"],
+      "expect": "valid"
+    },
+    {
+      "name": "equal_count: None wrong, another letter matches → invalid",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["E", "A", "B", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "equal_count: None, not all answered → pending",
+      "qi": 0,
+      "puzzle": {"q": [
+        {"r": {"t": "equal_count_as", "a": 0}, "o": [1, 2, 3, 4, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["E", "A", "", ""],
       "expect": "pending"
     },
 

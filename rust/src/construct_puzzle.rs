@@ -433,7 +433,6 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
             | QuestionTypeKind::OnlySame
             | QuestionTypeKind::OnlyOdd
             | QuestionTypeKind::OnlyEven
-            | QuestionTypeKind::EqualCount
     )
 }
 
@@ -455,13 +454,7 @@ fn solution_fits_type(kind: QuestionTypeKind, qi: usize, sol: &[Answer; MAX_N], 
             let counts = letter_counts(sol, n);
             counts.iter().filter(|&&c| c == 1).count() == 1
         }
-        QuestionTypeKind::EqualCount => {
-            let counts = letter_counts(sol, n);
-            let qi_count = counts[sol[qi].idx()];
-            LETTERS
-                .iter()
-                .any(|&l| l != sol[qi] && counts[l.idx()] == qi_count)
-        }
+        QuestionTypeKind::EqualCount => true,
         _ if is_constrained_type(kind) => solution_satisfies_type_for_kind(kind, qi, sol, n),
         _ => true,
     }
@@ -508,17 +501,6 @@ fn solution_satisfies_type_for_kind(
                 }
                 m == 1
             })
-        }
-        QuestionTypeKind::EqualCount => {
-            let counts = letter_counts(sol, n);
-            for a in 0..5 {
-                for b in (a + 1)..5 {
-                    if counts[a] == counts[b] {
-                        return true;
-                    }
-                }
-            }
-            false
         }
         _ => true,
     }
@@ -640,21 +622,15 @@ fn random_type_params(
         QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
         QuestionTypeKind::Unique => Some(QuestionType::Unique),
         QuestionTypeKind::EqualCount => {
-            let my_count = count_letter(solution, solution[qi], n);
-            let mut pool = [Answer::A; 4];
-            let mut plen = 0;
-            for &l in &LETTERS {
-                if l != solution[qi] && count_letter(solution, l, n) == my_count {
-                    pool[plen] = l;
-                    plen += 1;
-                }
-            }
-            if plen == 0 {
+            let ref_letter = rng.pick(&LETTERS);
+            let ref_count = count_letter(solution, ref_letter, n);
+            let has_match = LETTERS
+                .iter()
+                .any(|&l| l != ref_letter && count_letter(solution, l, n) == ref_count);
+            if !has_match && rng.int(0, 4) > 1 {
                 return None;
             }
-            Some(QuestionType::EqualCount {
-                answer: rng.pick(&pool[..plen]),
-            })
+            Some(QuestionType::EqualCount { answer: ref_letter })
         }
         QuestionTypeKind::AnswerIsSelf => Some(QuestionType::AnswerIsSelf),
         QuestionTypeKind::TrueStmt => Some(QuestionType::TrueStmt),

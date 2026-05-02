@@ -91,12 +91,7 @@ pub fn solution_satisfies_type(
             matches == 1
         }
         QuestionType::Unique => count_letter(sol, sol[qi], n) == 1,
-        QuestionType::EqualCount { answer } => {
-            let ref_count = count_letter(sol, answer, n);
-            LETTERS
-                .iter()
-                .any(|&l| l != answer && count_letter(sol, l, n) == ref_count)
-        }
+        QuestionType::EqualCount { .. } => true,
         _ => true,
     }
 }
@@ -413,6 +408,7 @@ pub fn repair_one_question(
                     QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1, 1),
                     QuestionType::OnlyOdd { .. } => (0, n as i16 - 1, 2),
                     QuestionType::OnlyEven { .. } => (1, n as i16 - 1, 2),
+                    QuestionType::EqualCount { .. } => (0, 4, 1),
                     _ => {
                         let min_p = match qt {
                             QuestionType::ClosestAfter { after_index, .. } => {
@@ -430,6 +426,10 @@ pub fn repair_one_question(
                     }
                 };
                 let exclude_self = matches!(qt, QuestionType::OnlySame | QuestionType::SameAs);
+                let exclude_ref = match qt {
+                    QuestionType::EqualCount { answer } => answer.idx() as i16,
+                    _ => -2,
+                };
                 let old_val = fp.option_nums[qi][oi];
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
@@ -438,7 +438,11 @@ pub fn repair_one_question(
                     .step_by(step as usize)
                     .chain(std::iter::once(NONE_VAL));
                 for v in candidates_iter {
-                    if v == correct_val || v == old_val || (exclude_self && v == qi as i16) {
+                    if v == correct_val
+                        || v == old_val
+                        || (exclude_self && v == qi as i16)
+                        || v == exclude_ref
+                    {
                         continue;
                     }
                     let mut in_use = false;
@@ -553,6 +557,23 @@ pub fn build_flat_puzzle(
                         di += 1;
                     }
                 }
+            }
+            QuestionType::EqualCount { answer } => {
+                option_nums[qi][correct_oi] = correct_val;
+                let mut pool = [0i16; 4];
+                let mut plen = 0;
+                for &l in &LETTERS {
+                    if l != answer && l.idx() as i16 != correct_val {
+                        pool[plen] = l.idx() as i16;
+                        plen += 1;
+                    }
+                }
+                if correct_val != NONE_VAL {
+                    pool[plen] = NONE_VAL;
+                    plen += 1;
+                }
+                rng.shuffle(&mut pool[..plen]);
+                place_distractors(&pool, &mut option_nums[qi], correct_oi);
             }
             QuestionType::ConsecIdent => {
                 option_nums[qi][correct_oi] = correct_val;
@@ -719,6 +740,15 @@ pub fn correct_option_value(qt: &QuestionType, qi: usize, sol: &[Answer; MAX_N],
             for i in 0..n.saturating_sub(1) {
                 if sol[i] == sol[i + 1] {
                     return i as i16;
+                }
+            }
+            NONE_VAL
+        }
+        QuestionType::EqualCount { answer } => {
+            let ref_count = count_letter(sol, answer, n);
+            for &l in &LETTERS {
+                if l != answer && count_letter(sol, l, n) == ref_count {
+                    return l.idx() as i16;
                 }
             }
             NONE_VAL

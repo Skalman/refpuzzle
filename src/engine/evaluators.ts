@@ -209,8 +209,9 @@ export function checkQuestionAgainstSolution(
 
     case RT_EQUAL_COUNT: {
       const refCount = countAnswer(answers, r.answer!);
-      const selCount = countAnswer(answers, selectedAnswer);
-      return selectedAnswer !== r.answer && refCount === selCount;
+      if (v == null) return !LETTERS.some((l) => l !== r.answer && countAnswer(answers, l) === refCount);
+      const claimed = LETTERS[v];
+      return claimed !== r.answer && countAnswer(answers, claimed) === refCount;
     }
 
     case RT_SELF:
