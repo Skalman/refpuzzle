@@ -361,6 +361,31 @@
       "expect": "1a"
     },
     {
+      "name": "FirstWith: self-ref, picking answer E means Q1 has E before claimed position → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "first_with_answer", "a": 4}, "o": [3, 2, 1, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1e"
+    },
+    {
+      "name": "LastWith: self-ref, picking answer A means Q4 has A after claimed position → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [1, 0, 2, null, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "", ""],
+      "expect": "4a"
+    },
+    {
       "name": "ConsecIdent: pair has different answers → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [
