@@ -161,12 +161,14 @@
   align-items: center;
   justify-content: center;
   width: 1.4em;
+  height: 1.4em;
   flex-shrink: 0;
 }
 
 .option-indicator-spacer {
   display: inline-block;
   width: 1.4em;
+  height: 1.4em;
 }
 
 /* ── Hint display ── */
