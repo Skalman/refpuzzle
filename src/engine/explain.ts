@@ -366,7 +366,8 @@ function explainElimDetail(
     const parity = r.t === RT_ONLY_ODD ? 1 : 0;
     const parityName = r.t === RT_ONLY_ODD ? "even" : "odd";
     if (v != null) {
-      if ((v + 1) % 2 !== parity) return `says ${Q(v)}, but that's an ${parityName}-numbered question.`;
+      if ((v + 1) % 2 !== parity)
+        return `says ${Q(v)}, but that's an ${parityName}-numbered question.`;
       if (v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer)
         return `says ${Q(v)}, but ${Q(v)} is marked ${answers[v]}.`;
       if (v >= 0 && v < n && answers[v] == null && isElim(eliminated, v, L2I[r.answer!]))

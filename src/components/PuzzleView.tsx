@@ -1,10 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
-import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
-import { LETTERS } from "../engine/types.ts";
-import { validate } from "../engine/validate.ts";
-import type { Validity } from "../engine/validate.ts";
-import { findHint } from "../engine/hints.ts";
+import type { Marks, Puzzle } from "../engine/types.ts";
+import { LETTERS, getFlatPuzzle } from "../engine/types.ts";
+import { checkAnswerValidity } from "../engine/check-validity.ts";
+import { deduce } from "../engine/deduce.ts";
+import { lookahead } from "../engine/lookahead.ts";
+import { explainDeduce, explainLookahead, explainInvalid } from "../engine/explain.ts";
+import { deriveState } from "../engine/state.ts";
+import type { Validity } from "../engine/state.ts";
 import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
@@ -223,14 +226,10 @@ export function PuzzleView({
     setQuestionsRaw(qs);
   }
   const [validity, setValidity] = useState<Validity[]>(() => {
-    const answers: (AnswerLetter | null)[] = initState.questions.map((q) => {
-      const idx = q.marks.indexOf("correct");
-      return idx >= 0 ? LETTERS[idx] : null;
-    });
-    return validate(
-      puzzle,
-      answers,
-      initState.questions.map((q) => q.marks),
+    const fp = getFlatPuzzle(puzzle);
+    const { answers, eliminated } = deriveState(initState.questions.map((q) => q.marks));
+    return answers.map((a, qi) =>
+      a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
     );
   });
   const [hintText, setHintText] = useState<string | null>(null);
@@ -321,14 +320,10 @@ export function PuzzleView({
 
   const revalidate = useCallback(
     (qs: QuestionState[]) => {
-      const answers: (AnswerLetter | null)[] = qs.map((q) => {
-        const idx = q.marks.indexOf("correct");
-        return idx >= 0 ? LETTERS[idx] : null;
-      });
-      const result = validate(
-        puzzle,
-        answers,
-        qs.map((q) => q.marks),
+      const fp = getFlatPuzzle(puzzle);
+      const { answers, eliminated } = deriveState(qs.map((q) => q.marks));
+      const result: Validity[] = answers.map((a, qi) =>
+        a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
       );
       setValidity(result);
 
@@ -466,16 +461,47 @@ export function PuzzleView({
       return;
     }
 
+    const fp = getFlatPuzzle(puzzle);
     const markSets = questionsRef.current.map((q) => q.marks);
-    const result = findHint(puzzle, markSets);
-    if (result) {
-      hintRef.current = { steps: result.steps, step: 0 };
-      setHintText(result.steps[0]);
-      pushHintMarker(1);
-    } else {
-      hintRef.current = null;
-      setHintText(null);
+    const { answers, eliminated } = deriveState(markSets);
+
+    // 1. Check for provably-wrong answers
+    for (let qi = 0; qi < answers.length; qi++) {
+      if (answers[qi] == null) continue;
+      if (checkAnswerValidity(fp, answers, eliminated, qi) === "invalid") {
+        const reason = explainInvalid(fp, puzzle, answers, eliminated, qi);
+        const steps = [`Something looks wrong around Q${qi + 1}.`];
+        if (reason) steps.push(reason);
+        hintRef.current = { steps, step: 0 };
+        setHintText(steps[0]);
+        pushHintMarker(1);
+        return;
+      }
     }
+
+    // 2. Try single-step deduction
+    const dr = deduce(fp, answers, eliminated);
+    if (dr) {
+      const steps = explainDeduce(puzzle, fp, answers, eliminated, dr);
+      hintRef.current = { steps, step: 0 };
+      setHintText(steps[0]);
+      pushHintMarker(1);
+      return;
+    }
+
+    // 3. Try lookahead (proof by contradiction)
+    const lr = lookahead(fp, answers, eliminated);
+    if (lr) {
+      const steps = explainLookahead(puzzle, fp, answers, eliminated, lr);
+      hintRef.current = { steps, step: 0 };
+      setHintText(steps[0]);
+      pushHintMarker(1);
+      return;
+    }
+
+    // 4. No hint available
+    hintRef.current = null;
+    setHintText("No obvious next step. Try making an assumption.");
   }
 
   const canShare = typeof navigator !== "undefined" && !!navigator.share;

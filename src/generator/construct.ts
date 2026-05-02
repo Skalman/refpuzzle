@@ -17,11 +17,11 @@ import type {
   Claim,
   StatementOption,
 } from "../engine/types.ts";
-import type { Marks } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
 import { evaluateClaim } from "../engine/evaluators.ts";
-import { findHint, findActionFast } from "../engine/hints.ts";
+import { deduce } from "../engine/deduce.ts";
+import { lookahead } from "../engine/lookahead.ts";
 import { solve } from "./solver.ts";
 import { RNG } from "./rng.ts";
 import type { DifficultyProfile } from "./difficulty.ts";
@@ -385,21 +385,22 @@ function runHintEngine(
   puzzle: Puzzle,
   n: number,
 ): { solved: boolean; answers: (AnswerLetter | null)[] } {
-  const marks: Marks[] = Array.from(
-    { length: n },
-    () => ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks,
-  );
+  const fp = flattenPuzzle(puzzle);
   const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  const eliminated: number[] = new Array(n).fill(0);
   for (let step = 0; step < n * 15; step++) {
     if (answers.every((a) => a != null)) return { solved: true, answers };
-    const fast = findActionFast(puzzle, answers, marks, n);
-    if (fast) {
-      applyAction(fast, marks, answers);
+    const dr = deduce(fp, answers, eliminated);
+    if (dr) {
+      applyDeduceAction(dr.action, answers, eliminated);
       continue;
     }
-    const hint = findHint(puzzle, marks);
-    if (!hint?.action) return { solved: false, answers };
-    applyAction(hint.action, marks, answers);
+    const lr = lookahead(fp, answers, eliminated);
+    if (lr) {
+      eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
+      continue;
+    }
+    return { solved: false, answers };
   }
   return { solved: false, answers };
 }
@@ -587,24 +588,17 @@ function repairPositionalDistractors(
   return rng.shuffle(pool).slice(0, 4);
 }
 
-function applyAction(
-  action: {
-    type: string;
-    questionIndex: number;
-    letter?: AnswerLetter;
-    optionIndex?: number;
-  },
-  marks: Marks[],
+function applyDeduceAction(
+  action: { type: string; questionIndex: number; letter?: AnswerLetter; optionIndex?: number },
   answers: (AnswerLetter | null)[],
+  eliminated: number[],
 ) {
   if (action.type === "force" && action.letter) {
-    const qi = action.questionIndex;
     const oi = L2I[action.letter];
-    for (let j = 0; j < 5; j++) marks[qi][j] = "incorrect";
-    marks[qi][oi] = "correct";
-    answers[qi] = action.letter;
+    eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
+    answers[action.questionIndex] = action.letter;
   } else if (action.type === "eliminate" && action.optionIndex != null) {
-    marks[action.questionIndex][action.optionIndex] = "incorrect";
+    eliminated[action.questionIndex] |= 1 << action.optionIndex;
   }
 }
 
@@ -721,7 +715,8 @@ function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[])
     case "only_even_with_answer": {
       const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
       let m = 0;
-      for (let i = 0; i < sol.length; i++) if ((i + 1) % 2 === parity && sol[i] === rule.answer) m++;
+      for (let i = 0; i < sol.length; i++)
+        if ((i + 1) % 2 === parity && sol[i] === rule.answer) m++;
       return m === 1;
     }
     case "unique_answer":

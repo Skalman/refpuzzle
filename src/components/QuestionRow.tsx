@@ -1,6 +1,6 @@
 import type { QuestionDef, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
-import type { Validity } from "../engine/validate.ts";
+import type { Validity } from "../engine/state.ts";
 import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../engine/render.ts";
 import { OptionButton } from "./OptionButton.tsx";
 
