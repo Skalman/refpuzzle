@@ -1,10 +1,12 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import type { FlatPuzzle } from "../src/engine/types.ts";
+import type { AnswerLetter, FlatPuzzle } from "../src/engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { deduce, deduceWithRule } from "../src/engine/deduce.ts";
 import type { DeduceRuleFilter } from "../src/engine/deduce.ts";
+import { explainDeduce } from "../src/engine/explain.ts";
+import type { ExplainStep } from "../src/engine/explain.ts";
 
 interface TestCase {
   name: string;
@@ -54,11 +56,24 @@ function formatAction(result: any): string | null {
   const a = result.action;
   if (a.type === "force") return `${a.questionIndex + 1}${a.letter}`;
   if (a.type === "eliminate") return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
+  if (a.type === "eliminateMulti")
+    return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
   return null;
+}
+
+function hasGenericFallback(steps: ExplainStep[]): boolean {
+  for (const step of steps) {
+    if (step.type === "simple") {
+      if (/^Q\d+ can't be [A-E]\.$/.test(step.text)) return true;
+      if (/^Q\d+ options? [A-E, ]+ can be ruled out\.$/.test(step.text)) return true;
+    }
+  }
+  return false;
 }
 
 let passed = 0;
 let failed = 0;
+let explainFailed = 0;
 
 for (const test of suite.tests) {
   if ("section" in test) continue;
@@ -84,7 +99,30 @@ for (const test of suite.tests) {
     console.log(`  expected: ${expected}`);
     console.log(`  got:      ${got}`);
   }
+
+  if (result && got === expected) {
+    try {
+      const steps = explainDeduce(
+        puzzle,
+        fp,
+        answers as (AnswerLetter | null)[],
+        eliminated,
+        result,
+      );
+      if (hasGenericFallback(steps)) {
+        explainFailed++;
+        console.log(`EXPLAIN FALLBACK: ${t.name}`);
+        for (const s of steps) {
+          console.log(`  ${s.type === "simple" ? s.text : JSON.stringify(s)}`);
+        }
+      }
+    } catch (e) {
+      explainFailed++;
+      console.log(`EXPLAIN THROW: ${t.name}: ${e}`);
+    }
+  }
 }
 
 console.log(`\n${passed}/${passed + failed} passed`);
+if (explainFailed > 0) console.log(`${explainFailed} explain fallback(s)`);
 if (failed > 0) process.exit(1);

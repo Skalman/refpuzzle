@@ -1266,6 +1266,96 @@
       "expect": null
     },
 
+    {"section": "=== Positional range elimination ==="},
+
+    {
+      "name": "FirstWith: answered, eliminate answer from earlier positions",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "C", ""],
+      "expect": "qm11o00001"
+    },
+    {
+      "name": "LastWith: answered, eliminate answer from later positions",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 1}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "", ""],
+      "expect": "qm1100o00010"
+    },
+    {
+      "name": "NextSame: answered, eliminate own answer from questions in between",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "next_same_answer"}, "o": [null, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["D", "", "", ""],
+      "expect": "qm110o01000"
+    },
+    {
+      "name": "PrevSame: answered, eliminate own answer from questions in between",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "previous_same_answer"}, "o": [null, 0, 1, 2, null]}
+      ]},
+      "state": ["", "", "", "B"],
+      "expect": "qm110o00010"
+    },
+    {
+      "name": "FirstWith: unanswered, min remaining option excludes earlier positions",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 2}, "o": [null, null, 3, 4, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "", "abc", ""],
+      "expect": "qm1111o00100"
+    },
+    {
+      "name": "LastWith: unanswered, max remaining option excludes later positions",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "last_with_answer", "a": 0}, "o": [null, null, 1, 2, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "abc", "", "", ""],
+      "expect": "qm11000o00001"
+    },
+    {
+      "name": "FirstWith: no elimination when answer already eliminated",
+      "rule": "positional_range",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "first_with_answer", "a": 0}, "o": [0, 1, 2, 3, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["a", "a", "C", ""],
+      "expect": null
+    },
+
     {"section": "=== No deduction / rule filter ==="},
 
     {

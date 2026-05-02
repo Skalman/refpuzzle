@@ -13,6 +13,58 @@ export interface LookaheadResult {
   contradictionQi: number;
 }
 
+function tryAssumption(
+  fp: FlatPuzzle,
+  answers: (AnswerLetter | null)[],
+  eliminated: number[],
+  qi: number,
+  oi: number,
+): LookaheadResult | null {
+  const n = fp.n;
+  const hypAnswers: (AnswerLetter | null)[] = answers.slice(0, n);
+  const hypEliminated: number[] = eliminated.slice(0, n);
+  hypAnswers[qi] = LETTERS[oi];
+  hypEliminated[qi] = 0b11111 ^ (1 << oi);
+
+  const chain: DeduceResult[] = [];
+
+  for (let iter = 0; iter < n * 5; iter++) {
+    const dr = deduce(fp, hypAnswers, hypEliminated);
+    if (!dr) break;
+    applyAction(dr, hypAnswers, hypEliminated);
+    chain.push(dr);
+  }
+
+  for (let checkQi = 0; checkQi < n; checkQi++) {
+    if (hypAnswers[checkQi] == null) {
+      let rem = 0;
+      for (let b = 0; b < 5; b++) if (((hypEliminated[checkQi] >> b) & 1) === 0) rem++;
+      if (rem === 0) {
+        return {
+          eliminateQi: qi,
+          eliminateOi: oi,
+          assumptionQi: qi,
+          assumptionAnswer: LETTERS[oi],
+          chain,
+          contradictionQi: checkQi,
+        };
+      }
+      continue;
+    }
+    if (checkAnswerValidity(fp, hypAnswers, hypEliminated, checkQi) === "invalid") {
+      return {
+        eliminateQi: qi,
+        eliminateOi: oi,
+        assumptionQi: qi,
+        assumptionAnswer: LETTERS[oi],
+        chain,
+        contradictionQi: checkQi,
+      };
+    }
+  }
+  return null;
+}
+
 export function lookahead(
   fp: FlatPuzzle,
   answers: (AnswerLetter | null)[],
@@ -23,51 +75,32 @@ export function lookahead(
     if (answers[qi] != null) continue;
     for (let oi = 0; oi < 5; oi++) {
       if ((eliminated[qi] >> oi) & 1) continue;
-
-      const hypAnswers: (AnswerLetter | null)[] = answers.slice(0, n);
-      const hypEliminated: number[] = eliminated.slice(0, n);
-      hypAnswers[qi] = LETTERS[oi];
-      hypEliminated[qi] = 0b11111 ^ (1 << oi);
-
-      const chain: DeduceResult[] = [];
-
-      for (let iter = 0; iter < n * 5; iter++) {
-        const dr = deduce(fp, hypAnswers, hypEliminated);
-        if (!dr) break;
-        applyAction(dr, hypAnswers, hypEliminated);
-        chain.push(dr);
-      }
-
-      for (let checkQi = 0; checkQi < n; checkQi++) {
-        if (hypAnswers[checkQi] == null) {
-          let rem = 0;
-          for (let b = 0; b < 5; b++) if (((hypEliminated[checkQi] >> b) & 1) === 0) rem++;
-          if (rem === 0) {
-            return {
-              eliminateQi: qi,
-              eliminateOi: oi,
-              assumptionQi: qi,
-              assumptionAnswer: LETTERS[oi],
-              chain,
-              contradictionQi: checkQi,
-            };
-          }
-          continue;
-        }
-        if (checkAnswerValidity(fp, hypAnswers, hypEliminated, checkQi) === "invalid") {
-          return {
-            eliminateQi: qi,
-            eliminateOi: oi,
-            assumptionQi: qi,
-            assumptionAnswer: LETTERS[oi],
-            chain,
-            contradictionQi: checkQi,
-          };
-        }
-      }
+      const result = tryAssumption(fp, answers, eliminated, qi, oi);
+      if (result) return result;
     }
   }
   return null;
+}
+
+export function lookaheadShortest(
+  fp: FlatPuzzle,
+  answers: (AnswerLetter | null)[],
+  eliminated: number[],
+): LookaheadResult | null {
+  const n = fp.n;
+  let best: LookaheadResult | null = null;
+  for (let qi = 0; qi < n; qi++) {
+    if (answers[qi] != null) continue;
+    for (let oi = 0; oi < 5; oi++) {
+      if ((eliminated[qi] >> oi) & 1) continue;
+      const result = tryAssumption(fp, answers, eliminated, qi, oi);
+      if (result && (best == null || result.chain.length < best.chain.length)) {
+        best = result;
+        if (best.chain.length === 0) return best;
+      }
+    }
+  }
+  return best;
 }
 
 function applyAction(
@@ -80,6 +113,10 @@ function applyAction(
     const oi = letterIdx(a.letter);
     eliminated[a.questionIndex] = 0b11111 ^ (1 << oi);
     answers[a.questionIndex] = a.letter;
+  } else if (a.type === "eliminateMulti") {
+    for (let i = 0; i < eliminated.length; i++) {
+      if ((a.questionMask >> i) & 1) eliminated[i] |= a.optionMask;
+    }
   } else {
     eliminated[a.questionIndex] |= 1 << a.optionIndex;
   }

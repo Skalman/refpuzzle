@@ -133,7 +133,7 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("preview")) {
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
     return true;
   }
   const today = new Date();

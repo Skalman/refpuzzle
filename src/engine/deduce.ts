@@ -28,13 +28,15 @@ import {
 export type DeduceRuleFilter =
   | "count_saturation"
   | "forced_values"
+  | "positional_range"
   | "vowel_consonant_cross"
   | "eliminations"
   | null;
 
 export type DeduceAction =
   | { type: "force"; questionIndex: number; letter: AnswerLetter }
-  | { type: "eliminate"; questionIndex: number; optionIndex: number };
+  | { type: "eliminate"; questionIndex: number; optionIndex: number }
+  | { type: "eliminateMulti"; questionMask: number; optionMask: number };
 
 export interface DeduceResult {
   action: DeduceAction;
@@ -237,6 +239,16 @@ export function deduceWithRule(
             return res({ type: "force", questionIndex: qi, letter: otherAns }, "forced_values");
           }
         }
+        if (
+          otherR.t === RT_PREV_SAME ||
+          otherR.t === RT_NEXT_SAME ||
+          otherR.t === RT_ONLY_SAME
+        ) {
+          const targetQ = fp.optionValues[other][letterIdx(otherAns)];
+          if (targetQ != null && targetQ >= 0 && targetQ === qi) {
+            return res({ type: "force", questionIndex: qi, letter: otherAns }, "forced_values");
+          }
+        }
       }
 
       if (r.t === RT_LETTER_DIST) {
@@ -259,6 +271,56 @@ export function deduceWithRule(
         }
       }
 
+      // Reverse LetterDist: other questions' LetterDist rules constrain qi
+      for (let src = 0; src < n; src++) {
+        if (src === qi) continue;
+        const srcR = fp.questions[src];
+        if (srcR.t !== RT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+        let elimMask = 0;
+        const srcAns = answers[src];
+        if (srcAns != null) {
+          const dist = fp.optionValues[src][letterIdx(srcAns)];
+          if (dist == null) continue;
+          let validCount = 0;
+          let validOi = 0;
+          for (let oi = 0; oi < 5; oi++) {
+            if (isElim(eliminated, qi, oi)) continue;
+            if (Math.abs(oi - letterIdx(srcAns)) === dist) {
+              validCount++;
+              validOi = oi;
+            } else {
+              elimMask |= 1 << oi;
+            }
+          }
+          if (validCount === 1 && elimMask !== 0) {
+            return res(
+              { type: "force", questionIndex: qi, letter: LETTERS[validOi] },
+              "forced_values",
+            );
+          }
+        } else {
+          for (let oi = 0; oi < 5; oi++) {
+            if (isElim(eliminated, qi, oi)) continue;
+            let compatible = false;
+            for (let si = 0; si < 5; si++) {
+              if (isElim(eliminated, src, si)) continue;
+              const dist = fp.optionValues[src][si];
+              if (dist != null && Math.abs(oi - si) === dist) {
+                compatible = true;
+                break;
+              }
+            }
+            if (!compatible) elimMask |= 1 << oi;
+          }
+        }
+        if (elimMask !== 0) {
+          return res(
+            { type: "eliminateMulti", questionMask: 1 << qi, optionMask: elimMask },
+            "forced_values",
+          );
+        }
+      }
+
       const cp = countPred(r);
       if (cp) {
         const [from, to] = countRange(r, n);
@@ -273,6 +335,101 @@ export function deduceWithRule(
               );
             }
           }
+        }
+      }
+    }
+  }
+
+  // ── Positional range elimination ──
+  if (rule === null || rule === "positional_range") {
+    // Answered positional rules exclude answer from range
+    for (let src = 0; src < n; src++) {
+      const srcAns = answers[src];
+      if (srcAns == null) continue;
+      const srcR = fp.questions[src];
+      const v = fp.optionValues[src][letterIdx(srcAns)];
+      if (v == null) continue;
+
+      let letterOi: number;
+      let rangeStart: number;
+      let rangeEnd: number;
+
+      if (srcR.t === RT_FIRST_WITH || srcR.t === RT_CLOSEST_AFTER) {
+        letterOi = letterIdx(srcR.answer!);
+        rangeStart = srcR.t === RT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
+        rangeEnd = v;
+      } else if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
+        letterOi = letterIdx(srcR.answer!);
+        rangeStart = v + 1;
+        rangeEnd = srcR.t === RT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
+      } else if (srcR.t === RT_NEXT_SAME) {
+        letterOi = letterIdx(srcAns);
+        rangeStart = src + 1;
+        rangeEnd = v;
+      } else if (srcR.t === RT_PREV_SAME) {
+        letterOi = letterIdx(srcAns);
+        rangeStart = v + 1;
+        rangeEnd = src;
+      } else {
+        continue;
+      }
+      let qMask = 0;
+      for (let j = rangeStart; j < rangeEnd; j++) {
+        if (answers[j] != null) continue;
+        if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
+      }
+      if (qMask !== 0) {
+        return res(
+          { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+          "positional_range",
+        );
+      }
+    }
+
+    // Unanswered positional rules: min/max of remaining options defines exclusion range
+    for (let src = 0; src < n; src++) {
+      if (answers[src] != null) continue;
+      const srcR = fp.questions[src];
+
+      if (srcR.t === RT_FIRST_WITH || srcR.t === RT_CLOSEST_AFTER) {
+        const letterOi = letterIdx(srcR.answer!);
+        const scanStart = srcR.t === RT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
+        let minPos = n;
+        for (let oi = 0; oi < 5; oi++) {
+          if (isElim(eliminated, src, oi)) continue;
+          const v = fp.optionValues[src][oi];
+          if (v != null && v < minPos) minPos = v;
+        }
+        let qMask = 0;
+        for (let j = scanStart; j < minPos; j++) {
+          if (answers[j] != null) continue;
+          if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
+        }
+        if (qMask !== 0) {
+          return res(
+            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+            "positional_range",
+          );
+        }
+      } else if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
+        const letterOi = letterIdx(srcR.answer!);
+        const scanEnd = srcR.t === RT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
+        let maxPos = -1;
+        for (let oi = 0; oi < 5; oi++) {
+          if (isElim(eliminated, src, oi)) continue;
+          const v = fp.optionValues[src][oi];
+          if (v != null && v > maxPos) maxPos = v;
+        }
+        let qMask = 0;
+        for (let j = maxPos + 1; j < scanEnd; j++) {
+          if (answers[j] != null) continue;
+          if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
+        }
+        if (qMask !== 0) {
+          return res(
+            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+            "positional_range",
+          );
         }
       }
     }

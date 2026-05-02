@@ -5,6 +5,7 @@ pub enum DeduceRule {
     All,
     CountSaturation,
     ForcedValues,
+    PositionalRange,
     VowelConsonantCross,
     Eliminations,
 }
@@ -13,6 +14,7 @@ pub enum DeduceRule {
 pub enum DeduceAction {
     Force { qi: usize, answer: Answer },
     Eliminate { qi: usize, oi: usize },
+    EliminateMulti { question_mask: u16, option_mask: u8 },
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -262,6 +264,21 @@ pub fn deduce_with_rule(
                         );
                     }
                 }
+                if matches!(
+                    fp.question_types[other],
+                    QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame
+                ) {
+                    let target_q = fp.option_nums[other][other_ans.idx()];
+                    if target_q >= 0 && target_q as usize == qi {
+                        return result(
+                            DeduceAction::Force {
+                                qi,
+                                answer: other_ans,
+                            },
+                            DeduceRule::ForcedValues,
+                        );
+                    }
+                }
             }
 
             if let QuestionType::LetterDist { question_index } = *r
@@ -291,6 +308,70 @@ pub fn deduce_with_rule(
                 }
             }
 
+            // Reverse LetterDist: other questions' LetterDist rules constrain qi
+            for src in 0..n {
+                if src == qi {
+                    continue;
+                }
+                if let QuestionType::LetterDist { question_index } = fp.question_types[src] {
+                    if question_index as usize != qi {
+                        continue;
+                    }
+                    let mut elim_mask = 0u8;
+                    if let Some(src_ans) = answers[src] {
+                        let dist = fp.option_nums[src][src_ans.idx()];
+                        if dist == NAN_VAL {
+                            continue;
+                        }
+                        let mut valid_count = 0u8;
+                        let mut valid_oi = 0usize;
+                        for oi in 0..5usize {
+                            if is_elim(eliminated, qi, oi) {
+                                continue;
+                            }
+                            if (oi as i16 - src_ans.idx() as i16).abs() == dist {
+                                valid_count += 1;
+                                valid_oi = oi;
+                            } else {
+                                elim_mask |= 1 << oi;
+                            }
+                        }
+                        if valid_count == 1 && elim_mask != 0 {
+                            return result(
+                                DeduceAction::Force {
+                                    qi,
+                                    answer: LETTERS[valid_oi],
+                                },
+                                DeduceRule::ForcedValues,
+                            );
+                        }
+                    } else {
+                        for oi in 0..5usize {
+                            if is_elim(eliminated, qi, oi) {
+                                continue;
+                            }
+                            let compatible = (0..5usize).any(|si| {
+                                !is_elim(eliminated, src, si)
+                                    && fp.option_nums[src][si] != NAN_VAL
+                                    && (oi as i16 - si as i16).abs() == fp.option_nums[src][si]
+                            });
+                            if !compatible {
+                                elim_mask |= 1 << oi;
+                            }
+                        }
+                    }
+                    if elim_mask != 0 {
+                        return result(
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << qi,
+                                option_mask: elim_mask,
+                            },
+                            DeduceRule::ForcedValues,
+                        );
+                    }
+                }
+            }
+
             if let Some(pred) = count_pred(r) {
                 let (from, to) = count_range(r, n);
                 let cr = count_matching(answers, eliminated, pred, from, to);
@@ -310,6 +391,141 @@ pub fn deduce_with_rule(
                         }
                     }
                 }
+            }
+        }
+    }
+
+    // ── Positional range elimination ──
+    if rule == DeduceRule::All || rule == DeduceRule::PositionalRange {
+        for src in 0..n {
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            let r = &fp.question_types[src];
+            let v = fp.option_nums[src][src_ans.idx()];
+            if v < 0 || v == NAN_VAL {
+                continue;
+            }
+            let v = v as usize;
+
+            let (letter, range_start, range_end) = match *r {
+                QuestionType::FirstWith { answer } => (answer, 0usize, v),
+                QuestionType::ClosestAfter {
+                    answer,
+                    after_index,
+                } => (answer, after_index as usize + 1, v),
+                QuestionType::LastWith { answer } => (answer, v + 1, n),
+                QuestionType::ClosestBefore {
+                    answer,
+                    before_index,
+                } => (answer, v + 1, before_index as usize),
+                QuestionType::NextSame => (src_ans, src + 1, v),
+                QuestionType::PrevSame => (src_ans, v + 1, src),
+                _ => continue,
+            };
+
+            let letter_oi = letter.idx();
+            let mut q_mask = 0u16;
+            for j in range_start..range_end {
+                if answers[j].is_some() {
+                    continue;
+                }
+                if !is_elim(eliminated, j, letter_oi) {
+                    q_mask |= 1 << j;
+                }
+            }
+            if q_mask != 0 {
+                return result(
+                    DeduceAction::EliminateMulti {
+                        question_mask: q_mask,
+                        option_mask: 1 << letter_oi,
+                    },
+                    DeduceRule::PositionalRange,
+                );
+            }
+        }
+
+        // Unanswered positional rules: min/max of remaining options defines exclusion range
+        for src in 0..n {
+            if answers[src].is_some() {
+                continue;
+            }
+            let r = &fp.question_types[src];
+            match *r {
+                QuestionType::FirstWith { answer } | QuestionType::ClosestAfter { answer, .. } => {
+                    let scan_start = match *r {
+                        QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
+                        _ => 0,
+                    };
+                    let mut min_pos = n;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, src, oi) {
+                            continue;
+                        }
+                        let v = fp.option_nums[src][oi];
+                        if v >= 0 && (v as usize) < min_pos {
+                            min_pos = v as usize;
+                        }
+                    }
+                    let letter_oi = answer.idx();
+                    let mut q_mask = 0u16;
+                    for j in scan_start..min_pos {
+                        if answers[j].is_some() {
+                            continue;
+                        }
+                        if !is_elim(eliminated, j, letter_oi) {
+                            q_mask |= 1 << j;
+                        }
+                    }
+                    if q_mask != 0 {
+                        return result(
+                            DeduceAction::EliminateMulti {
+                                question_mask: q_mask,
+                                option_mask: 1 << letter_oi,
+                            },
+                            DeduceRule::PositionalRange,
+                        );
+                    }
+                }
+                QuestionType::LastWith { answer } | QuestionType::ClosestBefore { answer, .. } => {
+                    let scan_end = match *r {
+                        QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
+                        _ => n,
+                    };
+                    let mut max_pos: i16 = -1;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, src, oi) {
+                            continue;
+                        }
+                        let v = fp.option_nums[src][oi];
+                        if v > max_pos {
+                            max_pos = v;
+                        }
+                    }
+                    if max_pos < 0 {
+                        continue;
+                    }
+                    let letter_oi = answer.idx();
+                    let mut q_mask = 0u16;
+                    for j in (max_pos as usize + 1)..scan_end {
+                        if answers[j].is_some() {
+                            continue;
+                        }
+                        if !is_elim(eliminated, j, letter_oi) {
+                            q_mask |= 1 << j;
+                        }
+                    }
+                    if q_mask != 0 {
+                        return result(
+                            DeduceAction::EliminateMulti {
+                                question_mask: q_mask,
+                                option_mask: 1 << letter_oi,
+                            },
+                            DeduceRule::PositionalRange,
+                        );
+                    }
+                }
+                _ => {}
             }
         }
     }
@@ -674,6 +890,9 @@ mod tests {
                 Some("forced_values") => {
                     deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::ForcedValues)
                 }
+                Some("positional_range") => {
+                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::PositionalRange)
+                }
                 Some("vowel_consonant_cross") => {
                     deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::VowelConsonantCross)
                 }
@@ -692,6 +911,14 @@ mod tests {
                     action: DeduceAction::Eliminate { qi, oi },
                     ..
                 }) => format!("{}{}", qi + 1, (b'a' + oi as u8) as char),
+                Some(DeduceResult {
+                    action:
+                        DeduceAction::EliminateMulti {
+                            question_mask,
+                            option_mask,
+                        },
+                    ..
+                }) => format!("qm{:b}o{:05b}", question_mask, option_mask),
                 None => "null".to_string(),
             };
             let expected = expect.unwrap_or("null");

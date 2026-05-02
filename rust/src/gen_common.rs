@@ -1,3 +1,5 @@
+use arrayvec::ArrayVec;
+
 use crate::check_validity::check_question_against_solution;
 use crate::deduce::{DeduceAction, deduce};
 use crate::evaluate::evaluate_claim;
@@ -120,6 +122,11 @@ fn try_solve_from(
                 }
                 DeduceAction::Eliminate { qi, oi } => {
                     eliminated[qi] |= 1 << oi;
+                }
+                DeduceAction::EliminateMulti { question_mask, option_mask } => {
+                    for i in 0..MAX_N {
+                        if (question_mask >> i) & 1 == 1 { eliminated[i] |= option_mask; }
+                    }
                 }
             }
             continue;

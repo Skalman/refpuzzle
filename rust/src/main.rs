@@ -387,6 +387,17 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
                     eliminated[qi] |= 1 << oi;
                     steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
                 }
+                deduce::DeduceAction::EliminateMulti {
+                    question_mask,
+                    option_mask,
+                } => {
+                    for i in 0..n {
+                        if (question_mask >> i) & 1 == 1 {
+                            eliminated[i] |= option_mask;
+                        }
+                    }
+                    steps.push(format!("qm{:b}o{:05b}", question_mask, option_mask));
+                }
             }
             continue;
         }

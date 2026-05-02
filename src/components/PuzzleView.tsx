@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
-import type { Marks, Puzzle } from "../engine/types.ts";
-import { LETTERS, getFlatPuzzle } from "../engine/types.ts";
+import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
+import { LETTERS, letterIdx, getFlatPuzzle } from "../engine/types.ts";
 import { checkAnswerValidity } from "../engine/check-validity.ts";
 import { deduce } from "../engine/deduce.ts";
-import { lookahead } from "../engine/lookahead.ts";
-import { explainDeduce, explainLookahead, explainInvalid } from "../engine/explain.ts";
+import { lookaheadShortest } from "../engine/lookahead.ts";
+import { solvePuzzle } from "../engine/solve.ts";
+import { explainDeduce, explainLookahead } from "../engine/explain.ts";
+import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { loadState, saveState } from "../lib/store.ts";
@@ -199,6 +201,8 @@ export function PuzzleView({
   onChanged,
 }: PuzzleViewProps) {
   const s = t();
+  const debugMode =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
 
   // Initialize synchronously to avoid flicker
   const initState = (() => {
@@ -233,8 +237,8 @@ export function PuzzleView({
       a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
     );
   });
-  const [hintText, setHintText] = useState<string | null>(null);
-  const hintRef = useRef<{ steps: string[]; step: number } | null>(null);
+  const [hintText, setHintText] = useState<ExplainStep | null>(null);
+  const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
 
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
@@ -454,55 +458,87 @@ export function PuzzleView({
     hintRef.current = null;
   }
 
+  const solutionRef = useRef<(AnswerLetter | null)[] | null>(null);
+  function getSolution(): (AnswerLetter | null)[] {
+    if (!solutionRef.current) {
+      const t0 = performance.now();
+      solutionRef.current = solvePuzzle(getFlatPuzzle(puzzle));
+      console.log(`solve: ${(performance.now() - t0).toFixed(1)}ms`);
+    }
+    return solutionRef.current;
+  }
+
+  function findError(
+    answers: (AnswerLetter | null)[],
+    eliminated: number[],
+  ): ExplainStep[] | null {
+    const solution = getSolution();
+    const n = puzzle.questions.length;
+    for (let qi = 0; qi < n; qi++) {
+      const correct = solution[qi];
+      if (correct == null) continue;
+      const correctOi = letterIdx(correct);
+      if (answers[qi] != null && answers[qi] !== correct) {
+        return [
+          { type: "simple", text: "You made an error." },
+          { type: "simple", text: `You made an error in Q${qi + 1}.` },
+          { type: "simple", text: `Q${qi + 1} is not ${answers[qi]} — try a different answer.` },
+        ];
+      }
+      if ((eliminated[qi] >> correctOi) & 1) {
+        return [
+          { type: "simple", text: "You made an error." },
+          { type: "simple", text: `You made an error in Q${qi + 1}.` },
+          { type: "simple", text: `You incorrectly eliminated Q${qi + 1} option ${correct}.` },
+        ];
+      }
+    }
+    return null;
+  }
+
+  function computeHint(): { steps: ExplainStep[] } | null {
+    const fp = getFlatPuzzle(puzzle);
+    const markSets = questionsRef.current.map((q) => q.marks);
+    const { answers, eliminated } = deriveState(markSets);
+
+    const errorSteps = findError(answers, eliminated);
+    if (errorSteps) return { steps: errorSteps };
+
+    const dr = deduce(fp, answers, eliminated);
+    if (dr) return { steps: explainDeduce(puzzle, fp, answers, eliminated, dr) };
+
+    const t0 = performance.now();
+    const lr = lookaheadShortest(fp, answers, eliminated);
+    console.log(`lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`);
+    if (lr) {
+      return { steps: explainLookahead(puzzle, fp, answers, eliminated, lr) };
+    }
+
+    return null;
+  }
+
   function handleHint() {
-    if (hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
+    if (!debugMode && hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
       hintRef.current.step++;
       setHintText(hintRef.current.steps[hintRef.current.step]);
       pushHintMarker(hintRef.current.step + 1);
       return;
     }
 
-    const fp = getFlatPuzzle(puzzle);
-    const markSets = questionsRef.current.map((q) => q.marks);
-    const { answers, eliminated } = deriveState(markSets);
-
-    // 1. Check for provably-wrong answers
-    for (let qi = 0; qi < answers.length; qi++) {
-      if (answers[qi] == null) continue;
-      if (checkAnswerValidity(fp, answers, eliminated, qi) === "invalid") {
-        const reason = explainInvalid(fp, puzzle, answers, eliminated, qi);
-        const steps = [`Something looks wrong around Q${qi + 1}.`];
-        if (reason) steps.push(reason);
-        hintRef.current = { steps, step: 0 };
-        setHintText(steps[0]);
-        pushHintMarker(1);
-        return;
+    const result = computeHint();
+    if (result) {
+      if (debugMode) {
+        hintRef.current = { steps: result.steps, step: result.steps.length - 1 };
+        setHintText(result.steps[result.steps.length - 1]);
+      } else {
+        hintRef.current = { steps: result.steps, step: 0 };
+        setHintText(result.steps[0]);
       }
+      pushHintMarker(debugMode ? result.steps.length : 1);
+    } else {
+      hintRef.current = null;
+      setHintText({ type: "simple", text: "No obvious next step. Try making an assumption." });
     }
-
-    // 2. Try single-step deduction
-    const dr = deduce(fp, answers, eliminated);
-    if (dr) {
-      const steps = explainDeduce(puzzle, fp, answers, eliminated, dr);
-      hintRef.current = { steps, step: 0 };
-      setHintText(steps[0]);
-      pushHintMarker(1);
-      return;
-    }
-
-    // 3. Try lookahead (proof by contradiction)
-    const lr = lookahead(fp, answers, eliminated);
-    if (lr) {
-      const steps = explainLookahead(puzzle, fp, answers, eliminated, lr);
-      hintRef.current = { steps, step: 0 };
-      setHintText(steps[0]);
-      pushHintMarker(1);
-      return;
-    }
-
-    // 4. No hint available
-    hintRef.current = null;
-    setHintText("No obvious next step. Try making an assumption.");
   }
 
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
@@ -803,12 +839,26 @@ export function PuzzleView({
       {/* Hint display */}
       {hintText && !completed && (
         <div class="puzzle-hint">
-          {hintText}
-          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
-            <button class="hint-more" onClick={handleHint}>
-              {s.puzzle.more}
-            </button>
+          {hintText.type === "complex" ? (
+            <div>
+              {hintText.header}
+              <ul class="hint-list">
+                {hintText.lines.map((line, i) => (
+                  // oxlint-disable-next-line react/no-array-index-key
+                  <li key={`h${i}`}>{line}</li>
+                ))}
+            </ul>
+            </div>
+          ) : (
+            hintText.text
           )}
+          {!debugMode &&
+            hintRef.current &&
+            hintRef.current.step < hintRef.current.steps.length - 1 && (
+              <button class="hint-more" onClick={handleHint}>
+                {s.puzzle.more}
+              </button>
+            )}
         </div>
       )}
 
@@ -853,6 +903,9 @@ export function PuzzleView({
         <button
           class="toolbar-accent-btn"
           onClick={handleHint}
+          onMouseEnter={getSolution}
+          onFocus={getSolution}
+          onTouchStart={getSolution}
           disabled={completed}
           title={s.puzzle.hint}
         >

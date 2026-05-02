@@ -96,6 +96,16 @@ fn apply_action(
         DeduceAction::Eliminate { qi, oi } => {
             eliminated[qi] |= 1 << oi;
         }
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            for i in 0..MAX_N {
+                if (question_mask >> i) & 1 == 1 {
+                    eliminated[i] |= option_mask;
+                }
+            }
+        }
     }
 }
 

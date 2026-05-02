@@ -589,15 +589,26 @@ function repairPositionalDistractors(
 }
 
 function applyDeduceAction(
-  action: { type: string; questionIndex: number; letter?: AnswerLetter; optionIndex?: number },
+  action: {
+    type: string;
+    questionIndex?: number;
+    questionMask?: number;
+    letter?: AnswerLetter;
+    optionIndex?: number;
+    optionMask?: number;
+  },
   answers: (AnswerLetter | null)[],
   eliminated: number[],
 ) {
-  if (action.type === "force" && action.letter) {
+  if (action.type === "force" && action.letter && action.questionIndex != null) {
     const oi = L2I[action.letter];
     eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
     answers[action.questionIndex] = action.letter;
-  } else if (action.type === "eliminate" && action.optionIndex != null) {
+  } else if (action.type === "eliminateMulti" && action.questionMask != null && action.optionMask != null) {
+    for (let i = 0; i < eliminated.length; i++) {
+      if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
+    }
+  } else if (action.type === "eliminate" && action.questionIndex != null && action.optionIndex != null) {
     eliminated[action.questionIndex] |= 1 << action.optionIndex;
   }
 }
