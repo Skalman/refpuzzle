@@ -1,3 +1,5 @@
+use arrayvec::ArrayVec;
+
 use crate::difficulty::DifficultyProfile;
 use crate::gen_common::{
     GenerateResult, build_flat_puzzle, count_letter, letter_counts, solution_satisfies_type,
@@ -261,7 +263,7 @@ fn try_construct(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateR
     }
 
     // Phase 6: Fill remaining (reserving slots for constrained types)
-    let av_constrained: Vec<QuestionTypeKind> = av_fill
+    let av_constrained: ArrayVec<QuestionTypeKind, 32> = av_fill
         .iter()
         .copied()
         .filter(|k| is_constrained_type(*k))
@@ -273,10 +275,10 @@ fn try_construct(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateR
     };
     let fill_target = n - constrained_reserve;
 
-    let mut fill_pool: Vec<QuestionTypeKind> = Vec::new();
-    fill_pool.extend_from_slice(&av_counting);
-    fill_pool.extend_from_slice(&av_positional);
-    fill_pool.extend_from_slice(&av_fill);
+    let mut fill_pool: ArrayVec<QuestionTypeKind, 32> = ArrayVec::new();
+    fill_pool.try_extend_from_slice(&av_counting).ok();
+    fill_pool.try_extend_from_slice(&av_positional).ok();
+    fill_pool.try_extend_from_slice(&av_fill).ok();
     fill_pool.retain(|k| *k != QuestionTypeKind::AnswerOf);
 
     while state.assigned_count < fill_target {
@@ -301,7 +303,7 @@ fn try_construct(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateR
             break;
         }
         let qi = state.slots[state.assigned_count] as usize;
-        let mut fitting: Vec<QuestionTypeKind> = av_constrained
+        let mut fitting: ArrayVec<QuestionTypeKind, 32> = av_constrained
             .iter()
             .copied()
             .filter(|&k| solution_fits_type(k, qi, &solution, n))
@@ -392,7 +394,7 @@ fn bias_consecutive_pair(
 fn filter_allowed(
     types: &[QuestionTypeKind],
     profile: &DifficultyProfile,
-) -> Vec<QuestionTypeKind> {
+) -> ArrayVec<QuestionTypeKind, 32> {
     types
         .iter()
         .copied()

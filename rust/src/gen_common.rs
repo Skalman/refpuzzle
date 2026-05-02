@@ -230,9 +230,12 @@ pub fn validate_and_repair(
 // distractor values (0, max, edge positions). Prioritize counting types since
 // extreme counts are easy for the hint engine to disprove.
 
-fn rank_repair_candidates(fp: &FlatPuzzle, stuck_answers: &[Option<Answer>; MAX_N]) -> Vec<usize> {
+fn rank_repair_candidates(
+    fp: &FlatPuzzle,
+    stuck_answers: &[Option<Answer>; MAX_N],
+) -> ArrayVec<usize, MAX_N> {
     let n = fp.n;
-    let mut scored: Vec<(usize, u8)> = Vec::new();
+    let mut scored: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
     for qi in 0..n {
         if stuck_answers[qi].is_some() {
             continue;
@@ -1036,7 +1039,7 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
         _ => {
             let counts = letter_counts(sol, n);
             let max = *counts.iter().max().unwrap_or(&0);
-            let most: Vec<Answer> = LETTERS
+            let most: ArrayVec<Answer, 5> = LETTERS
                 .iter()
                 .filter(|&&a| counts[a.idx()] == max)
                 .copied()

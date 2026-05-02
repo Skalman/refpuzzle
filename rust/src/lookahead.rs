@@ -1,3 +1,5 @@
+use arrayvec::ArrayVec;
+
 use crate::check_validity::{Validity, check_answer_validity};
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::types::*;
@@ -10,7 +12,7 @@ pub struct LookaheadResult {
     #[allow(dead_code)] // used by explain layer
     pub assumption_answer: Answer,
     #[allow(dead_code)] // used by explain layer
-    pub chain: Vec<DeduceResult>,
+    pub chain: ArrayVec<DeduceResult, 80>,
     #[allow(dead_code)] // used by explain layer
     pub contradiction_qi: usize,
 }
@@ -35,13 +37,15 @@ pub fn lookahead(
             hyp_answers[qi] = Some(LETTERS[oi]);
             hyp_eliminated[qi] = 0b11111 ^ (1 << oi);
 
-            let mut chain = Vec::new();
+            let mut chain = ArrayVec::new();
 
             for _ in 0..n * 5 {
                 match deduce(fp, &hyp_answers, &hyp_eliminated) {
                     Some(dr) => {
                         apply_action(&dr.action, &mut hyp_answers, &mut hyp_eliminated);
-                        chain.push(dr);
+                        if !chain.is_full() {
+                            chain.push(dr);
+                        }
                     }
                     None => break,
                 }
