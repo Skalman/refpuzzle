@@ -213,3 +213,12 @@ export function IconShare(p: Props) {
     <IM {...p} paths={["M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8", "m16 6-4-4-4 4", "M12 2v13"]} />
   );
 }
+
+export function IconDot({ size, class: cls }: Props) {
+  const s = size ?? defaults.size;
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={s} height={s} viewBox="0 0 24 24" class={cls}>
+      <circle cx="12" cy="12" r="5" fill="currentColor" />
+    </svg>
+  );
+}

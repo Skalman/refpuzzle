@@ -514,3 +514,6 @@ kbd {
   color: var(--text-muted);
   font-size: 0.85rem;
 }
+.history-progress svg {
+  vertical-align: middle;
+}

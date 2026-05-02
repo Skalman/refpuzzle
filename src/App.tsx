@@ -11,6 +11,7 @@ import {
   IconSunMoon,
   IconCheck,
   IconX,
+  IconDot,
 } from "./components/Icons.tsx";
 import { exportData, planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan, ImportAction } from "./lib/backup.ts";
@@ -625,10 +626,14 @@ function DayView({ dateStr }: { dateStr: string }) {
             >
               {solved && (
                 <span class="tab-check">
-                  <IconCheck size="0.9em" strokeWidth={3} />{" "}
+                  <IconCheck size="0.9em" />{" "}
                 </span>
               )}
-              {started && !solved && <span class="tab-started-dot">&#8226; </span>}
+              {started && !solved && (
+                <span class="tab-started-dot">
+                  <IconDot size="0.9em" />{" "}
+                </span>
+              )}
               <span class="tab-label">{s.difficulty[level]}</span>
             </button>
           );
@@ -1123,7 +1128,10 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
             )}
             {solved.length > 0 && started.length > 0 && "  "}
             {started.length > 0 && (
-              <span>&#8226; {started.map((l) => s.difficulty[l.level]).join(", ")}</span>
+              <span>
+                <IconDot size="0.9em" class="icon-hint" />{" "}
+                {started.map((l) => s.difficulty[l.level]).join(", ")}
+              </span>
             )}
           </>
         ) : (

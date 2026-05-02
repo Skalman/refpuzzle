@@ -191,8 +191,20 @@
   vertical-align: middle;
   margin-right: 0.25em;
 }
+.tab-check svg {
+  stroke-width: 3;
+}
+.active .tab-check svg {
+  stroke-width: 4;
+}
 .tab-started-dot {
   color: var(--accent);
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: 0.25em;
+}
+.active .tab-started-dot {
+  transform: scale(1.4);
 }
 
 /* ── Questions grid (2-column for medium+) ── */
