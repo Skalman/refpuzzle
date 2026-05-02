@@ -376,6 +376,9 @@ export function deduceWithRule(
                   }
                 }
               }
+              if (!elim && LETTERS[oi] === r.answer && qi >= scanStart && qi < v) {
+                elim = true;
+              }
             }
           } else {
             for (let j = scanStart; j < n; j++) {
@@ -405,6 +408,9 @@ export function deduceWithRule(
                     break;
                   }
                 }
+              }
+              if (!elim && LETTERS[oi] === r.answer && qi > v && qi < beforeIdx) {
+                elim = true;
               }
             }
           } else {

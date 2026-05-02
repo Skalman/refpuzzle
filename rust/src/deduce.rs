@@ -418,7 +418,7 @@ pub fn deduce_with_rule(
                             }
                             _ => 0,
                         };
-                        elim_first_in_range(answers, eliminated, answer, scan_start, n, on, oi)
+                        elim_first_in_range(answers, eliminated, answer, scan_start, n, on, qi, oi)
                     }
                     QuestionType::ClosestBefore { answer, .. }
                     | QuestionType::LastWith { answer } => {
@@ -428,7 +428,7 @@ pub fn deduce_with_rule(
                             }
                             _ => n,
                         };
-                        elim_last_in_range(answers, eliminated, answer, before_idx, on, oi)
+                        elim_last_in_range(answers, eliminated, answer, before_idx, on, qi, oi)
                     }
                     QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
                         let parity = match r {
@@ -520,7 +520,8 @@ fn elim_first_in_range(
     scan_start: usize,
     n: usize,
     on: i16,
-    _oi: usize,
+    qi: usize,
+    oi: usize,
 ) -> bool {
     if on != NONE_VAL {
         let pos = on as usize;
@@ -539,6 +540,9 @@ fn elim_first_in_range(
                 return true;
             }
         }
+        if LETTERS[oi] == answer && qi >= scan_start && qi < pos {
+            return true;
+        }
         false
     } else {
         (scan_start..n).any(|j| answers[j] == Some(answer))
@@ -551,7 +555,8 @@ fn elim_last_in_range(
     answer: Answer,
     before_idx: usize,
     on: i16,
-    _oi: usize,
+    qi: usize,
+    oi: usize,
 ) -> bool {
     if on != NONE_VAL {
         let pos = on as usize;
@@ -569,6 +574,9 @@ fn elim_last_in_range(
             if answers[j] == Some(answer) {
                 return true;
             }
+        }
+        if LETTERS[oi] == answer && qi > pos && qi < before_idx {
+            return true;
         }
         false
     } else {
