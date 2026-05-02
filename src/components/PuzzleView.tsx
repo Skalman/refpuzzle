@@ -12,6 +12,7 @@ import { loadState, saveState } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
+import { confetti } from "../lib/confetti.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import {
@@ -541,8 +542,13 @@ export function PuzzleView({
     return () => clearTimeout(timer);
   }, [resetPending]);
 
-  // Autofocus "Next puzzle" on completion
+  // Confetti + autofocus on completion
+  const wasCompleted = useRef(initState.completed);
   useEffect(() => {
+    if (completed && !wasCompleted.current) {
+      confetti();
+      wasCompleted.current = true;
+    }
     if (completed && nextPuzzleRef.current) nextPuzzleRef.current.focus();
   }, [completed]);
 
