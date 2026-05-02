@@ -25,13 +25,16 @@ import {
   RT_LETTER_DIST,
 } from "./types.ts";
 
-export type DeduceRuleFilter =
-  | "count_saturation"
-  | "forced_values"
-  | "positional_range"
-  | "vowel_consonant_cross"
-  | "eliminations"
-  | null;
+const ALL_DEDUCE_RULES_INTERNAL = [
+  "count_saturation",
+  "forced_values",
+  "positional_range",
+  "vowel_consonant_cross",
+  "eliminations",
+] as const;
+export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
+export const ALL_DEDUCE_RULES: readonly DeduceRule[] =
+  ALL_DEDUCE_RULES_INTERNAL;
 
 export type DeduceAction =
   | { type: "force"; questionIndex: number; letter: AnswerLetter }
@@ -40,7 +43,7 @@ export type DeduceAction =
 
 export interface DeduceResult {
   action: DeduceAction;
-  rule: string;
+  rule: DeduceRule;
 }
 
 // ── Helpers ──
@@ -80,7 +83,10 @@ function countMatching(
   return { count, remaining };
 }
 
-function countPred(r: { t: number; answer: string | null }): { pred: Pred; mask: number } | null {
+function countPred(r: {
+  t: number;
+  answer: string | null;
+}): { pred: Pred; mask: number } | null {
   switch (r.t) {
     case RT_COUNT_ANSWER:
     case RT_COUNT_ANSWER_BEFORE:
@@ -113,7 +119,7 @@ function canStillMatch(pred: Pred, eliminated: number): boolean {
   return false;
 }
 
-function res(action: DeduceAction, rule: string): DeduceResult {
+function res(action: DeduceAction, rule: DeduceRule): DeduceResult {
   return { action, rule };
 }
 
@@ -131,11 +137,11 @@ export function deduceWithRule(
   fp: FlatPuzzle,
   answers: (AnswerLetter | null)[],
   eliminated: number[],
-  rule: DeduceRuleFilter,
-  exclude: DeduceRuleFilter = null,
+  rule: DeduceRule | null,
+  exclude: DeduceRule | null = null,
 ): DeduceResult | null {
   const n = fp.n;
-  const run = (r: DeduceRuleFilter) => (rule === null || rule === r) && exclude !== r;
+  const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
 
   // ── Count saturation ──
   if (run("count_saturation")) {
@@ -166,7 +172,8 @@ export function deduceWithRule(
       if (cr.count + cr.remaining === v && cr.remaining > 0) {
         if (cr.remaining === 1) {
           for (let j = from; j < to; j++) {
-            if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j])) continue;
+            if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j]))
+              continue;
             let matchCount = 0;
             let matchOi = 0;
             for (let oi = 0; oi < 5; oi++) {
@@ -184,7 +191,8 @@ export function deduceWithRule(
           }
         }
         for (let j = from; j < to; j++) {
-          if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j])) continue;
+          if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j]))
+            continue;
           for (let oi = 0; oi < 5; oi++) {
             if (!isElim(eliminated, j, oi) && !cp.pred(LETTERS[oi])) {
               return res(
@@ -207,7 +215,10 @@ export function deduceWithRule(
       if (remainingCount(eliminated[qi]) === 1) {
         for (let oi = 0; oi < 5; oi++) {
           if (!isElim(eliminated, qi, oi)) {
-            return res({ type: "force", questionIndex: qi, letter: LETTERS[oi] }, "forced_values");
+            return res(
+              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+              "forced_values",
+            );
           }
         }
       }
@@ -217,7 +228,10 @@ export function deduceWithRule(
         const targetIdx = letterIdx(target);
         for (let oi = 0; oi < 5; oi++) {
           if (fp.optionValues[qi][oi] === targetIdx) {
-            return res({ type: "force", questionIndex: qi, letter: LETTERS[oi] }, "forced_values");
+            return res(
+              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+              "forced_values",
+            );
           }
         }
       }
@@ -238,7 +252,10 @@ export function deduceWithRule(
         if (otherR.t === RT_SAME_AS) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
-            return res({ type: "force", questionIndex: qi, letter: otherAns }, "forced_values");
+            return res(
+              { type: "force", questionIndex: qi, letter: otherAns },
+              "forced_values",
+            );
           }
         }
         if (
@@ -248,7 +265,10 @@ export function deduceWithRule(
         ) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
-            return res({ type: "force", questionIndex: qi, letter: otherAns }, "forced_values");
+            return res(
+              { type: "force", questionIndex: qi, letter: otherAns },
+              "forced_values",
+            );
           }
         }
       }
@@ -268,7 +288,10 @@ export function deduceWithRule(
             }
           }
           if (validCount === 1) {
-            return res({ type: "force", questionIndex: qi, letter: validLetter }, "forced_values");
+            return res(
+              { type: "force", questionIndex: qi, letter: validLetter },
+              "forced_values",
+            );
           }
         }
       }
@@ -317,7 +340,11 @@ export function deduceWithRule(
         }
         if (elimMask !== 0) {
           return res(
-            { type: "eliminateMulti", questionMask: 1 << qi, optionMask: elimMask },
+            {
+              type: "eliminateMulti",
+              questionMask: 1 << qi,
+              optionMask: elimMask,
+            },
             "forced_values",
           );
         }
@@ -326,7 +353,14 @@ export function deduceWithRule(
       const cp = countPred(r);
       if (cp) {
         const [from, to] = countRange(r, n);
-        const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
+        const cr = countMatching(
+          answers,
+          eliminated,
+          cp.pred,
+          cp.mask,
+          from,
+          to,
+        );
         if (cr.remaining === 0) {
           for (let oi = 0; oi < 5; oi++) {
             if (isElim(eliminated, qi, oi)) continue;
@@ -382,7 +416,11 @@ export function deduceWithRule(
       }
       if (qMask !== 0) {
         return res(
-          { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+          {
+            type: "eliminateMulti",
+            questionMask: qMask,
+            optionMask: 1 << letterOi,
+          },
           "positional_range",
         );
       }
@@ -409,7 +447,11 @@ export function deduceWithRule(
         }
         if (qMask !== 0) {
           return res(
-            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+            {
+              type: "eliminateMulti",
+              questionMask: qMask,
+              optionMask: 1 << letterOi,
+            },
             "positional_range",
           );
         }
@@ -429,7 +471,11 @@ export function deduceWithRule(
         }
         if (qMask !== 0) {
           return res(
-            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << letterOi },
+            {
+              type: "eliminateMulti",
+              questionMask: qMask,
+              optionMask: 1 << letterOi,
+            },
             "positional_range",
           );
         }
@@ -454,7 +500,10 @@ export function deduceWithRule(
         const need = n - vv;
         let has = false;
         for (let coi = 0; coi < 5; coi++) {
-          if (!isElim(eliminated, consonantQi, coi) && fp.optionValues[consonantQi][coi] === need) {
+          if (
+            !isElim(eliminated, consonantQi, coi) &&
+            fp.optionValues[consonantQi][coi] === need
+          ) {
             has = true;
             break;
           }
@@ -472,7 +521,10 @@ export function deduceWithRule(
         const need = n - vv;
         let has = false;
         for (let voi = 0; voi < 5; voi++) {
-          if (!isElim(eliminated, vowelQi, voi) && fp.optionValues[vowelQi][voi] === need) {
+          if (
+            !isElim(eliminated, vowelQi, voi) &&
+            fp.optionValues[vowelQi][voi] === need
+          ) {
             has = true;
             break;
           }
@@ -500,7 +552,14 @@ export function deduceWithRule(
         const cp = countPred(r);
         if (cp && r.t !== 5 /* RT_MOST_COMMON_COUNT */) {
           const [from, to] = countRange(r, n);
-          const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
+          const cr = countMatching(
+            answers,
+            eliminated,
+            cp.pred,
+            cp.mask,
+            from,
+            to,
+          );
           if (v != null && (cr.count > v || cr.count + cr.remaining < v)) {
             elim = true;
           }
@@ -523,13 +582,21 @@ export function deduceWithRule(
             elim = true;
           }
           const other = !elim ? answers[r.questionIndex] : null;
-          if (!elim && other != null && v != null && Math.abs(oi - letterIdx(other)) !== v) {
+          if (
+            !elim &&
+            other != null &&
+            v != null &&
+            Math.abs(oi - letterIdx(other)) !== v
+          ) {
             elim = true;
           }
           if (!elim && other == null && v != null) {
             let anyPossible = false;
             for (let ti = 0; ti < 5; ti++) {
-              if (!isElim(eliminated, r.questionIndex, ti) && Math.abs(oi - ti) === v) {
+              if (
+                !isElim(eliminated, r.questionIndex, ti) &&
+                Math.abs(oi - ti) === v
+              ) {
                 anyPossible = true;
                 break;
               }
@@ -546,7 +613,10 @@ export function deduceWithRule(
             } else {
               if (answers[v] != null && answers[v] !== r.answer) {
                 elim = true;
-              } else if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              } else if (
+                answers[v] == null &&
+                isElim(eliminated, v, L2I[r.answer!])
+              ) {
                 elim = true;
               }
               if (!elim) {
@@ -557,7 +627,12 @@ export function deduceWithRule(
                   }
                 }
               }
-              if (!elim && LETTERS[oi] === r.answer && qi >= scanStart && qi < v) {
+              if (
+                !elim &&
+                LETTERS[oi] === r.answer &&
+                qi >= scanStart &&
+                qi < v
+              ) {
                 elim = true;
               }
             }
@@ -579,7 +654,10 @@ export function deduceWithRule(
             } else {
               if (answers[v] != null && answers[v] !== r.answer) {
                 elim = true;
-              } else if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              } else if (
+                answers[v] == null &&
+                isElim(eliminated, v, L2I[r.answer!])
+              ) {
                 elim = true;
               }
               if (!elim) {
@@ -590,7 +668,12 @@ export function deduceWithRule(
                   }
                 }
               }
-              if (!elim && LETTERS[oi] === r.answer && qi > v && qi < beforeIdx) {
+              if (
+                !elim &&
+                LETTERS[oi] === r.answer &&
+                qi > v &&
+                qi < beforeIdx
+              ) {
                 elim = true;
               }
             }
@@ -612,7 +695,10 @@ export function deduceWithRule(
             } else if (v >= 0 && v < n) {
               if (answers[v] != null && answers[v] !== r.answer) {
                 elim = true;
-              } else if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              } else if (
+                answers[v] == null &&
+                isElim(eliminated, v, L2I[r.answer!])
+              ) {
                 elim = true;
               }
             }
@@ -641,7 +727,11 @@ export function deduceWithRule(
             }
           } else {
             for (let i = 0; i < n - 1; i++) {
-              if (answers[i] != null && answers[i + 1] != null && answers[i] === answers[i + 1]) {
+              if (
+                answers[i] != null &&
+                answers[i + 1] != null &&
+                answers[i] === answers[i + 1]
+              ) {
                 elim = true;
                 break;
               }
@@ -683,13 +773,20 @@ export function deduceWithRule(
           }
         }
 
-        if (!elim && (r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && v != null) {
+        if (
+          !elim &&
+          (r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) &&
+          v != null
+        ) {
           if (v === qi) elim = true;
           else if (v >= 0 && v < n && isElim(eliminated, v, oi)) elim = true;
         }
 
         if (elim) {
-          return res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "eliminations");
+          return res(
+            { type: "eliminate", questionIndex: qi, optionIndex: oi },
+            "eliminations",
+          );
         }
       }
     }

@@ -1,13 +1,41 @@
 use crate::types::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DeduceRule {
-    All,
-    CountSaturation,
-    ForcedValues,
-    PositionalRange,
-    VowelConsonantCross,
-    Eliminations,
+macro_rules! deduce_rules {
+    ($($variant:ident => $name:expr),+ $(,)?) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum DeduceRule {
+            All,
+            $($variant),+
+        }
+
+        pub const ALL_DEDUCE_RULES: &[DeduceRule] = &[
+            $(DeduceRule::$variant),+
+        ];
+
+        impl DeduceRule {
+            pub fn from_str(s: &str) -> Option<DeduceRule> {
+                match s {
+                    $($name => Some(DeduceRule::$variant),)+
+                    _ => None,
+                }
+            }
+
+            pub fn to_str(self) -> &'static str {
+                match self {
+                    DeduceRule::All => "all",
+                    $(DeduceRule::$variant => $name),+
+                }
+            }
+        }
+    }
+}
+
+deduce_rules! {
+    CountSaturation => "count_saturation",
+    ForcedValues => "forced_values",
+    PositionalRange => "positional_range",
+    VowelConsonantCross => "vowel_consonant_cross",
+    Eliminations => "eliminations",
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -858,6 +886,8 @@ mod tests {
 
         let mut passed = 0;
         let mut failed = 0;
+        let mut covered_rules = std::collections::HashSet::new();
+        let mut dry_failed = 0;
 
         for test in tests {
             if test.get("section").is_some() {
@@ -894,23 +924,14 @@ mod tests {
                 }
             }
 
-            let dr = match rule_filter {
-                Some("count_saturation") => {
-                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::CountSaturation)
-                }
-                Some("forced_values") => {
-                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::ForcedValues)
-                }
-                Some("positional_range") => {
-                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::PositionalRange)
-                }
-                Some("vowel_consonant_cross") => {
-                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::VowelConsonantCross)
-                }
-                Some("eliminations") => {
-                    deduce_with_rule(&fp, &answers, &eliminated, DeduceRule::Eliminations)
-                }
-                _ => deduce(&fp, &answers, &eliminated),
+            let parsed_rule = rule_filter.and_then(DeduceRule::from_str);
+            if let Some(r) = parsed_rule {
+                covered_rules.insert(r.to_str());
+            }
+
+            let dr = match parsed_rule {
+                Some(r) => deduce_with_rule(&fp, &answers, &eliminated, r),
+                None => deduce(&fp, &answers, &eliminated),
             };
 
             let got = match dr {
@@ -942,9 +963,65 @@ mod tests {
                 eprintln!("  expected: {expected}");
                 eprintln!("  got:      {got}");
             }
+
+            // DRY check
+            if let Some(r) = parsed_rule {
+                if dr.is_some() && got == expected {
+                    let without = deduce_with_rule_exclude(
+                        &fp,
+                        &answers,
+                        &eliminated,
+                        DeduceRule::All,
+                        Some(r),
+                    );
+                    let without_got = match without {
+                        Some(DeduceResult {
+                            action: DeduceAction::Force { qi, answer },
+                            ..
+                        }) => format!("{}{}", qi + 1, answer.as_char()),
+                        Some(DeduceResult {
+                            action: DeduceAction::Eliminate { qi, oi },
+                            ..
+                        }) => format!("{}{}", qi + 1, (b'a' + oi as u8) as char),
+                        Some(DeduceResult {
+                            action:
+                                DeduceAction::EliminateMulti {
+                                    question_mask,
+                                    option_mask,
+                                },
+                            ..
+                        }) => format!("qm{:b}o{:05b}", question_mask, option_mask),
+                        None => "null".to_string(),
+                    };
+                    if without_got == got {
+                        dry_failed += 1;
+                        eprintln!("DRY: {name}");
+                        eprintln!("  excluding {} still produces: {got}", r.to_str());
+                    }
+                }
+            }
+        }
+
+        // Coverage check
+        let uncovered: Vec<_> = ALL_DEDUCE_RULES
+            .iter()
+            .filter(|r| !covered_rules.contains(r.to_str()))
+            .collect();
+        for r in &uncovered {
+            eprintln!("MISSING TEST COVERAGE: {}", r.to_str());
         }
 
         eprintln!("{passed}/{} passed", passed + failed);
+        if dry_failed > 0 {
+            eprintln!("{dry_failed} DRY violation(s)");
+        }
         assert_eq!(failed, 0, "{failed} test(s) failed");
+        assert_eq!(
+            uncovered.len(),
+            0,
+            "{} rule(s) without tests",
+            uncovered.len()
+        );
+        assert_eq!(dry_failed, 0, "{dry_failed} DRY violation(s)");
     }
 }
