@@ -110,7 +110,8 @@
   }
 
   &.incorrect {
-    border-color: transparent;
+    border-style: dashed;
+    border-color: var(--border-muted);
     background: var(--invalid-soft);
     & .option-text {
       opacity: 0.45;
@@ -118,7 +119,8 @@
   }
 
   &.implied {
-    border-color: transparent;
+    border-style: dashed;
+    border-color: var(--border-muted);
     background: var(--invalid-soft);
     cursor: not-allowed;
     & .option-text {
@@ -155,13 +157,11 @@
 }
 
 .option-indicator {
-  align-self: center;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 1.4em;
-  height: 1em;
   flex-shrink: 0;
-  line-height: 0;
-  overflow: visible;
 }
 
 .option-indicator-spacer {
