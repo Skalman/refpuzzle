@@ -158,6 +158,29 @@ pub fn deduce_with_rule(
                 }
             }
             if cr.count + cr.remaining == on && cr.remaining > 0 {
+                if cr.remaining == 1 {
+                    for j in from..to {
+                        if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
+                            let mut match_count = 0;
+                            let mut match_oi = 0;
+                            for oi in 0..5usize {
+                                if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
+                                    match_count += 1;
+                                    match_oi = oi;
+                                }
+                            }
+                            if match_count == 1 {
+                                return result(
+                                    DeduceAction::Force {
+                                        qi: j,
+                                        answer: LETTERS[match_oi],
+                                    },
+                                    DeduceRule::CountSaturation,
+                                );
+                            }
+                        }
+                    }
+                }
                 for j in from..to {
                     if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
                         for oi in 0..5usize {
@@ -398,7 +421,10 @@ pub fn deduce_with_rule(
                         }
                     }
                     QuestionType::LetterDist { question_index } => {
-                        if let Some(other) = answers[question_index as usize] {
+                        let max_dist = oi.max(4 - oi) as i16;
+                        if on != NAN_VAL && on > max_dist {
+                            true
+                        } else if let Some(other) = answers[question_index as usize] {
                             let dist = (oi as i16 - other.idx() as i16).abs();
                             dist != on
                         } else if on != NAN_VAL {
@@ -460,7 +486,14 @@ pub fn deduce_with_rule(
                             } else {
                                 let possible_a = !eliminated[pos] & 0b11111u8;
                                 let possible_b = !eliminated[pos + 1] & 0b11111u8;
-                                possible_a & possible_b == 0
+                                if possible_a & possible_b == 0 {
+                                    true
+                                } else if pos == qi || pos + 1 == qi {
+                                    let partner = if pos == qi { pos + 1 } else { pos };
+                                    is_elim(eliminated, partner, oi)
+                                } else {
+                                    false
+                                }
                             }
                         } else {
                             (0..n.saturating_sub(1)).any(|i| {

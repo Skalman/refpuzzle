@@ -389,13 +389,13 @@
       "name": "ConsecIdent: pair has different answers → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [
-        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
-        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]}
       ]},
-      "state": ["", "A", "B", ""],
-      "expect": "1c"
+      "state": ["A", "B", "", ""],
+      "expect": "4b"
     },
     {
       "name": "ConsecIdent: claims None but pair exists → eliminate",
@@ -683,13 +683,13 @@
       "name": "ConsecIdent: one answered, other has that answer eliminated → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [
-        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
-        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]}
       ]},
-      "state": ["", "A", "a", ""],
-      "expect": "1c"
+      "state": ["A", "a", "", ""],
+      "expect": "4b"
     },
     {
       "name": "ConsecIdent: disjoint possible answers → eliminate",
@@ -1136,24 +1136,24 @@
       "name": "ConsecIdent: one answered, other has answer eliminated → eliminate",
       "rule": "eliminations",
       "puzzle": {"q": [
-        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
-        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]}
       ]},
-      "state": ["", "A", "a", ""],
-      "expect": "1c"
+      "state": ["A", "a", "", ""],
+      "expect": "4b"
     },
     {
       "name": "ConsecIdent: both unanswered, overlapping → no elimination",
       "rule": "eliminations",
       "puzzle": {"q": [
-        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
         {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
-        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [null, 0, 1, 2, null]}
       ]},
-      "state": ["", "ab", "de", ""],
+      "state": ["ab", "de", "", ""],
       "expect": null
     },
     {
@@ -1167,6 +1167,31 @@
       ]},
       "state": ["bcde", "A", "B", "C"],
       "expect": null
+    },
+    {
+      "name": "ConsecIdent: self-ref, answer eliminated from partner → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "consecutive_identical"}, "o": [0, 1, 3, 2, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "ab", "c"],
+      "expect": "4c"
+    },
+    {
+      "name": "LetterDist: impossible distance for option letter → eliminate",
+      "rule": "eliminations",
+      "puzzle": {"q": [
+        {"r": {"t": "letter_distance", "q": 1}, "o": [0, 4, 1, 2, 3]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", ""],
+      "expect": "1b"
     },
     {
       "name": "PrevSame: None value doesn't trigger elimination",

@@ -160,6 +160,25 @@ export function deduceWithRule(
         }
       }
       if (cr.count + cr.remaining === v && cr.remaining > 0) {
+        if (cr.remaining === 1) {
+          for (let j = from; j < to; j++) {
+            if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j])) continue;
+            let matchCount = 0;
+            let matchOi = 0;
+            for (let oi = 0; oi < 5; oi++) {
+              if (!isElim(eliminated, j, oi) && cp.pred(LETTERS[oi])) {
+                matchCount++;
+                matchOi = oi;
+              }
+            }
+            if (matchCount === 1) {
+              return res(
+                { type: "force", questionIndex: j, letter: LETTERS[matchOi] },
+                "count_saturation",
+              );
+            }
+          }
+        }
         for (let j = from; j < to; j++) {
           if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j])) continue;
           for (let oi = 0; oi < 5; oi++) {
@@ -341,8 +360,11 @@ export function deduceWithRule(
         }
 
         if (!elim && r.t === RT_LETTER_DIST) {
-          const other = answers[r.questionIndex];
-          if (other != null && v != null && Math.abs(oi - letterIdx(other)) !== v) {
+          if (v != null && v > Math.max(oi, 4 - oi)) {
+            elim = true;
+          }
+          const other = !elim ? answers[r.questionIndex] : null;
+          if (!elim && other != null && v != null && Math.abs(oi - letterIdx(other)) !== v) {
             elim = true;
           }
           if (!elim && other == null && v != null) {
@@ -453,6 +475,10 @@ export function deduceWithRule(
               const possibleA = ~eliminated[v] & 0b11111;
               const possibleB = ~eliminated[v + 1] & 0b11111;
               if ((possibleA & possibleB) === 0) elim = true;
+              if (!elim && (v === qi || v + 1 === qi)) {
+                const partner = v === qi ? v + 1 : v;
+                if (isElim(eliminated, partner, oi)) elim = true;
+              }
             }
           } else {
             for (let i = 0; i < n - 1; i++) {
