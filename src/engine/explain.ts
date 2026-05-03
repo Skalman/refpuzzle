@@ -156,7 +156,7 @@ export function explainDeduce(
     const qList = qis.map(Q).join(", ");
     const optStr = optLetters.join(", ");
 
-    if (result.rule === "positional_range") {
+    if (result.rule === "PositionalRangeAnswered" || result.rule === "PositionalRangeUnanswered") {
       const oi = optLetters.length === 1 ? letterIdx(optLetters[0]) : 0;
       const src = findPositionalRangeSource(fp, answers, eliminated, qis[0], oi);
       const steps: ExplainStep[] = [];
@@ -269,6 +269,22 @@ function explainForce(
     return steps;
   }
 
+  // Reverse LetterDist: another question's LetterDist constrains qi
+  for (let src = 0; src < n; src++) {
+    if (src === qi) continue;
+    const srcR = fp.questions[src];
+    if (srcR.t !== RT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+    const srcAns = answers[src];
+    if (srcAns != null) {
+      const dist = fp.optionValues[src][letterIdx(srcAns)];
+      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+      steps.push(simple(
+        `${Q(src)} is answered ${srcAns} with letter distance ${dist}. Only ${letter} is at distance ${dist} from ${srcAns}, so ${Q(qi)} must be ${letter}.`,
+      ));
+      return steps;
+    }
+  }
+
   // Counting: all in range answered, count determines answer
   const pred = countPred(r);
   if (pred) {
@@ -282,7 +298,7 @@ function explainForce(
     }
   }
 
-  if (rule === "count_saturation") {
+  if (rule === "CountMustMatchForce") {
     const src = findCountSatSource(fp, answers, eliminated, qi, letter);
     if (src != null) {
       const srcR = fp.questions[src];
@@ -341,7 +357,7 @@ function explainElimination(
   const n = fp.n;
   const steps: ExplainStep[] = [simple(`Try looking at ${Q(qi)}.`)];
 
-  if (rule === "count_saturation") {
+  if (rule === "CountSaturated" || rule === "CountMustMatchElim") {
     const sat = explainCountSaturation(fp, answers, eliminated, qi, oi);
     if (sat) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(sat.srcQi)}.`));
@@ -354,7 +370,7 @@ function explainElimination(
     return steps;
   }
 
-  if (rule === "positional_range") {
+  if (rule === "PositionalRangeAnswered" || rule === "PositionalRangeUnanswered") {
     const src = findPositionalRangeSource(fp, answers, eliminated, qi, oi);
     if (src != null) {
       steps.push(simple(`Try looking at ${Q(src.srcQi)} and ${Q(qi)}.`));
@@ -365,7 +381,7 @@ function explainElimination(
     return steps;
   }
 
-  if (rule === "vowel_consonant_cross") {
+  if (rule === "VowelCrossElim" || rule === "ConsonantCrossElim") {
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
     steps.push(simple(
       `${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`,
@@ -662,6 +678,8 @@ function explainElimDetail(
   }
 
   if (r.t === RT_CONSEC_IDENT) {
+    if (v != null && v + 1 >= n)
+      return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`);
     if (v != null && v + 1 < n) {
       if (v === qi || v + 1 === qi) {
         const partner = v === qi ? v + 1 : v;
