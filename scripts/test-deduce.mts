@@ -1,26 +1,46 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import type { AnswerLetter, FlatPuzzle } from "../src/engine/types.ts";
-import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
-import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
-import type { DeduceRule } from "../src/engine/deduce.ts";
+import type { AnswerLetter, FlatPuzzle, Puzzle } from "../src/engine/types.ts";
+import { L2I, flattenPuzzle } from "../src/engine/types.ts";
+import {
+  deduce,
+  deduceWithRule,
+  ALL_DEDUCE_RULES,
+} from "../src/engine/deduce.ts";
+import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
 import type { ExplainStep } from "../src/engine/explain.ts";
+
+interface CompactPuzzle {
+  q: unknown[];
+}
 
 interface TestCase {
   name: string;
   rule?: string;
-  puzzle: { q: any[] };
+  puzzle: CompactPuzzle;
   state: string[];
   expect: string | null;
 }
 
-const suite: { tests: (TestCase | { section: string })[] } = JSON.parse(
+interface SectionHeader {
+  section: string;
+}
+
+interface TestSuite {
+  tests: (TestCase | SectionHeader)[];
+}
+
+function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
+  return "section" in entry;
+}
+
+const suite: TestSuite = JSON.parse(
   readFileSync("tests/deduce.json", "utf8"),
 );
 
-function parsePuzzle(compact: { q: any[] }) {
+function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {
     "0101": { "level-1": compact },
   };
@@ -28,21 +48,29 @@ function parsePuzzle(compact: { q: any[] }) {
   return parsed["0101"]["level-1"];
 }
 
+function isUpperAnswer(ch: string): ch is AnswerLetter {
+  return ch >= "A" && ch <= "E";
+}
+
+function isLowerAnswer(ch: string): boolean {
+  return ch >= "a" && ch <= "e";
+}
+
 function applyState(
   n: number,
   state: string[],
-): { answers: (string | null)[]; eliminated: number[] } {
-  const answers: (string | null)[] = new Array(n).fill(null);
+): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
+  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(0);
 
   for (let qi = 0; qi < n; qi++) {
     const s = state[qi] || "";
     for (const ch of s) {
-      if (ch >= "A" && ch <= "E") {
+      if (isUpperAnswer(ch)) {
         const oi = L2I[ch];
         answers[qi] = ch;
         eliminated[qi] = 0b11111 ^ (1 << oi);
-      } else if (ch >= "a" && ch <= "e") {
+      } else if (isLowerAnswer(ch)) {
         const oi = L2I[ch.toUpperCase()];
         eliminated[qi] |= 1 << oi;
       }
@@ -51,15 +79,32 @@ function applyState(
   return { answers, eliminated };
 }
 
-function formatAction(result: any): string | null {
+function formatAction(result: DeduceResult | null): string | null {
   if (!result) return null;
   const a = result.action;
-  if (a.type === "force") return `${a.questionIndex + 1}${a.letter}`;
-  if (a.type === "eliminate")
-    return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
-  if (a.type === "eliminateMulti")
-    return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
+  switch (a.type) {
+    case "force":
+      return `${a.questionIndex + 1}${a.letter}`;
+    case "eliminate":
+      return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
+    case "eliminateMulti":
+      return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
+    default:
+      return null;
+  }
+}
+
+const VALID_RULES = new Set<string>(ALL_DEDUCE_RULES);
+
+function parseRule(rule: string | undefined): DeduceRule | "All" | null {
+  if (rule == null) return null;
+  if (rule === "All") return "All";
+  if (VALID_RULES.has(rule)) return rule as DeduceRule;
   return null;
+}
+
+function isRealRule(rule: DeduceRule | "All" | null): rule is DeduceRule {
+  return rule !== null && rule !== "All";
 }
 
 function hasGenericFallback(steps: ExplainStep[]): boolean {
@@ -73,33 +118,29 @@ function hasGenericFallback(steps: ExplainStep[]): boolean {
   return false;
 }
 
-const testedRules = new Set(
-  suite.tests
-    .filter((t): t is TestCase => "rule" in t && typeof (t as TestCase).rule === "string")
-    .map((t) => (t as TestCase).rule!),
-);
-const uncoveredRules = ALL_DEDUCE_RULES.filter((r) => !testedRules.has(r));
-if (uncoveredRules.length > 0) {
-  console.log(`MISSING TEST COVERAGE: ${uncoveredRules.join(", ")}`);
-}
-
 let passed = 0;
 let failed = 0;
 let explainFailed = 0;
 let dryFailed = 0;
+const coveredRules = new Set<DeduceRule>();
 
 for (const test of suite.tests) {
-  if ("section" in test) continue;
-  const t = test as TestCase;
+  if (isSectionHeader(test)) continue;
+  const t = test;
   const puzzle = parsePuzzle(t.puzzle);
   const fp: FlatPuzzle = flattenPuzzle(puzzle);
   const n = puzzle.questions.length;
   const { answers, eliminated } = applyState(n, t.state);
 
-  const ruleFilter = (t.rule ?? null) as DeduceRule;
-  const result = ruleFilter
-    ? deduceWithRule(fp, answers as any, eliminated, ruleFilter)
-    : deduce(fp, answers as any, eliminated);
+  const parsedRule = parseRule(t.rule);
+  if (isRealRule(parsedRule)) {
+    coveredRules.add(parsedRule);
+  }
+
+  const results = isRealRule(parsedRule)
+    ? deduceWithRule(fp, answers, eliminated, parsedRule)
+    : deduce(fp, answers, eliminated);
+  const result = results[0] ?? null;
 
   const got = formatAction(result);
   const expected = t.expect;
@@ -118,7 +159,7 @@ for (const test of suite.tests) {
       const steps = explainDeduce(
         puzzle,
         fp,
-        answers as (AnswerLetter | null)[],
+        answers,
         eliminated,
         result,
       );
@@ -131,31 +172,38 @@ for (const test of suite.tests) {
       }
     } catch (e) {
       explainFailed++;
-      console.log(`EXPLAIN THROW: ${t.name}: ${e}`);
+      console.log(`EXPLAIN THROW: ${t.name}: ${String(e)}`);
     }
   }
   // DRY check: if test specifies a rule, running without that rule should not produce the same action
-  if (ruleFilter && result && got === expected) {
-    const withoutResult = deduceWithRule(
+  if (parsedRule != null && result && got === expected) {
+    const withoutResults = deduceWithRule(
       fp,
-      answers as any,
+      answers,
       eliminated,
       null,
-      ruleFilter,
+      isRealRule(parsedRule) ? parsedRule : null,
     );
-    const withoutGot = formatAction(withoutResult);
+    const withoutFirst = withoutResults[0] ?? null;
+    const withoutGot = formatAction(withoutFirst);
     if (withoutGot === got) {
       dryFailed++;
       console.log(`DRY: ${t.name}`);
       console.log(
-        `  excluding "${ruleFilter}" still produces: ${got} (via rule: ${withoutResult!.rule})`,
+        `  excluding "${parsedRule}" still produces: ${got} (via rule: ${withoutFirst?.rule ?? "unknown"})`,
       );
     }
   }
 }
 
+const uncoveredRules = ALL_DEDUCE_RULES.filter((r) => !coveredRules.has(r));
+if (uncoveredRules.length > 0) {
+  console.log(`MISSING TEST COVERAGE: ${uncoveredRules.join(", ")}`);
+}
+
 console.log(`\n${passed}/${passed + failed} passed`);
 if (explainFailed > 0) console.log(`${explainFailed} explain fallback(s)`);
 if (dryFailed > 0) console.log(`${dryFailed} DRY violation(s)`);
-if (uncoveredRules.length > 0) console.log(`${uncoveredRules.length} rule(s) without tests`);
-if (failed > 0 || uncoveredRules.length > 0) process.exit(1);
+if (uncoveredRules.length > 0)
+  console.log(`${uncoveredRules.length} rule(s) without tests`);
+if (failed > 0 || uncoveredRules.length > 0 || dryFailed > 0) process.exit(1);

@@ -1,21 +1,38 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import type { FlatPuzzle } from "../src/engine/types.ts";
+import type { FlatPuzzle, Puzzle } from "../src/engine/types.ts";
 import { flattenPuzzle } from "../src/engine/types.ts";
 import { checkSolvable } from "../src/engine/solve.ts";
+import type { SolveOutcome } from "../src/engine/solve.ts";
+
+interface CompactPuzzle {
+  q: unknown[];
+}
 
 interface TestCase {
   name: string;
-  puzzle: { q: any[] };
-  expect: string;
+  puzzle: CompactPuzzle;
+  expect: SolveOutcome;
 }
 
-const suite: { tests: (TestCase | { section: string })[] } = JSON.parse(
+interface SectionHeader {
+  section: string;
+}
+
+interface TestSuite {
+  tests: (TestCase | SectionHeader)[];
+}
+
+function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
+  return "section" in entry;
+}
+
+const suite: TestSuite = JSON.parse(
   readFileSync("tests/solve.json", "utf8"),
 );
 
-function parsePuzzle(compact: { q: any[] }) {
+function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {
     "0101": { "level-1": compact },
   };
@@ -27,8 +44,8 @@ let passed = 0;
 let failed = 0;
 
 for (const test of suite.tests) {
-  if ("section" in test) continue;
-  const t = test as TestCase;
+  if (isSectionHeader(test)) continue;
+  const t = test;
   const puzzle = parsePuzzle(t.puzzle);
   const fp: FlatPuzzle = flattenPuzzle(puzzle);
 

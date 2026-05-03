@@ -1571,7 +1571,8 @@ mod tests {
             let fp = match fp {
                 Some(fp) => fp,
                 None => {
-                    eprintln!("SKIP: {name}: parse failed");
+                    failed += 1;
+                    eprintln!("FAIL: {name}: parse failed");
                     continue;
                 }
             };
