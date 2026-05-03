@@ -336,7 +336,7 @@ fn check_json(path: &str, target: Option<&str>) {
                 }
             };
             total += 1;
-            let (ok, steps) = run_check(&fp);
+            let (ok, steps) = run_check(&fp, &key);
             if ok {
                 solved += 1;
             } else {
@@ -387,10 +387,11 @@ fn check_json(path: &str, target: Option<&str>) {
     }
 }
 
-fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
+fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
     let n = fp.n;
     let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
     let mut eliminated = [0u8; MAX_N];
+    let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
     let mut steps = Vec::new();
     let letters_lower = ['a', 'b', 'c', 'd', 'e'];
 
@@ -405,13 +406,18 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
                     deduce::DeduceAction::Force { qi, answer } => {
                         if let Some(existing) = answers[qi] {
                             if existing != answer {
+                                let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                                 eprintln!(
-                                    "CONFLICT: Q{} forced {} but already {}",
+                                    "CONFLICT [{key}]: Q{} forced {} by {} but already {} (set by {})",
                                     qi + 1,
                                     answer.as_char(),
-                                    existing.as_char()
+                                    dr.rule.to_str(),
+                                    existing.as_char(),
+                                    origin,
                                 );
                             }
+                        } else {
+                            forced_by[qi] = Some(dr.rule);
                         }
                         eliminated[qi] = 0b11111 ^ (1 << answer.idx());
                         answers[qi] = Some(answer);
@@ -419,11 +425,13 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
                     }
                     deduce::DeduceAction::Eliminate { qi, oi } => {
                         if answers[qi] == Some(LETTERS[oi]) {
+                            let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                             eprintln!(
-                                "CONFLICT: Q{} eliminating {} but already forced to it (rule: {:?})",
+                                "CONFLICT [{key}]: Q{} eliminating {} by {} but already forced to it (set by {})",
                                 qi + 1,
                                 LETTERS[oi].as_char(),
-                                dr.rule
+                                dr.rule.to_str(),
+                                origin,
                             );
                         }
                         eliminated[qi] |= 1 << oi;
@@ -438,6 +446,17 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
                                 eliminated[i] |= option_mask;
                                 for oi in 0..5usize {
                                     if (option_mask >> oi) & 1 == 1 {
+                                        if answers[i] == Some(LETTERS[oi]) {
+                                            let origin =
+                                                forced_by[i].map_or("unknown", |r| r.to_str());
+                                            eprintln!(
+                                                "CONFLICT [{key}]: Q{} eliminating {} by {} (multi) but already forced to it (set by {})",
+                                                i + 1,
+                                                LETTERS[oi].as_char(),
+                                                dr.rule.to_str(),
+                                                origin,
+                                            );
+                                        }
                                         steps.push(format!("{}{}", i + 1, letters_lower[oi]));
                                     }
                                 }
