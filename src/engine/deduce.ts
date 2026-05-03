@@ -643,7 +643,11 @@ export function deduceWithRule(
       if (qMask !== 0) {
         results.push(
           res(
-            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << answerOi },
+            {
+              type: "eliminateMulti",
+              questionMask: qMask,
+              optionMask: 1 << answerOi,
+            },
             "OnlyOddEvenRangeElim",
           ),
         );
@@ -1256,10 +1260,12 @@ export function deduceWithRule(
           }
         }
         if (!canBeLeast) {
-          results.push(res(
-            { type: "eliminate", questionIndex: qi, optionIndex: oi },
-            "LeastCommonElim",
-          ));
+          results.push(
+            res(
+              { type: "eliminate", questionIndex: qi, optionIndex: oi },
+              "LeastCommonElim",
+            ),
+          );
         }
       }
 
@@ -1275,10 +1281,12 @@ export function deduceWithRule(
           }
         }
         if (mustBeLeast) {
-          results.push(res(
-            { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-            "LeastCommonForce",
-          ));
+          results.push(
+            res(
+              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+              "LeastCommonForce",
+            ),
+          );
         }
       }
     }
@@ -1332,10 +1340,12 @@ export function deduceWithRule(
       mustBeMostOpt[oi] = mustBeMost;
 
       if (run("MostCommonElim") && !canBeMost) {
-        results.push(res(
-          { type: "eliminate", questionIndex: qi, optionIndex: oi },
-          "MostCommonElim",
-        ));
+        results.push(
+          res(
+            { type: "eliminate", questionIndex: qi, optionIndex: oi },
+            "MostCommonElim",
+          ),
+        );
       }
     }
 
@@ -1351,10 +1361,12 @@ export function deduceWithRule(
           }
         }
         if (onlyViable) {
-          results.push(res(
-            { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-            "MostCommonForce",
-          ));
+          results.push(
+            res(
+              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+              "MostCommonForce",
+            ),
+          );
         }
       }
     }
@@ -1371,7 +1383,8 @@ export function deduceWithRule(
       if (!claim) continue;
 
       if (
-        (claim.type === "first_with_answer" || claim.type === "last_with_answer") &&
+        (claim.type === "first_with_answer" ||
+          claim.type === "last_with_answer") &&
         claim.value >= 0 &&
         claim.value < n
       ) {
@@ -1380,24 +1393,40 @@ export function deduceWithRule(
         if (answers[targetQi] == null) {
           const targetOi = letterIdx(targetLetter);
           if (!isElim(eliminated, targetQi, targetOi)) {
-            results.push(res(
-              { type: "force", questionIndex: targetQi, letter: targetLetter },
-              "TrueStatementForward",
-            ));
+            results.push(
+              res(
+                {
+                  type: "force",
+                  questionIndex: targetQi,
+                  letter: targetLetter,
+                },
+                "TrueStatementForward",
+              ),
+            );
           }
         }
       }
 
-      if (claim.type === "answer_of_question" && claim.value >= 0 && claim.value < 5) {
+      if (
+        claim.type === "answer_of_question" &&
+        claim.value >= 0 &&
+        claim.value < 5
+      ) {
         const targetQi = claim.questionIndex;
         const targetLetter = LETTERS[claim.value];
         if (answers[targetQi] == null) {
           const targetOi = claim.value;
           if (!isElim(eliminated, targetQi, targetOi)) {
-            results.push(res(
-              { type: "force", questionIndex: targetQi, letter: targetLetter },
-              "TrueStatementForward",
-            ));
+            results.push(
+              res(
+                {
+                  type: "force",
+                  questionIndex: targetQi,
+                  letter: targetLetter,
+                },
+                "TrueStatementForward",
+              ),
+            );
           }
         }
       }
