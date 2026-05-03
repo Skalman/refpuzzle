@@ -1305,6 +1305,9 @@ export function deduceWithRule(
       }
     }
 
+    const canBeMostOpt = [false, false, false, false, false];
+    const mustBeMostOpt = [false, false, false, false, false];
+
     for (let oi = 0; oi < 5; oi++) {
       if (isElim(eliminated, qi, oi)) continue;
       const v = fp.optionValues[qi][oi];
@@ -1317,37 +1320,37 @@ export function deduceWithRule(
       adjMin[selfLetter]++;
       adjMax[selfLetter]++;
 
-      // Eliminate: if claimed letter's max count < some other letter's min count,
-      // claimed can't be most common
-      if (run("MostCommonElim")) {
-        let canBeMost = true;
-        for (let li = 0; li < 5; li++) {
-          if (li === claimed) continue;
-          if (adjMin[li] > adjMax[claimed]) {
-            canBeMost = false;
-            break;
-          }
-        }
-        if (!canBeMost) {
-          results.push(res(
-            { type: "eliminate", questionIndex: qi, optionIndex: oi },
-            "MostCommonElim",
-          ));
-        }
+      let canBeMost = true;
+      let mustBeMost = true;
+      for (let li = 0; li < 5; li++) {
+        if (li === claimed) continue;
+        if (adjMin[li] > adjMax[claimed]) canBeMost = false;
+        if (adjMax[li] >= adjMin[claimed]) mustBeMost = false;
       }
 
-      // Force: if claimed letter's min count >= every other letter's max count,
-      // claimed must be most common (ties are valid)
-      if (run("MostCommonForce")) {
-        let mustBeMost = true;
-        for (let li = 0; li < 5; li++) {
-          if (li === claimed) continue;
-          if (adjMax[li] > adjMin[claimed]) {
-            mustBeMost = false;
+      canBeMostOpt[oi] = canBeMost;
+      mustBeMostOpt[oi] = mustBeMost;
+
+      if (run("MostCommonElim") && !canBeMost) {
+        results.push(res(
+          { type: "eliminate", questionIndex: qi, optionIndex: oi },
+          "MostCommonElim",
+        ));
+      }
+    }
+
+    if (run("MostCommonForce")) {
+      for (let oi = 0; oi < 5; oi++) {
+        if (!mustBeMostOpt[oi]) continue;
+        let onlyViable = true;
+        for (let oj = 0; oj < 5; oj++) {
+          if (oj === oi || isElim(eliminated, qi, oj)) continue;
+          if (canBeMostOpt[oj]) {
+            onlyViable = false;
             break;
           }
         }
-        if (mustBeMost) {
+        if (onlyViable) {
           results.push(res(
             { type: "force", questionIndex: qi, letter: LETTERS[oi] },
             "MostCommonForce",

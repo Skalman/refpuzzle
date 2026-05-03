@@ -1527,6 +1527,18 @@
       "state": ["abde", "B", "B", "C", "", ""],
       "expect": null
     },
+    {
+      "name": "MostCommon: tie still possible with another letter → no force",
+      "rule": "MostCommonForce",
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [0, 1, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "A", "B", ""],
+      "expect": null
+    },
 
     {"section": "=== OnlyOddEven range ==="},
 

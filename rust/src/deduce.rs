@@ -1450,6 +1450,9 @@ fn deduce_impl(
             }
         }
 
+        let mut can_be_most_opt = [false; 5];
+        let mut must_be_most_opt = [false; 5];
+
         for oi in 0..5usize {
             if is_elim(eliminated, qi, oi) {
                 continue;
@@ -1466,20 +1469,28 @@ fn deduce_impl(
             adj_min[self_letter] += 1;
             adj_max[self_letter] += 1;
 
-            if run(DeduceRule::MostCommonElim) {
-                let can_be_most = (0..5).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
-                if !can_be_most {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::MostCommonElim,
-                    );
-                }
-            }
+            let can_be_most = (0..5).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
+            let must_be_most = (0..5).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
 
-            if run(DeduceRule::MostCommonForce) {
-                let must_be_most =
-                    (0..5).all(|li| li == claimed || adj_max[li] <= adj_min[claimed]);
-                if must_be_most {
+            can_be_most_opt[oi] = can_be_most;
+            must_be_most_opt[oi] = must_be_most;
+
+            if run(DeduceRule::MostCommonElim) && !can_be_most {
+                push(
+                    DeduceAction::Eliminate { qi, oi },
+                    DeduceRule::MostCommonElim,
+                );
+            }
+        }
+
+        if run(DeduceRule::MostCommonForce) {
+            for oi in 0..5usize {
+                if !must_be_most_opt[oi] {
+                    continue;
+                }
+                let only_viable = (0..5usize)
+                    .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_most_opt[oj]);
+                if only_viable {
                     push(
                         DeduceAction::Force {
                             qi,

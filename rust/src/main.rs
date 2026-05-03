@@ -387,11 +387,220 @@ fn check_json(path: &str, target: Option<&str>) {
     }
 }
 
+#[derive(Clone)]
+struct LookaheadTrace {
+    eliminate_qi: usize,
+    eliminate_oi: usize,
+    assumption_qi: usize,
+    assumption_answer: Answer,
+    contradiction_qi: usize,
+    chain: Vec<deduce::DeduceResult>,
+}
+
+#[derive(Clone)]
+enum CheckAction {
+    Force {
+        qi: usize,
+        answer: Answer,
+        rule: deduce::DeduceRule,
+    },
+    Eliminate {
+        qi: usize,
+        oi: usize,
+        rule: deduce::DeduceRule,
+    },
+    EliminateMulti {
+        question_mask: u16,
+        option_mask: u8,
+        rule: deduce::DeduceRule,
+    },
+    LookaheadEliminate {
+        trace: LookaheadTrace,
+    },
+}
+
+struct IncorrectActionReport {
+    index: usize,
+    summary: String,
+    details: Vec<String>,
+}
+
+fn format_deduce_action(action: &deduce::DeduceAction) -> String {
+    match *action {
+        deduce::DeduceAction::Force { qi, answer } => {
+            format!("force Q{}={}", qi + 1, answer.as_char())
+        }
+        deduce::DeduceAction::Eliminate { qi, oi } => {
+            format!("eliminate Q{}{}", qi + 1, LETTERS[oi].as_char())
+        }
+        deduce::DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            let qs: Vec<String> = (0..MAX_N)
+                .filter(|&qi| (question_mask >> qi) & 1 == 1)
+                .map(|qi| format!("Q{}", qi + 1))
+                .collect();
+            let opts: String = (0..5usize)
+                .filter(|&oi| (option_mask >> oi) & 1 == 1)
+                .map(|oi| LETTERS[oi].as_char())
+                .collect();
+            format!("eliminate-multi [{}] options [{}]", qs.join(", "), opts)
+        }
+    }
+}
+
+fn first_incorrect_action(
+    actions: &[CheckAction],
+    solution: &[Answer; MAX_N],
+    n: usize,
+) -> Option<IncorrectActionReport> {
+    for (idx, action) in actions.iter().enumerate() {
+        match action {
+            CheckAction::Force { qi, answer, rule } => {
+                if solution[*qi] != *answer {
+                    return Some(IncorrectActionReport {
+                        index: idx + 1,
+                        summary: format!(
+                            "force Q{}={} by {} (expected {})",
+                            *qi + 1,
+                            answer.as_char(),
+                            rule.to_str(),
+                            solution[*qi].as_char(),
+                        ),
+                        details: Vec::new(),
+                    });
+                }
+            }
+            CheckAction::Eliminate { qi, oi, rule } => {
+                if solution[*qi] == LETTERS[*oi] {
+                    return Some(IncorrectActionReport {
+                        index: idx + 1,
+                        summary: format!(
+                            "eliminate Q{}{} by {} (eliminates true answer)",
+                            *qi + 1,
+                            LETTERS[*oi].as_char(),
+                            rule.to_str(),
+                        ),
+                        details: Vec::new(),
+                    });
+                }
+            }
+            CheckAction::EliminateMulti {
+                question_mask,
+                option_mask,
+                rule,
+            } => {
+                for qi in 0..n {
+                    if (question_mask >> qi) & 1 == 0 {
+                        continue;
+                    }
+                    let sol_oi = solution[qi].idx();
+                    if (option_mask >> sol_oi) & 1 == 1 {
+                        return Some(IncorrectActionReport {
+                            index: idx + 1,
+                            summary: format!(
+                                "eliminate-multi by {} removes Q{}{} (true answer)",
+                                rule.to_str(),
+                                qi + 1,
+                                solution[qi].as_char(),
+                            ),
+                            details: Vec::new(),
+                        });
+                    }
+                }
+            }
+            CheckAction::LookaheadEliminate { trace } => {
+                if solution[trace.eliminate_qi] == LETTERS[trace.eliminate_oi] {
+                    let mut details = vec![
+                        format!(
+                            "assumption: Q{}={}",
+                            trace.assumption_qi + 1,
+                            trace.assumption_answer.as_char()
+                        ),
+                        format!("contradiction at Q{}", trace.contradiction_qi + 1),
+                    ];
+                    if trace.chain.is_empty() {
+                        details.push("deduction chain: (empty)".to_string());
+                    } else {
+                        details.push("deduction chain:".to_string());
+                        for (i, dr) in trace.chain.iter().enumerate() {
+                            details.push(format!(
+                                "  {}. {} via {}",
+                                i + 1,
+                                format_deduce_action(&dr.action),
+                                dr.rule.to_str()
+                            ));
+                        }
+                    }
+
+                    return Some(IncorrectActionReport {
+                        index: idx + 1,
+                        summary: format!(
+                            "lookahead eliminate Q{}{} (eliminates true answer)",
+                            trace.eliminate_qi + 1,
+                            LETTERS[trace.eliminate_oi].as_char(),
+                        ),
+                        details,
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+fn report_first_incorrect_if_needed(
+    key: &str,
+    fp: &FlatPuzzle,
+    actions: &[CheckAction],
+    n: usize,
+    conflict_reported: &mut bool,
+    brute_solutions: &mut Option<Vec<[Answer; MAX_N]>>,
+) {
+    if *conflict_reported {
+        return;
+    }
+    *conflict_reported = true;
+
+    let solutions = brute_solutions.get_or_insert_with(|| solver::solve(fp, None, 2));
+    match solutions.len() {
+        0 => {
+            eprintln!(
+                "CONFLICT [{key}]: brute-force solver found no solutions; cannot locate first incorrect action"
+            );
+        }
+        1 => {
+            if let Some(report) = first_incorrect_action(actions, &solutions[0], n) {
+                eprintln!(
+                    "CONFLICT [{key}]: first incorrect action #{}: {}",
+                    report.index, report.summary
+                );
+                for line in report.details {
+                    eprintln!("CONFLICT [{key}]:   {line}");
+                }
+            } else {
+                eprintln!(
+                    "CONFLICT [{key}]: no incorrect force/elimination found before conflict against unique solution"
+                );
+            }
+        }
+        m => {
+            eprintln!(
+                "CONFLICT [{key}]: brute-force solver found {m} solutions; first incorrect action is ambiguous"
+            );
+        }
+    }
+}
+
 fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
     let n = fp.n;
     let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
     let mut eliminated = [0u8; MAX_N];
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
+    let mut action_log: Vec<CheckAction> = Vec::new();
+    let mut conflict_reported = false;
+    let mut brute_solutions: Option<Vec<[Answer; MAX_N]>> = None;
     let mut steps = Vec::new();
     let letters_lower = ['a', 'b', 'c', 'd', 'e'];
 
@@ -404,6 +613,11 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
             for dr in &drs {
                 match dr.action {
                     deduce::DeduceAction::Force { qi, answer } => {
+                        action_log.push(CheckAction::Force {
+                            qi,
+                            answer,
+                            rule: dr.rule,
+                        });
                         if let Some(existing) = answers[qi] {
                             if existing != answer {
                                 let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
@@ -415,6 +629,14 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
                                     existing.as_char(),
                                     origin,
                                 );
+                                report_first_incorrect_if_needed(
+                                    key,
+                                    fp,
+                                    &action_log,
+                                    n,
+                                    &mut conflict_reported,
+                                    &mut brute_solutions,
+                                );
                             }
                         } else {
                             forced_by[qi] = Some(dr.rule);
@@ -424,6 +646,11 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
                         steps.push(format!("{}{}", qi + 1, answer.as_char()));
                     }
                     deduce::DeduceAction::Eliminate { qi, oi } => {
+                        action_log.push(CheckAction::Eliminate {
+                            qi,
+                            oi,
+                            rule: dr.rule,
+                        });
                         if answers[qi] == Some(LETTERS[oi]) {
                             let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                             eprintln!(
@@ -433,6 +660,14 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
                                 dr.rule.to_str(),
                                 origin,
                             );
+                            report_first_incorrect_if_needed(
+                                key,
+                                fp,
+                                &action_log,
+                                n,
+                                &mut conflict_reported,
+                                &mut brute_solutions,
+                            );
                         }
                         eliminated[qi] |= 1 << oi;
                         steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
@@ -441,6 +676,11 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
                         question_mask,
                         option_mask,
                     } => {
+                        action_log.push(CheckAction::EliminateMulti {
+                            question_mask,
+                            option_mask,
+                            rule: dr.rule,
+                        });
                         for i in 0..n {
                             if (question_mask >> i) & 1 == 1 {
                                 eliminated[i] |= option_mask;
@@ -456,6 +696,14 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
                                                 dr.rule.to_str(),
                                                 origin,
                                             );
+                                            report_first_incorrect_if_needed(
+                                                key,
+                                                fp,
+                                                &action_log,
+                                                n,
+                                                &mut conflict_reported,
+                                                &mut brute_solutions,
+                                            );
                                         }
                                         steps.push(format!("{}{}", i + 1, letters_lower[oi]));
                                     }
@@ -468,6 +716,16 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
             continue;
         }
         if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX) {
+            action_log.push(CheckAction::LookaheadEliminate {
+                trace: LookaheadTrace {
+                    eliminate_qi: lr.eliminate_qi,
+                    eliminate_oi: lr.eliminate_oi,
+                    assumption_qi: lr.assumption_qi,
+                    assumption_answer: lr.assumption_answer,
+                    contradiction_qi: lr.contradiction_qi,
+                    chain: lr.chain.iter().copied().collect(),
+                },
+            });
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             steps.push(format!(
                 "{}{}",
