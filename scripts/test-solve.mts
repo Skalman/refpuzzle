@@ -24,13 +24,13 @@ interface TestSuite {
   tests: (TestCase | SectionHeader)[];
 }
 
-function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
+function isSectionHeader(
+  entry: TestCase | SectionHeader,
+): entry is SectionHeader {
   return "section" in entry;
 }
 
-const suite: TestSuite = JSON.parse(
-  readFileSync("tests/solve.json", "utf8"),
-);
+const suite: TestSuite = JSON.parse(readFileSync("tests/solve.json", "utf8"));
 
 function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {

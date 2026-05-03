@@ -32,13 +32,13 @@ interface TestSuite {
   tests: (TestCase | SectionHeader)[];
 }
 
-function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
+function isSectionHeader(
+  entry: TestCase | SectionHeader,
+): entry is SectionHeader {
   return "section" in entry;
 }
 
-const suite: TestSuite = JSON.parse(
-  readFileSync("tests/deduce.json", "utf8"),
-);
+const suite: TestSuite = JSON.parse(readFileSync("tests/deduce.json", "utf8"));
 
 function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {
@@ -156,13 +156,7 @@ for (const test of suite.tests) {
 
   if (result && got === expected) {
     try {
-      const steps = explainDeduce(
-        puzzle,
-        fp,
-        answers,
-        eliminated,
-        result,
-      );
+      const steps = explainDeduce(puzzle, fp, answers, eliminated, result);
       if (hasGenericFallback(steps)) {
         explainFailed++;
         console.log(`EXPLAIN FALLBACK: ${t.name}`);

@@ -25,7 +25,9 @@ interface TestSuite {
   tests: (TestCase | SectionHeader)[];
 }
 
-function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
+function isSectionHeader(
+  entry: TestCase | SectionHeader,
+): entry is SectionHeader {
   return "section" in entry;
 }
 
