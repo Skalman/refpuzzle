@@ -22,7 +22,10 @@ import {
   RT_CONSEC_IDENT,
   RT_EQUAL_COUNT,
   RT_ANSWER_OF,
+  RT_LEAST_COMMON,
+  RT_MOST_COMMON,
   RT_LETTER_DIST,
+  RT_TRUE_STMT,
 } from "./types.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
@@ -78,6 +81,12 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "OnlySameSelfRef",
   "OnlySameRuledOut",
   "UniqueAlreadyUsed",
+  "LeastCommonElim",
+  "LeastCommonForce",
+  "TrueStatementForward",
+  "OnlyOddEvenRangeElim",
+  "MostCommonElim",
+  "MostCommonForce",
 ] as const;
 export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] =
@@ -176,7 +185,7 @@ export function deduce(
   fp: FlatPuzzle,
   answers: (AnswerLetter | null)[],
   eliminated: number[],
-): DeduceResult | null {
+): DeduceResult[] {
   return deduceWithRule(fp, answers, eliminated, null);
 }
 
@@ -186,9 +195,10 @@ export function deduceWithRule(
   eliminated: number[],
   rule: DeduceRule | null,
   exclude: DeduceRule | null = null,
-): DeduceResult | null {
+): DeduceResult[] {
   const n = fp.n;
   const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
+  const results: DeduceResult[] = [];
 
   // ── Count saturation ──
   for (let qi = 0; qi < n; qi++) {
@@ -208,9 +218,11 @@ export function deduceWithRule(
           if (answers[j] != null) continue;
           for (let oi = 0; oi < 5; oi++) {
             if (!isElim(eliminated, j, oi) && cp.pred(LETTERS[oi])) {
-              return res(
-                { type: "eliminate", questionIndex: j, optionIndex: oi },
-                "CountSaturated",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: j, optionIndex: oi },
+                  "CountSaturated",
+                ),
               );
             }
           }
@@ -233,9 +245,11 @@ export function deduceWithRule(
               }
             }
             if (matchCount === 1) {
-              return res(
-                { type: "force", questionIndex: j, letter: LETTERS[matchOi] },
-                "CountMustMatchForce",
+              results.push(
+                res(
+                  { type: "force", questionIndex: j, letter: LETTERS[matchOi] },
+                  "CountMustMatchForce",
+                ),
               );
             }
           }
@@ -248,9 +262,11 @@ export function deduceWithRule(
             continue;
           for (let oi = 0; oi < 5; oi++) {
             if (!isElim(eliminated, j, oi) && !cp.pred(LETTERS[oi])) {
-              return res(
-                { type: "eliminate", questionIndex: j, optionIndex: oi },
-                "CountMustMatchElim",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: j, optionIndex: oi },
+                  "CountMustMatchElim",
+                ),
               );
             }
           }
@@ -268,9 +284,11 @@ export function deduceWithRule(
       if (remainingCount(eliminated[qi]) === 1) {
         for (let oi = 0; oi < 5; oi++) {
           if (!isElim(eliminated, qi, oi)) {
-            return res(
-              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-              "OnlyOptionLeft",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+                "OnlyOptionLeft",
+              ),
             );
           }
         }
@@ -283,9 +301,11 @@ export function deduceWithRule(
         const targetIdx = letterIdx(target);
         for (let oi = 0; oi < 5; oi++) {
           if (fp.optionValues[qi][oi] === targetIdx) {
-            return res(
-              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-              "AnswerOfForward",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+                "AnswerOfForward",
+              ),
             );
           }
         }
@@ -301,9 +321,15 @@ export function deduceWithRule(
         if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
           const impliedIdx = fp.optionValues[other][letterIdx(otherAns)];
           if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
-            return res(
-              { type: "force", questionIndex: qi, letter: LETTERS[impliedIdx] },
-              "AnswerOfReverse",
+            results.push(
+              res(
+                {
+                  type: "force",
+                  questionIndex: qi,
+                  letter: LETTERS[impliedIdx],
+                },
+                "AnswerOfReverse",
+              ),
             );
           }
         }
@@ -313,9 +339,11 @@ export function deduceWithRule(
         if (otherR.t === RT_SAME_AS) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
-            return res(
-              { type: "force", questionIndex: qi, letter: otherAns },
-              "SameAsReverse",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: otherAns },
+                "SameAsReverse",
+              ),
             );
           }
         }
@@ -329,9 +357,11 @@ export function deduceWithRule(
         ) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
-            return res(
-              { type: "force", questionIndex: qi, letter: otherAns },
-              "PrevNextOnlySameReverse",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: otherAns },
+                "PrevNextOnlySameReverse",
+              ),
             );
           }
         }
@@ -354,9 +384,11 @@ export function deduceWithRule(
             }
           }
           if (validCount === 1) {
-            return res(
-              { type: "force", questionIndex: qi, letter: validLetter },
-              "LetterDistForward",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: validLetter },
+                "LetterDistForward",
+              ),
             );
           }
         }
@@ -386,21 +418,25 @@ export function deduceWithRule(
         }
         if (run("LetterDistReverseForce")) {
           if (validCount === 1 && elimMask !== 0) {
-            return res(
-              { type: "force", questionIndex: qi, letter: LETTERS[validOi] },
-              "LetterDistReverseForce",
+            results.push(
+              res(
+                { type: "force", questionIndex: qi, letter: LETTERS[validOi] },
+                "LetterDistReverseForce",
+              ),
             );
           }
         }
         if (run("LetterDistReverseElim")) {
           if (elimMask !== 0 && validCount !== 1) {
-            return res(
-              {
-                type: "eliminateMulti",
-                questionMask: 1 << qi,
-                optionMask: elimMask,
-              },
-              "LetterDistReverseElim",
+            results.push(
+              res(
+                {
+                  type: "eliminateMulti",
+                  questionMask: 1 << qi,
+                  optionMask: elimMask,
+                },
+                "LetterDistReverseElim",
+              ),
             );
           }
         }
@@ -420,13 +456,15 @@ export function deduceWithRule(
         }
         if (run("LetterDistReverseElim")) {
           if (elimMask !== 0) {
-            return res(
-              {
-                type: "eliminateMulti",
-                questionMask: 1 << qi,
-                optionMask: elimMask,
-              },
-              "LetterDistReverseElim",
+            results.push(
+              res(
+                {
+                  type: "eliminateMulti",
+                  questionMask: 1 << qi,
+                  optionMask: elimMask,
+                },
+                "LetterDistReverseElim",
+              ),
             );
           }
         }
@@ -449,9 +487,11 @@ export function deduceWithRule(
           for (let oi = 0; oi < 5; oi++) {
             if (isElim(eliminated, qi, oi)) continue;
             if (fp.optionValues[qi][oi] === cr.count) {
-              return res(
-                { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-                "CountAllAnswered",
+              results.push(
+                res(
+                  { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+                  "CountAllAnswered",
+                ),
               );
             }
           }
@@ -498,13 +538,15 @@ export function deduceWithRule(
         if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
       }
       if (qMask !== 0) {
-        return res(
-          {
-            type: "eliminateMulti",
-            questionMask: qMask,
-            optionMask: 1 << letterOi,
-          },
-          "PositionalRangeAnswered",
+        results.push(
+          res(
+            {
+              type: "eliminateMulti",
+              questionMask: qMask,
+              optionMask: 1 << letterOi,
+            },
+            "PositionalRangeAnswered",
+          ),
         );
       }
     }
@@ -531,13 +573,15 @@ export function deduceWithRule(
           if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
         }
         if (qMask !== 0) {
-          return res(
-            {
-              type: "eliminateMulti",
-              questionMask: qMask,
-              optionMask: 1 << letterOi,
-            },
-            "PositionalRangeUnanswered",
+          results.push(
+            res(
+              {
+                type: "eliminateMulti",
+                questionMask: qMask,
+                optionMask: 1 << letterOi,
+              },
+              "PositionalRangeUnanswered",
+            ),
           );
         }
       } else if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
@@ -555,15 +599,54 @@ export function deduceWithRule(
           if (!isElim(eliminated, j, letterOi)) qMask |= 1 << j;
         }
         if (qMask !== 0) {
-          return res(
-            {
-              type: "eliminateMulti",
-              questionMask: qMask,
-              optionMask: 1 << letterOi,
-            },
-            "PositionalRangeUnanswered",
+          results.push(
+            res(
+              {
+                type: "eliminateMulti",
+                questionMask: qMask,
+                optionMask: 1 << letterOi,
+              },
+              "PositionalRangeUnanswered",
+            ),
           );
         }
+      }
+    }
+  }
+
+  // ── OnlyOdd/OnlyEven range elimination ──
+  if (run("OnlyOddEvenRangeElim")) {
+    for (let src = 0; src < n; src++) {
+      if (answers[src] != null) continue;
+      const srcR = fp.questions[src];
+      if (srcR.t !== RT_ONLY_ODD && srcR.t !== RT_ONLY_EVEN) continue;
+      const parity = srcR.t === RT_ONLY_ODD ? 1 : 0;
+      const answerOi = letterIdx(srcR.answer!);
+
+      // Collect all positions claimed by remaining options
+      const claimedPositions = new Set<number>();
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, src, oi)) continue;
+        const v = fp.optionValues[src][oi];
+        if (v != null && v >= 0 && v < n) claimedPositions.add(v);
+      }
+
+      // Eliminate answer from all parity-matching questions NOT in claimed set
+      let qMask = 0;
+      for (let j = 0; j < n; j++) {
+        if (j === src) continue;
+        if ((j + 1) % 2 !== parity) continue;
+        if (answers[j] != null) continue;
+        if (claimedPositions.has(j)) continue;
+        if (!isElim(eliminated, j, answerOi)) qMask |= 1 << j;
+      }
+      if (qMask !== 0) {
+        results.push(
+          res(
+            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << answerOi },
+            "OnlyOddEvenRangeElim",
+          ),
+        );
       }
     }
   }
@@ -595,9 +678,11 @@ export function deduceWithRule(
             }
           }
           if (!has)
-            return res(
-              { type: "eliminate", questionIndex: vowelQi, optionIndex: oi },
-              "VowelCrossElim",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: vowelQi, optionIndex: oi },
+                "VowelCrossElim",
+              ),
             );
         }
       }
@@ -618,13 +703,15 @@ export function deduceWithRule(
             }
           }
           if (!has)
-            return res(
-              {
-                type: "eliminate",
-                questionIndex: consonantQi,
-                optionIndex: oi,
-              },
-              "ConsonantCrossElim",
+            results.push(
+              res(
+                {
+                  type: "eliminate",
+                  questionIndex: consonantQi,
+                  optionIndex: oi,
+                },
+                "ConsonantCrossElim",
+              ),
             );
         }
       }
@@ -653,17 +740,21 @@ export function deduceWithRule(
         );
         if (run("CountExceeded")) {
           if (v != null && cr.count > v) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "CountExceeded",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "CountExceeded",
+              ),
             );
           }
         }
         if (run("CountImpossible")) {
           if (v != null && cr.count + cr.remaining < v) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "CountImpossible",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "CountImpossible",
+              ),
             );
           }
         }
@@ -673,16 +764,20 @@ export function deduceWithRule(
         if (run("AnswerOfTargetRuledOut")) {
           const target = answers[r.questionIndex];
           if (target != null && v != null && letterIdx(target) !== v) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "AnswerOfTargetRuledOut",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "AnswerOfTargetRuledOut",
+              ),
             );
           }
           if (target == null && v != null && v >= 0 && v < 5) {
             if (isElim(eliminated, r.questionIndex, v)) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "AnswerOfTargetRuledOut",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "AnswerOfTargetRuledOut",
+                ),
               );
             }
           }
@@ -692,9 +787,11 @@ export function deduceWithRule(
       if (r.t === RT_LETTER_DIST) {
         if (run("LetterDistImpossible")) {
           if (v != null && v > Math.max(oi, 4 - oi)) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "LetterDistImpossible",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "LetterDistImpossible",
+              ),
             );
           }
         }
@@ -705,9 +802,11 @@ export function deduceWithRule(
             v != null &&
             Math.abs(oi - letterIdx(other)) !== v
           ) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "LetterDistWrong",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "LetterDistWrong",
+              ),
             );
           }
         }
@@ -725,9 +824,11 @@ export function deduceWithRule(
               }
             }
             if (!anyPossible) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "LetterDistNoMatch",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "LetterDistNoMatch",
+                ),
               );
             }
           }
@@ -739,47 +840,54 @@ export function deduceWithRule(
         if (v != null) {
           if (run("FirstClosestAfterOutOfRange")) {
             if (v < scanStart || v >= n) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "FirstClosestAfterOutOfRange",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "FirstClosestAfterOutOfRange",
+                ),
               );
             }
           }
           if (v >= scanStart && v < n) {
             if (run("FirstClosestAfterWrongAnswer")) {
               if (answers[v] != null && answers[v] !== r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "FirstClosestAfterWrongAnswer",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "FirstClosestAfterWrongAnswer",
+                  ),
                 );
               }
             }
             if (run("FirstClosestAfterRuledOut")) {
-              if (
-                answers[v] == null &&
-                isElim(eliminated, v, L2I[r.answer!])
-              ) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "FirstClosestAfterRuledOut",
+              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "FirstClosestAfterRuledOut",
+                  ),
                 );
               }
             }
             if (run("FirstClosestAfterEarlierMatch")) {
               for (let j = scanStart; j < v; j++) {
                 if (answers[j] === r.answer) {
-                  return res(
-                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                    "FirstClosestAfterEarlierMatch",
+                  results.push(
+                    res(
+                      { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                      "FirstClosestAfterEarlierMatch",
+                    ),
                   );
                 }
               }
             }
             if (run("FirstClosestAfterSelfRef")) {
               if (LETTERS[oi] === r.answer && qi >= scanStart && qi < v) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "FirstClosestAfterSelfRef",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "FirstClosestAfterSelfRef",
+                  ),
                 );
               }
             }
@@ -788,9 +896,11 @@ export function deduceWithRule(
           if (run("FirstClosestAfterNoneMatch")) {
             for (let j = scanStart; j < n; j++) {
               if (answers[j] === r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "FirstClosestAfterNoneMatch",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "FirstClosestAfterNoneMatch",
+                  ),
                 );
               }
             }
@@ -803,47 +913,54 @@ export function deduceWithRule(
         if (v != null) {
           if (run("LastClosestBeforeOutOfRange")) {
             if (v < 0 || v >= beforeIdx) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "LastClosestBeforeOutOfRange",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "LastClosestBeforeOutOfRange",
+                ),
               );
             }
           }
           if (v >= 0 && v < beforeIdx) {
             if (run("LastClosestBeforeWrongAnswer")) {
               if (answers[v] != null && answers[v] !== r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "LastClosestBeforeWrongAnswer",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "LastClosestBeforeWrongAnswer",
+                  ),
                 );
               }
             }
             if (run("LastClosestBeforeRuledOut")) {
-              if (
-                answers[v] == null &&
-                isElim(eliminated, v, L2I[r.answer!])
-              ) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "LastClosestBeforeRuledOut",
+              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "LastClosestBeforeRuledOut",
+                  ),
                 );
               }
             }
             if (run("LastClosestBeforeLaterMatch")) {
               for (let j = beforeIdx - 1; j > v; j--) {
                 if (answers[j] === r.answer) {
-                  return res(
-                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                    "LastClosestBeforeLaterMatch",
+                  results.push(
+                    res(
+                      { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                      "LastClosestBeforeLaterMatch",
+                    ),
                   );
                 }
               }
             }
             if (run("LastClosestBeforeSelfRef")) {
               if (LETTERS[oi] === r.answer && qi > v && qi < beforeIdx) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "LastClosestBeforeSelfRef",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "LastClosestBeforeSelfRef",
+                  ),
                 );
               }
             }
@@ -852,9 +969,11 @@ export function deduceWithRule(
           if (run("LastClosestBeforeNoneMatch")) {
             for (let j = 0; j < beforeIdx; j++) {
               if (answers[j] === r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "LastClosestBeforeNoneMatch",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "LastClosestBeforeNoneMatch",
+                  ),
                 );
               }
             }
@@ -867,29 +986,32 @@ export function deduceWithRule(
         if (v != null) {
           if (run("OnlyOddEvenWrongParity")) {
             if ((v + 1) % 2 !== parity) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "OnlyOddEvenWrongParity",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "OnlyOddEvenWrongParity",
+                ),
               );
             }
           }
           if ((v + 1) % 2 === parity && v >= 0 && v < n) {
             if (run("OnlyOddEvenWrongAnswer")) {
               if (answers[v] != null && answers[v] !== r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "OnlyOddEvenWrongAnswer",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "OnlyOddEvenWrongAnswer",
+                  ),
                 );
               }
             }
             if (run("OnlyOddEvenRuledOut")) {
-              if (
-                answers[v] == null &&
-                isElim(eliminated, v, L2I[r.answer!])
-              ) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "OnlyOddEvenRuledOut",
+              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "OnlyOddEvenRuledOut",
+                  ),
                 );
               }
             }
@@ -898,9 +1020,11 @@ export function deduceWithRule(
           if (run("OnlyOddEvenNoneMatch")) {
             for (let i = 0; i < n; i++) {
               if ((i + 1) % 2 === parity && answers[i] === r.answer) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "OnlyOddEvenNoneMatch",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "OnlyOddEvenNoneMatch",
+                  ),
                 );
               }
             }
@@ -912,9 +1036,11 @@ export function deduceWithRule(
         if (v != null) {
           if (run("ConsecIdentOutOfRange")) {
             if (v < 0 || v + 1 >= n) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "ConsecIdentOutOfRange",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "ConsecIdentOutOfRange",
+                ),
               );
             }
           }
@@ -923,9 +1049,11 @@ export function deduceWithRule(
             const possibleB = ~eliminated[v + 1] & 0b11111;
             if (run("ConsecIdentNoCommon")) {
               if ((possibleA & possibleB) === 0) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "ConsecIdentNoCommon",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "ConsecIdentNoCommon",
+                  ),
                 );
               }
             }
@@ -934,9 +1062,15 @@ export function deduceWithRule(
                 if (v === qi || v + 1 === qi) {
                   const partner = v === qi ? v + 1 : v;
                   if (isElim(eliminated, partner, oi)) {
-                    return res(
-                      { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                      "ConsecIdentSelfRef",
+                    results.push(
+                      res(
+                        {
+                          type: "eliminate",
+                          questionIndex: qi,
+                          optionIndex: oi,
+                        },
+                        "ConsecIdentSelfRef",
+                      ),
                     );
                   }
                 }
@@ -951,9 +1085,11 @@ export function deduceWithRule(
                 answers[i + 1] != null &&
                 answers[i] === answers[i + 1]
               ) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "ConsecIdentNonePair",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "ConsecIdentNonePair",
+                  ),
                 );
               }
             }
@@ -964,9 +1100,11 @@ export function deduceWithRule(
       if (r.t === RT_EQUAL_COUNT) {
         if (run("EqualCountSelfRef")) {
           if (v != null && LETTERS[v] === r.answer) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "EqualCountSelfRef",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "EqualCountSelfRef",
+              ),
             );
           }
         }
@@ -975,27 +1113,33 @@ export function deduceWithRule(
       if (r.t === RT_PREV_SAME && v != null) {
         if (run("PrevSameNotBefore")) {
           if (v >= qi) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "PrevSameNotBefore",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "PrevSameNotBefore",
+              ),
             );
           }
         }
         if (v < qi) {
           if (run("PrevSameRuledOut")) {
             if (isElim(eliminated, v, oi)) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "PrevSameRuledOut",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "PrevSameRuledOut",
+                ),
               );
             }
           }
           if (run("PrevSameCloser")) {
             for (let j = qi - 1; j > v; j--) {
               if (answers[j] === LETTERS[oi]) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "PrevSameCloser",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "PrevSameCloser",
+                  ),
                 );
               }
             }
@@ -1006,27 +1150,33 @@ export function deduceWithRule(
       if (r.t === RT_NEXT_SAME && v != null) {
         if (run("NextSameNotAfter")) {
           if (v <= qi || v >= n) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "NextSameNotAfter",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "NextSameNotAfter",
+              ),
             );
           }
         }
         if (v > qi && v < n) {
           if (run("NextSameRuledOut")) {
             if (isElim(eliminated, v, oi)) {
-              return res(
-                { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                "NextSameRuledOut",
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "NextSameRuledOut",
+                ),
               );
             }
           }
           if (run("NextSameCloser")) {
             for (let j = qi + 1; j < v; j++) {
               if (answers[j] === LETTERS[oi]) {
-                return res(
-                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
-                  "NextSameCloser",
+                results.push(
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "NextSameCloser",
+                  ),
                 );
               }
             }
@@ -1037,17 +1187,21 @@ export function deduceWithRule(
       if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && v != null) {
         if (run("OnlySameSelfRef")) {
           if (v === qi) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "OnlySameSelfRef",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "OnlySameSelfRef",
+              ),
             );
           }
         }
         if (run("OnlySameRuledOut")) {
           if (v >= 0 && v < n && isElim(eliminated, v, oi)) {
-            return res(
-              { type: "eliminate", questionIndex: qi, optionIndex: oi },
-              "OnlySameRuledOut",
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                "OnlySameRuledOut",
+              ),
             );
           }
         }
@@ -1055,5 +1209,197 @@ export function deduceWithRule(
     }
   }
 
-  return null;
+  // ── LeastCommon ──
+  for (let qi = 0; qi < n; qi++) {
+    if (answers[qi] != null) continue;
+    const r = fp.questions[qi];
+    if (r.t !== RT_LEAST_COMMON) continue;
+
+    // Compute min/max possible count for each letter
+    const minCount = [0, 0, 0, 0, 0];
+    const maxCount = [0, 0, 0, 0, 0];
+    for (let j = 0; j < n; j++) {
+      if (j === qi) continue;
+      if (answers[j] != null) {
+        const li = letterIdx(answers[j]!);
+        minCount[li]++;
+        maxCount[li]++;
+      } else {
+        for (let li = 0; li < 5; li++) {
+          if (!isElim(eliminated, j, li)) maxCount[li]++;
+        }
+      }
+    }
+
+    for (let oi = 0; oi < 5; oi++) {
+      if (isElim(eliminated, qi, oi)) continue;
+      const v = fp.optionValues[qi][oi];
+      if (v == null || v < 0 || v >= 5) continue;
+      const claimed = v;
+      const selfLetter = oi;
+
+      // Adjust counts for qi's own answer being LETTERS[oi]
+      const adjMin = [...minCount];
+      const adjMax = [...maxCount];
+      adjMin[selfLetter]++;
+      adjMax[selfLetter]++;
+
+      // Eliminate: if claimed letter's min count > some other letter's max count,
+      // claimed can't be least common
+      if (run("LeastCommonElim")) {
+        let canBeLeast = true;
+        for (let li = 0; li < 5; li++) {
+          if (li === claimed) continue;
+          if (adjMax[li] < adjMin[claimed]) {
+            canBeLeast = false;
+            break;
+          }
+        }
+        if (!canBeLeast) {
+          results.push(res(
+            { type: "eliminate", questionIndex: qi, optionIndex: oi },
+            "LeastCommonElim",
+          ));
+        }
+      }
+
+      // Force: if claimed letter's max count < every other letter's min count,
+      // claimed must be least common
+      if (run("LeastCommonForce")) {
+        let mustBeLeast = true;
+        for (let li = 0; li < 5; li++) {
+          if (li === claimed) continue;
+          if (adjMin[li] <= adjMax[claimed]) {
+            mustBeLeast = false;
+            break;
+          }
+        }
+        if (mustBeLeast) {
+          results.push(res(
+            { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+            "LeastCommonForce",
+          ));
+        }
+      }
+    }
+  }
+
+  // ── MostCommon ──
+  for (let qi = 0; qi < n; qi++) {
+    if (answers[qi] != null) continue;
+    const r = fp.questions[qi];
+    if (r.t !== RT_MOST_COMMON) continue;
+
+    const minCount = [0, 0, 0, 0, 0];
+    const maxCount = [0, 0, 0, 0, 0];
+    for (let j = 0; j < n; j++) {
+      if (j === qi) continue;
+      if (answers[j] != null) {
+        const li = letterIdx(answers[j]!);
+        minCount[li]++;
+        maxCount[li]++;
+      } else {
+        for (let li = 0; li < 5; li++) {
+          if (!isElim(eliminated, j, li)) maxCount[li]++;
+        }
+      }
+    }
+
+    for (let oi = 0; oi < 5; oi++) {
+      if (isElim(eliminated, qi, oi)) continue;
+      const v = fp.optionValues[qi][oi];
+      if (v == null || v < 0 || v >= 5) continue;
+      const claimed = v;
+      const selfLetter = oi;
+
+      const adjMin = [...minCount];
+      const adjMax = [...maxCount];
+      adjMin[selfLetter]++;
+      adjMax[selfLetter]++;
+
+      // Eliminate: if claimed letter's max count < some other letter's min count,
+      // claimed can't be most common
+      if (run("MostCommonElim")) {
+        let canBeMost = true;
+        for (let li = 0; li < 5; li++) {
+          if (li === claimed) continue;
+          if (adjMin[li] > adjMax[claimed]) {
+            canBeMost = false;
+            break;
+          }
+        }
+        if (!canBeMost) {
+          results.push(res(
+            { type: "eliminate", questionIndex: qi, optionIndex: oi },
+            "MostCommonElim",
+          ));
+        }
+      }
+
+      // Force: if claimed letter's min count >= every other letter's max count,
+      // claimed must be most common (ties are valid)
+      if (run("MostCommonForce")) {
+        let mustBeMost = true;
+        for (let li = 0; li < 5; li++) {
+          if (li === claimed) continue;
+          if (adjMax[li] > adjMin[claimed]) {
+            mustBeMost = false;
+            break;
+          }
+        }
+        if (mustBeMost) {
+          results.push(res(
+            { type: "force", questionIndex: qi, letter: LETTERS[oi] },
+            "MostCommonForce",
+          ));
+        }
+      }
+    }
+  }
+
+  // ── TrueStatement forward ──
+  if (run("TrueStatementForward")) {
+    for (let qi = 0; qi < n; qi++) {
+      const a = answers[qi];
+      if (a == null) continue;
+      const r = fp.questions[qi];
+      if (r.t !== RT_TRUE_STMT) continue;
+      const claim = fp.optionClaims[qi][letterIdx(a)];
+      if (!claim) continue;
+
+      if (
+        (claim.type === "first_with_answer" || claim.type === "last_with_answer") &&
+        claim.value >= 0 &&
+        claim.value < n
+      ) {
+        const targetQi = claim.value;
+        const targetLetter = claim.answer;
+        if (answers[targetQi] == null) {
+          const targetOi = letterIdx(targetLetter);
+          if (!isElim(eliminated, targetQi, targetOi)) {
+            results.push(res(
+              { type: "force", questionIndex: targetQi, letter: targetLetter },
+              "TrueStatementForward",
+            ));
+          }
+        }
+      }
+
+      if (claim.type === "answer_of_question" && claim.value >= 0 && claim.value < 5) {
+        const targetQi = claim.questionIndex;
+        const targetLetter = LETTERS[claim.value];
+        if (answers[targetQi] == null) {
+          const targetOi = claim.value;
+          if (!isElim(eliminated, targetQi, targetOi)) {
+            results.push(res(
+              { type: "force", questionIndex: targetQi, letter: targetLetter },
+              "TrueStatementForward",
+            ));
+          }
+        }
+      }
+    }
+  }
+
+  return results;
 }

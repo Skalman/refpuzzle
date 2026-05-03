@@ -1438,6 +1438,137 @@
       "expect": null
     },
 
+    {"section": "=== LeastCommon ==="},
+
+    {
+      "name": "LeastCommon: claimed letter already has more than another letter's max → eliminate",
+      "rule": "LeastCommonElim",
+      "puzzle": {"q": [
+        {"r": {"t": "least_common_answer"}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "B", "B", "B", "C"],
+      "expect": "1a"
+    },
+    {
+      "name": "LeastCommon: claimed letter's max count < all others' min count → force",
+      "rule": "LeastCommonForce",
+      "puzzle": {"q": [
+        {"r": {"t": "least_common_answer"}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["b", "A", "A", "C", "C", "D", "E"],
+      "expect": "1A"
+    },
+
+    {"section": "=== MostCommon ==="},
+
+    {
+      "name": "MostCommon: claimed letter's max < another letter's min → eliminate",
+      "rule": "MostCommonElim",
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [2, 0, 1, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["abde", "C", "C", "C", "B"],
+      "expect": "1c"
+    },
+    {
+      "name": "MostCommon: claimed letter could still be most → no elimination",
+      "rule": "MostCommonElim",
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [2, 0, 1, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["abde", "B", "B", "C", "", ""],
+      "expect": null
+    },
+    {
+      "name": "MostCommon: claimed letter's min >= all others' max → force",
+      "rule": "MostCommonForce",
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [1, 0, 2, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["b", "C", "C", "C", "D", "E", "A"],
+      "expect": "1C"
+    },
+    {
+      "name": "MostCommon: claimed letter could be overtaken → no force",
+      "rule": "MostCommonForce",
+      "puzzle": {"q": [
+        {"r": {"t": "most_common_answer"}, "o": [2, 0, 1, 3, 4]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["abde", "B", "B", "C", "", ""],
+      "expect": null
+    },
+
+    {"section": "=== OnlyOddEven range ==="},
+
+    {
+      "name": "OnlyOdd: remaining options exclude other odd positions → eliminate",
+      "rule": "OnlyOddEvenRangeElim",
+      "puzzle": {"q": [
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "only_odd_with_answer", "a": 3}, "o": [0, 2, 4, null, 8]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["", "", "", "", "abc", "", "", "", ""],
+      "expect": "qm1000101o01000"
+    },
+
+    {"section": "=== TrueStatement ==="},
+
+    {
+      "name": "TrueStatement: answered, claim is last_with_answer → force target",
+      "rule": "TrueStatementForward",
+      "puzzle": {"q": [
+        {"r": {"t": "only_true_statement"}, "c": [
+          {"t": "last_with_answer", "a": 2, "v": 2},
+          {"t": "count_answer", "a": 0, "v": 1},
+          {"t": "count_answer", "a": 1, "v": 0},
+          {"t": "count_answer", "a": 2, "v": 0},
+          {"t": "count_answer", "a": 3, "v": 0}
+        ]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]},
+        {"r": {"t": "answer_is_self"}, "o": [null, null, null, null, null]}
+      ]},
+      "state": ["A", "", "", ""],
+      "expect": "3C"
+    },
+
     {"section": "=== No deduction / rule filter ==="},
 
     {

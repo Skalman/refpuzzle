@@ -21,6 +21,7 @@ pub fn lookahead(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
+    stop_deducing_after_n_results: usize,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
     for qi in 0..n {
@@ -38,17 +39,36 @@ pub fn lookahead(
             hyp_eliminated[qi] = 0b11111 ^ (1 << oi);
 
             let mut chain = ArrayVec::new();
-
-            for _ in 0..n * 5 {
-                match deduce(fp, &hyp_answers, &hyp_eliminated) {
-                    Some(dr) => {
-                        apply_action(&dr.action, &mut hyp_answers, &mut hyp_eliminated);
-                        if !chain.is_full() {
-                            chain.push(dr);
-                        }
-                    }
-                    None => break,
+            let mut contradiction = false;
+            while chain.len() < stop_deducing_after_n_results {
+                let drs = deduce(fp, &hyp_answers, &hyp_eliminated);
+                if drs.is_empty() {
+                    break;
                 }
+                for dr in &drs {
+                    if has_contradiction(&dr.action, &hyp_answers) {
+                        contradiction = true;
+                        break;
+                    }
+                    apply_action(&dr.action, &mut hyp_answers, &mut hyp_eliminated);
+                    if !chain.is_full() {
+                        chain.push(*dr);
+                    }
+                }
+                if contradiction {
+                    break;
+                }
+            }
+
+            if contradiction {
+                return Some(LookaheadResult {
+                    eliminate_qi: qi,
+                    eliminate_oi: oi,
+                    assumption_qi: qi,
+                    assumption_answer: LETTERS[oi],
+                    chain,
+                    contradiction_qi: qi,
+                });
             }
 
             for check_qi in 0..n {
@@ -81,6 +101,28 @@ pub fn lookahead(
         }
     }
     None
+}
+
+fn has_contradiction(action: &DeduceAction, answers: &[Option<Answer>; MAX_N]) -> bool {
+    match *action {
+        DeduceAction::Force { qi, answer } => answers[qi].is_some() && answers[qi] != Some(answer),
+        DeduceAction::Eliminate { qi, oi } => answers[qi] == Some(LETTERS[oi]),
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            for i in 0..MAX_N {
+                if (question_mask >> i) & 1 == 1 {
+                    if let Some(a) = answers[i] {
+                        if (option_mask >> a.idx()) & 1 == 1 {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+    }
 }
 
 fn apply_action(
@@ -158,7 +200,7 @@ mod tests {
                 }
             }
 
-            let result = lookahead(&fp, &answers, &eliminated);
+            let result = lookahead(&fp, &answers, &eliminated, usize::MAX);
             let got = match result {
                 Some(r) => format!(
                     "{}{}",

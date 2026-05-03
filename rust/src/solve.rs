@@ -19,12 +19,15 @@ pub fn check_solvable(fp: &FlatPuzzle) -> SolveOutcome {
             return SolveOutcome::Solved;
         }
 
-        if let Some(dr) = deduce(fp, &answers, &eliminated) {
-            apply_action(&dr.action, &mut answers, &mut eliminated);
+        let drs = deduce(fp, &answers, &eliminated);
+        if !drs.is_empty() {
+            for dr in &drs {
+                apply_action(&dr.action, &mut answers, &mut eliminated);
+            }
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &answers, &eliminated) {
+        if let Some(lr) = lookahead(fp, &answers, &eliminated, usize::MAX) {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }
@@ -57,10 +60,27 @@ fn apply_action(
 ) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-            answers[qi] = Some(answer);
+            if let Some(existing) = answers[qi] {
+                assert_eq!(
+                    existing,
+                    answer,
+                    "conflicting forces for Q{}: {} vs {}",
+                    qi + 1,
+                    existing.as_char(),
+                    answer.as_char()
+                );
+            } else {
+                eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                answers[qi] = Some(answer);
+            }
         }
         DeduceAction::Eliminate { qi, oi } => {
+            assert!(
+                answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
+                "eliminating Q{} option {} but it's already forced to that answer",
+                qi + 1,
+                LETTERS[oi].as_char()
+            );
             eliminated[qi] |= 1 << oi;
         }
         DeduceAction::EliminateMulti {

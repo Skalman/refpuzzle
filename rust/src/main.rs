@@ -214,13 +214,14 @@ fn main() {
         tasks.len()
     );
     eprintln!(
-        "  Time:    {:.1}s ({:.0}ms per day)",
+        "  Time:    {:.1}s ({:.1}ms per day)",
         elapsed.as_secs_f64(),
         elapsed.as_secs_f64() * 1000.0 / day_count as f64
     );
     eprintln!("  Output:  {raw_kb}KB JSON");
     if show_stats {
         gen_common::print_stats();
+        gen_common::print_extra_stats();
     }
 
     println!("{json_out}");
@@ -343,10 +344,31 @@ fn check_json(path: &str, target: Option<&str>) {
                     .iter()
                     .filter(|s| s.chars().last().map_or(false, |c| c.is_uppercase()))
                     .count();
-                failures.push(format!("{key}: {answered}/{}", fp.n));
+                let year = &path
+                    .replace(".json", "")
+                    .chars()
+                    .rev()
+                    .take(4)
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>();
+                let mm = &day[..2];
+                let dd = &day[2..4];
+                let level = lvl.strip_prefix("level-").unwrap_or(lvl);
+                let hash = steps.join(".");
+                let url =
+                    format!("http://localhost:5173/day/{year}-{mm}-{dd}?l={level}&debug#{hash}");
+                failures.push(format!("{key}: {answered}/{} — {url}", fp.n));
             }
             if target.is_some() {
                 println!("{}", steps.join("."));
+                let solutions = solver::solve(&fp, None, 10);
+                eprintln!("Solutions found: {}", solutions.len());
+                for (i, sol) in solutions.iter().enumerate() {
+                    let s: String = sol.iter().take(fp.n).map(|a| a.as_char()).collect();
+                    eprintln!("  #{}: {}", i + 1, s);
+                }
                 if !ok {
                     std::process::exit(1);
                 }
@@ -376,32 +398,57 @@ fn run_check(fp: &FlatPuzzle) -> (bool, Vec<String>) {
         if (0..n).all(|i| answers[i].is_some()) {
             return (true, steps);
         }
-        if let Some(dr) = deduce::deduce(fp, &answers, &eliminated) {
-            match dr.action {
-                deduce::DeduceAction::Force { qi, answer } => {
-                    eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                    answers[qi] = Some(answer);
-                    steps.push(format!("{}{}", qi + 1, answer.as_char()));
-                }
-                deduce::DeduceAction::Eliminate { qi, oi } => {
-                    eliminated[qi] |= 1 << oi;
-                    steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
-                }
-                deduce::DeduceAction::EliminateMulti {
-                    question_mask,
-                    option_mask,
-                } => {
-                    for i in 0..n {
-                        if (question_mask >> i) & 1 == 1 {
-                            eliminated[i] |= option_mask;
+        let drs = deduce::deduce(fp, &answers, &eliminated);
+        if !drs.is_empty() {
+            for dr in &drs {
+                match dr.action {
+                    deduce::DeduceAction::Force { qi, answer } => {
+                        if let Some(existing) = answers[qi] {
+                            if existing != answer {
+                                eprintln!(
+                                    "CONFLICT: Q{} forced {} but already {}",
+                                    qi + 1,
+                                    answer.as_char(),
+                                    existing.as_char()
+                                );
+                            }
+                        }
+                        eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                        answers[qi] = Some(answer);
+                        steps.push(format!("{}{}", qi + 1, answer.as_char()));
+                    }
+                    deduce::DeduceAction::Eliminate { qi, oi } => {
+                        if answers[qi] == Some(LETTERS[oi]) {
+                            eprintln!(
+                                "CONFLICT: Q{} eliminating {} but already forced to it (rule: {:?})",
+                                qi + 1,
+                                LETTERS[oi].as_char(),
+                                dr.rule
+                            );
+                        }
+                        eliminated[qi] |= 1 << oi;
+                        steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
+                    }
+                    deduce::DeduceAction::EliminateMulti {
+                        question_mask,
+                        option_mask,
+                    } => {
+                        for i in 0..n {
+                            if (question_mask >> i) & 1 == 1 {
+                                eliminated[i] |= option_mask;
+                                for oi in 0..5usize {
+                                    if (option_mask >> oi) & 1 == 1 {
+                                        steps.push(format!("{}{}", i + 1, letters_lower[oi]));
+                                    }
+                                }
+                            }
                         }
                     }
-                    steps.push(format!("qm{:b}o{:05b}", question_mask, option_mask));
                 }
             }
             continue;
         }
-        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated) {
+        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX) {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             steps.push(format!(
                 "{}{}",

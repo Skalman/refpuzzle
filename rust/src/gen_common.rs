@@ -114,25 +114,47 @@ fn try_solve_from(
             return (true, answers, eliminated);
         }
 
-        if let Some(dr) = deduce(fp, &answers, &eliminated) {
+        let drs = deduce(fp, &answers, &eliminated);
+        if !drs.is_empty() {
+            for dr in &drs {
             match dr.action {
                 DeduceAction::Force { qi, answer } => {
+                        if let Some(existing) = answers[qi] {
+                            assert_eq!(
+                                existing,
+                                answer,
+                                "conflicting forces for Q{}: {} vs {}",
+                                qi + 1,
+                                existing.as_char(),
+                                answer.as_char()
+                            );
+                        } else {
                     eliminated[qi] = 0b11111 ^ (1 << answer.idx());
                     answers[qi] = Some(answer);
+                        }
                 }
                 DeduceAction::Eliminate { qi, oi } => {
+                        assert!(answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
+                            "eliminating Q{} option {} but it's already forced to that answer", qi + 1, LETTERS[oi].as_char());
                     eliminated[qi] |= 1 << oi;
                 }
-                DeduceAction::EliminateMulti { question_mask, option_mask } => {
+                    DeduceAction::EliminateMulti {
+                        question_mask,
+                        option_mask,
+                    } => {
                     for i in 0..MAX_N {
-                        if (question_mask >> i) & 1 == 1 { eliminated[i] |= option_mask; }
+                            if (question_mask >> i) & 1 == 1 {
+                                eliminated[i] |= option_mask;
+                            }
+                        }
                     }
                 }
             }
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &answers, &eliminated) {
+        let lr = lookahead(fp, &answers, &eliminated, 6);
+        if let Some(lr) = lr {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }

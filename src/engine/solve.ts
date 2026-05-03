@@ -12,9 +12,9 @@ export function solvePuzzle(fp: FlatPuzzle): (AnswerLetter | null)[] {
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.slice(0, n).every((a) => a != null)) break;
 
-    const dr = deduce(fp, answers, eliminated);
-    if (dr) {
-      applyAction(dr.action, answers, eliminated);
+    const drs = deduce(fp, answers, eliminated);
+    if (drs.length > 0) {
+      for (const dr of drs) applyAction(dr.action, answers, eliminated);
       continue;
     }
 
@@ -40,9 +40,9 @@ export function checkSolvable(fp: FlatPuzzle): SolveOutcome {
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.slice(0, n).every((a) => a != null)) return "solved";
 
-    const dr = deduce(fp, answers, eliminated);
-    if (dr) {
-      applyAction(dr.action, answers, eliminated);
+    const drs = deduce(fp, answers, eliminated);
+    if (drs.length > 0) {
+      for (const dr of drs) applyAction(dr.action, answers, eliminated);
       continue;
     }
 

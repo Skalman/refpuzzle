@@ -390,9 +390,9 @@ function runHintEngine(
   const eliminated: number[] = new Array(n).fill(0);
   for (let step = 0; step < n * 15; step++) {
     if (answers.every((a) => a != null)) return { solved: true, answers };
-    const dr = deduce(fp, answers, eliminated);
-    if (dr) {
-      applyDeduceAction(dr.action, answers, eliminated);
+    const drs = deduce(fp, answers, eliminated);
+    if (drs.length > 0) {
+      for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
       continue;
     }
     const lr = lookahead(fp, answers, eliminated);

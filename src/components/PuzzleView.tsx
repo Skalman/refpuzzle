@@ -504,8 +504,8 @@ export function PuzzleView({
     const errorSteps = findError(answers, eliminated);
     if (errorSteps) return { steps: errorSteps };
 
-    const dr = deduce(fp, answers, eliminated);
-    if (dr) return { steps: explainDeduce(puzzle, fp, answers, eliminated, dr) };
+    const drs = deduce(fp, answers, eliminated);
+    if (drs.length > 0) return { steps: explainDeduce(puzzle, fp, answers, eliminated, drs[0]) };
 
     const t0 = performance.now();
     const lr = lookaheadShortest(fp, answers, eliminated);
