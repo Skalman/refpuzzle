@@ -1269,24 +1269,31 @@ export function deduceWithRule(
         }
       }
 
-      // Force: if claimed letter's max count < every other letter's min count,
-      // claimed must be least common
       if (run("LeastCommonForce")) {
-        let mustBeLeast = true;
-        for (let li = 0; li < 5; li++) {
-          if (li === claimed) continue;
-          if (adjMin[li] <= adjMax[claimed]) {
-            mustBeLeast = false;
-            break;
+        let forceCount = 0;
+        let forceOi = 0;
+        for (let checkOi = 0; checkOi < 5; checkOi++) {
+          if (isElim(eliminated, qi, checkOi)) continue;
+          const checkV = fp.optionValues[qi][checkOi];
+          if (checkV == null || checkV < 0 || checkV >= 5) continue;
+          const checkClaimed = checkV;
+          const checkAdjMin = [...minCount];
+          const checkAdjMax = [...maxCount];
+          checkAdjMin[checkOi]++;
+          checkAdjMax[checkOi]++;
+          const mustBeLeast = [0, 1, 2, 3, 4].every(
+            (li) => li === checkClaimed || checkAdjMin[li] > checkAdjMax[checkClaimed],
+          );
+          if (mustBeLeast) {
+            forceCount++;
+            forceOi = checkOi;
           }
         }
-        if (mustBeLeast) {
-          results.push(
-            res(
-              { type: "force", questionIndex: qi, letter: LETTERS[oi] },
-              "LeastCommonForce",
-            ),
-          );
+        if (forceCount === 1) {
+          results.push(res(
+            { type: "force", questionIndex: qi, letter: LETTERS[forceOi] },
+            "LeastCommonForce",
+          ));
         }
       }
     }

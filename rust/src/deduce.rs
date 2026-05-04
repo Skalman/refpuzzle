@@ -985,7 +985,7 @@ fn deduce_impl(
                 QuestionType::FirstWith { answer } => {
                     let scan_start = 0usize;
                     if run(DeduceRule::FirstClosestAfterOutOfRange) {
-                        if on != NONE_VAL && (on as usize) >= n {
+                        if on != NONE_VAL && ((on as usize) < scan_start || (on as usize) >= n) {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::FirstClosestAfterOutOfRange,
@@ -1406,19 +1406,40 @@ fn deduce_impl(
                     );
                 }
             }
+        }
 
-            if run(DeduceRule::LeastCommonForce) {
+        if run(DeduceRule::LeastCommonForce) {
+            let mut force_count = 0u8;
+            let mut force_oi = 0usize;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let v = fp.option_answers[qi][oi];
+                if v >= 5 {
+                    continue;
+                }
+                let claimed = v as usize;
+                let self_letter = oi;
+                let mut adj_min = min_count;
+                let mut adj_max = max_count;
+                adj_min[self_letter] += 1;
+                adj_max[self_letter] += 1;
                 let must_be_least =
                     (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
                 if must_be_least {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::LeastCommonForce,
-                    );
+                    force_count += 1;
+                    force_oi = oi;
                 }
+            }
+            if force_count == 1 {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: LETTERS[force_oi],
+                    },
+                    DeduceRule::LeastCommonForce,
+                );
             }
         }
     }
@@ -1689,5 +1710,204 @@ mod tests {
             uncovered.len()
         );
         assert_eq!(dry_failed, 0, "{dry_failed} DRY violation(s)");
+    }
+
+    #[test]
+    fn test_deduce_soundness_fuzz() {
+        use crate::gen_common::build_flat_puzzle;
+        use crate::rng::Rng;
+        use crate::solver::solve;
+
+        fn random_question_type(rng: &mut Rng, qi: usize, n: usize) -> QuestionType {
+            match rng.int(0, 23) {
+                0 => QuestionType::CountAnswer {
+                    answer: rng.pick(&LETTERS),
+                },
+                1 => QuestionType::CountAnswerBefore {
+                    answer: rng.pick(&LETTERS),
+                    before_index: rng.int(2, n as i32 - 1) as u8,
+                },
+                2 => QuestionType::CountAnswerAfter {
+                    answer: rng.pick(&LETTERS),
+                    after_index: rng.int(0, n as i32 - 3) as u8,
+                },
+                3 => QuestionType::CountVowel,
+                4 => QuestionType::CountConsonant,
+                5 => QuestionType::MostCommonCount,
+                6 => QuestionType::ClosestAfter {
+                    after_index: rng.int(0, n as i32 - 3) as u8,
+                    answer: rng.pick(&LETTERS),
+                },
+                7 => QuestionType::ClosestBefore {
+                    before_index: rng.int(2, n as i32 - 1) as u8,
+                    answer: rng.pick(&LETTERS),
+                },
+                8 => QuestionType::FirstWith {
+                    answer: rng.pick(&LETTERS),
+                },
+                9 => QuestionType::LastWith {
+                    answer: rng.pick(&LETTERS),
+                },
+                10 if qi >= 2 => QuestionType::PrevSame,
+                11 if qi + 2 < n => QuestionType::NextSame,
+                12 => QuestionType::OnlySame,
+                13 => QuestionType::SameAs,
+                14 => QuestionType::OnlyOdd {
+                    answer: rng.pick(&LETTERS),
+                },
+                15 => QuestionType::OnlyEven {
+                    answer: rng.pick(&LETTERS),
+                },
+                16 => QuestionType::ConsecIdent,
+                17 => {
+                    let q = rng.int(0, n as i32 - 1) as u8;
+                    if q as usize == qi {
+                        QuestionType::AnswerIsSelf
+                    } else {
+                        QuestionType::AnswerOf { question_index: q }
+                    }
+                }
+                18 => QuestionType::LeastCommon,
+                19 => QuestionType::MostCommon,
+                20 => QuestionType::Unique,
+                21 => QuestionType::EqualCount {
+                    answer: rng.pick(&LETTERS),
+                },
+                22 => QuestionType::AnswerIsSelf,
+                23 => {
+                    let q = rng.int(0, n as i32 - 1) as u8;
+                    if q as usize == qi {
+                        QuestionType::AnswerIsSelf
+                    } else {
+                        QuestionType::LetterDist { question_index: q }
+                    }
+                }
+                _ => QuestionType::AnswerIsSelf,
+            }
+        }
+
+        let mut failures = 0;
+        let mut puzzles_tested = 0;
+
+        for seed in 0..5000u32 {
+            let mut rng = Rng::new(seed.wrapping_mul(7919).wrapping_add(42));
+            let n = rng.int(4, 8) as usize;
+
+            let solution: [Answer; MAX_N] =
+                std::array::from_fn(|i| if i < n { rng.pick(&LETTERS) } else { Answer::A });
+
+            let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
+            for qi in 0..n {
+                question_types[qi] = random_question_type(&mut rng, qi, n);
+            }
+
+            let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                build_flat_puzzle(&question_types, &solution, n, &mut Rng::new(seed))
+            }));
+            let Ok(Some(fp)) = fp else { continue };
+
+            let solutions = solve(&fp, None, 2);
+            if solutions.len() != 1 {
+                continue;
+            }
+            let solution = solutions[0];
+
+            // Verify construction correctness: each question's correct option must be valid
+            let opt_sol = crate::gen_common::to_optional(&solution, n);
+            let mut valid = true;
+            for qi in 0..n {
+                if crate::check_validity::check_question_against_solution(
+                    &fp,
+                    qi,
+                    solution[qi],
+                    &opt_sol,
+                ) == false
+                {
+                    valid = false;
+                    break;
+                }
+            }
+            if !valid {
+                continue;
+            }
+
+            puzzles_tested += 1;
+
+            for state_seed in 0..20u32 {
+                let mut rng = Rng::new(seed.wrapping_mul(1000).wrapping_add(state_seed));
+                let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+                let mut eliminated = [0u8; MAX_N];
+
+                for qi in 0..n {
+                    let r = rng.int(0, 4);
+                    if r == 0 {
+                        answers[qi] = Some(solution[qi]);
+                        eliminated[qi] = 0b11111 ^ (1 << solution[qi].idx());
+                    } else if r <= 2 {
+                        let count = rng.int(1, 3) as usize;
+                        for _ in 0..count {
+                            let oi = rng.int(0, 4) as usize;
+                            if LETTERS[oi] != solution[qi] {
+                                eliminated[qi] |= 1 << oi;
+                            }
+                        }
+                    }
+                }
+
+                let drs = deduce(&fp, &answers, &eliminated);
+                for dr in &drs {
+                    let bad = match dr.action {
+                        DeduceAction::Force { qi, answer } => answer != solution[qi],
+                        DeduceAction::Eliminate { qi, oi } => LETTERS[oi] == solution[qi],
+                        DeduceAction::EliminateMulti {
+                            question_mask,
+                            option_mask,
+                        } => (0..n).any(|qi| {
+                            (question_mask >> qi) & 1 == 1
+                                && (option_mask >> solution[qi].idx()) & 1 == 1
+                        }),
+                    };
+                    if bad {
+                        failures += 1;
+                        if failures <= 3 {
+                            eprintln!(
+                                "SOUNDNESS FAIL seed={} state_seed={} rule={}: {:?}",
+                                seed,
+                                state_seed,
+                                dr.rule.to_str(),
+                                dr.action
+                            );
+                            eprintln!(
+                                "  solution: {:?}",
+                                &solution[..n]
+                                    .iter()
+                                    .map(|a| a.as_char())
+                                    .collect::<Vec<_>>()
+                            );
+                            eprintln!("  answers:  {:?}", &answers[..n]);
+                            eprintln!(
+                                "  elim:     {:?}",
+                                &eliminated[..n]
+                                    .iter()
+                                    .map(|e| format!("{:05b}", e))
+                                    .collect::<Vec<_>>()
+                            );
+                            for qi in 0..n {
+                                eprintln!(
+                                    "  Q{}: {:?} opts={:?} ans={:?}",
+                                    qi + 1,
+                                    fp.question_types[qi],
+                                    &fp.option_nums[qi],
+                                    &fp.option_answers[qi]
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        eprintln!("Fuzz: {puzzles_tested} puzzles tested, {failures} soundness failures");
+        assert_eq!(failures, 0, "{failures} soundness failure(s)");
     }
 }

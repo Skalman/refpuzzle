@@ -88,6 +88,9 @@ fn first_in_range(
     let amask = 1u8 << answer.idx();
     if pos != NONE_VAL {
         let p = pos as usize;
+        if p < start || p >= end {
+            return Validity::Invalid;
+        }
         if let Some(pa) = answers[p] {
             if pa != answer {
                 return Validity::Invalid;
@@ -136,6 +139,9 @@ fn last_in_range(
     let amask = 1u8 << answer.idx();
     if pos != NONE_VAL {
         let p = pos as usize;
+        if p < start || p >= end {
+            return Validity::Invalid;
+        }
         if let Some(pa) = answers[p] {
             if pa != answer {
                 return Validity::Invalid;
@@ -313,7 +319,7 @@ pub fn check_answer_validity(
         },
 
         QuestionType::SameAs => {
-            if on < 0 || on as usize >= n {
+            if on < 0 || on as usize >= n || on as usize == qi {
                 return Validity::Invalid;
             }
             match answers[on as usize] {
@@ -624,7 +630,7 @@ pub fn check_answer_validity(
             match *r {
                 QuestionType::LeastCommon => {
                     let min = c.iter().copied().min().unwrap_or(0);
-                    if c[claimed] == min {
+                    if c[claimed] == min && c.iter().filter(|&&x| x == min).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -632,7 +638,7 @@ pub fn check_answer_validity(
                 }
                 QuestionType::MostCommon => {
                     let max = c.iter().copied().max().unwrap_or(0);
-                    if c[claimed] == max {
+                    if c[claimed] == max && c.iter().filter(|&&x| x == max).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid

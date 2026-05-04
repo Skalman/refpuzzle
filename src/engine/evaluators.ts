@@ -193,7 +193,7 @@ export function checkQuestionAgainstSolution(
       const c = fillCounts(answers);
       let min = c[0];
       for (let i = 1; i < 5; i++) if (c[i] < min) min = c[i];
-      return c[v] === min;
+      return c[v] === min && c.filter((x) => x === min).length === 1;
     }
 
     case RT_MOST_COMMON: {
@@ -201,7 +201,7 @@ export function checkQuestionAgainstSolution(
       const c = fillCounts(answers);
       let max = c[0];
       for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
-      return c[v] === max;
+      return c[v] === max && c.filter((x) => x === max).length === 1;
     }
 
     case RT_UNIQUE:

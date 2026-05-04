@@ -83,6 +83,7 @@ function firstInRange(
 ): Validity {
   const amask = 1 << letterIdx(answer);
   if (pos != null) {
+    if (pos < start || pos >= end) return "invalid";
     if (answers[pos] != null && answers[pos] !== answer) return "invalid";
     let allCertain = true;
     for (let j = start; j < pos; j++) {
@@ -111,6 +112,7 @@ function lastInRange(
 ): Validity {
   const amask = 1 << letterIdx(answer);
   if (pos != null) {
+    if (pos < start || pos >= end) return "invalid";
     if (answers[pos] != null && answers[pos] !== answer) return "invalid";
     let allCertain = true;
     for (let j = pos + 1; j < end; j++) {
@@ -207,7 +209,7 @@ export function checkAnswerValidity(
   }
 
   if (r.t === RT_SAME_AS) {
-    if (v == null || v < 0 || v >= n) return "invalid";
+    if (v == null || v < 0 || v >= n || v === qi) return "invalid";
     const ta = answers[v];
     if (ta == null) return "pending";
     return ta === a ? "valid" : "invalid";
@@ -410,10 +412,14 @@ export function checkAnswerValidity(
     for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
     if (r.t === RT_LEAST_COMMON) {
       const min = Math.min(...counts);
-      return counts[v] === min ? "valid" : "invalid";
+      return counts[v] === min && counts.filter((c) => c === min).length === 1
+        ? "valid"
+        : "invalid";
     } else {
       const max = Math.max(...counts);
-      return counts[v] === max ? "valid" : "invalid";
+      return counts[v] === max && counts.filter((c) => c === max).length === 1
+        ? "valid"
+        : "invalid";
     }
   }
 

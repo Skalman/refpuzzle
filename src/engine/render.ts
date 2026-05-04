@@ -30,7 +30,7 @@ export function renderQuestionText(qt: QuestionTypeDef): string {
     case "only_same_answer":
       return "Which is the only other question with the same answer as this one?";
     case "same_answer_as":
-      return "Which question has the same answer as this one?";
+      return "Which other question has the same answer as this one?";
     case "only_odd_with_answer":
       return `Which is the only odd-numbered question with answer ${qt.answer}?`;
     case "only_even_with_answer":
