@@ -1661,6 +1661,28 @@
       "state": ["b", "A", "A", "C", "C", "D", "E"],
       "expect": "1A"
     },
+    {
+      "name": "LeastCommonForce unsound: both Q10=A and Q10=E self-consistent",
+      "rule": "LeastCommonForce",
+      "puzzle": {
+        "q": [
+          { "t": { "q": 8, "t": "AnswerOf" }, "o": [0, 2, 1, 4, 3] },
+          { "t": { "a": 2, "t": "OnlyOdd" }, "o": [10, 6, 2, 8, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [0, null, 1, 6, 4] },
+          { "t": { "t": "TrueStmt" }, "c": [{ "a": 0, "q": 0, "t": "CountAnswerAfter", "v": 3 }, { "q": 1, "t": "AnswerOf", "v": 0 }, { "t": "MostCommon", "v": 4 }, { "t": "CountConsonant", "v": 9 }, { "q": 6, "t": "AnswerOf", "v": 0 }] },
+          { "t": { "a": 4, "q": 9, "t": "ClosestBefore" }, "o": [6, 8, 3, 7, 1] },
+          { "t": { "a": 1, "t": "LastWith" }, "o": [11, 0, 10, 6, 8] },
+          { "t": { "q": 0, "t": "AnswerOf" }, "o": [0, 3, 1, 4, 2] },
+          { "t": { "t": "CountVowel" }, "o": [3, 1, 5, 8, 12] },
+          { "t": { "t": "CountConsonant" }, "o": [1, 3, 2, 0, 9] },
+          { "t": { "t": "LeastCommon" }, "o": [4, 2, 3, 1, 0] },
+          { "t": { "q": 6, "t": "AnswerOf" }, "o": [4, 2, 0, 1, 3] },
+          { "t": { "a": 0, "q": 5, "t": "ClosestBefore" }, "o": [4, 2, null, 1, 0] }
+        ]
+      },
+      "state": ["D", "C", "ade", "a", "B", "D", "B", "A", "E", "b", "D", "C"],
+      "expect": null
+    },
     { "section": "=== MostCommon ===" },
     {
       "name": "MostCommon: claimed letter's max < another letter's min → eliminate",
