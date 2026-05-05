@@ -41,11 +41,12 @@ function isSectionHeader(
 const suite: TestSuite = JSON.parse(readFileSync("tests/deduce.json", "utf8"));
 
 function parsePuzzle(compact: CompactPuzzle): Puzzle {
-  const wrapped: Record<string, Record<string, typeof compact>> = {
-    "0101": { "level-1": compact },
+  const wrapped = {
+    "0101": { "1": compact },
   };
-  const parsed = parseCompactYear(wrapped);
-  return parsed["0101"]["level-1"];
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const parsed = parseCompactYear(wrapped as Parameters<typeof parseCompactYear>[0]);
+  return parsed["0101"]["1"];
 }
 
 function isUpperAnswer(ch: string): ch is AnswerLetter {
