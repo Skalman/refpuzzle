@@ -96,6 +96,8 @@ deduce_rules! {
     MostCommonElim,
     MostCommonForce,
     ConsecIdentReverse,
+    TrueStatementSelfRef,
+    TrueStatementClaimInvalid,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1602,6 +1604,155 @@ fn deduce_impl(
                             DeduceRule::ConsecIdentReverse,
                         );
                     }
+                }
+            }
+        }
+    }
+
+    // ── TrueStatement self-reference: claim contradicts the option's own letter ──
+    if run(DeduceRule::TrueStatementSelfRef) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
+                continue;
+            }
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let claim = &fp.option_claims[qi][oi];
+                let contradicts = match *claim {
+                    Claim::FirstWith {
+                        value,
+                        question_index,
+                    }
+                    | Claim::LastWith {
+                        value,
+                        question_index,
+                    } => question_index as usize == qi && value != LETTERS[oi],
+                    Claim::AnswerOf {
+                        question_index,
+                        value,
+                    } => question_index as usize == qi && value != LETTERS[oi],
+                    _ => false,
+                };
+                if contradicts {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::TrueStatementSelfRef,
+                    );
+                }
+            }
+        }
+    }
+
+    // ── TrueStatement claim invalid: claim contradicts known answers ──
+    if run(DeduceRule::TrueStatementClaimInvalid) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
+                continue;
+            }
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let claim = &fp.option_claims[qi][oi];
+                let invalid = match *claim {
+                    Claim::FirstWith {
+                        value,
+                        question_index,
+                    }
+                    | Claim::LastWith {
+                        value,
+                        question_index,
+                    } => {
+                        let tqi = question_index as usize;
+                        tqi < n && answers[tqi].is_some() && answers[tqi].unwrap() != value
+                    }
+                    Claim::AnswerOf {
+                        question_index,
+                        value,
+                    } => {
+                        let tqi = question_index as usize;
+                        tqi < n && answers[tqi].is_some() && answers[tqi].unwrap() != value
+                    }
+                    Claim::CountAnswer { answer, value } => {
+                        let cr =
+                            count_matching(answers, eliminated, CountPred::IsAnswer(answer), 0, n);
+                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                    }
+                    Claim::CountVowel { value } => {
+                        let cr = count_matching(answers, eliminated, CountPred::IsVowel, 0, n);
+                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                    }
+                    Claim::CountConsonant { value } => {
+                        let cr = count_matching(answers, eliminated, CountPred::IsConsonant, 0, n);
+                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                    }
+                    Claim::CountAnswerAfter {
+                        answer,
+                        after_index,
+                        value,
+                    } => {
+                        let cr = count_matching(
+                            answers,
+                            eliminated,
+                            CountPred::IsAnswer(answer),
+                            after_index as usize + 1,
+                            n,
+                        );
+                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                    }
+                    Claim::CountAnswerBefore {
+                        answer,
+                        before_index,
+                        value,
+                    } => {
+                        let cr = count_matching(
+                            answers,
+                            eliminated,
+                            CountPred::IsAnswer(answer),
+                            0,
+                            before_index as usize,
+                        );
+                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                    }
+                    Claim::MostCommon { value } => {
+                        let mut max_possible = 0i16;
+                        for li in 0..5usize {
+                            if LETTERS[li] == value {
+                                continue;
+                            }
+                            let mut c = 0i16;
+                            for j in 0..n {
+                                if let Some(a) = answers[j] {
+                                    if a.idx() == li {
+                                        c += 1;
+                                    }
+                                }
+                            }
+                            if c > max_possible {
+                                max_possible = c;
+                            }
+                        }
+                        let mut claimed_max = 0i16;
+                        for j in 0..n {
+                            if let Some(a) = answers[j] {
+                                if a == value {
+                                    claimed_max += 1;
+                                }
+                            } else if !is_elim(eliminated, j, value.idx()) {
+                                claimed_max += 1;
+                            }
+                        }
+                        claimed_max < max_possible
+                    }
+                    Claim::None => false,
+                };
+                if invalid {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::TrueStatementClaimInvalid,
+                    );
                 }
             }
         }

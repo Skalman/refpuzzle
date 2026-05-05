@@ -1871,6 +1871,46 @@
       },
       "state": ["", "", "ade", "", "B", "", ""],
       "expect": "4b"
+    },
+    { "section": "=== TrueStatementSelfRef ===" },
+    {
+      "name": "TrueStatementSelfRef: FirstWith claims self has answer A, but option is C",
+      "rule": "TrueStatementSelfRef",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "TrueStmt" }, "c": [
+            { "a": 0, "t": "CountAnswer", "v": 1 },
+            { "a": 0, "t": "CountAnswer", "v": 2 },
+            { "a": 0, "t": "FirstWith", "v": 2 },
+            { "a": 0, "t": "CountAnswer", "v": 0 },
+            { "t": "CountVowel", "v": 1 }
+          ]}
+        ]
+      },
+      "state": ["", "", ""],
+      "expect": "3c"
+    },
+    { "section": "=== TrueStatementClaimInvalid ===" },
+    {
+      "name": "TrueStatementClaimInvalid: FirstWith claims Q2 has answer A, but Q2=C",
+      "rule": "TrueStatementClaimInvalid",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "TrueStmt" }, "c": [
+            { "a": 0, "t": "FirstWith", "v": 1 },
+            { "a": 0, "t": "CountAnswer", "v": 1 },
+            { "a": 0, "t": "CountAnswer", "v": 2 },
+            { "a": 0, "t": "CountAnswer", "v": 0 },
+            { "t": "CountVowel", "v": 1 }
+          ]},
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "C", ""],
+      "expect": "1a"
     }
   ]
 }

@@ -146,7 +146,15 @@ fn try_solve_from(
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            return (true, answers, eliminated);
+            let valid = (0..n).all(|i| {
+                crate::check_validity::check_question_against_solution(
+                    fp,
+                    i,
+                    answers[i].unwrap(),
+                    &answers,
+                )
+            });
+            return (valid, answers, eliminated);
         }
 
         stats.deduce_calls += 1;

@@ -430,6 +430,42 @@ function explainElimination(
     return steps;
   }
 
+  if (rule === "TrueStatementClaimInvalid") {
+    const claim = fp.optionClaims[qi][oi];
+    if (claim && (claim.type === "FirstWith" || claim.type === "LastWith") && claim.value < n && answers[claim.value] != null) {
+      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.value)}.`));
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(claim.value)} has answer ${claim.answer}, but ${Q(claim.value)} is ${answers[claim.value]}.`));
+      return steps;
+    }
+    if (claim && claim.type === "AnswerOf" && claim.questionIndex < n && answers[claim.questionIndex] != null) {
+      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.questionIndex)}.`));
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(claim.questionIndex)}'s answer is ${LETTERS[claim.value]}, but ${Q(claim.questionIndex)} is ${answers[claim.questionIndex]}.`));
+      return steps;
+    }
+    steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+    steps.push(simple(`${Q(qi)} option ${letter}'s statement is contradicted by the current answers.`));
+    return steps;
+  }
+
+  if (rule === "TrueStatementSelfRef") {
+    const claim = fp.optionClaims[qi][oi];
+    if (claim && (claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(qi)} has answer ${claim.answer}, but that contradicts ${Q(qi)} being ${letter}.`));
+      return steps;
+    }
+    if (claim && claim.type === "AnswerOf" && claim.questionIndex === qi) {
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(qi)}'s answer is ${LETTERS[claim.value]}, but that contradicts ${Q(qi)} being ${letter}.`));
+      return steps;
+    }
+    steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+    steps.push(simple(`${Q(qi)} option ${letter}'s statement contradicts itself.`));
+    return steps;
+  }
+
   if (rule === "ConsecIdentReverse") {
     for (let src = 0; src < n; src++) {
       if (fp.questions[src].t !== RT_CONSEC_IDENT) continue;

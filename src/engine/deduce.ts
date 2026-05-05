@@ -88,6 +88,8 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "MostCommonElim",
   "MostCommonForce",
   "ConsecIdentReverse",
+  "TrueStatementSelfRef",
+  "TrueStatementClaimInvalid",
 ] as const;
 export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] = ALL_DEDUCE_RULES_INTERNAL;
@@ -1334,6 +1336,89 @@ export function deduceWithRule(
           const oi = letterIdx(answers[j + 1]!);
           if (!isElim(eliminated, j, oi))
             results.push(res({ type: "eliminate", questionIndex: j, optionIndex: oi }, "ConsecIdentReverse"));
+        }
+      }
+    }
+  }
+
+  // TrueStatement self-reference: claim contradicts the option's own letter
+  if (run("TrueStatementSelfRef")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== RT_TRUE_STMT) continue;
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const claim = fp.optionClaims[qi][oi];
+        if (!claim) continue;
+        let contradicts = false;
+        if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi && claim.answer !== LETTERS[oi]) {
+          contradicts = true;
+        }
+        if (claim.type === "AnswerOf" && claim.questionIndex === qi && LETTERS[claim.value] !== LETTERS[oi]) {
+          contradicts = true;
+        }
+        if (contradicts) {
+          results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "TrueStatementSelfRef"));
+        }
+      }
+    }
+  }
+
+  function countAnswersForDeduce(ans: (AnswerLetter | null)[], elim: number[], pred: Pred, from: number, to: number) {
+    let count = 0, remaining = 0;
+    for (let i = from; i < to; i++) {
+      if (ans[i] != null) { if (pred(ans[i]!)) count++; }
+      else { for (let b = 0; b < 5; b++) { if (!(elim[i] & (1 << b)) && pred(LETTERS[b])) { remaining++; break; } } }
+    }
+    return { count, remaining };
+  }
+
+  // TrueStatement claim invalid: claim contradicts known answers
+  if (run("TrueStatementClaimInvalid")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== RT_TRUE_STMT) continue;
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const claim = fp.optionClaims[qi][oi];
+        if (!claim) continue;
+        let invalid = false;
+        if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value < n) {
+          const tqi = claim.value;
+          if (answers[tqi] != null && answers[tqi] !== claim.answer) invalid = true;
+        }
+        if (claim.type === "AnswerOf" && claim.questionIndex < n) {
+          if (answers[claim.questionIndex] != null && letterIdx(answers[claim.questionIndex]!) !== claim.value) invalid = true;
+        }
+        if (claim.type === "CountAnswer" || claim.type === "CountVowel" || claim.type === "CountConsonant" || claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore") {
+          const pred: Pred | null =
+            claim.type === "CountAnswer" ? (a) => a === claim.answer :
+            claim.type === "CountVowel" ? (a) => VOWELS.has(a) :
+            claim.type === "CountConsonant" ? (a) => !VOWELS.has(a) :
+            (claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore") ? (a) => a === claim.answer : null;
+          if (pred) {
+            const from = claim.type === "CountAnswerAfter" ? claim.afterIndex + 1 : 0;
+            const to = claim.type === "CountAnswerBefore" ? claim.beforeIndex : n;
+            const cr = countAnswersForDeduce(answers, eliminated, pred, from, to);
+            if (cr.count > claim.value || cr.count + cr.remaining < claim.value) invalid = true;
+          }
+        }
+        if (claim.type === "MostCommon") {
+          const claimedLetter = LETTERS[claim.value];
+          let maxOther = 0;
+          for (let li = 0; li < 5; li++) {
+            if (li === claim.value) continue;
+            let c = 0;
+            for (let j = 0; j < n; j++) if (answers[j] === LETTERS[li]) c++;
+            if (c > maxOther) maxOther = c;
+          }
+          let claimedMax = 0;
+          for (let j = 0; j < n; j++) {
+            if (answers[j] === claimedLetter) claimedMax++;
+            else if (answers[j] == null && !isElim(eliminated, j, claim.value)) claimedMax++;
+          }
+          if (claimedMax < maxOther) invalid = true;
+        }
+        if (invalid) {
+          results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "TrueStatementClaimInvalid"));
         }
       }
     }
