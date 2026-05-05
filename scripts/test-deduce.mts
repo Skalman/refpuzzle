@@ -139,8 +139,8 @@ function isRealRule(rule: DeduceRule | "All" | null): rule is DeduceRule {
 function hasGenericFallback(steps: ExplainStep[]): boolean {
   for (const step of steps) {
     if (step.type === "simple") {
-      if (/^Q\d+ can't be [A-E]\.$/.test(step.text)) return true;
-      if (/^Q\d+ options? [A-E, ]+ can be ruled out\.$/.test(step.text))
+      if (/^#\d+ can't be [A-E]\.$/.test(step.text)) return true;
+      if (/^#\d+ options? [A-E, ]+ can be ruled out\.$/.test(step.text))
         return true;
     }
   }

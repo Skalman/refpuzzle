@@ -57,15 +57,15 @@ function describeDiff(prev: QuestionState[], next: QuestionState[]): MoveInfo {
       let text: string;
       let icon: string;
       if (n === "correct") {
-        text = `Q${qi + 1}=${letter}`;
+        text = `#${qi + 1}=${letter}`;
         icon = "ok";
         priority = 2;
       } else if (n === "incorrect") {
-        text = `Q${qi + 1} ${letter}`;
+        text = `#${qi + 1} ${letter}`;
         icon = "no";
         priority = 1;
       } else {
-        text = `Q${qi + 1} ${letter}`;
+        text = `#${qi + 1} ${letter}`;
         icon = "un";
         priority = 0;
       }
@@ -479,15 +479,15 @@ export function PuzzleView({
       if (answers[qi] != null && answers[qi] !== correct) {
         return [
           { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in Q${qi + 1}.` },
-          { type: "simple", text: `Q${qi + 1} is not ${answers[qi]} — try a different answer.` },
+          { type: "simple", text: `You made an error in #${qi + 1}.` },
+          { type: "simple", text: `#${qi + 1} is not ${answers[qi]} — try a different answer.` },
         ];
       }
       if ((eliminated[qi] >> correctOi) & 1) {
         return [
           { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in Q${qi + 1}.` },
-          { type: "simple", text: `You incorrectly eliminated Q${qi + 1} option ${correct}.` },
+          { type: "simple", text: `You made an error in #${qi + 1}.` },
+          { type: "simple", text: `You incorrectly eliminated #${qi + 1} option ${correct}.` },
         ];
       }
     }

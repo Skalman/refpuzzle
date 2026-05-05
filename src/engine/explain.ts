@@ -46,7 +46,7 @@ import type { LookaheadResult } from "./lookahead.ts";
 // ── Formatting helpers ──
 
 function Q(i: number): string {
-  return `Q${i + 1}`;
+  return `#${i + 1}`;
 }
 
 type Pred = (a: AnswerLetter) => boolean;
@@ -803,13 +803,13 @@ function explainElimDetail(
 
   if (q.t === RT_CONSEC_IDENT) {
     if (v != null && v + 1 >= n)
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`);
+      return d(`${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)}, but that's out of range.`);
     if (v != null && v + 1 < n) {
       if (v === qi || v + 1 === qi) {
         const partner = v === qi ? v + 1 : v;
         if (isElim(eliminated, partner, oi))
           return d(
-            `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but ${letter} is ruled out for ${Q(partner)} so they can't match.`,
+            `${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)} are the consecutive pair, but ${letter} is ruled out for ${Q(partner)} so they can't match.`,
             partner,
           );
       }
@@ -817,7 +817,7 @@ function explainElimDetail(
       const possB = ~eliminated[v + 1] & 0b11111;
       if ((possA & possB) === 0)
         return d(
-          `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but they share no possible answer.`,
+          `${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)} are the consecutive pair, but they share no possible answer.`,
           v,
         );
     } else if (v == null) {
