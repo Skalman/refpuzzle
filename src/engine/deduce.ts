@@ -87,6 +87,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "OnlyOddEvenRangeElim",
   "MostCommonElim",
   "MostCommonForce",
+  "ConsecIdentReverse",
 ] as const;
 export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] = ALL_DEDUCE_RULES_INTERNAL;
@@ -1306,6 +1307,33 @@ export function deduceWithRule(
               ),
             );
           }
+        }
+      }
+    }
+  }
+
+  // ConsecIdent reverse: eliminate matching neighbors for impossible pairs
+  if (run("ConsecIdentReverse")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== RT_CONSEC_IDENT) continue;
+      let possiblePairs = 0;
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const v = fp.optionValues[qi][oi];
+        if (v == null) continue;
+        if (v + 1 < n) possiblePairs |= 1 << v;
+      }
+      for (let j = 0; j < n - 1; j++) {
+        if (possiblePairs & (1 << j)) continue;
+        if (answers[j] != null && answers[j + 1] == null) {
+          const oi = letterIdx(answers[j]!);
+          if (!isElim(eliminated, j + 1, oi))
+            results.push(res({ type: "eliminate", questionIndex: j + 1, optionIndex: oi }, "ConsecIdentReverse"));
+        }
+        if (answers[j + 1] != null && answers[j] == null) {
+          const oi = letterIdx(answers[j + 1]!);
+          if (!isElim(eliminated, j, oi))
+            results.push(res({ type: "eliminate", questionIndex: j, optionIndex: oi }, "ConsecIdentReverse"));
         }
       }
     }

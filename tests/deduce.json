@@ -1853,6 +1853,24 @@
       },
       "state": ["C", "A", "", ""],
       "expect": "3a"
+    },
+    { "section": "=== ConsecIdentReverse ===" },
+    {
+      "name": "ConsecIdentReverse: only pairs 1-2 and 2-3 possible, Q5=B → eliminate Q4 B",
+      "rule": "ConsecIdentReverse",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "", "ade", "", "B", "", ""],
+      "expect": "4b"
     }
   ]
 }

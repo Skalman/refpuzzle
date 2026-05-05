@@ -95,6 +95,7 @@ deduce_rules! {
     OnlyOddEvenRangeElim,
     MostCommonElim,
     MostCommonForce,
+    ConsecIdentReverse,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1555,6 +1556,53 @@ fn deduce_impl(
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    // ── ConsecIdent reverse: eliminate matching neighbors for impossible pairs ──
+    if run(DeduceRule::ConsecIdentReverse) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::ConsecIdent) {
+                continue;
+            }
+            let mut possible_pairs = 0u16;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let v = fp.option_nums[qi][oi];
+                if v == NONE_VAL {
+                    continue;
+                }
+                let pos = v as usize;
+                if pos + 1 < n {
+                    possible_pairs |= 1 << pos;
+                }
+            }
+            for j in 0..n.saturating_sub(1) {
+                if possible_pairs & (1 << j) != 0 {
+                    continue;
+                }
+                if let Some(a) = answers[j] {
+                    if answers[j + 1].is_none() && !is_elim(eliminated, j + 1, a.idx()) {
+                        push(
+                            DeduceAction::Eliminate {
+                                qi: j + 1,
+                                oi: a.idx(),
+                            },
+                            DeduceRule::ConsecIdentReverse,
+                        );
+                    }
+                }
+                if let Some(b) = answers[j + 1] {
+                    if answers[j].is_none() && !is_elim(eliminated, j, b.idx()) {
+                        push(
+                            DeduceAction::Eliminate { qi: j, oi: b.idx() },
+                            DeduceRule::ConsecIdentReverse,
+                        );
+                    }
+                }
             }
         }
     }
