@@ -69,8 +69,8 @@ fn count_validity(cr: CountResult, value: i16) -> Validity {
     }
 }
 
-fn count_range(r: &QuestionType, n: usize) -> (usize, usize) {
-    match *r {
+fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
+    match *t {
         QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
         QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
         _ => (0, n),
@@ -221,11 +221,11 @@ pub fn check_answer_validity(
         None => return Validity::Pending,
     };
     let ai = a.idx();
-    let r = &fp.question_types[qi];
+    let t = &fp.question_types[qi];
     let on = fp.option_nums[qi][ai];
     let n = fp.n;
 
-    match *r {
+    match *t {
         // ── Counting ──
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
@@ -233,7 +233,7 @@ pub fn check_answer_validity(
             if on == NAN_VAL {
                 return Validity::Pending;
             }
-            let (from, to) = count_range(r, n);
+            let (from, to) = count_range(t, n);
             let cr = count_matching(answers, eliminated, Pred::IsAnswer(answer), from, to);
             count_validity(cr, on)
         }
@@ -495,7 +495,7 @@ pub fn check_answer_validity(
 
         // ── Only odd / only even ──
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-            let parity = match *r {
+            let parity = match *t {
                 QuestionType::OnlyOdd { .. } => 1,
                 _ => 0,
             };
@@ -627,7 +627,7 @@ pub fn check_answer_validity(
                 return Validity::Invalid;
             }
             let c = fill_counts(answers, n);
-            match *r {
+            match *t {
                 QuestionType::LeastCommon => {
                     let min = c.iter().copied().min().unwrap_or(0);
                     if c[claimed] == min && c.iter().filter(|&&x| x == min).count() == 1 {

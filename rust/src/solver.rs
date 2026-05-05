@@ -232,17 +232,17 @@ fn check_rule(
     assigned: u16,
     range_masks: &[u16; MAX_N],
 ) -> bool {
-    let r = &fp.question_types[i];
+    let t = &fp.question_types[i];
     let answer_i = answers[i].unwrap();
 
-    if (all_answered || can_fully_evaluate_local(r, assigned, range_masks, i))
+    if (all_answered || can_fully_evaluate_local(t, assigned, range_masks, i))
         && !check_question_against_solution(fp, i, answer_i, answers)
     {
         return true;
     }
 
     // Forward checking for counting types
-    match *r {
+    match *t {
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
@@ -251,7 +251,7 @@ fn check_rule(
                 return false;
             }
 
-            let (range_start, range_end) = match *r {
+            let (range_start, range_end) = match *t {
                 QuestionType::CountAnswer { .. } => (0, n),
                 QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
                 QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
@@ -276,7 +276,7 @@ fn check_rule(
             if opt_val == NAN_VAL {
                 return false;
             }
-            let is_vowel = matches!(*r, QuestionType::CountVowel);
+            let is_vowel = matches!(*t, QuestionType::CountVowel);
             let mut count: i16 = 0;
             let mut remaining: i16 = 0;
             for j in 0..n {
@@ -299,12 +299,12 @@ fn check_rule(
 }
 
 fn can_fully_evaluate_local(
-    r: &QuestionType,
+    t: &QuestionType,
     assigned: u16,
     range_masks: &[u16; MAX_N],
     qi: usize,
 ) -> bool {
-    match *r {
+    match *t {
         QuestionType::AnswerIsSelf => true,
         QuestionType::PrevSame => {
             let mut mask = 0u16;

@@ -1,7 +1,16 @@
 export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
+export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>([
+  "A",
+  "E",
+]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
-export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
+export type Marks = [
+  OptionMark,
+  OptionMark,
+  OptionMark,
+  OptionMark,
+  OptionMark,
+];
 
 export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
@@ -20,7 +29,7 @@ export function letterIdx(s: string): number {
 export interface Puzzle {
   id: string;
   title: string;
-  difficulty: 1 | 2 | 3 | 4 | 5;
+  difficulty: string; // "1" | "2" | "3" | "4" | "5"
   questions: QuestionDef[];
 }
 
@@ -41,61 +50,61 @@ export interface StatementOption {
 }
 
 export type Claim =
-  | { type: "count_answer"; answer: AnswerLetter; value: number }
-  | { type: "count_consonant_answers"; value: number }
-  | { type: "count_vowel_answers"; value: number }
+  | { type: "CountAnswer"; answer: AnswerLetter; value: number }
+  | { type: "CountConsonant"; value: number }
+  | { type: "CountVowel"; value: number }
   | {
-      type: "count_answer_after";
+      type: "CountAnswerAfter";
       answer: AnswerLetter;
       afterIndex: number;
       value: number;
     }
   | {
-      type: "count_answer_before";
+      type: "CountAnswerBefore";
       answer: AnswerLetter;
       beforeIndex: number;
       value: number;
     }
-  | { type: "answer_of_question"; questionIndex: number; value: number }
-  | { type: "first_with_answer"; answer: AnswerLetter; value: number }
-  | { type: "last_with_answer"; answer: AnswerLetter; value: number }
-  | { type: "most_common_answer"; value: number };
+  | { type: "AnswerOf"; questionIndex: number; value: number }
+  | { type: "FirstWith"; answer: AnswerLetter; value: number }
+  | { type: "LastWith"; answer: AnswerLetter; value: number }
+  | { type: "MostCommon"; value: number };
 
 export type QuestionTypeDef =
   // ── Counting ──
-  | { type: "count_answer"; answer: AnswerLetter }
-  | { type: "count_answer_before"; answer: AnswerLetter; beforeIndex: number }
-  | { type: "count_answer_after"; answer: AnswerLetter; afterIndex: number }
-  | { type: "count_vowel_answers" }
-  | { type: "count_consonant_answers" }
-  | { type: "most_common_count" }
+  | { type: "CountAnswer"; answer: AnswerLetter }
+  | { type: "CountAnswerBefore"; answer: AnswerLetter; beforeIndex: number }
+  | { type: "CountAnswerAfter"; answer: AnswerLetter; afterIndex: number }
+  | { type: "CountVowel" }
+  | { type: "CountConsonant" }
+  | { type: "MostCommonCount" }
 
   // ── Positional ──
-  | { type: "closest_after"; afterIndex: number; answer: AnswerLetter }
-  | { type: "closest_before"; beforeIndex: number; answer: AnswerLetter }
-  | { type: "first_with_answer"; answer: AnswerLetter }
-  | { type: "last_with_answer"; answer: AnswerLetter }
-  | { type: "previous_same_answer" }
-  | { type: "next_same_answer" }
-  | { type: "only_same_answer" }
-  | { type: "same_answer_as" }
-  | { type: "only_odd_with_answer"; answer: AnswerLetter }
-  | { type: "only_even_with_answer"; answer: AnswerLetter }
-  | { type: "consecutive_identical" }
+  | { type: "ClosestAfter"; afterIndex: number; answer: AnswerLetter }
+  | { type: "ClosestBefore"; beforeIndex: number; answer: AnswerLetter }
+  | { type: "FirstWith"; answer: AnswerLetter }
+  | { type: "LastWith"; answer: AnswerLetter }
+  | { type: "PrevSame" }
+  | { type: "NextSame" }
+  | { type: "OnlySame" }
+  | { type: "SameAs" }
+  | { type: "OnlyOdd"; answer: AnswerLetter }
+  | { type: "OnlyEven"; answer: AnswerLetter }
+  | { type: "ConsecIdent" }
 
   // ── Constrained (options always A-E, answer determined by solution) ──
-  | { type: "answer_of_question"; questionIndex: number }
-  | { type: "least_common_answer" }
-  | { type: "most_common_answer" }
-  | { type: "unique_answer" }
-  | { type: "equal_count_as"; answer: AnswerLetter }
-  | { type: "answer_is_self" }
+  | { type: "AnswerOf"; questionIndex: number }
+  | { type: "LeastCommon" }
+  | { type: "MostCommon" }
+  | { type: "Unique" }
+  | { type: "EqualCount"; answer: AnswerLetter }
+  | { type: "AnswerIsSelf" }
 
   // ── Relationship ──
-  | { type: "letter_distance"; questionIndex: number }
+  | { type: "LetterDist"; questionIndex: number }
 
   // ── Compound ──
-  | { type: "only_true_statement" };
+  | { type: "TrueStmt" };
 
 // Numeric question type IDs — top-level constants for V8 inlining
 export const RT_COUNT_ANSWER = 0;
@@ -128,31 +137,31 @@ export type QuestionTypeId = number;
 
 // Mapping from string type names to numeric IDs (used in flattenRule)
 const RT_MAP: Record<string, QuestionTypeId> = {
-  count_answer: RT_COUNT_ANSWER,
-  count_answer_before: RT_COUNT_ANSWER_BEFORE,
-  count_answer_after: RT_COUNT_ANSWER_AFTER,
-  count_vowel_answers: RT_COUNT_VOWEL,
-  count_consonant_answers: RT_COUNT_CONSONANT,
-  most_common_count: RT_MOST_COMMON_COUNT,
-  closest_after: RT_CLOSEST_AFTER,
-  closest_before: RT_CLOSEST_BEFORE,
-  first_with_answer: RT_FIRST_WITH,
-  last_with_answer: RT_LAST_WITH,
-  previous_same_answer: RT_PREV_SAME,
-  next_same_answer: RT_NEXT_SAME,
-  only_same_answer: RT_ONLY_SAME,
-  same_answer_as: RT_SAME_AS,
-  only_odd_with_answer: RT_ONLY_ODD,
-  only_even_with_answer: RT_ONLY_EVEN,
-  consecutive_identical: RT_CONSEC_IDENT,
-  answer_of_question: RT_ANSWER_OF,
-  least_common_answer: RT_LEAST_COMMON,
-  most_common_answer: RT_MOST_COMMON,
-  unique_answer: RT_UNIQUE,
-  equal_count_as: RT_EQUAL_COUNT,
-  answer_is_self: RT_SELF,
-  letter_distance: RT_LETTER_DIST,
-  only_true_statement: RT_TRUE_STMT,
+  CountAnswer: RT_COUNT_ANSWER,
+  CountAnswerBefore: RT_COUNT_ANSWER_BEFORE,
+  CountAnswerAfter: RT_COUNT_ANSWER_AFTER,
+  CountVowel: RT_COUNT_VOWEL,
+  CountConsonant: RT_COUNT_CONSONANT,
+  MostCommonCount: RT_MOST_COMMON_COUNT,
+  ClosestAfter: RT_CLOSEST_AFTER,
+  ClosestBefore: RT_CLOSEST_BEFORE,
+  FirstWith: RT_FIRST_WITH,
+  LastWith: RT_LAST_WITH,
+  PrevSame: RT_PREV_SAME,
+  NextSame: RT_NEXT_SAME,
+  OnlySame: RT_ONLY_SAME,
+  SameAs: RT_SAME_AS,
+  OnlyOdd: RT_ONLY_ODD,
+  OnlyEven: RT_ONLY_EVEN,
+  ConsecIdent: RT_CONSEC_IDENT,
+  AnswerOf: RT_ANSWER_OF,
+  LeastCommon: RT_LEAST_COMMON,
+  MostCommon: RT_MOST_COMMON,
+  Unique: RT_UNIQUE,
+  EqualCount: RT_EQUAL_COUNT,
+  AnswerIsSelf: RT_SELF,
+  LetterDist: RT_LETTER_DIST,
+  TrueStmt: RT_TRUE_STMT,
 };
 
 // Flat representation for hot-path performance (single V8 hidden class)
@@ -164,13 +173,13 @@ export interface FlatQuestion {
   beforeIndex: number;
 }
 
-function flattenQuestion(r: QuestionTypeDef): FlatQuestion {
+function flattenQuestion(t: QuestionTypeDef): FlatQuestion {
   return {
-    t: RT_MAP[r.type],
-    answer: "answer" in r ? r.answer : null,
-    questionIndex: "questionIndex" in r ? r.questionIndex : -1,
-    afterIndex: "afterIndex" in r ? r.afterIndex : -1,
-    beforeIndex: "beforeIndex" in r ? r.beforeIndex : -1,
+    t: RT_MAP[t.type],
+    answer: "answer" in t ? t.answer : null,
+    questionIndex: "questionIndex" in t ? t.questionIndex : -1,
+    afterIndex: "afterIndex" in t ? t.afterIndex : -1,
+    beforeIndex: "beforeIndex" in t ? t.beforeIndex : -1,
   };
 }
 
@@ -214,27 +223,29 @@ export function getFlatPuzzle(puzzle: Puzzle): FlatPuzzle {
 
 export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
   const n = puzzle.questions.length;
-  const questions = puzzle.questions.map((q) => flattenQuestion(q.questionType));
+  const questions = puzzle.questions.map((q) =>
+    flattenQuestion(q.questionType),
+  );
 
   // Build dependency map: affectedBy[j] = local rules to re-check when Q_j changes
   const affectedBy: number[][] = Array.from({ length: n }, () => []);
   const globalIndices: number[] = [];
 
   for (let i = 0; i < n; i++) {
-    const r = questions[i];
-    if (GLOBAL_RULE_IDS.has(r.t)) {
+    const q = questions[i];
+    if (GLOBAL_RULE_IDS.has(q.t)) {
       globalIndices.push(i);
-    } else if (r.t === RT_ANSWER_OF) {
-      affectedBy[r.questionIndex].push(i);
-    } else if (r.t === RT_LETTER_DIST) {
-      affectedBy[r.questionIndex].push(i);
-    } else if (r.t === RT_CLOSEST_AFTER || r.t === RT_COUNT_ANSWER_AFTER) {
-      for (let j = r.afterIndex + 1; j < n; j++) affectedBy[j].push(i);
-    } else if (r.t === RT_CLOSEST_BEFORE || r.t === RT_COUNT_ANSWER_BEFORE) {
-      for (let j = 0; j < r.beforeIndex; j++) affectedBy[j].push(i);
-    } else if (r.t === RT_PREV_SAME) {
+    } else if (q.t === RT_ANSWER_OF) {
+      affectedBy[q.questionIndex].push(i);
+    } else if (q.t === RT_LETTER_DIST) {
+      affectedBy[q.questionIndex].push(i);
+    } else if (q.t === RT_CLOSEST_AFTER || q.t === RT_COUNT_ANSWER_AFTER) {
+      for (let j = q.afterIndex + 1; j < n; j++) affectedBy[j].push(i);
+    } else if (q.t === RT_CLOSEST_BEFORE || q.t === RT_COUNT_ANSWER_BEFORE) {
+      for (let j = 0; j < q.beforeIndex; j++) affectedBy[j].push(i);
+    } else if (q.t === RT_PREV_SAME) {
       for (let j = 0; j < i; j++) affectedBy[j].push(i);
-    } else if (r.t === RT_NEXT_SAME) {
+    } else if (q.t === RT_NEXT_SAME) {
       for (let j = i + 1; j < n; j++) affectedBy[j].push(i);
     } else {
       // answer_is_self or unknown — self only, no external deps

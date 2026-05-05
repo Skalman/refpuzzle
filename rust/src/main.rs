@@ -139,15 +139,18 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), Option<GenerateResult>)> = tasks
+    let results: Vec<((usize, u8), Option<GenerateResult>, gen_common::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), seeds)| {
             let profile = &PROFILES[level as usize - 1];
             let mut result = None;
+            let mut stats = gen_common::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) = construct_puzzle::generate(profile, &mut rng, max_attempts) {
+                if let Some(r) =
+                    construct_puzzle::generate(profile, &mut rng, max_attempts, &mut stats)
+                {
                     result = Some(r);
                     break;
                 }
@@ -166,9 +169,14 @@ fn main() {
                 );
                 *last = Instant::now();
             }
-            ((day_idx, level), result)
+            ((day_idx, level), result, stats)
         })
         .collect();
+
+    let mut stats = gen_common::Stats::default();
+    for (_, _, s) in &results {
+        stats.merge(s);
+    }
 
     // Assemble into { "_seed": N, "MMDD": { "level-1": ..., ... }, ... }
     let mut year_map = serde_json::Map::new();
@@ -182,7 +190,7 @@ fn main() {
         );
     }
 
-    for ((day_idx, level), result) in &results {
+    for ((day_idx, level), result, _) in &results {
         let (mm, dd) = days[*day_idx];
         let key = format!("{mm:02}{dd:02}");
         match result {
@@ -190,12 +198,12 @@ fn main() {
                 ok_count += 1;
                 let puzzle_json = puzzle_to_json(r, *level as usize);
                 if let Some(Value::Object(day)) = year_map.get_mut(&key) {
-                    day.insert(format!("level-{level}"), puzzle_json);
+                    day.insert(format!("{level}"), puzzle_json);
                 }
             }
             None => {
                 fail_count += 1;
-                eprintln!("  FAILED: {} level-{}", key, level);
+                eprintln!("  FAILED: {} L{}", key, level);
             }
         }
     }
@@ -220,8 +228,7 @@ fn main() {
     );
     eprintln!("  Output:  {raw_kb}KB JSON");
     if show_stats {
-        gen_common::print_stats();
-        gen_common::print_extra_stats();
+        stats.print();
     }
 
     println!("{json_out}");
@@ -267,7 +274,7 @@ fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
                     .collect();
                 q.insert("o".into(), json!(options));
             }
-            q.insert("r".into(), question_type_to_json(qt));
+            q.insert("t".into(), question_type_to_json(qt));
             Value::Object(q)
         })
         .collect();
@@ -355,7 +362,7 @@ fn check_json(path: &str, target: Option<&str>) {
                     .collect::<String>();
                 let mm = &day[..2];
                 let dd = &day[2..4];
-                let level = lvl.strip_prefix("level-").unwrap_or(lvl);
+                let level = lvl;
                 let hash = steps.join(".");
                 let url =
                     format!("http://localhost:5173/day/{year}-{mm}-{dd}?l={level}&debug#{hash}");
@@ -606,7 +613,15 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            return (true, steps);
+            let valid = (0..n).all(|i| {
+                check_validity::check_question_against_solution(
+                    fp,
+                    i,
+                    answers[i].unwrap(),
+                    &answers,
+                )
+            });
+            return (valid, steps);
         }
         let drs = deduce::deduce(fp, &answers, &eliminated);
         if !drs.is_empty() {
@@ -752,8 +767,8 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     let mut option_claims = [[Claim::None; 5]; MAX_N];
 
     for (qi, q) in qs.iter().enumerate() {
-        let r = q.get("r")?;
-        question_types[qi] = serde_json::from_value(r.clone()).ok()?;
+        let t = q.get("t")?;
+        question_types[qi] = serde_json::from_value(t.clone()).ok()?;
 
         if let Some(claims) = q.get("c") {
             let claims = claims.as_array()?;

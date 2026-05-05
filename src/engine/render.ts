@@ -3,84 +3,84 @@ import { LETTERS } from "./types.ts";
 
 export function renderQuestionText(qt: QuestionTypeDef): string {
   switch (qt.type) {
-    case "count_answer":
+    case "CountAnswer":
       return `How many questions have answer ${qt.answer}?`;
-    case "count_answer_before":
+    case "CountAnswerBefore":
       return `How many questions before #${qt.beforeIndex + 1} have answer ${qt.answer}?`;
-    case "count_answer_after":
+    case "CountAnswerAfter":
       return `How many questions after #${qt.afterIndex + 1} have answer ${qt.answer}?`;
-    case "count_vowel_answers":
+    case "CountVowel":
       return "How many questions have a vowel as the answer?";
-    case "count_consonant_answers":
+    case "CountConsonant":
       return "How many questions have a consonant as the answer?";
-    case "most_common_count":
+    case "MostCommonCount":
       return "How many times does the most common answer occur?";
-    case "closest_after":
+    case "ClosestAfter":
       return `Which is the closest question after #${qt.afterIndex + 1} that has answer ${qt.answer}?`;
-    case "closest_before":
+    case "ClosestBefore":
       return `Which is the closest question before #${qt.beforeIndex + 1} that has answer ${qt.answer}?`;
-    case "first_with_answer":
+    case "FirstWith":
       return `Which is the first question with answer ${qt.answer}?`;
-    case "last_with_answer":
+    case "LastWith":
       return `Which is the last question with answer ${qt.answer}?`;
-    case "previous_same_answer":
+    case "PrevSame":
       return "Which is the previous question that has the same answer as this one?";
-    case "next_same_answer":
+    case "NextSame":
       return "Which is the next question that has the same answer as this one?";
-    case "only_same_answer":
+    case "OnlySame":
       return "Which is the only other question with the same answer as this one?";
-    case "same_answer_as":
+    case "SameAs":
       return "Which other question has the same answer as this one?";
-    case "only_odd_with_answer":
+    case "OnlyOdd":
       return `Which is the only odd-numbered question with answer ${qt.answer}?`;
-    case "only_even_with_answer":
+    case "OnlyEven":
       return `Which is the only even-numbered question with answer ${qt.answer}?`;
-    case "consecutive_identical":
+    case "ConsecIdent":
       return "Which are the only two consecutive questions with identical answers?";
-    case "answer_of_question":
+    case "AnswerOf":
       return `What is the answer to question #${qt.questionIndex + 1}?`;
-    case "least_common_answer":
+    case "LeastCommon":
       return "Which is the least common answer?";
-    case "most_common_answer":
+    case "MostCommon":
       return "Which is the most common answer?";
-    case "unique_answer":
+    case "Unique":
       return "Which answer is not the answer to any other question?";
-    case "equal_count_as":
+    case "EqualCount":
       return `Which answer appears the same number of times as ${qt.answer}?`;
-    case "answer_is_self":
+    case "AnswerIsSelf":
       return "What is the answer to this question?";
-    case "letter_distance":
+    case "LetterDist":
       return `How many letters away is the answer to this question from the answer to question #${qt.questionIndex + 1}?`;
-    case "only_true_statement":
+    case "TrueStmt":
       return "Which statement is the only true statement?";
   }
   return "";
 }
 
 const POSITIONAL_RULES = new Set([
-  "closest_after",
-  "closest_before",
-  "first_with_answer",
-  "last_with_answer",
-  "previous_same_answer",
-  "next_same_answer",
-  "only_same_answer",
-  "same_answer_as",
-  "only_odd_with_answer",
-  "only_even_with_answer",
-  "consecutive_identical",
+  "ClosestAfter",
+  "ClosestBefore",
+  "FirstWith",
+  "LastWith",
+  "PrevSame",
+  "NextSame",
+  "OnlySame",
+  "SameAs",
+  "OnlyOdd",
+  "OnlyEven",
+  "ConsecIdent",
 ]);
 
 export function renderOptionLabel(qt: QuestionTypeDef, value: number | null, _qi: number): string {
-  if (qt.type === "only_true_statement") return "";
+  if (qt.type === "TrueStmt") return "";
 
   if (isLetterRule(qt.type)) return value != null ? LETTERS[value] : "?";
 
-  if (qt.type === "consecutive_identical") {
+  if (qt.type === "ConsecIdent") {
     return value != null ? `${value + 1}-${value + 2}` : "None";
   }
 
-  if (qt.type === "equal_count_as") {
+  if (qt.type === "EqualCount") {
     return value != null ? LETTERS[value] : "None";
   }
 
@@ -96,11 +96,11 @@ export function renderClaimLabel(claim: Claim): string {
 }
 
 const LETTER_RULES = new Set([
-  "answer_of_question",
-  "least_common_answer",
-  "most_common_answer",
-  "unique_answer",
-  "answer_is_self",
+  "AnswerOf",
+  "LeastCommon",
+  "MostCommon",
+  "Unique",
+  "AnswerIsSelf",
 ]);
 
 function isLetterRule(type: string): boolean {

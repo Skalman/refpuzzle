@@ -456,6 +456,7 @@ export function PuzzleView({
     setQuestions(fresh);
     setHintText(null);
     hintRef.current = null;
+    wasCompleted.current = false;
   }
 
   const solutionRef = useRef<(AnswerLetter | null)[] | null>(null);
@@ -578,14 +579,19 @@ export function PuzzleView({
     return () => clearTimeout(timer);
   }, [resetPending]);
 
-  // Confetti + autofocus on completion
+  // Confetti + scroll to next puzzle on completion
   const wasCompleted = useRef(initState.completed);
   useEffect(() => {
-    if (completed && !wasCompleted.current) {
-      confetti();
-      wasCompleted.current = true;
-    }
-    if (completed && nextPuzzleRef.current) nextPuzzleRef.current.focus();
+    if (!completed || wasCompleted.current) return undefined;
+    wasCompleted.current = true;
+    confetti();
+    const timer = setTimeout(() => {
+      const btn = nextPuzzleRef.current;
+      if (!btn) return;
+      btn.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      btn.focus({ preventScroll: true });
+    }, 1800);
+    return () => clearTimeout(timer);
   }, [completed]);
 
   // Init roving tabindex on controls toolbar

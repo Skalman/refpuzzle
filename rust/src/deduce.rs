@@ -173,8 +173,8 @@ fn count_matching(
     CountResult { count, remaining }
 }
 
-fn count_pred(r: &QuestionType) -> Option<CountPred> {
-    match *r {
+fn count_pred(t: &QuestionType) -> Option<CountPred> {
+    match *t {
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => Some(CountPred::IsAnswer(answer)),
@@ -184,8 +184,8 @@ fn count_pred(r: &QuestionType) -> Option<CountPred> {
     }
 }
 
-fn count_range(r: &QuestionType, n: usize) -> (usize, usize) {
-    match *r {
+fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
+    match *t {
         QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
         QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
         _ => (0, n),
@@ -251,13 +251,13 @@ fn deduce_impl(
     // ── Count saturation ──
     for qi in 0..n {
         let Some(a) = answers[qi] else { continue };
-        let r = &fp.question_types[qi];
-        let Some(pred) = count_pred(r) else { continue };
+        let t = &fp.question_types[qi];
+        let Some(pred) = count_pred(t) else { continue };
         let on = fp.option_nums[qi][a.idx()];
         if on == NAN_VAL || on < 0 {
             continue;
         }
-        let (from, to) = count_range(r, n);
+        let (from, to) = count_range(t, n);
         let cr = count_matching(answers, eliminated, pred, from, to);
 
         if run(DeduceRule::CountSaturated) {
@@ -326,7 +326,7 @@ fn deduce_impl(
         if answers[qi].is_some() {
             continue;
         }
-        let r = &fp.question_types[qi];
+        let t = &fp.question_types[qi];
 
         if run(DeduceRule::OnlyOptionLeft) {
             if remaining_count(eliminated[qi]) == 1 {
@@ -342,7 +342,7 @@ fn deduce_impl(
         }
 
         if run(DeduceRule::AnswerOfForward) {
-            if let QuestionType::AnswerOf { question_index } = *r
+            if let QuestionType::AnswerOf { question_index } = *t
                 && let Some(target) = answers[question_index as usize]
             {
                 for oi in 0..5usize {
@@ -416,7 +416,7 @@ fn deduce_impl(
         }
 
         if run(DeduceRule::LetterDistForward) {
-            if let QuestionType::LetterDist { question_index } = *r
+            if let QuestionType::LetterDist { question_index } = *t
                 && let Some(other_ans) = answers[question_index as usize]
             {
                 let other_idx = other_ans.idx();
@@ -524,8 +524,8 @@ fn deduce_impl(
         }
 
         if run(DeduceRule::CountAllAnswered) {
-            if let Some(pred) = count_pred(r) {
-                let (from, to) = count_range(r, n);
+            if let Some(pred) = count_pred(t) {
+                let (from, to) = count_range(t, n);
                 let cr = count_matching(answers, eliminated, pred, from, to);
                 if cr.remaining == 0 {
                     for oi in 0..5usize {
@@ -553,14 +553,14 @@ fn deduce_impl(
             let Some(src_ans) = answers[src] else {
                 continue;
             };
-            let r = &fp.question_types[src];
+            let t = &fp.question_types[src];
             let v = fp.option_nums[src][src_ans.idx()];
             if v < 0 || v == NAN_VAL {
                 continue;
             }
             let v = v as usize;
 
-            let (letter, range_start, range_end) = match *r {
+            let (letter, range_start, range_end) = match *t {
                 QuestionType::FirstWith { answer } => (answer, 0usize, v),
                 QuestionType::ClosestAfter {
                     answer,
@@ -604,10 +604,10 @@ fn deduce_impl(
             if answers[src].is_some() {
                 continue;
             }
-            let r = &fp.question_types[src];
-            match *r {
+            let t = &fp.question_types[src];
+            match *t {
                 QuestionType::FirstWith { answer } | QuestionType::ClosestAfter { answer, .. } => {
-                    let scan_start = match *r {
+                    let scan_start = match *t {
                         QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
                         _ => 0,
                     };
@@ -642,7 +642,7 @@ fn deduce_impl(
                     }
                 }
                 QuestionType::LastWith { answer } | QuestionType::ClosestBefore { answer, .. } => {
-                    let scan_end = match *r {
+                    let scan_end = match *t {
                         QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
                         _ => n,
                     };
@@ -804,7 +804,7 @@ fn deduce_impl(
         if answers[qi].is_some() {
             continue;
         }
-        let r = &fp.question_types[qi];
+        let t = &fp.question_types[qi];
 
         for oi in 0..5usize {
             if is_elim(eliminated, qi, oi) {
@@ -812,13 +812,13 @@ fn deduce_impl(
             }
             let on = fp.option_nums[qi][oi];
 
-            match *r {
+            match *t {
                 QuestionType::CountAnswer { answer }
                 | QuestionType::CountAnswerBefore { answer, .. }
                 | QuestionType::CountAnswerAfter { answer, .. }
                     if on != NAN_VAL =>
                 {
-                    let (from, to) = count_range(r, n);
+                    let (from, to) = count_range(t, n);
                     let cr =
                         count_matching(answers, eliminated, CountPred::IsAnswer(answer), from, to);
                     if run(DeduceRule::CountExceeded) {
@@ -839,7 +839,7 @@ fn deduce_impl(
                     }
                 }
                 QuestionType::CountVowel | QuestionType::CountConsonant if on != NAN_VAL => {
-                    let pred = if matches!(*r, QuestionType::CountVowel) {
+                    let pred = if matches!(*t, QuestionType::CountVowel) {
                         CountPred::IsVowel
                     } else {
                         CountPred::IsConsonant
@@ -1160,7 +1160,7 @@ fn deduce_impl(
                     }
                 }
                 QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-                    let parity = match r {
+                    let parity = match t {
                         QuestionType::OnlyOdd { .. } => 1,
                         _ => 0,
                     };
@@ -1533,11 +1533,11 @@ fn deduce_impl(
             }
             let claim = &fp.option_claims[qi][a.idx()];
             match *claim {
-                Claim::FirstWithAnswer {
+                Claim::FirstWith {
                     value: answer,
                     question_index,
                 }
-                | Claim::LastWithAnswer {
+                | Claim::LastWith {
                     value: answer,
                     question_index,
                 } => {
@@ -1550,7 +1550,7 @@ fn deduce_impl(
                         );
                     }
                 }
-                Claim::ClaimAnswerOf {
+                Claim::AnswerOf {
                     question_index,
                     value,
                 } => {

@@ -48,12 +48,12 @@ function Q(i: number): string {
 
 type Pred = (a: AnswerLetter) => boolean;
 
-function countPred(r: { t: number; answer: string | null }): Pred | null {
-  switch (r.t) {
+function countPred(q: { t: number; answer: string | null }): Pred | null {
+  switch (q.t) {
     case RT_COUNT_ANSWER:
     case RT_COUNT_ANSWER_BEFORE:
     case RT_COUNT_ANSWER_AFTER:
-      return (a) => a === r.answer;
+      return (a) => a === q.answer;
     case RT_COUNT_VOWEL:
       return (a) => VOWELS.has(a);
     case RT_COUNT_CONSONANT:
@@ -64,11 +64,11 @@ function countPred(r: { t: number; answer: string | null }): Pred | null {
 }
 
 function countRange(
-  r: { t: number; afterIndex: number; beforeIndex: number },
+  q: { t: number; afterIndex: number; beforeIndex: number },
   n: number,
 ): [number, number] {
-  if (r.t === RT_COUNT_ANSWER_BEFORE) return [0, r.beforeIndex];
-  if (r.t === RT_COUNT_ANSWER_AFTER) return [r.afterIndex + 1, n];
+  if (q.t === RT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
+  if (q.t === RT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
   return [0, n];
 }
 
@@ -96,7 +96,7 @@ function countAnswers(
 }
 
 function countRuleLabel(
-  r: {
+  q: {
     t: number;
     answer: string | null;
     afterIndex: number;
@@ -104,20 +104,20 @@ function countRuleLabel(
   },
   count: number,
 ): string {
-  const q = count === 1 ? "question" : "questions";
-  switch (r.t) {
+  const qs = count === 1 ? "question" : "questions";
+  switch (q.t) {
     case RT_COUNT_ANSWER:
-      return `${q} with answer ${r.answer}`;
+      return `${qs} with answer ${q.answer}`;
     case RT_COUNT_ANSWER_BEFORE:
-      return `${q} before #${r.beforeIndex + 1} with answer ${r.answer}`;
+      return `${qs} before #${q.beforeIndex + 1} with answer ${q.answer}`;
     case RT_COUNT_ANSWER_AFTER:
-      return `${q} after #${r.afterIndex + 1} with answer ${r.answer}`;
+      return `${qs} after #${q.afterIndex + 1} with answer ${q.answer}`;
     case RT_COUNT_VOWEL:
-      return `${q} with a vowel answer`;
+      return `${qs} with a vowel answer`;
     case RT_COUNT_CONSONANT:
-      return `${q} with a consonant answer`;
+      return `${qs} with a consonant answer`;
     default:
-      return `matching ${q}`;
+      return `matching ${qs}`;
   }
 }
 
@@ -142,7 +142,15 @@ export function explainDeduce(
 ): ExplainStep[] {
   const a = result.action;
   if (a.type === "force") {
-    return explainForce(puzzle, fp, answers, eliminated, a.questionIndex, a.letter, result.rule);
+    return explainForce(
+      puzzle,
+      fp,
+      answers,
+      eliminated,
+      a.questionIndex,
+      a.letter,
+      result.rule,
+    );
   }
   if (a.type === "eliminateMulti") {
     const qis: number[] = [];
@@ -156,9 +164,18 @@ export function explainDeduce(
     const qList = qis.map(Q).join(", ");
     const optStr = optLetters.join(", ");
 
-    if (result.rule === "PositionalRangeAnswered" || result.rule === "PositionalRangeUnanswered") {
+    if (
+      result.rule === "PositionalRangeAnswered" ||
+      result.rule === "PositionalRangeUnanswered"
+    ) {
       const oi = optLetters.length === 1 ? letterIdx(optLetters[0]) : 0;
-      const src = findPositionalRangeSource(fp, answers, eliminated, qis[0], oi);
+      const src = findPositionalRangeSource(
+        fp,
+        answers,
+        eliminated,
+        qis[0],
+        oi,
+      );
       const steps: ExplainStep[] = [];
       if (src) {
         steps.push(simple(`Try looking at ${Q(src.srcQi)}.`));
@@ -166,7 +183,9 @@ export function explainDeduce(
         steps.push(simple(`Try looking at ${allQis.map(Q).join(", ")}.`));
         steps.push(simple(`${qList} can't be ${optStr}: ${src.text}`));
       } else {
-        console.error(`No positional_range explain for ${qList} option ${optStr}`);
+        console.error(
+          `No positional_range explain for ${qList} option ${optStr}`,
+        );
         steps.push(simple(`Try looking at ${qList}.`));
         steps.push(simple(`${qList} can't be ${optStr}.`));
       }
@@ -174,7 +193,13 @@ export function explainDeduce(
     }
 
     const firstQi = qis[0];
-    const reason = explainMultiElim(fp, answers, eliminated, firstQi, a.optionMask);
+    const reason = explainMultiElim(
+      fp,
+      answers,
+      eliminated,
+      firstQi,
+      a.optionMask,
+    );
     const steps: ExplainStep[] = [];
     if (reason.otherQi != null) {
       steps.push(simple(`Try looking at ${Q(reason.otherQi)}.`));
@@ -207,19 +232,23 @@ function explainForce(
   rule: string,
 ): ExplainStep[] {
   const steps: ExplainStep[] = [simple(`Try looking at ${Q(qi)}.`)];
-  const r = fp.questions[qi];
+  const q = fp.questions[qi];
   const n = fp.n;
 
   if (remainingCount(eliminated[qi]) === 1) {
-    steps.push(simple(`${Q(qi)} has only one option left — it must be ${letter}.`));
+    steps.push(
+      simple(`${Q(qi)} has only one option left — it must be ${letter}.`),
+    );
     return steps;
   }
 
-  if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null) {
-    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(r.questionIndex)}.`));
-    steps.push(simple(
-      `${Q(qi)} asks for ${Q(r.questionIndex)}'s answer. ${Q(r.questionIndex)} is ${answers[r.questionIndex]}, so ${Q(qi)} must be ${letter}.`,
-    ));
+  if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null) {
+    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(q.questionIndex)}.`));
+    steps.push(
+      simple(
+        `${Q(qi)} asks for ${Q(q.questionIndex)}'s answer. ${Q(q.questionIndex)} is ${answers[q.questionIndex]}, so ${Q(qi)} must be ${letter}.`,
+      ),
+    );
     return steps;
   }
 
@@ -227,21 +256,30 @@ function explainForce(
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
-      steps.push(simple(
-        `${Q(other)} says it has the same answer as ${Q(qi)}. ${Q(other)} is ${otherAns}, so ${Q(qi)} must be ${otherAns}.`,
-      ));
-      return steps;
-    }
     if (
-      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
+      otherR.t === RT_SAME_AS &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     ) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
-      steps.push(simple(
-        `${Q(other)} is ${otherAns}, pointing to ${Q(qi)} as having the same answer. So ${Q(qi)} must be ${otherAns}.`,
-      ));
+      steps.push(
+        simple(
+          `${Q(other)} says it has the same answer as ${Q(qi)}. ${Q(other)} is ${otherAns}, so ${Q(qi)} must be ${otherAns}.`,
+        ),
+      );
+      return steps;
+    }
+    if (
+      (otherR.t === RT_PREV_SAME ||
+        otherR.t === RT_NEXT_SAME ||
+        otherR.t === RT_ONLY_SAME) &&
+      fp.optionValues[other][letterIdx(otherAns)] === qi
+    ) {
+      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+      steps.push(
+        simple(
+          `${Q(other)} is ${otherAns}, pointing to ${Q(qi)} as having the same answer. So ${Q(qi)} must be ${otherAns}.`,
+        ),
+      );
       return steps;
     }
   }
@@ -253,19 +291,23 @@ function explainForce(
     const otherR = fp.questions[other];
     if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
-      steps.push(simple(
-        `${Q(other)} asks for ${Q(qi)}'s answer. ${Q(other)} is ${otherAns}, telling us ${Q(qi)} must be ${letter}.`,
-      ));
+      steps.push(
+        simple(
+          `${Q(other)} asks for ${Q(qi)}'s answer. ${Q(other)} is ${otherAns}, telling us ${Q(qi)} must be ${letter}.`,
+        ),
+      );
       return steps;
     }
   }
 
   // LetterDist: target answered, only one valid distance
-  if (r.t === RT_LETTER_DIST && answers[r.questionIndex] != null) {
-    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(r.questionIndex)}.`));
-    steps.push(simple(
-      `${Q(r.questionIndex)} is answered ${answers[r.questionIndex]}. Only option ${letter} gives the right letter distance.`,
-    ));
+  if (q.t === RT_LETTER_DIST && answers[q.questionIndex] != null) {
+    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(q.questionIndex)}.`));
+    steps.push(
+      simple(
+        `${Q(q.questionIndex)} is answered ${answers[q.questionIndex]}. Only option ${letter} gives the right letter distance.`,
+      ),
+    );
     return steps;
   }
 
@@ -278,22 +320,26 @@ function explainForce(
     if (srcAns != null) {
       const dist = fp.optionValues[src][letterIdx(srcAns)];
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
-      steps.push(simple(
-        `${Q(src)} is answered ${srcAns} with letter distance ${dist}. Only ${letter} is at distance ${dist} from ${srcAns}, so ${Q(qi)} must be ${letter}.`,
-      ));
+      steps.push(
+        simple(
+          `${Q(src)} is answered ${srcAns} with letter distance ${dist}. Only ${letter} is at distance ${dist} from ${srcAns}, so ${Q(qi)} must be ${letter}.`,
+        ),
+      );
       return steps;
     }
   }
 
   // Counting: all in range answered, count determines answer
-  const pred = countPred(r);
+  const pred = countPred(q);
   if (pred) {
-    const [from, to] = countRange(r, n);
+    const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (cr.remaining === 0) {
-      steps.push(simple(
-        `There are ${cr.count} ${countRuleLabel(r, cr.count)}, so ${Q(qi)} must be ${letter}.`,
-      ));
+      steps.push(
+        simple(
+          `There are ${cr.count} ${countRuleLabel(q, cr.count)}, so ${Q(qi)} must be ${letter}.`,
+        ),
+      );
       return steps;
     }
   }
@@ -307,14 +353,18 @@ function explainForce(
       const [from, to] = countRange(srcR, n);
       const cr = countAnswers(answers, eliminated, countPred(srcR)!, from, to);
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
-      steps.push(simple(
-        `${Q(src)} says there are ${srcVal} ${countRuleLabel(srcR, srcVal)}. Only ${cr.count} found so far, and ${Q(qi)} is the only remaining question that could be ${letter} — so ${Q(qi)} must be ${letter}.`,
-      ));
+      steps.push(
+        simple(
+          `${Q(src)} says there are ${srcVal} ${countRuleLabel(srcR, srcVal)}. Only ${cr.count} found so far, and ${Q(qi)} is the only remaining question that could be ${letter} — so ${Q(qi)} must be ${letter}.`,
+        ),
+      );
       return steps;
     }
   }
 
-  throw new Error(`explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`);
+  throw new Error(
+    `explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`,
+  );
 }
 
 function findCountSatSource(
@@ -327,13 +377,13 @@ function findCountSatSource(
   const n = fp.n;
   for (let src = 0; src < n; src++) {
     if (answers[src] == null) continue;
-    const r = fp.questions[src];
-    const pred = countPred(r);
+    const q = fp.questions[src];
+    const pred = countPred(q);
     if (!pred || !pred(targetLetter)) continue;
     const ai = letterIdx(answers[src]!);
     const value = fp.optionValues[src][ai];
     if (value == null) continue;
-    const [from, to] = countRange(r, n);
+    const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (cr.count + cr.remaining === value && cr.remaining > 0) {
       return src;
@@ -352,7 +402,7 @@ function explainElimination(
   rule: string,
 ): ExplainStep[] {
   const letter = LETTERS[oi];
-  const r = fp.questions[qi];
+  const q = fp.questions[qi];
   const v = fp.optionValues[qi][oi];
   const n = fp.n;
   const steps: ExplainStep[] = [simple(`Try looking at ${Q(qi)}.`)];
@@ -370,7 +420,10 @@ function explainElimination(
     return steps;
   }
 
-  if (rule === "PositionalRangeAnswered" || rule === "PositionalRangeUnanswered") {
+  if (
+    rule === "PositionalRangeAnswered" ||
+    rule === "PositionalRangeUnanswered"
+  ) {
     const src = findPositionalRangeSource(fp, answers, eliminated, qi, oi);
     if (src != null) {
       steps.push(simple(`Try looking at ${Q(src.srcQi)} and ${Q(qi)}.`));
@@ -383,18 +436,23 @@ function explainElimination(
 
   if (rule === "VowelCrossElim" || rule === "ConsonantCrossElim") {
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-    steps.push(simple(
-      `${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`,
-    ));
+    steps.push(
+      simple(
+        `${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`,
+      ),
+    );
     return steps;
   }
 
-  const detail = explainElimDetail(r, qi, oi, v, answers, eliminated, n);
+  const detail = explainElimDetail(q, qi, oi, v, answers, eliminated, n);
   if (detail && detail.otherQi != null) {
     steps.push(simple(`Try looking at ${Q(qi)} and ${Q(detail.otherQi)}.`));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-  if (!detail) console.error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
+  if (!detail)
+    console.error(
+      `No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`,
+    );
   steps.push(simple(detail ? detail.text : `${Q(qi)} can't be ${letter}.`));
   return steps;
 }
@@ -496,24 +554,28 @@ function explainCountSaturation(
   const n = fp.n;
   for (let src = 0; src < n; src++) {
     if (answers[src] == null) continue;
-    const r = fp.questions[src];
-    const pred = countPred(r);
+    const q = fp.questions[src];
+    const pred = countPred(q);
     if (!pred) continue;
     const ai = letterIdx(answers[src]!);
     const value = fp.optionValues[src][ai];
     if (value == null) continue;
-    const [from, to] = countRange(r, n);
+    const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (cr.count === value && pred(LETTERS[oi])) {
       return {
         srcQi: src,
-        text: `${Q(src)} says there are ${value} ${countRuleLabel(r, value)}. There are already ${value}, so ${Q(qi)} can't also be ${LETTERS[oi]}.`,
+        text: `${Q(src)} says there are ${value} ${countRuleLabel(q, value)}. There are already ${value}, so ${Q(qi)} can't also be ${LETTERS[oi]}.`,
       };
     }
-    if (cr.count + cr.remaining === value && cr.remaining > 0 && !pred(LETTERS[oi])) {
+    if (
+      cr.count + cr.remaining === value &&
+      cr.remaining > 0 &&
+      !pred(LETTERS[oi])
+    ) {
       return {
         srcQi: src,
-        text: `${Q(src)} says there are ${value} ${countRuleLabel(r, value)}. Only ${cr.count} found so far, and all remaining unknowns must match — so ${Q(qi)} can't be ${LETTERS[oi]}.`,
+        text: `${Q(src)} says there are ${value} ${countRuleLabel(q, value)}. Only ${cr.count} found so far, and all remaining unknowns must match — so ${Q(qi)} can't be ${LETTERS[oi]}.`,
       };
     }
   }
@@ -559,7 +621,7 @@ function d(text: string, otherQi: number | null = null): ElimDetail {
 }
 
 function explainElimDetail(
-  r: {
+  q: {
     t: number;
     answer: string | null;
     questionIndex: number;
@@ -574,169 +636,274 @@ function explainElimDetail(
   n: number,
 ): ElimDetail | null {
   const letter = LETTERS[oi];
-  const pred = countPred(r);
-  if (pred && r.t !== RT_MOST_COMMON_COUNT) {
-    const [from, to] = countRange(r, n);
+  const pred = countPred(q);
+  if (pred && q.t !== RT_MOST_COMMON_COUNT) {
+    const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (v != null) {
       if (cr.count > v)
-        return d(`${Q(qi)} option ${letter} claims ${v} ${countRuleLabel(r, v)}, but there are already ${cr.count}.`);
+        return d(
+          `${Q(qi)} option ${letter} claims ${v} ${countRuleLabel(q, v)}, but there are already ${cr.count}.`,
+        );
       if (cr.count + cr.remaining < v)
-        return d(`${Q(qi)} option ${letter} claims ${v} ${countRuleLabel(r, v)}, but at most ${cr.count + cr.remaining} are possible.`);
+        return d(
+          `${Q(qi)} option ${letter} claims ${v} ${countRuleLabel(q, v)}, but at most ${cr.count + cr.remaining} are possible.`,
+        );
     }
   }
 
-  if (r.t === RT_ANSWER_OF) {
-    if (v != null && v >= 0 && v < 5 && isElim(eliminated, r.questionIndex, v))
-      return d(`${Q(qi)} option ${letter} claims ${Q(r.questionIndex)}'s answer is ${LETTERS[v]}, but ${LETTERS[v]} is ruled out for ${Q(r.questionIndex)}.`, r.questionIndex);
+  if (q.t === RT_ANSWER_OF) {
+    if (v != null && v >= 0 && v < 5 && isElim(eliminated, q.questionIndex, v))
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(q.questionIndex)}'s answer is ${LETTERS[v]}, but ${LETTERS[v]} is ruled out for ${Q(q.questionIndex)}.`,
+        q.questionIndex,
+      );
   }
 
-  if (r.t === RT_LETTER_DIST) {
+  if (q.t === RT_LETTER_DIST) {
     const maxDist = Math.max(oi, 4 - oi);
     if (v != null && v > maxDist)
-      return d(`${Q(qi)} option ${letter} claims letter distance ${v}, but ${letter} can be at most ${maxDist} letters from any answer.`);
-    const other = answers[r.questionIndex];
+      return d(
+        `${Q(qi)} option ${letter} claims letter distance ${v}, but ${letter} can be at most ${maxDist} letters from any answer.`,
+      );
+    const other = answers[q.questionIndex];
     if (other != null && v != null) {
       const dist = Math.abs(oi - letterIdx(other));
       if (dist !== v)
-        return d(`${Q(qi)} option ${letter} claims letter distance ${v}, but ${letter} is ${dist} letters from ${Q(r.questionIndex)}'s answer ${other}.`, r.questionIndex);
+        return d(
+          `${Q(qi)} option ${letter} claims letter distance ${v}, but ${letter} is ${dist} letters from ${Q(q.questionIndex)}'s answer ${other}.`,
+          q.questionIndex,
+        );
     }
     if (other == null && v != null) {
       let anyPossible = false;
       for (let ti = 0; ti < 5; ti++) {
-        if (!isElim(eliminated, r.questionIndex, ti) && Math.abs(oi - ti) === v) anyPossible = true;
+        if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v)
+          anyPossible = true;
       }
       if (!anyPossible)
-        return d(`${Q(qi)} option ${letter} claims letter distance ${v}, but no remaining answer for ${Q(r.questionIndex)} gives that distance from ${letter}.`, r.questionIndex);
+        return d(
+          `${Q(qi)} option ${letter} claims letter distance ${v}, but no remaining answer for ${Q(q.questionIndex)} gives that distance from ${letter}.`,
+          q.questionIndex,
+        );
     }
   }
 
-  if (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) {
-    const label = r.t === RT_FIRST_WITH ? "first" : "closest";
-    const scanStart = r.t === RT_CLOSEST_AFTER ? r.afterIndex + 1 : 0;
+  if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
+    const label = q.t === RT_FIRST_WITH ? "first" : "closest";
+    const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
     if (v != null) {
       if (v < scanStart || v >= n)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is #${v + 1}, but that's out of range.`);
-      if (answers[v] != null && answers[v] !== r.answer)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}.`, v);
-      if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!]))
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${r.answer} is ruled out for ${Q(v)}.`, v);
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is #${v + 1}, but that's out of range.`,
+        );
+      if (answers[v] != null && answers[v] !== q.answer)
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}.`,
+          v,
+        );
+      if (answers[v] == null && isElim(eliminated, v, L2I[q.answer!]))
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${q.answer} is ruled out for ${Q(v)}.`,
+          v,
+        );
       for (let j = scanStart; j < v; j++) {
-        if (answers[j] === r.answer)
-          return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(j)} already has answer ${r.answer} and comes before ${Q(v)}.`, j);
+        if (answers[j] === q.answer)
+          return d(
+            `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(j)} already has answer ${q.answer} and comes before ${Q(v)}.`,
+            j,
+          );
       }
-      if (LETTERS[oi] === r.answer && qi >= scanStart && qi < v)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(qi)} itself is before ${Q(v)} and would have answer ${r.answer}. Contradiction.`);
+      if (LETTERS[oi] === q.answer && qi >= scanStart && qi < v)
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(qi)} itself is before ${Q(v)} and would have answer ${q.answer}. Contradiction.`,
+        );
     } else {
       for (let j = scanStart; j < n; j++) {
-        if (answers[j] === r.answer)
-          return d(`${Q(qi)} option ${letter} claims no question has answer ${r.answer}, but ${Q(j)} has answer ${r.answer}.`, j);
+        if (answers[j] === q.answer)
+          return d(
+            `${Q(qi)} option ${letter} claims no question has answer ${q.answer}, but ${Q(j)} has answer ${q.answer}.`,
+            j,
+          );
       }
     }
   }
 
-  if (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) {
-    const label = r.t === RT_LAST_WITH ? "last" : "closest";
-    const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
+  if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
+    const label = q.t === RT_LAST_WITH ? "last" : "closest";
+    const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
     if (v != null) {
       if (v < 0 || v >= beforeIdx)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is #${v + 1}, but that's out of range.`);
-      if (answers[v] != null && answers[v] !== r.answer)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}.`, v);
-      if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!]))
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${r.answer} is ruled out for ${Q(v)}.`, v);
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is #${v + 1}, but that's out of range.`,
+        );
+      if (answers[v] != null && answers[v] !== q.answer)
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}.`,
+          v,
+        );
+      if (answers[v] == null && isElim(eliminated, v, L2I[q.answer!]))
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${q.answer} is ruled out for ${Q(v)}.`,
+          v,
+        );
       for (let j = beforeIdx - 1; j > v; j--) {
-        if (answers[j] === r.answer)
-          return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(j)} has answer ${r.answer} and comes after ${Q(v)}.`, j);
+        if (answers[j] === q.answer)
+          return d(
+            `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(j)} has answer ${q.answer} and comes after ${Q(v)}.`,
+            j,
+          );
       }
-      if (LETTERS[oi] === r.answer && qi > v && qi < beforeIdx)
-        return d(`${Q(qi)} option ${letter} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(qi)} itself is after ${Q(v)} and would have answer ${r.answer}. Contradiction.`);
+      if (LETTERS[oi] === q.answer && qi > v && qi < beforeIdx)
+        return d(
+          `${Q(qi)} option ${letter} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(qi)} itself is after ${Q(v)} and would have answer ${q.answer}. Contradiction.`,
+        );
     } else {
       for (let j = 0; j < beforeIdx; j++) {
-        if (answers[j] === r.answer)
-          return d(`${Q(qi)} option ${letter} claims no question has answer ${r.answer}, but ${Q(j)} has answer ${r.answer}.`, j);
+        if (answers[j] === q.answer)
+          return d(
+            `${Q(qi)} option ${letter} claims no question has answer ${q.answer}, but ${Q(j)} has answer ${q.answer}.`,
+            j,
+          );
       }
     }
   }
 
-  if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
-    const parity = r.t === RT_ONLY_ODD ? 1 : 0;
-    const parityName = r.t === RT_ONLY_ODD ? "even" : "odd";
+  if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
+    const parity = q.t === RT_ONLY_ODD ? 1 : 0;
+    const parityName = q.t === RT_ONLY_ODD ? "even" : "odd";
     if (v != null) {
       if ((v + 1) % 2 !== parity)
-        return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is ${parityName}-numbered.`);
-      if (v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer)
-        return d(`${Q(qi)} option ${letter} claims ${Q(v)} has answer ${r.answer}, but ${Q(v)} is answered ${answers[v]}.`, v);
-      if (v >= 0 && v < n && answers[v] == null && isElim(eliminated, v, L2I[r.answer!]))
-        return d(`${Q(qi)} option ${letter} claims ${Q(v)} has answer ${r.answer}, but ${r.answer} is ruled out for ${Q(v)}.`, v);
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is ${parityName}-numbered.`,
+        );
+      if (v >= 0 && v < n && answers[v] != null && answers[v] !== q.answer)
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)} has answer ${q.answer}, but ${Q(v)} is answered ${answers[v]}.`,
+          v,
+        );
+      if (
+        v >= 0 &&
+        v < n &&
+        answers[v] == null &&
+        isElim(eliminated, v, L2I[q.answer!])
+      )
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)} has answer ${q.answer}, but ${q.answer} is ruled out for ${Q(v)}.`,
+          v,
+        );
     } else {
       for (let i = 0; i < n; i++) {
-        if ((i + 1) % 2 === parity && answers[i] === r.answer)
-          return d(`${Q(qi)} option ${letter} claims no ${parity === 1 ? "odd" : "even"}-numbered question has answer ${r.answer}, but ${Q(i)} does.`, i);
+        if ((i + 1) % 2 === parity && answers[i] === q.answer)
+          return d(
+            `${Q(qi)} option ${letter} claims no ${parity === 1 ? "odd" : "even"}-numbered question has answer ${q.answer}, but ${Q(i)} does.`,
+            i,
+          );
       }
     }
   }
 
-  if (r.t === RT_CONSEC_IDENT) {
+  if (q.t === RT_CONSEC_IDENT) {
     if (v != null && v + 1 >= n)
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`,
+      );
     if (v != null && v + 1 < n) {
       if (v === qi || v + 1 === qi) {
         const partner = v === qi ? v + 1 : v;
         if (isElim(eliminated, partner, oi))
-          return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but ${letter} is ruled out for ${Q(partner)} so they can't match.`, partner);
+          return d(
+            `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but ${letter} is ruled out for ${Q(partner)} so they can't match.`,
+            partner,
+          );
       }
       const possA = ~eliminated[v] & 0b11111;
       const possB = ~eliminated[v + 1] & 0b11111;
       if ((possA & possB) === 0)
-        return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but they share no possible answer.`, v);
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)} are the consecutive pair, but they share no possible answer.`,
+          v,
+        );
     } else if (v == null) {
       for (let i = 0; i < n - 1; i++) {
-        if (answers[i] != null && answers[i + 1] != null && answers[i] === answers[i + 1])
-          return d(`${Q(qi)} option ${letter} claims no consecutive pair exists, but ${Q(i)} and ${Q(i + 1)} both have answer ${answers[i]}.`, i);
+        if (
+          answers[i] != null &&
+          answers[i + 1] != null &&
+          answers[i] === answers[i + 1]
+        )
+          return d(
+            `${Q(qi)} option ${letter} claims no consecutive pair exists, but ${Q(i)} and ${Q(i + 1)} both have answer ${answers[i]}.`,
+            i,
+          );
       }
     }
   }
 
-  if (r.t === RT_PREV_SAME && v != null) {
+  if (q.t === RT_PREV_SAME && v != null) {
     if (v >= qi)
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`,
+      );
     if (isElim(eliminated, v, oi))
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`, v);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
+        v,
+      );
     for (let j = qi - 1; j > v; j--) {
       if (answers[j] === LETTERS[oi])
-        return d(`${Q(qi)} option ${letter} claims previous same answer is ${Q(v)}, but ${Q(j)} also has answer ${letter} and is closer.`, j);
+        return d(
+          `${Q(qi)} option ${letter} claims previous same answer is ${Q(v)}, but ${Q(j)} also has answer ${letter} and is closer.`,
+          j,
+        );
     }
   }
 
-  if (r.t === RT_NEXT_SAME && v != null) {
+  if (q.t === RT_NEXT_SAME && v != null) {
     if (v <= qi || v >= n)
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not after ${Q(qi)}.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not after ${Q(qi)}.`,
+      );
     if (isElim(eliminated, v, oi))
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`, v);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
+        v,
+      );
     for (let j = qi + 1; j < v; j++) {
       if (answers[j] === LETTERS[oi])
-        return d(`${Q(qi)} option ${letter} claims next same answer is ${Q(v)}, but ${Q(j)} also has answer ${letter} and is closer.`, j);
+        return d(
+          `${Q(qi)} option ${letter} claims next same answer is ${Q(v)}, but ${Q(j)} also has answer ${letter} and is closer.`,
+          j,
+        );
     }
   }
 
-  if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && v != null) {
+  if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
     if (v === qi)
-      return d(`${Q(qi)} option ${letter} points to ${Q(qi)} itself, but a question can't share an answer with itself.`);
+      return d(
+        `${Q(qi)} option ${letter} points to ${Q(qi)} itself, but a question can't share an answer with itself.`,
+      );
     if (v >= 0 && v < n && isElim(eliminated, v, oi))
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`, v);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
+        v,
+      );
   }
 
-  if (r.t === RT_UNIQUE) {
+  if (q.t === RT_UNIQUE) {
     for (let i = 0; i < n; i++) {
       if (answers[i] === letter)
-        return d(`${Q(qi)} option ${letter} claims ${letter} is unique, but ${Q(i)} already has answer ${letter}.`, i);
+        return d(
+          `${Q(qi)} option ${letter} claims ${letter} is unique, but ${Q(i)} already has answer ${letter}.`,
+          i,
+        );
     }
   }
 
-  if (r.t === RT_EQUAL_COUNT) {
-    if (v != null && LETTERS[v] === r.answer)
-      return d(`${Q(qi)} option ${letter} claims ${LETTERS[v]}, but the question asks for a different letter with the same count as ${r.answer}.`);
+  if (q.t === RT_EQUAL_COUNT) {
+    if (v != null && LETTERS[v] === q.answer)
+      return d(
+        `${Q(qi)} option ${letter} claims ${LETTERS[v]}, but the question asks for a different letter with the same count as ${q.answer}.`,
+      );
   }
 
   return null;
@@ -751,11 +918,11 @@ function briefForceReason(
   qi: number,
   letter: AnswerLetter,
 ): string {
-  const r = fp.questions[qi];
+  const q = fp.questions[qi];
   const n = fp.n;
 
-  if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null)
-    return `${Q(r.questionIndex)} is ${answers[r.questionIndex]}`;
+  if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null)
+    return `${Q(q.questionIndex)} is ${answers[q.questionIndex]}`;
 
   for (let other = 0; other < n; other++) {
     const otherAns = answers[other];
@@ -763,10 +930,15 @@ function briefForceReason(
     const otherR = fp.questions[other];
     if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi)
       return `${Q(other)} is ${otherAns}, which implies ${letter}`;
-    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi)
+    if (
+      otherR.t === RT_SAME_AS &&
+      fp.optionValues[other][letterIdx(otherAns)] === qi
+    )
       return `same answer as ${Q(other)}`;
     if (
-      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
+      (otherR.t === RT_PREV_SAME ||
+        otherR.t === RT_NEXT_SAME ||
+        otherR.t === RT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     )
       return `${Q(other)} is ${otherAns}, same answer as ${Q(qi)}`;
@@ -801,7 +973,13 @@ export function explainLookahead(
     const a = dr.action;
     if (a.type === "force") {
       involvedQis.add(a.questionIndex);
-      const reason = briefForceReason(fp, hypAnswers, hypEliminated, a.questionIndex, a.letter);
+      const reason = briefForceReason(
+        fp,
+        hypAnswers,
+        hypEliminated,
+        a.questionIndex,
+        a.letter,
+      );
       lines.push(
         reason
           ? `${Q(a.questionIndex)} must be ${a.letter} (${reason}).`
@@ -812,13 +990,18 @@ export function explainLookahead(
     } else if (a.type === "eliminateMulti") {
       const qis: number[] = [];
       for (let i = 0; i < n; i++) {
-        if ((a.questionMask >> i) & 1) { involvedQis.add(i); qis.push(i); }
+        if ((a.questionMask >> i) & 1) {
+          involvedQis.add(i);
+          qis.push(i);
+        }
       }
       const optLetters: string[] = [];
       for (let b = 0; b < 5; b++) {
         if ((a.optionMask >> b) & 1) optLetters.push(LETTERS[b]);
       }
-      lines.push(`Eliminate ${optLetters.join(", ")} from ${qis.map(Q).join(", ")}.`);
+      lines.push(
+        `Eliminate ${optLetters.join(", ")} from ${qis.map(Q).join(", ")}.`,
+      );
       for (const q of qis) hypEliminated[q] |= a.optionMask;
     } else {
       involvedQis.add(a.questionIndex);
@@ -832,10 +1015,16 @@ export function explainLookahead(
         n,
       );
       if (elimDetail) {
-        lines.push(`Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}: ${elimDetail.text}`);
+        lines.push(
+          `Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}: ${elimDetail.text}`,
+        );
       } else {
-        console.error(`No explain for: ELIM ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]} (rule: ${dr.rule})`);
-        lines.push(`Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}.`);
+        console.error(
+          `No explain for: ELIM ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]} (rule: ${dr.rule})`,
+        );
+        lines.push(
+          `Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}.`,
+        );
       }
       hypEliminated[a.questionIndex] |= 1 << a.optionIndex;
     }
@@ -844,7 +1033,13 @@ export function explainLookahead(
   const contradictionQi = result.contradictionQi;
   involvedQis.add(contradictionQi);
   let detail = `${Q(contradictionQi)} would be invalid`;
-  const reason = explainInvalidDetail(fp, puzzle, hypAnswers, hypEliminated, contradictionQi);
+  const reason = explainInvalidDetail(
+    fp,
+    puzzle,
+    hypAnswers,
+    hypEliminated,
+    contradictionQi,
+  );
   if (reason) {
     detail = reason.replace(" claims ", " would say ");
   }
@@ -853,7 +1048,10 @@ export function explainLookahead(
 
   steps.push(simple(`Try looking at ${Q(qi)}.`));
   if (involvedQis.size > 1) {
-    const qList = [...involvedQis].sort((a, b) => a - b).map(Q).join(", ");
+    const qList = [...involvedQis]
+      .sort((a, b) => a - b)
+      .map(Q)
+      .join(", ");
     steps.push(simple(`Try looking at ${qList}.`));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
@@ -885,83 +1083,95 @@ function explainInvalidDetail(
   const a = answers[qi];
   if (a == null) return null;
   const ai = letterIdx(a);
-  const r = fp.questions[qi];
+  const q = fp.questions[qi];
   const v = fp.optionValues[qi][ai];
   const n = fp.n;
 
-  const pred = countPred(r);
-  if (pred && r.t !== RT_MOST_COMMON_COUNT) {
-    const [from, to] = countRange(r, n);
+  const pred = countPred(q);
+  if (pred && q.t !== RT_MOST_COMMON_COUNT) {
+    const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (v != null) {
       if (cr.count > v)
-        return `${Q(qi)} claims ${v} ${countRuleLabel(r, v)}, but there are already ${cr.count}`;
+        return `${Q(qi)} claims ${v} ${countRuleLabel(q, v)}, but there are already ${cr.count}`;
       if (cr.count + cr.remaining < v)
-        return `${Q(qi)} claims ${v} ${countRuleLabel(r, v)}, but at most ${cr.count + cr.remaining} are possible`;
+        return `${Q(qi)} claims ${v} ${countRuleLabel(q, v)}, but at most ${cr.count + cr.remaining} are possible`;
     }
   }
 
-  if (r.t === RT_ANSWER_OF) {
-    const target = answers[r.questionIndex];
+  if (q.t === RT_ANSWER_OF) {
+    const target = answers[q.questionIndex];
     if (target != null && v != null && letterIdx(target) !== v)
-      return `${Q(qi)} claims ${Q(r.questionIndex)}'s answer is ${LETTERS[v]}, but ${Q(r.questionIndex)} is answered ${target}`;
+      return `${Q(qi)} claims ${Q(q.questionIndex)}'s answer is ${LETTERS[v]}, but ${Q(q.questionIndex)} is answered ${target}`;
   }
 
-  if (r.t === RT_LETTER_DIST) {
-    const other = answers[r.questionIndex];
+  if (q.t === RT_LETTER_DIST) {
+    const other = answers[q.questionIndex];
     if (other != null && v != null) {
       const dist = Math.abs(ai - letterIdx(other));
       if (dist !== v)
-        return `${Q(qi)} claims letter distance ${v}, but ${a} is ${dist} letters from ${Q(r.questionIndex)}'s answer ${other}`;
+        return `${Q(qi)} claims letter distance ${v}, but ${a} is ${dist} letters from ${Q(q.questionIndex)}'s answer ${other}`;
     }
   }
 
-  if (r.t === RT_UNIQUE) {
+  if (q.t === RT_UNIQUE) {
     for (let i = 0; i < n; i++) {
       if (i !== qi && answers[i] === a)
         return `${Q(qi)} claims ${a} is unique, but ${Q(i)} already has answer ${a}`;
     }
   }
 
-  if (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) {
-    const label = r.t === RT_FIRST_WITH ? "first" : "closest";
-    const scanStart = r.t === RT_CLOSEST_AFTER ? r.afterIndex + 1 : 0;
-    if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer)
-      return `${Q(qi)} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
+  if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
+    const label = q.t === RT_FIRST_WITH ? "first" : "closest";
+    const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
+    if (
+      v != null &&
+      v >= 0 &&
+      v < n &&
+      answers[v] != null &&
+      answers[v] !== q.answer
+    )
+      return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
       for (let j = scanStart; j < v; j++) {
-        if (answers[j] === r.answer)
-          return `${Q(qi)} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(j)} has answer ${r.answer} and comes before ${Q(v)}`;
+        if (answers[j] === q.answer)
+          return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(j)} has answer ${q.answer} and comes before ${Q(v)}`;
       }
     }
     if (v == null) {
       for (let j = scanStart; j < n; j++) {
-        if (answers[j] === r.answer)
-          return `${Q(qi)} claims no question has answer ${r.answer}, but ${Q(j)} does`;
+        if (answers[j] === q.answer)
+          return `${Q(qi)} claims no question has answer ${q.answer}, but ${Q(j)} does`;
       }
     }
   }
 
-  if (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) {
-    const label = r.t === RT_LAST_WITH ? "last" : "closest";
-    const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
-    if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== r.answer)
-      return `${Q(qi)} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
+  if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
+    const label = q.t === RT_LAST_WITH ? "last" : "closest";
+    const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
+    if (
+      v != null &&
+      v >= 0 &&
+      v < n &&
+      answers[v] != null &&
+      answers[v] !== q.answer
+    )
+      return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
       for (let j = beforeIdx - 1; j > v; j--) {
-        if (answers[j] === r.answer)
-          return `${Q(qi)} claims ${label} ${r.answer} is ${Q(v)}, but ${Q(j)} has answer ${r.answer} and comes after ${Q(v)}`;
+        if (answers[j] === q.answer)
+          return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(j)} has answer ${q.answer} and comes after ${Q(v)}`;
       }
     }
     if (v == null) {
       for (let j = 0; j < beforeIdx; j++) {
-        if (answers[j] === r.answer)
-          return `${Q(qi)} claims no question has answer ${r.answer}, but ${Q(j)} does`;
+        if (answers[j] === q.answer)
+          return `${Q(qi)} claims no question has answer ${q.answer}, but ${Q(j)} does`;
       }
     }
   }
 
-  if (r.t === RT_SAME_AS) {
+  if (q.t === RT_SAME_AS) {
     if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== a)
       return `${Q(qi)} claims same answer as ${Q(v)}, but ${Q(v)} is ${answers[v]} and ${Q(qi)} is ${a}`;
   }

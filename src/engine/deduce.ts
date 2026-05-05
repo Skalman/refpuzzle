@@ -139,15 +139,15 @@ function countMatching(
   return { count, remaining };
 }
 
-function countPred(r: {
+function countPred(q: {
   t: number;
   answer: string | null;
 }): { pred: Pred; mask: number } | null {
-  switch (r.t) {
+  switch (q.t) {
     case RT_COUNT_ANSWER:
     case RT_COUNT_ANSWER_BEFORE:
     case RT_COUNT_ANSWER_AFTER: {
-      const answer = r.answer!;
+      const answer = q.answer!;
       return { pred: (a) => a === answer, mask: 1 << letterIdx(answer) };
     }
     case RT_COUNT_VOWEL:
@@ -160,11 +160,11 @@ function countPred(r: {
 }
 
 function countRange(
-  r: { t: number; afterIndex: number; beforeIndex: number },
+  q: { t: number; afterIndex: number; beforeIndex: number },
   n: number,
 ): [number, number] {
-  if (r.t === RT_COUNT_ANSWER_BEFORE) return [0, r.beforeIndex];
-  if (r.t === RT_COUNT_ANSWER_AFTER) return [r.afterIndex + 1, n];
+  if (q.t === RT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
+  if (q.t === RT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
   return [0, n];
 }
 
@@ -203,13 +203,13 @@ export function deduceWithRule(
   // ── Count saturation ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] == null) continue;
-    const r = fp.questions[qi];
-    const cp = countPred(r);
+    const q = fp.questions[qi];
+    const cp = countPred(q);
     if (!cp) continue;
     const ai = letterIdx(answers[qi]!);
     const v = fp.optionValues[qi][ai];
     if (v == null) continue;
-    const [from, to] = countRange(r, n);
+    const [from, to] = countRange(q, n);
     const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
 
     if (run("CountSaturated")) {
@@ -278,7 +278,7 @@ export function deduceWithRule(
   // ── Forced values ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.questions[qi];
+    const q = fp.questions[qi];
 
     if (run("OnlyOptionLeft")) {
       if (remainingCount(eliminated[qi]) === 1) {
@@ -296,8 +296,8 @@ export function deduceWithRule(
     }
 
     if (run("AnswerOfForward")) {
-      if (r.t === RT_ANSWER_OF && answers[r.questionIndex] != null) {
-        const target = answers[r.questionIndex]!;
+      if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null) {
+        const target = answers[q.questionIndex]!;
         const targetIdx = letterIdx(target);
         for (let oi = 0; oi < 5; oi++) {
           if (fp.optionValues[qi][oi] === targetIdx) {
@@ -369,8 +369,8 @@ export function deduceWithRule(
     }
 
     if (run("LetterDistForward")) {
-      if (r.t === RT_LETTER_DIST) {
-        const otherAns = answers[r.questionIndex];
+      if (q.t === RT_LETTER_DIST) {
+        const otherAns = answers[q.questionIndex];
         if (otherAns != null) {
           const otherIdx = letterIdx(otherAns);
           let validCount = 0;
@@ -472,9 +472,9 @@ export function deduceWithRule(
     }
 
     if (run("CountAllAnswered")) {
-      const cp = countPred(r);
+      const cp = countPred(q);
       if (cp) {
-        const [from, to] = countRange(r, n);
+        const [from, to] = countRange(q, n);
         const cr = countMatching(
           answers,
           eliminated,
@@ -725,15 +725,15 @@ export function deduceWithRule(
   // ── Eliminations ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.questions[qi];
+    const q = fp.questions[qi];
 
     for (let oi = 0; oi < 5; oi++) {
       if (isElim(eliminated, qi, oi)) continue;
       const v = fp.optionValues[qi][oi];
 
-      const cp = countPred(r);
-      if (cp && r.t !== 5 /* RT_MOST_COMMON_COUNT */) {
-        const [from, to] = countRange(r, n);
+      const cp = countPred(q);
+      if (cp && q.t !== 5 /* RT_MOST_COMMON_COUNT */) {
+        const [from, to] = countRange(q, n);
         const cr = countMatching(
           answers,
           eliminated,
@@ -764,9 +764,9 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_ANSWER_OF) {
+      if (q.t === RT_ANSWER_OF) {
         if (run("AnswerOfTargetRuledOut")) {
-          const target = answers[r.questionIndex];
+          const target = answers[q.questionIndex];
           if (target != null && v != null && letterIdx(target) !== v) {
             results.push(
               res(
@@ -776,7 +776,7 @@ export function deduceWithRule(
             );
           }
           if (target == null && v != null && v >= 0 && v < 5) {
-            if (isElim(eliminated, r.questionIndex, v)) {
+            if (isElim(eliminated, q.questionIndex, v)) {
               results.push(
                 res(
                   { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -788,7 +788,7 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_LETTER_DIST) {
+      if (q.t === RT_LETTER_DIST) {
         if (run("LetterDistImpossible")) {
           if (v != null && v > Math.max(oi, 4 - oi)) {
             results.push(
@@ -800,7 +800,7 @@ export function deduceWithRule(
           }
         }
         if (run("LetterDistWrong")) {
-          const other = answers[r.questionIndex];
+          const other = answers[q.questionIndex];
           if (
             other != null &&
             v != null &&
@@ -815,12 +815,12 @@ export function deduceWithRule(
           }
         }
         if (run("LetterDistNoMatch")) {
-          const other = answers[r.questionIndex];
+          const other = answers[q.questionIndex];
           if (other == null && v != null) {
             let anyPossible = false;
             for (let ti = 0; ti < 5; ti++) {
               if (
-                !isElim(eliminated, r.questionIndex, ti) &&
+                !isElim(eliminated, q.questionIndex, ti) &&
                 Math.abs(oi - ti) === v
               ) {
                 anyPossible = true;
@@ -839,8 +839,8 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_CLOSEST_AFTER || r.t === RT_FIRST_WITH) {
-        const scanStart = r.t === RT_CLOSEST_AFTER ? r.afterIndex + 1 : 0;
+      if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
+        const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
         if (v != null) {
           if (run("FirstClosestAfterOutOfRange")) {
             if (v < scanStart || v >= n) {
@@ -854,7 +854,7 @@ export function deduceWithRule(
           }
           if (v >= scanStart && v < n) {
             if (run("FirstClosestAfterWrongAnswer")) {
-              if (answers[v] != null && answers[v] !== r.answer) {
+              if (answers[v] != null && answers[v] !== q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -864,7 +864,7 @@ export function deduceWithRule(
               }
             }
             if (run("FirstClosestAfterRuledOut")) {
-              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              if (answers[v] == null && isElim(eliminated, v, L2I[q.answer!])) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -875,7 +875,7 @@ export function deduceWithRule(
             }
             if (run("FirstClosestAfterEarlierMatch")) {
               for (let j = scanStart; j < v; j++) {
-                if (answers[j] === r.answer) {
+                if (answers[j] === q.answer) {
                   results.push(
                     res(
                       { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -886,7 +886,7 @@ export function deduceWithRule(
               }
             }
             if (run("FirstClosestAfterSelfRef")) {
-              if (LETTERS[oi] === r.answer && qi >= scanStart && qi < v) {
+              if (LETTERS[oi] === q.answer && qi >= scanStart && qi < v) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -899,7 +899,7 @@ export function deduceWithRule(
         } else {
           if (run("FirstClosestAfterNoneMatch")) {
             for (let j = scanStart; j < n; j++) {
-              if (answers[j] === r.answer) {
+              if (answers[j] === q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -912,8 +912,8 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_CLOSEST_BEFORE || r.t === RT_LAST_WITH) {
-        const beforeIdx = r.t === RT_CLOSEST_BEFORE ? r.beforeIndex : n;
+      if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
+        const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
         if (v != null) {
           if (run("LastClosestBeforeOutOfRange")) {
             if (v < 0 || v >= beforeIdx) {
@@ -927,7 +927,7 @@ export function deduceWithRule(
           }
           if (v >= 0 && v < beforeIdx) {
             if (run("LastClosestBeforeWrongAnswer")) {
-              if (answers[v] != null && answers[v] !== r.answer) {
+              if (answers[v] != null && answers[v] !== q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -937,7 +937,7 @@ export function deduceWithRule(
               }
             }
             if (run("LastClosestBeforeRuledOut")) {
-              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              if (answers[v] == null && isElim(eliminated, v, L2I[q.answer!])) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -948,7 +948,7 @@ export function deduceWithRule(
             }
             if (run("LastClosestBeforeLaterMatch")) {
               for (let j = beforeIdx - 1; j > v; j--) {
-                if (answers[j] === r.answer) {
+                if (answers[j] === q.answer) {
                   results.push(
                     res(
                       { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -959,7 +959,7 @@ export function deduceWithRule(
               }
             }
             if (run("LastClosestBeforeSelfRef")) {
-              if (LETTERS[oi] === r.answer && qi > v && qi < beforeIdx) {
+              if (LETTERS[oi] === q.answer && qi > v && qi < beforeIdx) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -972,7 +972,7 @@ export function deduceWithRule(
         } else {
           if (run("LastClosestBeforeNoneMatch")) {
             for (let j = 0; j < beforeIdx; j++) {
-              if (answers[j] === r.answer) {
+              if (answers[j] === q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -985,8 +985,8 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
-        const parity = r.t === RT_ONLY_ODD ? 1 : 0;
+      if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
+        const parity = q.t === RT_ONLY_ODD ? 1 : 0;
         if (v != null) {
           if (run("OnlyOddEvenWrongParity")) {
             if ((v + 1) % 2 !== parity) {
@@ -1000,7 +1000,7 @@ export function deduceWithRule(
           }
           if ((v + 1) % 2 === parity && v >= 0 && v < n) {
             if (run("OnlyOddEvenWrongAnswer")) {
-              if (answers[v] != null && answers[v] !== r.answer) {
+              if (answers[v] != null && answers[v] !== q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -1010,7 +1010,7 @@ export function deduceWithRule(
               }
             }
             if (run("OnlyOddEvenRuledOut")) {
-              if (answers[v] == null && isElim(eliminated, v, L2I[r.answer!])) {
+              if (answers[v] == null && isElim(eliminated, v, L2I[q.answer!])) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -1023,7 +1023,7 @@ export function deduceWithRule(
         } else {
           if (run("OnlyOddEvenNoneMatch")) {
             for (let i = 0; i < n; i++) {
-              if ((i + 1) % 2 === parity && answers[i] === r.answer) {
+              if ((i + 1) % 2 === parity && answers[i] === q.answer) {
                 results.push(
                   res(
                     { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -1036,7 +1036,7 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_CONSEC_IDENT) {
+      if (q.t === RT_CONSEC_IDENT) {
         if (v != null) {
           if (run("ConsecIdentOutOfRange")) {
             if (v < 0 || v + 1 >= n) {
@@ -1101,9 +1101,9 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_EQUAL_COUNT) {
+      if (q.t === RT_EQUAL_COUNT) {
         if (run("EqualCountSelfRef")) {
-          if (v != null && LETTERS[v] === r.answer) {
+          if (v != null && LETTERS[v] === q.answer) {
             results.push(
               res(
                 { type: "eliminate", questionIndex: qi, optionIndex: oi },
@@ -1114,7 +1114,7 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_PREV_SAME && v != null) {
+      if (q.t === RT_PREV_SAME && v != null) {
         if (run("PrevSameNotBefore")) {
           if (v >= qi) {
             results.push(
@@ -1151,7 +1151,7 @@ export function deduceWithRule(
         }
       }
 
-      if (r.t === RT_NEXT_SAME && v != null) {
+      if (q.t === RT_NEXT_SAME && v != null) {
         if (run("NextSameNotAfter")) {
           if (v <= qi || v >= n) {
             results.push(
@@ -1188,7 +1188,7 @@ export function deduceWithRule(
         }
       }
 
-      if ((r.t === RT_ONLY_SAME || r.t === RT_SAME_AS) && v != null) {
+      if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
         if (run("OnlySameSelfRef")) {
           if (v === qi) {
             results.push(
@@ -1216,8 +1216,8 @@ export function deduceWithRule(
   // ── LeastCommon ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.questions[qi];
-    if (r.t !== RT_LEAST_COMMON) continue;
+    const q = fp.questions[qi];
+    if (q.t !== RT_LEAST_COMMON) continue;
 
     // Compute min/max possible count for each letter
     const minCount = [0, 0, 0, 0, 0];
@@ -1282,7 +1282,9 @@ export function deduceWithRule(
           checkAdjMin[checkOi]++;
           checkAdjMax[checkOi]++;
           const mustBeLeast = [0, 1, 2, 3, 4].every(
-            (li) => li === checkClaimed || checkAdjMin[li] > checkAdjMax[checkClaimed],
+            (li) =>
+              li === checkClaimed ||
+              checkAdjMin[li] > checkAdjMax[checkClaimed],
           );
           if (mustBeLeast) {
             forceCount++;
@@ -1290,10 +1292,12 @@ export function deduceWithRule(
           }
         }
         if (forceCount === 1) {
-          results.push(res(
-            { type: "force", questionIndex: qi, letter: LETTERS[forceOi] },
-            "LeastCommonForce",
-          ));
+          results.push(
+            res(
+              { type: "force", questionIndex: qi, letter: LETTERS[forceOi] },
+              "LeastCommonForce",
+            ),
+          );
         }
       }
     }
@@ -1302,8 +1306,8 @@ export function deduceWithRule(
   // ── MostCommon ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
-    const r = fp.questions[qi];
-    if (r.t !== RT_MOST_COMMON) continue;
+    const q = fp.questions[qi];
+    if (q.t !== RT_MOST_COMMON) continue;
 
     const minCount = [0, 0, 0, 0, 0];
     const maxCount = [0, 0, 0, 0, 0];
@@ -1384,14 +1388,13 @@ export function deduceWithRule(
     for (let qi = 0; qi < n; qi++) {
       const a = answers[qi];
       if (a == null) continue;
-      const r = fp.questions[qi];
-      if (r.t !== RT_TRUE_STMT) continue;
+      const q = fp.questions[qi];
+      if (q.t !== RT_TRUE_STMT) continue;
       const claim = fp.optionClaims[qi][letterIdx(a)];
       if (!claim) continue;
 
       if (
-        (claim.type === "first_with_answer" ||
-          claim.type === "last_with_answer") &&
+        (claim.type === "FirstWith" || claim.type === "LastWith") &&
         claim.value >= 0 &&
         claim.value < n
       ) {
@@ -1414,11 +1417,7 @@ export function deduceWithRule(
         }
       }
 
-      if (
-        claim.type === "answer_of_question" &&
-        claim.value >= 0 &&
-        claim.value < 5
-      ) {
+      if (claim.type === "AnswerOf" && claim.value >= 0 && claim.value < 5) {
         const targetQi = claim.questionIndex;
         const targetLetter = LETTERS[claim.value];
         if (answers[targetQi] == null) {

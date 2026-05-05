@@ -73,7 +73,7 @@ function countConsonants(answers: (AnswerLetter | null)[]): number {
 }
 
 export function checkQuestionAgainstSolution(
-  rule: FlatQuestion,
+  question: FlatQuestion,
   questionIdx: number,
   selectedAnswer: AnswerLetter,
   answers: (AnswerLetter | null)[],
@@ -81,18 +81,18 @@ export function checkQuestionAgainstSolution(
 ): boolean {
   const si = letterIdx(selectedAnswer);
   const v = fp.optionValues[questionIdx][si];
-  const r = rule;
+  const q = question;
   const n = fp.n;
 
-  switch (r.t) {
+  switch (q.t) {
     case RT_COUNT_ANSWER:
-      return countAnswer(answers, r.answer!) === v;
+      return countAnswer(answers, q.answer!) === v;
 
     case RT_COUNT_ANSWER_BEFORE:
-      return countAnswerInRange(answers, r.answer!, 0, r.beforeIndex) === v;
+      return countAnswerInRange(answers, q.answer!, 0, q.beforeIndex) === v;
 
     case RT_COUNT_ANSWER_AFTER:
-      return countAnswerInRange(answers, r.answer!, r.afterIndex + 1, n) === v;
+      return countAnswerInRange(answers, q.answer!, q.afterIndex + 1, n) === v;
 
     case RT_COUNT_VOWEL:
       return countVowels(answers) === v;
@@ -108,29 +108,29 @@ export function checkQuestionAgainstSolution(
     }
 
     case RT_CLOSEST_AFTER: {
-      for (let i = r.afterIndex + 1; i < n; i++) {
-        if (answers[i] === r.answer) return i === v;
+      for (let i = q.afterIndex + 1; i < n; i++) {
+        if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
     case RT_CLOSEST_BEFORE: {
-      for (let i = r.beforeIndex - 1; i >= 0; i--) {
-        if (answers[i] === r.answer) return i === v;
+      for (let i = q.beforeIndex - 1; i >= 0; i--) {
+        if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
     case RT_FIRST_WITH: {
       for (let i = 0; i < n; i++) {
-        if (answers[i] === r.answer) return i === v;
+        if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
     case RT_LAST_WITH: {
       for (let i = n - 1; i >= 0; i--) {
-        if (answers[i] === r.answer) return i === v;
+        if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
@@ -165,10 +165,10 @@ export function checkQuestionAgainstSolution(
 
     case RT_ONLY_ODD:
     case RT_ONLY_EVEN: {
-      const parity = r.t === RT_ONLY_ODD ? 1 : 0;
+      const parity = q.t === RT_ONLY_ODD ? 1 : 0;
       const matches: number[] = [];
       for (let i = 0; i < n; i++) {
-        if ((i + 1) % 2 === parity && answers[i] === r.answer) matches.push(i);
+        if ((i + 1) % 2 === parity && answers[i] === q.answer) matches.push(i);
       }
       if (v == null) return matches.length === 0;
       return matches.length === 1 && matches[0] === v;
@@ -184,7 +184,7 @@ export function checkQuestionAgainstSolution(
     }
 
     case RT_ANSWER_OF: {
-      const other = answers[r.questionIndex];
+      const other = answers[q.questionIndex];
       return other != null && letterIdx(other) === v;
     }
 
@@ -208,18 +208,20 @@ export function checkQuestionAgainstSolution(
       return countAnswer(answers, selectedAnswer) === 1;
 
     case RT_EQUAL_COUNT: {
-      const refCount = countAnswer(answers, r.answer!);
+      const refCount = countAnswer(answers, q.answer!);
       if (v == null)
-        return !LETTERS.some((l) => l !== r.answer && countAnswer(answers, l) === refCount);
+        return !LETTERS.some(
+          (l) => l !== q.answer && countAnswer(answers, l) === refCount,
+        );
       const claimed = LETTERS[v];
-      return claimed !== r.answer && countAnswer(answers, claimed) === refCount;
+      return claimed !== q.answer && countAnswer(answers, claimed) === refCount;
     }
 
     case RT_SELF:
       return true;
 
     case RT_LETTER_DIST: {
-      const other = answers[r.questionIndex];
+      const other = answers[q.questionIndex];
       if (other == null) return false;
       const dist = Math.abs(si - letterIdx(other));
       return dist === v;
@@ -244,37 +246,47 @@ export function checkQuestionAgainstSolution(
   return false;
 }
 
-export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): boolean {
+export function evaluateClaim(
+  claim: Claim,
+  answers: (AnswerLetter | null)[],
+): boolean {
   switch (claim.type) {
-    case "count_answer":
+    case "CountAnswer":
       return countAnswer(answers, claim.answer) === claim.value;
 
-    case "count_consonant_answers":
+    case "CountConsonant":
       return countConsonants(answers) === claim.value;
 
-    case "count_vowel_answers":
+    case "CountVowel":
       return countVowels(answers) === claim.value;
 
-    case "count_answer_after":
+    case "CountAnswerAfter":
       return (
-        countAnswerInRange(answers, claim.answer, claim.afterIndex + 1, answers.length) ===
+        countAnswerInRange(
+          answers,
+          claim.answer,
+          claim.afterIndex + 1,
+          answers.length,
+        ) === claim.value
+      );
+
+    case "CountAnswerBefore":
+      return (
+        countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) ===
         claim.value
       );
 
-    case "count_answer_before":
-      return countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) === claim.value;
-
-    case "answer_of_question":
+    case "AnswerOf":
       return answers[claim.questionIndex] === LETTERS[claim.value];
 
-    case "first_with_answer": {
+    case "FirstWith": {
       for (let i = 0; i < answers.length; i++) {
         if (answers[i] === claim.answer) return i === claim.value;
       }
       return false;
     }
 
-    case "last_with_answer": {
+    case "LastWith": {
       let last = -1;
       for (let i = 0; i < answers.length; i++) {
         if (answers[i] === claim.answer) last = i;
@@ -282,13 +294,16 @@ export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): b
       return last === claim.value;
     }
 
-    case "most_common_answer": {
+    case "MostCommon": {
       const counts = [0, 0, 0, 0, 0];
       for (const a of answers) {
         if (a !== null) counts[L2I[a]] += 1;
       }
       const max = Math.max(...counts);
-      return counts[claim.value] === max && counts.filter((c) => c === max).length === 1;
+      return (
+        counts[claim.value] === max &&
+        counts.filter((c) => c === max).length === 1
+      );
     }
   }
   claim satisfies never;

@@ -8,32 +8,66 @@ use crate::rng::Rng;
 use crate::solver::solve;
 use crate::types::*;
 
-use std::sync::atomic::{AtomicU64, Ordering};
+#[derive(Default)]
+pub struct Stats {
+    pub attempts: u32,
+    pub fail_unique: u32,
+    pub fail_solve: u32,
+    pub fail_solve_zero_progress: u32,
+    pub repair_attempts: u32,
+    pub repair_ok: u32,
+    pub repair_fail_no_candidates: u32,
+    pub repair_fail_no_change: u32,
+    pub repair_fail_changed: u32,
+    pub solve_us: u64,
+    pub hint_us: u64,
+    pub deduce_calls: u32,
+    pub deduce_results: u32,
+    pub lookahead_calls: u32,
+    pub lookahead_us: u64,
+}
 
-pub static STATS: [AtomicU64; 9] = {
-    #[allow(clippy::declare_interior_mutable_const)]
-    const Z: AtomicU64 = AtomicU64::new(0);
-    [Z; 9]
-};
-// 0=attempts, 1=fail_eval, 2=fail_unique, 3=fail_solve, 4=repair_attempts,
-// 5=repair_ok, 6=solve_us, 7=hint_us, 8=solve_fail_zero_progress
+impl Stats {
+    pub fn merge(&mut self, other: &Stats) {
+        self.attempts += other.attempts;
+        self.fail_unique += other.fail_unique;
+        self.fail_solve += other.fail_solve;
+        self.fail_solve_zero_progress += other.fail_solve_zero_progress;
+        self.repair_attempts += other.repair_attempts;
+        self.repair_ok += other.repair_ok;
+        self.repair_fail_no_candidates += other.repair_fail_no_candidates;
+        self.repair_fail_no_change += other.repair_fail_no_change;
+        self.repair_fail_changed += other.repair_fail_changed;
+        self.solve_us += other.solve_us;
+        self.hint_us += other.hint_us;
+        self.deduce_calls += other.deduce_calls;
+        self.deduce_results += other.deduce_results;
+        self.lookahead_calls += other.lookahead_calls;
+        self.lookahead_us += other.lookahead_us;
+    }
 
-pub fn print_stats() {
-    let s = |i: usize| STATS[i].load(Ordering::Relaxed);
-    let ok = s(0) - s(1) - s(2) - s(3);
-    eprintln!(
-        "  attempts={} ok={} eval_fail={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{} | solve={}ms hint={}ms",
-        s(0),
-        ok,
-        s(1),
-        s(2),
-        s(3),
-        s(8),
-        s(5),
-        s(4),
-        s(6) / 1000,
-        s(7) / 1000
-    );
+    pub fn print(&self) {
+        let ok = self.attempts - self.fail_unique - self.fail_solve;
+        eprintln!(
+            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {}ms\n  repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
+            self.attempts,
+            ok,
+            self.fail_unique,
+            self.fail_solve,
+            self.fail_solve_zero_progress,
+            self.repair_ok,
+            self.repair_attempts,
+            self.solve_us / 1000,
+            self.hint_us / 1000,
+            self.deduce_calls,
+            self.deduce_results,
+            self.lookahead_calls,
+            self.lookahead_us / 1000,
+            self.repair_fail_no_candidates,
+            self.repair_fail_no_change,
+            self.repair_fail_changed,
+        );
+    }
 }
 
 fn us(t: std::time::Instant) -> u64 {
@@ -98,14 +132,15 @@ pub fn solution_satisfies_type(
     }
 }
 
-fn try_solve(fp: &FlatPuzzle) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
-    try_solve_from(fp, [None; MAX_N], [0u8; MAX_N])
+fn try_solve(fp: &FlatPuzzle, stats: &mut Stats) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+    try_solve_from(fp, [None; MAX_N], [0u8; MAX_N], stats)
 }
 
 fn try_solve_from(
     fp: &FlatPuzzle,
     mut answers: [Option<Answer>; MAX_N],
     mut eliminated: [u8; MAX_N],
+    stats: &mut Stats,
 ) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
     let n = fp.n;
 
@@ -114,11 +149,13 @@ fn try_solve_from(
             return (true, answers, eliminated);
         }
 
+        stats.deduce_calls += 1;
         let drs = deduce(fp, &answers, &eliminated);
+        stats.deduce_results += drs.len() as u32;
         if !drs.is_empty() {
             for dr in &drs {
-            match dr.action {
-                DeduceAction::Force { qi, answer } => {
+                match dr.action {
+                    DeduceAction::Force { qi, answer } => {
                         if let Some(existing) = answers[qi] {
                             assert_eq!(
                                 existing,
@@ -129,20 +166,24 @@ fn try_solve_from(
                                 answer.as_char()
                             );
                         } else {
-                    eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                    answers[qi] = Some(answer);
+                            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                            answers[qi] = Some(answer);
                         }
-                }
-                DeduceAction::Eliminate { qi, oi } => {
-                        assert!(answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
-                            "eliminating Q{} option {} but it's already forced to that answer", qi + 1, LETTERS[oi].as_char());
-                    eliminated[qi] |= 1 << oi;
-                }
+                    }
+                    DeduceAction::Eliminate { qi, oi } => {
+                        assert!(
+                            answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
+                            "eliminating Q{} option {} but it's already forced to that answer",
+                            qi + 1,
+                            LETTERS[oi].as_char()
+                        );
+                        eliminated[qi] |= 1 << oi;
+                    }
                     DeduceAction::EliminateMulti {
                         question_mask,
                         option_mask,
                     } => {
-                    for i in 0..MAX_N {
+                        for i in 0..MAX_N {
                             if (question_mask >> i) & 1 == 1 {
                                 eliminated[i] |= option_mask;
                             }
@@ -153,7 +194,10 @@ fn try_solve_from(
             continue;
         }
 
+        stats.lookahead_calls += 1;
+        let t_la = std::time::Instant::now();
         let lr = lookahead(fp, &answers, &eliminated, 6);
+        stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
@@ -170,8 +214,9 @@ pub fn validate_and_repair(
     fp: &mut FlatPuzzle,
     n: usize,
     rng: &mut Rng,
+    stats: &mut Stats,
 ) -> bool {
-    STATS[0].fetch_add(1, Ordering::Relaxed);
+    stats.attempts += 1;
 
     // Assert construction correctness
     let opt_solution = to_optional(solution, n);
@@ -189,41 +234,47 @@ pub fn validate_and_repair(
 
     // Step 1: Can the engine solve it? (fast, rejects most bad puzzles)
     let t0 = std::time::Instant::now();
-    let (ok, stuck_answers, stuck_elim) = try_solve(fp);
-    STATS[7].fetch_add(us(t0), Ordering::Relaxed);
+    let (ok, stuck_answers, stuck_elim) = try_solve(fp, stats);
+    stats.hint_us += us(t0);
     if ok {
         // Step 2: Is the solution unique? (expensive, only for solvable puzzles)
         let t0 = std::time::Instant::now();
         let solutions = solve(fp, None, 2);
-        STATS[6].fetch_add(us(t0), Ordering::Relaxed);
+        stats.solve_us += us(t0);
         if solutions.len() == 1 {
             return true;
         }
-        STATS[2].fetch_add(1, Ordering::Relaxed);
+        stats.fail_unique += 1;
         return false;
     }
 
     // Step 3: Repair — tweak distractors and retry
     let solved_before = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
-    STATS[3].fetch_add(1, Ordering::Relaxed);
+    stats.fail_solve += 1;
     if solved_before == 0 {
-        STATS[8].fetch_add(1, Ordering::Relaxed);
+        stats.fail_solve_zero_progress += 1;
     }
 
     let candidates = rank_repair_candidates(fp, &stuck_answers);
     let mut repaired = false;
+    let mut any_changed = false;
 
     for &qi in &candidates {
-        STATS[4].fetch_add(1, Ordering::Relaxed);
+        stats.repair_attempts += 1;
+
+        let before: [i16; 5] = fp.option_nums[qi];
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
+        if fp.option_nums[qi] != before {
+            any_changed = true;
+        }
 
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
-            try_solve(fp)
+            try_solve(fp, stats)
         } else {
-            try_solve_from(fp, stuck_answers, stuck_elim)
+            try_solve_from(fp, stuck_answers, stuck_elim, stats)
         };
-        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
+        stats.hint_us += us(t0);
 
         if ok {
             repaired = true;
@@ -232,9 +283,19 @@ pub fn validate_and_repair(
     }
 
     if !repaired {
+        if candidates.is_empty() {
+            stats.repair_fail_no_candidates += 1;
+        } else if !any_changed {
+            stats.repair_fail_no_change += 1;
+        } else {
+            stats.repair_fail_changed += 1;
+        }
+    }
+
+    if !repaired {
         let t0 = std::time::Instant::now();
-        let (ok, _, _) = try_solve(fp);
-        STATS[7].fetch_add(us(t0), Ordering::Relaxed);
+        let (ok, _, _) = try_solve(fp, stats);
+        stats.hint_us += us(t0);
         repaired = ok;
     }
 
@@ -245,9 +306,9 @@ pub fn validate_and_repair(
     // Step 4: After repair, verify uniqueness
     let t0 = std::time::Instant::now();
     let solutions = solve(fp, None, 2);
-    STATS[6].fetch_add(us(t0), Ordering::Relaxed);
+    stats.solve_us += us(t0);
     if solutions.len() == 1 {
-        STATS[5].fetch_add(1, Ordering::Relaxed);
+        stats.repair_ok += 1;
         return true;
     }
 
@@ -941,15 +1002,15 @@ pub fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
 fn claim_category(claim: &Claim) -> u16 {
     match *claim {
         Claim::None => 0,
-        Claim::CountAnswerEquals { answer, .. } => 100 + answer.idx() as u16,
-        Claim::CountConsonantEquals { .. } => 200,
-        Claim::CountVowelEquals { .. } => 201,
-        Claim::CountAnswerAfterEquals { answer, .. } => 300 + answer.idx() as u16,
-        Claim::CountAnswerBeforeEquals { answer, .. } => 400 + answer.idx() as u16,
-        Claim::ClaimAnswerOf { question_index, .. } => 500 + question_index as u16,
-        Claim::FirstWithAnswer { value, .. } => 600 + value.idx() as u16,
-        Claim::LastWithAnswer { value, .. } => 700 + value.idx() as u16,
-        Claim::MostCommonAnswer { .. } => 800,
+        Claim::CountAnswer { answer, .. } => 100 + answer.idx() as u16,
+        Claim::CountConsonant { .. } => 200,
+        Claim::CountVowel { .. } => 201,
+        Claim::CountAnswerAfter { answer, .. } => 300 + answer.idx() as u16,
+        Claim::CountAnswerBefore { answer, .. } => 400 + answer.idx() as u16,
+        Claim::AnswerOf { question_index, .. } => 500 + question_index as u16,
+        Claim::FirstWith { value, .. } => 600 + value.idx() as u16,
+        Claim::LastWith { value, .. } => 700 + value.idx() as u16,
+        Claim::MostCommon { .. } => 800,
     }
 }
 
@@ -995,21 +1056,21 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
     match rng.int(0, 8) {
         0 => {
             let a = rng.pick(&LETTERS);
-            Claim::CountAnswerEquals {
+            Claim::CountAnswer {
                 answer: a,
                 value: count_letter(sol, a, n) as u8,
             }
         }
-        1 => Claim::CountConsonantEquals {
+        1 => Claim::CountConsonant {
             value: (0..n).filter(|&i| !sol[i].is_vowel()).count() as u8,
         },
-        2 => Claim::CountVowelEquals {
+        2 => Claim::CountVowel {
             value: (0..n).filter(|&i| sol[i].is_vowel()).count() as u8,
         },
         3 => {
             let a = rng.pick(&LETTERS);
             let ai = rng.int(0, (n as i32 - 5).max(0)) as u8;
-            Claim::CountAnswerAfterEquals {
+            Claim::CountAnswerAfter {
                 answer: a,
                 after_index: ai,
                 value: ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as u8,
@@ -1018,7 +1079,7 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
         4 => {
             let a = rng.pick(&LETTERS);
             let bi = rng.int(4, n as i32 - 1) as u8;
-            Claim::CountAnswerBeforeEquals {
+            Claim::CountAnswerBefore {
                 answer: a,
                 before_index: bi,
                 value: (0..bi as usize).filter(|&i| sol[i] == a).count() as u8,
@@ -1026,7 +1087,7 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
         }
         5 => {
             let qi = rng.int(0, n as i32 - 1) as u8;
-            Claim::ClaimAnswerOf {
+            Claim::AnswerOf {
                 question_index: qi,
                 value: sol[qi as usize],
             }
@@ -1035,13 +1096,13 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
             let a = rng.pick(&LETTERS);
             let first = (0..n).find(|&i| sol[i] == a);
             match first {
-                Some(qi) => Claim::FirstWithAnswer {
+                Some(qi) => Claim::FirstWith {
                     question_index: qi as u8,
                     value: a,
                 },
                 None => {
                     let a2 = rng.pick(&LETTERS);
-                    Claim::CountAnswerEquals {
+                    Claim::CountAnswer {
                         answer: a2,
                         value: count_letter(sol, a2, n) as u8,
                     }
@@ -1052,13 +1113,13 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
             let a = rng.pick(&LETTERS);
             let last = (0..n).rev().find(|&i| sol[i] == a);
             match last {
-                Some(qi) => Claim::LastWithAnswer {
+                Some(qi) => Claim::LastWith {
                     question_index: qi as u8,
                     value: a,
                 },
                 None => {
                     let a2 = rng.pick(&LETTERS);
-                    Claim::CountAnswerEquals {
+                    Claim::CountAnswer {
                         answer: a2,
                         value: count_letter(sol, a2, n) as u8,
                     }
@@ -1074,10 +1135,10 @@ fn make_true_claim(sol: &[Answer; MAX_N], n: usize, rng: &mut Rng) -> Claim {
                 .copied()
                 .collect();
             if most.len() == 1 {
-                Claim::MostCommonAnswer { value: most[0] }
+                Claim::MostCommon { value: most[0] }
             } else {
                 let a = rng.pick(&LETTERS);
-                Claim::CountAnswerEquals {
+                Claim::CountAnswer {
                     answer: a,
                     value: count_letter(sol, a, n) as u8,
                 }
@@ -1101,7 +1162,7 @@ fn make_false_claim(
             }
         }
     }
-    Claim::CountAnswerEquals {
+    Claim::CountAnswer {
         answer: Answer::A,
         value: n as u8 + 1,
     }
@@ -1109,11 +1170,11 @@ fn make_false_claim(
 
 fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
     match claim {
-        Claim::CountAnswerEquals { value, .. }
-        | Claim::CountConsonantEquals { value }
-        | Claim::CountVowelEquals { value }
-        | Claim::CountAnswerAfterEquals { value, .. }
-        | Claim::CountAnswerBeforeEquals { value, .. } => {
+        Claim::CountAnswer { value, .. }
+        | Claim::CountConsonant { value }
+        | Claim::CountVowel { value }
+        | Claim::CountAnswerAfter { value, .. }
+        | Claim::CountAnswerBefore { value, .. } => {
             let offset = rng.pick(&[-2i8, -1, 1, 2]);
             let new_val = value as i8 + offset;
             if new_val < 0 || new_val > n as i8 {
@@ -1121,30 +1182,30 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
             }
             Some(set_claim_value(claim, new_val as u8))
         }
-        Claim::ClaimAnswerOf { question_index, .. } => {
+        Claim::AnswerOf { question_index, .. } => {
             let wrong = rng.pick(&LETTERS);
-            Some(Claim::ClaimAnswerOf {
+            Some(Claim::AnswerOf {
                 question_index,
                 value: wrong,
             })
         }
-        Claim::FirstWithAnswer { value, .. } => {
+        Claim::FirstWith { value, .. } => {
             let wrong_qi = rng.int(0, n as i32 - 1) as u8;
-            Some(Claim::FirstWithAnswer {
+            Some(Claim::FirstWith {
                 value,
                 question_index: wrong_qi,
             })
         }
-        Claim::LastWithAnswer { value, .. } => {
+        Claim::LastWith { value, .. } => {
             let wrong_qi = rng.int(0, n as i32 - 1) as u8;
-            Some(Claim::LastWithAnswer {
+            Some(Claim::LastWith {
                 value,
                 question_index: wrong_qi,
             })
         }
-        Claim::MostCommonAnswer { .. } => {
+        Claim::MostCommon { .. } => {
             let wrong = rng.pick(&LETTERS);
-            Some(Claim::MostCommonAnswer { value: wrong })
+            Some(Claim::MostCommon { value: wrong })
         }
         Claim::None => None,
     }
@@ -1152,31 +1213,31 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
 
 fn set_claim_value(claim: Claim, value: u8) -> Claim {
     match claim {
-        Claim::CountAnswerEquals { answer, .. } => Claim::CountAnswerEquals { answer, value },
-        Claim::CountConsonantEquals { .. } => Claim::CountConsonantEquals { value },
-        Claim::CountVowelEquals { .. } => Claim::CountVowelEquals { value },
-        Claim::CountAnswerAfterEquals {
+        Claim::CountAnswer { answer, .. } => Claim::CountAnswer { answer, value },
+        Claim::CountConsonant { .. } => Claim::CountConsonant { value },
+        Claim::CountVowel { .. } => Claim::CountVowel { value },
+        Claim::CountAnswerAfter {
             answer,
             after_index,
             ..
-        } => Claim::CountAnswerAfterEquals {
+        } => Claim::CountAnswerAfter {
             answer,
             after_index,
             value,
         },
-        Claim::CountAnswerBeforeEquals {
+        Claim::CountAnswerBefore {
             answer,
             before_index,
             ..
-        } => Claim::CountAnswerBeforeEquals {
+        } => Claim::CountAnswerBefore {
             answer,
             before_index,
             value,
         },
         Claim::None
-        | Claim::ClaimAnswerOf { .. }
-        | Claim::FirstWithAnswer { .. }
-        | Claim::LastWithAnswer { .. }
-        | Claim::MostCommonAnswer { .. } => claim,
+        | Claim::AnswerOf { .. }
+        | Claim::FirstWith { .. }
+        | Claim::LastWith { .. }
+        | Claim::MostCommon { .. } => claim,
     }
 }

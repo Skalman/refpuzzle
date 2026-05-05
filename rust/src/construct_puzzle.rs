@@ -2,7 +2,7 @@ use arrayvec::ArrayVec;
 
 use crate::difficulty::DifficultyProfile;
 use crate::gen_common::{
-    GenerateResult, build_flat_puzzle, count_letter, letter_counts, solution_satisfies_type,
+    GenerateResult, Stats, build_flat_puzzle, count_letter, letter_counts, solution_satisfies_type,
     validate_and_repair,
 };
 use crate::rng::Rng;
@@ -12,9 +12,10 @@ pub fn generate(
     profile: &DifficultyProfile,
     rng: &mut Rng,
     max_attempts: usize,
+    stats: &mut Stats,
 ) -> Option<GenerateResult> {
     for _ in 0..max_attempts {
-        if let Some(r) = try_construct(profile, rng) {
+        if let Some(r) = try_construct(profile, rng, stats) {
             return Some(r);
         }
     }
@@ -180,7 +181,11 @@ impl PlacementState {
 
 // ── Main construction ──
 
-fn try_construct(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateResult> {
+fn try_construct(
+    profile: &DifficultyProfile,
+    rng: &mut Rng,
+    stats: &mut Stats,
+) -> Option<GenerateResult> {
     let n = profile.question_count;
 
     let mut solution: [Answer; MAX_N] =
@@ -335,7 +340,7 @@ fn try_construct(profile: &DifficultyProfile, rng: &mut Rng) -> Option<GenerateR
 
     let mut fp = build_flat_puzzle(&state.question_types, &solution, n, rng)?;
 
-    if !validate_and_repair(&state.question_types, &solution, &mut fp, n, rng) {
+    if !validate_and_repair(&state.question_types, &solution, &mut fp, n, rng, stats) {
         return None;
     }
 

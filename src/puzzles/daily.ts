@@ -9,10 +9,13 @@ import type {
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
+const YEAR_RAW = new Map<
+  string,
+  Record<string, Record<string, CompactPuzzle>> | null
+>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
-interface CompactRule {
+interface CompactQuestionTypeDef {
   t: string;
   a?: number;
   q?: number;
@@ -25,7 +28,7 @@ interface CompactClaim {
 }
 interface CompactQuestion {
   o?: (number | null)[];
-  r: CompactRule;
+  t: CompactQuestionTypeDef;
   c?: (CompactClaim | null)[];
 }
 interface CompactPuzzle {
@@ -40,7 +43,7 @@ export function parseCompactYear(
     result[mmdd] = {};
     for (const [lvl, compact] of Object.entries(levels)) {
       const questions = compact.q.map<QuestionDef>((cq) => {
-        const questionType = expandQuestion(cq.r);
+        const questionType = expandQuestion(cq.t);
         const options: OptionDef[] = cq.c
           ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
           : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
@@ -49,16 +52,7 @@ export function parseCompactYear(
       result[mmdd][lvl] = {
         id: "",
         title: "",
-        difficulty:
-          (
-            {
-              "level-1": 1,
-              "level-2": 2,
-              "level-3": 3,
-              "level-4": 4,
-              "level-5": 5,
-            } as Record<string, Puzzle["difficulty"]>
-          )[lvl] ?? 1,
+        difficulty: lvl,
         questions,
       };
     }
@@ -70,44 +64,44 @@ function L(i: number | undefined): AnswerLetter {
   return LETTERS[i ?? 0];
 }
 
-function expandQuestion(r: CompactRule): QuestionTypeDef {
+function expandQuestion(q: CompactQuestionTypeDef): QuestionTypeDef {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const type = r.t as QuestionTypeDef["type"];
+  const type = q.t as QuestionTypeDef["type"];
   switch (type) {
-    case "count_vowel_answers":
-    case "count_consonant_answers":
-    case "most_common_count":
-    case "previous_same_answer":
-    case "next_same_answer":
-    case "only_same_answer":
-    case "same_answer_as":
-    case "consecutive_identical":
-    case "least_common_answer":
-    case "most_common_answer":
-    case "unique_answer":
-    case "answer_is_self":
-    case "only_true_statement":
+    case "CountVowel":
+    case "CountConsonant":
+    case "MostCommonCount":
+    case "PrevSame":
+    case "NextSame":
+    case "OnlySame":
+    case "SameAs":
+    case "ConsecIdent":
+    case "LeastCommon":
+    case "MostCommon":
+    case "Unique":
+    case "AnswerIsSelf":
+    case "TrueStmt":
       return { type };
-    case "count_answer":
-    case "first_with_answer":
-    case "last_with_answer":
-    case "only_odd_with_answer":
-    case "only_even_with_answer":
-    case "equal_count_as":
-      return { type, answer: L(r.a) };
-    case "count_answer_after":
-    case "closest_after":
-      return { type, answer: L(r.a), afterIndex: r.q! };
-    case "count_answer_before":
-    case "closest_before":
-      return { type, answer: L(r.a), beforeIndex: r.q! };
-    case "answer_of_question":
-    case "letter_distance":
-      return { type, questionIndex: r.q! };
+    case "CountAnswer":
+    case "FirstWith":
+    case "LastWith":
+    case "OnlyOdd":
+    case "OnlyEven":
+    case "EqualCount":
+      return { type, answer: L(q.a) };
+    case "CountAnswerAfter":
+    case "ClosestAfter":
+      return { type, answer: L(q.a), afterIndex: q.q! };
+    case "CountAnswerBefore":
+    case "ClosestBefore":
+      return { type, answer: L(q.a), beforeIndex: q.q! };
+    case "AnswerOf":
+    case "LetterDist":
+      return { type, questionIndex: q.q! };
     default: {
       (type) satisfies never;
       // oxlint-disable-next-line typescript/restrict-template-expressions
-      throw new Error(`Unknown rule type: ${type}`);
+      throw new Error(`Unknown question type: ${type}`);
     }
   }
 }
@@ -133,7 +127,10 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
+  if (
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).has("debug")
+  ) {
     return true;
   }
   const today = new Date();
@@ -169,7 +166,9 @@ async function fetchYearRaw(
   }
 }
 
-export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
+export async function fetchDaily(
+  dateStr: string,
+): Promise<Record<string, Puzzle> | null> {
   const key = dateStr;
   if (DAY_CACHE.has(key)) return DAY_CACHE.get(key)!;
   const year = dateStr.slice(0, 4);

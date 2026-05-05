@@ -61,9 +61,9 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
 
   // Count how many answer_of_question rules point to each question
   const refCount = new Array<number>(n).fill(0);
-  for (const r of fp.questions) {
-    if (r.t === RT_ANSWER_OF && r.questionIndex >= 0) {
-      refCount[r.questionIndex]++;
+  for (const q of fp.questions) {
+    if (q.t === RT_ANSWER_OF && q.questionIndex >= 0) {
+      refCount[q.questionIndex]++;
     }
   }
 
@@ -97,22 +97,22 @@ function solveFp(
   // Pre-compute bitmasks for range checks in canFullyEvaluateLocal
   const rangeMasks: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
-    const r = fp.questions[i];
-    if (r.t === RT_NEXT_SAME) {
+    const q = fp.questions[i];
+    if (q.t === RT_NEXT_SAME) {
       let m = 0;
       for (let j = i + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (r.t === RT_CLOSEST_AFTER) {
+    } else if (q.t === RT_CLOSEST_AFTER) {
       let m = 0;
-      for (let j = r.afterIndex + 1; j < n; j++) m |= 1 << j;
+      for (let j = q.afterIndex + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (r.t === RT_CLOSEST_BEFORE || r.t === RT_COUNT_ANSWER_BEFORE) {
+    } else if (q.t === RT_CLOSEST_BEFORE || q.t === RT_COUNT_ANSWER_BEFORE) {
       let m = 0;
-      for (let j = 0; j < r.beforeIndex; j++) m |= 1 << j;
+      for (let j = 0; j < q.beforeIndex; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (r.t === RT_COUNT_ANSWER_AFTER) {
+    } else if (q.t === RT_COUNT_ANSWER_AFTER) {
       let m = 0;
-      for (let j = r.afterIndex + 1; j < n; j++) m |= 1 << j;
+      for (let j = q.afterIndex + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
     } else {
       rangeMasks[i] = 0;
@@ -144,7 +144,9 @@ function solveFp(
     if (fixed[qi] != null) {
       current[qi] = fixed[qi];
       assignedBits |= bit;
-      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
+      if (
+        !hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)
+      ) {
         search(depth + 1);
       }
       current[qi] = null;
@@ -155,7 +157,9 @@ function solveFp(
     for (const letter of LETTERS) {
       current[qi] = letter;
       assignedBits |= bit;
-      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
+      if (
+        !hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)
+      ) {
         search(depth + 1);
         if (solutions.length >= maxSolutions) {
           current[qi] = null;
@@ -196,7 +200,8 @@ function hasContradiction(
   for (let k = 0; k < affected.length; k++) {
     const i = affected[k];
     if (answers[i] == null) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
+    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks))
+      return true;
   }
 
   // Check global rules for forward-checking bounds
@@ -205,7 +210,8 @@ function hasContradiction(
     const i = globals[k];
     if (answers[i] == null) continue;
     if (i === justAssigned) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
+    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks))
+      return true;
   }
 
   return false;
@@ -220,44 +226,51 @@ function checkRule(
   assigned: number,
   rangeMasks: number[],
 ): boolean {
-  const r = fp.questions[i];
+  const q = fp.questions[i];
 
-  if (allAnswered || canFullyEvaluateLocal(r, answers, assigned, rangeMasks, i)) {
+  if (
+    allAnswered ||
+    canFullyEvaluateLocal(q, answers, assigned, rangeMasks, i)
+  ) {
     if (!evaluate(fp, i, answers[i]!, answers)) return true;
   }
 
   // Forward checking for counting rules
-  if (r.t === RT_COUNT_ANSWER || r.t === RT_COUNT_ANSWER_BEFORE || r.t === RT_COUNT_ANSWER_AFTER) {
+  if (
+    q.t === RT_COUNT_ANSWER ||
+    q.t === RT_COUNT_ANSWER_BEFORE ||
+    q.t === RT_COUNT_ANSWER_AFTER
+  ) {
     const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
     if (optVal == null) return false;
 
     let rangeStart: number;
     let rangeEnd: number;
 
-    if (r.t === RT_COUNT_ANSWER) {
+    if (q.t === RT_COUNT_ANSWER) {
       rangeStart = 0;
       rangeEnd = n;
-    } else if (r.t === RT_COUNT_ANSWER_BEFORE) {
+    } else if (q.t === RT_COUNT_ANSWER_BEFORE) {
       rangeStart = 0;
-      rangeEnd = r.beforeIndex;
+      rangeEnd = q.beforeIndex;
     } else {
-      rangeStart = r.afterIndex + 1;
+      rangeStart = q.afterIndex + 1;
       rangeEnd = n;
     }
 
     let count = 0;
     let remaining = 0;
     for (let j = rangeStart; j < rangeEnd; j++) {
-      if (answers[j] === r.answer) count++;
+      if (answers[j] === q.answer) count++;
       else if (answers[j] == null) remaining++;
     }
     if (count > optVal || count + remaining < optVal) return true;
   }
 
-  if (r.t === RT_COUNT_VOWEL || r.t === RT_COUNT_CONSONANT) {
+  if (q.t === RT_COUNT_VOWEL || q.t === RT_COUNT_CONSONANT) {
     const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
     if (optVal == null) return false;
-    const isVowel = r.t === RT_COUNT_VOWEL;
+    const isVowel = q.t === RT_COUNT_VOWEL;
     let count = 0;
     let remaining = 0;
     for (let j = 0; j < n; j++) {
@@ -279,13 +292,13 @@ function checkRule(
 
 // Lightweight canFullyEvaluate for non-global rules only
 function canFullyEvaluateLocal(
-  r: FlatQuestion,
+  q: FlatQuestion,
   _answers: (AnswerLetter | null)[],
   assigned: number,
   rangeMasks: number[],
   questionIdx: number,
 ): boolean {
-  switch (r.t) {
+  switch (q.t) {
     case RT_SELF:
       return true;
     case RT_PREV_SAME: {
@@ -294,9 +307,9 @@ function canFullyEvaluateLocal(
       return (assigned & mask) === mask;
     }
     case RT_ANSWER_OF:
-      return (assigned & (1 << r.questionIndex)) !== 0;
+      return (assigned & (1 << q.questionIndex)) !== 0;
     case RT_LETTER_DIST:
-      return (assigned & (1 << r.questionIndex)) !== 0;
+      return (assigned & (1 << q.questionIndex)) !== 0;
     case RT_NEXT_SAME:
     case RT_CLOSEST_AFTER:
     case RT_CLOSEST_BEFORE:

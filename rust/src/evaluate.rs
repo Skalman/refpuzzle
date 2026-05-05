@@ -37,26 +37,24 @@ fn count_consonants(answers: &[Option<Answer>], n: usize) -> i16 {
 pub fn evaluate_claim(claim: &Claim, answers: &[Option<Answer>; MAX_N], n: usize) -> bool {
     match *claim {
         Claim::None => false,
-        Claim::CountAnswerEquals { answer, value } => {
-            count_answer(answers, answer, 0, n) == value as i16
-        }
-        Claim::CountConsonantEquals { value } => count_consonants(answers, n) == value as i16,
-        Claim::CountVowelEquals { value } => count_vowels(answers, n) == value as i16,
-        Claim::CountAnswerAfterEquals {
+        Claim::CountAnswer { answer, value } => count_answer(answers, answer, 0, n) == value as i16,
+        Claim::CountConsonant { value } => count_consonants(answers, n) == value as i16,
+        Claim::CountVowel { value } => count_vowels(answers, n) == value as i16,
+        Claim::CountAnswerAfter {
             answer,
             after_index,
             value,
         } => count_answer(answers, answer, after_index as usize + 1, n) == value as i16,
-        Claim::CountAnswerBeforeEquals {
+        Claim::CountAnswerBefore {
             answer,
             before_index,
             value,
         } => count_answer(answers, answer, 0, before_index as usize) == value as i16,
-        Claim::ClaimAnswerOf {
+        Claim::AnswerOf {
             question_index,
             value,
         } => answers[question_index as usize] == Some(value),
-        Claim::FirstWithAnswer {
+        Claim::FirstWith {
             question_index,
             value,
         } => {
@@ -67,7 +65,7 @@ pub fn evaluate_claim(claim: &Claim, answers: &[Option<Answer>; MAX_N], n: usize
             }
             false
         }
-        Claim::LastWithAnswer {
+        Claim::LastWith {
             question_index,
             value,
         } => {
@@ -79,7 +77,7 @@ pub fn evaluate_claim(claim: &Claim, answers: &[Option<Answer>; MAX_N], n: usize
             }
             last == Some(question_index as usize)
         }
-        Claim::MostCommonAnswer { value } => {
+        Claim::MostCommon { value } => {
             let mut counts = [0i16; 5];
             for i in 0..n {
                 if let Some(a) = answers[i] {

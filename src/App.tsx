@@ -541,7 +541,7 @@ function DayView({ dateStr }: { dateStr: string }) {
     });
   }, [dateStr]);
 
-  const currentPuzzle = puzzles?.[`level-${activeLevel}`] ?? null;
+  const currentPuzzle = puzzles?.[`${activeLevel}`] ?? null;
   const pid = puzzleId(dateStr, activeLevel);
   if (currentPuzzle) {
     currentPuzzle.id = pid;
@@ -687,7 +687,7 @@ function DayView({ dateStr }: { dateStr: string }) {
             {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
           </h1>
           {[1, 2, 3, 4, 5].map((lvl) => {
-            const p = puzzles[`level-${lvl}`];
+            const p = puzzles[`${lvl}`];
             if (!p) return null;
             return (
               <div key={lvl} class="print-puzzle">

@@ -81,99 +81,74 @@ pub enum QuestionTypeKind {
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum QuestionType {
-    #[serde(rename = "count_answer")]
     CountAnswer {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "count_answer_before")]
     CountAnswerBefore {
         #[serde(rename = "a")]
         answer: Answer,
         #[serde(rename = "q")]
         before_index: u8,
     },
-    #[serde(rename = "count_answer_after")]
     CountAnswerAfter {
         #[serde(rename = "a")]
         answer: Answer,
         #[serde(rename = "q")]
         after_index: u8,
     },
-    #[serde(rename = "count_vowel_answers")]
     CountVowel,
-    #[serde(rename = "count_consonant_answers")]
     CountConsonant,
-    #[serde(rename = "most_common_count")]
     MostCommonCount,
-    #[serde(rename = "closest_after")]
     ClosestAfter {
         #[serde(rename = "q")]
         after_index: u8,
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "closest_before")]
     ClosestBefore {
         #[serde(rename = "q")]
         before_index: u8,
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "first_with_answer")]
     FirstWith {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "last_with_answer")]
     LastWith {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "previous_same_answer")]
     PrevSame,
-    #[serde(rename = "next_same_answer")]
     NextSame,
-    #[serde(rename = "only_same_answer")]
     OnlySame,
-    #[serde(rename = "same_answer_as")]
     SameAs,
-    #[serde(rename = "only_odd_with_answer")]
     OnlyOdd {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "only_even_with_answer")]
     OnlyEven {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "consecutive_identical")]
     ConsecIdent,
-    #[serde(rename = "answer_of_question")]
     AnswerOf {
         #[serde(rename = "q")]
         question_index: u8,
     },
-    #[serde(rename = "least_common_answer")]
     LeastCommon,
-    #[serde(rename = "most_common_answer")]
     MostCommon,
-    #[serde(rename = "unique_answer")]
     Unique,
-    #[serde(rename = "equal_count_as")]
     EqualCount {
         #[serde(rename = "a")]
         answer: Answer,
     },
-    #[serde(rename = "answer_is_self")]
     AnswerIsSelf,
-    #[serde(rename = "letter_distance")]
     LetterDist {
         #[serde(rename = "q")]
         question_index: u8,
     },
-    #[serde(rename = "only_true_statement")]
     TrueStmt,
 }
 
@@ -229,25 +204,21 @@ impl QuestionType {
 pub enum Claim {
     #[serde(skip)]
     None,
-    #[serde(rename = "count_answer")]
-    CountAnswerEquals {
+    CountAnswer {
         #[serde(rename = "a")]
         answer: Answer,
         #[serde(rename = "v")]
         value: u8,
     },
-    #[serde(rename = "count_consonant_answers")]
-    CountConsonantEquals {
+    CountConsonant {
         #[serde(rename = "v")]
         value: u8,
     },
-    #[serde(rename = "count_vowel_answers")]
-    CountVowelEquals {
+    CountVowel {
         #[serde(rename = "v")]
         value: u8,
     },
-    #[serde(rename = "count_answer_after")]
-    CountAnswerAfterEquals {
+    CountAnswerAfter {
         #[serde(rename = "a")]
         answer: Answer,
         #[serde(rename = "q")]
@@ -255,8 +226,7 @@ pub enum Claim {
         #[serde(rename = "v")]
         value: u8,
     },
-    #[serde(rename = "count_answer_before")]
-    CountAnswerBeforeEquals {
+    CountAnswerBefore {
         #[serde(rename = "a")]
         answer: Answer,
         #[serde(rename = "q")]
@@ -264,29 +234,25 @@ pub enum Claim {
         #[serde(rename = "v")]
         value: u8,
     },
-    #[serde(rename = "answer_of_question")]
-    ClaimAnswerOf {
+    AnswerOf {
         #[serde(rename = "q")]
         question_index: u8,
         #[serde(rename = "v")]
         value: Answer,
     },
-    #[serde(rename = "first_with_answer")]
-    FirstWithAnswer {
+    FirstWith {
         #[serde(rename = "a")]
         value: Answer,
         #[serde(rename = "v")]
         question_index: u8,
     },
-    #[serde(rename = "last_with_answer")]
-    LastWithAnswer {
+    LastWith {
         #[serde(rename = "a")]
         value: Answer,
         #[serde(rename = "v")]
         question_index: u8,
     },
-    #[serde(rename = "most_common_answer")]
-    MostCommonAnswer {
+    MostCommon {
         #[serde(rename = "v")]
         value: Answer,
     },
@@ -330,11 +296,11 @@ impl FlatPuzzle {
         let mut global_indices = SmallList::new();
 
         for i in 0..n {
-            let r = &question_types[i];
-            if r.is_global() {
+            let t = &question_types[i];
+            if t.is_global() {
                 global_indices.push(i as u8);
             } else {
-                match *r {
+                match *t {
                     QuestionType::AnswerOf { question_index } => {
                         affected_by[question_index as usize].push(i as u8);
                     }

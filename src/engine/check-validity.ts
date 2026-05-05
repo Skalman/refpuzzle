@@ -58,7 +58,11 @@ function countMatching(
   return { count, remaining };
 }
 
-function countValidity(count: number, remaining: number, value: number): Validity {
+function countValidity(
+  count: number,
+  remaining: number,
+  value: number,
+): Validity {
   if (count > value || count + remaining < value) return "invalid";
   if (count === value && remaining === 0) return "valid";
   return "pending";
@@ -88,7 +92,8 @@ function firstInRange(
     let allCertain = true;
     for (let j = start; j < pos; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0) allCertain = false;
+      if (answers[j] == null && (eliminated[j] & amask) === 0)
+        allCertain = false;
     }
     if (answers[pos] === answer && allCertain) return "valid";
     return "pending";
@@ -96,7 +101,8 @@ function firstInRange(
     let couldExist = false;
     for (let j = start; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0) couldExist = true;
+      if (answers[j] == null && (eliminated[j] & amask) === 0)
+        couldExist = true;
     }
     return couldExist ? "pending" : "valid";
   }
@@ -117,7 +123,8 @@ function lastInRange(
     let allCertain = true;
     for (let j = pos + 1; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0) allCertain = false;
+      if (answers[j] == null && (eliminated[j] & amask) === 0)
+        allCertain = false;
     }
     if (answers[pos] === answer && allCertain) return "valid";
     return "pending";
@@ -125,7 +132,8 @@ function lastInRange(
     let couldExist = false;
     for (let j = start; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0) couldExist = true;
+      if (answers[j] == null && (eliminated[j] & amask) === 0)
+        couldExist = true;
     }
     return couldExist ? "pending" : "valid";
   }
@@ -142,33 +150,58 @@ export function checkAnswerValidity(
   const a = answers[qi];
   if (a == null) return "pending";
   const ai = letterIdx(a);
-  const r = fp.questions[qi];
+  const q = fp.questions[qi];
   const v = fp.optionValues[qi][ai];
   const n = fp.n;
 
   // ── Counting ──
-  if (r.t === RT_COUNT_ANSWER || r.t === RT_COUNT_ANSWER_BEFORE || r.t === RT_COUNT_ANSWER_AFTER) {
+  if (
+    q.t === RT_COUNT_ANSWER ||
+    q.t === RT_COUNT_ANSWER_BEFORE ||
+    q.t === RT_COUNT_ANSWER_AFTER
+  ) {
     if (v == null) return "pending";
-    const answer = r.answer!;
-    const [from, to] = countRange(r, n);
+    const answer = q.answer!;
+    const [from, to] = countRange(q, n);
     const matchMask = 1 << letterIdx(answer);
-    const cr = countMatching(answers, eliminated, (x) => x === answer, matchMask, from, to);
+    const cr = countMatching(
+      answers,
+      eliminated,
+      (x) => x === answer,
+      matchMask,
+      from,
+      to,
+    );
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (r.t === RT_COUNT_VOWEL) {
+  if (q.t === RT_COUNT_VOWEL) {
     if (v == null) return "pending";
-    const cr = countMatching(answers, eliminated, (x) => VOWELS.has(x), 0b10001, 0, n);
+    const cr = countMatching(
+      answers,
+      eliminated,
+      (x) => VOWELS.has(x),
+      0b10001,
+      0,
+      n,
+    );
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (r.t === RT_COUNT_CONSONANT) {
+  if (q.t === RT_COUNT_CONSONANT) {
     if (v == null) return "pending";
-    const cr = countMatching(answers, eliminated, (x) => !VOWELS.has(x), 0b01110, 0, n);
+    const cr = countMatching(
+      answers,
+      eliminated,
+      (x) => !VOWELS.has(x),
+      0b01110,
+      0,
+      n,
+    );
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (r.t === RT_MOST_COMMON_COUNT) {
+  if (q.t === RT_MOST_COMMON_COUNT) {
     if (v == null) return "pending";
     const counts = [0, 0, 0, 0, 0];
     let allKnown = true;
@@ -186,29 +219,31 @@ export function checkAnswerValidity(
   }
 
   // ── Positional ──
-  if (r.t === RT_FIRST_WITH) return firstInRange(answers, eliminated, r.answer!, 0, n, v);
-  if (r.t === RT_CLOSEST_AFTER)
-    return firstInRange(answers, eliminated, r.answer!, r.afterIndex + 1, n, v);
-  if (r.t === RT_LAST_WITH) return lastInRange(answers, eliminated, r.answer!, 0, n, v);
-  if (r.t === RT_CLOSEST_BEFORE)
-    return lastInRange(answers, eliminated, r.answer!, 0, r.beforeIndex, v);
+  if (q.t === RT_FIRST_WITH)
+    return firstInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === RT_CLOSEST_AFTER)
+    return firstInRange(answers, eliminated, q.answer!, q.afterIndex + 1, n, v);
+  if (q.t === RT_LAST_WITH)
+    return lastInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === RT_CLOSEST_BEFORE)
+    return lastInRange(answers, eliminated, q.answer!, 0, q.beforeIndex, v);
 
   // ── Reference ──
-  if (r.t === RT_ANSWER_OF) {
+  if (q.t === RT_ANSWER_OF) {
     if (v == null) return "pending";
-    const target = answers[r.questionIndex];
+    const target = answers[q.questionIndex];
     if (target == null) return "pending";
     return letterIdx(target) === v ? "valid" : "invalid";
   }
 
-  if (r.t === RT_LETTER_DIST) {
-    const other = answers[r.questionIndex];
+  if (q.t === RT_LETTER_DIST) {
+    const other = answers[q.questionIndex];
     if (other == null) return "pending";
     const dist = Math.abs(ai - letterIdx(other));
     return dist === v ? "valid" : "invalid";
   }
 
-  if (r.t === RT_SAME_AS) {
+  if (q.t === RT_SAME_AS) {
     if (v == null || v < 0 || v >= n || v === qi) return "invalid";
     const ta = answers[v];
     if (ta == null) return "pending";
@@ -216,14 +251,15 @@ export function checkAnswerValidity(
   }
 
   // ── Unique ──
-  if (r.t === RT_UNIQUE) {
+  if (q.t === RT_UNIQUE) {
     const amask = 1 << ai;
     let others = 0;
     let couldMatch = 0;
     for (let j = 0; j < n; j++) {
       if (j === qi) continue;
       if (answers[j] === a) others++;
-      else if (answers[j] == null && (eliminated[j] & amask) === 0) couldMatch++;
+      else if (answers[j] == null && (eliminated[j] & amask) === 0)
+        couldMatch++;
     }
     if (others > 0) return "invalid";
     if (couldMatch === 0) return "valid";
@@ -231,18 +267,18 @@ export function checkAnswerValidity(
   }
 
   // ── Previous/Next same ──
-  if (r.t === RT_PREV_SAME) {
+  if (q.t === RT_PREV_SAME) {
     if (v != null && (v < 0 || v >= qi)) return "invalid";
     return lastInRange(answers, eliminated, a, 0, qi, v);
   }
 
-  if (r.t === RT_NEXT_SAME) {
+  if (q.t === RT_NEXT_SAME) {
     if (v != null && (v <= qi || v >= n)) return "invalid";
     return firstInRange(answers, eliminated, a, qi + 1, n, v);
   }
 
   // ── Only same ──
-  if (r.t === RT_ONLY_SAME) {
+  if (q.t === RT_ONLY_SAME) {
     const amask = 1 << ai;
 
     if (v == null) {
@@ -251,7 +287,8 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if (j === qi) continue;
         if (answers[j] === a) matches++;
-        else if (answers[j] == null && (eliminated[j] & amask) === 0) couldMatch++;
+        else if (answers[j] == null && (eliminated[j] & amask) === 0)
+          couldMatch++;
       }
       if (matches > 0) return "invalid";
       if (couldMatch === 0) return "valid";
@@ -268,7 +305,8 @@ export function checkAnswerValidity(
     for (let j = 0; j < n; j++) {
       if (j === qi || j === v) continue;
       if (answers[j] === a) otherMatches++;
-      else if (answers[j] == null && (eliminated[j] & amask) === 0) otherRemaining++;
+      else if (answers[j] == null && (eliminated[j] & amask) === 0)
+        otherRemaining++;
     }
 
     if (otherMatches > 0) return "invalid";
@@ -277,11 +315,15 @@ export function checkAnswerValidity(
   }
 
   // ── Consecutive identical ──
-  if (r.t === RT_CONSEC_IDENT) {
+  if (q.t === RT_CONSEC_IDENT) {
     if (v != null) {
       if (v < 0 || v + 1 >= n) return "invalid";
 
-      if (answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1])
+      if (
+        answers[v] != null &&
+        answers[v + 1] != null &&
+        answers[v] !== answers[v + 1]
+      )
         return "invalid";
 
       let otherPairs = 0;
@@ -321,9 +363,9 @@ export function checkAnswerValidity(
   }
 
   // ── Only odd / only even ──
-  if (r.t === RT_ONLY_ODD || r.t === RT_ONLY_EVEN) {
-    const parity = r.t === RT_ONLY_ODD ? 1 : 0;
-    const answer = r.answer!;
+  if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
+    const parity = q.t === RT_ONLY_ODD ? 1 : 0;
+    const answer = q.answer!;
     const amask = 1 << letterIdx(answer);
 
     if (v != null) {
@@ -335,7 +377,8 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if (j === v || (j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) otherMatches++;
-        else if (answers[j] == null && (eliminated[j] & amask) === 0) otherRemaining++;
+        else if (answers[j] == null && (eliminated[j] & amask) === 0)
+          otherRemaining++;
       }
 
       if (otherMatches > 0) return "invalid";
@@ -347,7 +390,8 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if ((j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) anyMatch = true;
-        if (answers[j] == null && (eliminated[j] & amask) === 0) anyCould = true;
+        if (answers[j] == null && (eliminated[j] & amask) === 0)
+          anyCould = true;
       }
       if (anyMatch) return "invalid";
       if (anyCould) return "pending";
@@ -356,7 +400,7 @@ export function checkAnswerValidity(
   }
 
   // ── True statement ──
-  if (r.t === RT_TRUE_STMT) {
+  if (q.t === RT_TRUE_STMT) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return "pending";
     const claims = fp.optionClaims[qi];
@@ -373,19 +417,19 @@ export function checkAnswerValidity(
   }
 
   // ── Always valid ──
-  if (r.t === RT_SELF) return "valid";
+  if (q.t === RT_SELF) return "valid";
 
   // ── Equal count ──
-  if (r.t === RT_EQUAL_COUNT) {
+  if (q.t === RT_EQUAL_COUNT) {
     if (v != null) {
       const claimed = LETTERS[v];
-      if (claimed === r.answer) return "invalid";
+      if (claimed === q.answer) return "invalid";
       const allKnown = answers.slice(0, n).every((x) => x != null);
       if (!allKnown) return "pending";
       let refCount = 0;
       let selCount = 0;
       for (let i = 0; i < n; i++) {
-        if (answers[i] === r.answer) refCount++;
+        if (answers[i] === q.answer) refCount++;
         if (answers[i] === claimed) selCount++;
       }
       return refCount === selCount ? "valid" : "invalid";
@@ -394,23 +438,23 @@ export function checkAnswerValidity(
       if (!allKnown) return "pending";
       const counts = [0, 0, 0, 0, 0];
       for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
-      const refCount = counts[letterIdx(r.answer!)];
+      const refCount = counts[letterIdx(q.answer!)];
       let anyMatch = false;
       for (let i = 0; i < 5; i++) {
-        if (LETTERS[i] !== r.answer && counts[i] === refCount) anyMatch = true;
+        if (LETTERS[i] !== q.answer && counts[i] === refCount) anyMatch = true;
       }
       return anyMatch ? "invalid" : "valid";
     }
   }
 
   // ── Global: need all answers ──
-  if (r.t === RT_LEAST_COMMON || r.t === RT_MOST_COMMON) {
+  if (q.t === RT_LEAST_COMMON || q.t === RT_MOST_COMMON) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return "pending";
     if (v == null || v < 0 || v >= 5) return "invalid";
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
-    if (r.t === RT_LEAST_COMMON) {
+    if (q.t === RT_LEAST_COMMON) {
       const min = Math.min(...counts);
       return counts[v] === min && counts.filter((c) => c === min).length === 1
         ? "valid"

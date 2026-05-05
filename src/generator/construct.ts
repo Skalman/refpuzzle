@@ -43,75 +43,75 @@ export function generateConstructive(
   return null;
 }
 
-const CONSTRAINED_TYPES = new Set<string>(["unique_answer", "answer_is_self"]);
+const CONSTRAINED_TYPES = new Set<string>(["Unique", "AnswerIsSelf"]);
 
 // Rule types by category
 const ENTRY_TYPES: QuestionTypeDef["type"][] = [
-  "count_answer",
-  "count_answer_before",
-  "count_answer_after",
-  "count_vowel_answers",
-  "count_consonant_answers",
+  "CountAnswer",
+  "CountAnswerBefore",
+  "CountAnswerAfter",
+  "CountVowel",
+  "CountConsonant",
 ];
 
 const POSITIONAL_TYPES: QuestionTypeDef["type"][] = [
-  "first_with_answer",
-  "last_with_answer",
-  "closest_after",
-  "closest_before",
+  "FirstWith",
+  "LastWith",
+  "ClosestAfter",
+  "ClosestBefore",
 ];
 
 const VARIETY_TYPES: QuestionTypeDef["type"][] = [
-  "letter_distance",
-  "consecutive_identical",
-  "most_common_count",
-  "previous_same_answer",
-  "next_same_answer",
-  "only_same_answer",
-  "same_answer_as",
-  "only_odd_with_answer",
-  "only_even_with_answer",
-  "least_common_answer",
-  "most_common_answer",
-  "unique_answer",
-  "equal_count_as",
-  "answer_is_self",
-  "only_true_statement",
+  "LetterDist",
+  "ConsecIdent",
+  "MostCommonCount",
+  "PrevSame",
+  "NextSame",
+  "OnlySame",
+  "SameAs",
+  "OnlyOdd",
+  "OnlyEven",
+  "LeastCommon",
+  "MostCommon",
+  "Unique",
+  "EqualCount",
+  "AnswerIsSelf",
+  "TrueStmt",
 ];
 
 const STRUCTURAL_TYPES = new Set<QuestionTypeDef["type"]>([
-  "consecutive_identical",
-  "unique_answer",
-  "only_same_answer",
-  "only_odd_with_answer",
-  "only_even_with_answer",
+  "ConsecIdent",
+  "Unique",
+  "OnlySame",
+  "OnlyOdd",
+  "OnlyEven",
 ]);
 
 function typeCap(type: QuestionTypeDef["type"]): number {
-  if (type === "letter_distance") return 1;
-  if (type === "answer_of_question") return 2;
+  if (type === "LetterDist") return 1;
+  if (type === "AnswerOf") return 2;
   return 3;
 }
 
 function symmetricGroup(type: QuestionTypeDef["type"]): string | null {
   switch (type) {
-    case "first_with_answer":
-    case "last_with_answer":
+    case "FirstWith":
+    case "LastWith":
       return "first_last";
-    case "closest_after":
-    case "closest_before":
+    case "ClosestAfter":
+    case "ClosestBefore":
       return "closest";
-    case "next_same_answer":
-    case "previous_same_answer":
+    case "NextSame":
+    case "PrevSame":
       return "next_prev_same";
-    case "count_answer_before":
-    case "count_answer_after":
+    case "CountAnswerBefore":
+    case "CountAnswerAfter":
       return "count_before_after";
-    case "count_vowel_answers":
-    case "count_consonant_answers":
+    case "CountVowel":
+    case "CountConsonant":
       return "count_vowel_consonant";
-    case "least_common_answer":
-    case "most_common_answer":
+    case "LeastCommon":
+    case "MostCommon":
       return "least_most_common";
     default:
       return null;
@@ -125,16 +125,22 @@ function allowed(
   return types.filter((t) => profile.allowedTypes.includes(t));
 }
 
-function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult | null {
+function tryConstructive(
+  profile: DifficultyProfile,
+  rng: RNG,
+): GenerateResult | null {
   const n = profile.questionCount;
 
   // 1. Random solution
-  const solution: AnswerLetter[] = Array.from({ length: n }, () => rng.pick(LETTERS));
+  const solution: AnswerLetter[] = Array.from({ length: n }, () =>
+    rng.pick(LETTERS),
+  );
 
   // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
-  if (profile.allowedTypes.includes("consecutive_identical") && rng.int(0, 1) === 0) {
+  if (profile.allowedTypes.includes("ConsecIdent") && rng.int(0, 1) === 0) {
     const pairPositions: number[] = [];
-    for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairPositions.push(i);
+    for (let i = 0; i < n - 1; i++)
+      if (solution[i] === solution[i + 1]) pairPositions.push(i);
     if (pairPositions.length === 0) {
       const pos = rng.int(0, n - 2);
       solution[pos + 1] = solution[pos];
@@ -145,7 +151,10 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
         const pos = pairPositions[k] + 1;
         for (;;) {
           const nl = rng.pick(LETTERS);
-          if (nl !== solution[pos - 1] && (pos + 1 >= n || nl !== solution[pos + 1])) {
+          if (
+            nl !== solution[pos - 1] &&
+            (pos + 1 >= n || nl !== solution[pos + 1])
+          ) {
             solution[pos] = nl;
             break;
           }
@@ -182,23 +191,29 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // Count-letter cap: prevent multiple count rules for the same letter
   const countLetterCap = rng.int(0, 3) === 0 ? 2 : 1;
   const countLetterCounts: Record<string, number> = {};
-  const COUNT_RULE_TYPES = new Set(["count_answer", "count_answer_before", "count_answer_after"]);
+  const COUNT_RULE_TYPES = new Set([
+    "CountAnswer",
+    "CountAnswerBefore",
+    "CountAnswerAfter",
+  ]);
 
   // Variant: 25% of the time for levels with letter_distance,
   // trade letter_distance for a 3rd answer_of chain
-  const extraChain = profile.allowedTypes.includes("letter_distance") && rng.int(0, 3) === 0;
+  const extraChain =
+    profile.allowedTypes.includes("LetterDist") && rng.int(0, 3) === 0;
 
   const capsOverride: Record<string, number> = {};
   if (extraChain) {
-    capsOverride["answer_of_question"] = 3;
-    capsOverride["letter_distance"] = 0;
+    capsOverride["AnswerOf"] = 3;
+    capsOverride["LetterDist"] = 0;
   }
 
   function placeRule(type: QuestionTypeDef["type"], slotIdx: number): boolean {
     const cap = capsOverride[type] ?? typeCap(type);
     if ((kindCounts[type] ?? 0) >= cap) return false;
     const group = symmetricGroup(type);
-    if (group !== null && (groupCounts[group] ?? 0) >= (groupCaps[group] ?? 3)) return false;
+    if (group !== null && (groupCounts[group] ?? 0) >= (groupCaps[group] ?? 3))
+      return false;
     const qi = slots[slotIdx];
     if (!solutionCompatible(type, qi, solution, n)) return false;
     for (let attempt = 0; attempt < 10; attempt++) {
@@ -240,14 +255,14 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     n - assigned.size,
   );
   for (let c = 0; c < chainCount; c++) {
-    if (!placeRule("answer_of_question", assigned.size)) return null;
+    if (!placeRule("AnswerOf", assigned.size)) return null;
   }
 
   // Phase 2b: occasionally place prev/next_same (need specific slot positions)
   if (rng.int(0, 1) === 0 && assigned.size < n) {
     const candidates: [QuestionTypeDef["type"], number][] = [
-      ["previous_same_answer", n - 1],
-      ["next_same_answer", 0],
+      ["PrevSame", n - 1],
+      ["NextSame", 0],
     ];
     const [kind, neededQi] = candidates[rng.int(0, 1)];
     if (profile.allowedTypes.includes(kind) && !assigned.has(neededQi)) {
@@ -268,10 +283,11 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   // Phase 4: Guaranteed exotic types for variety
   const exoticSlots: QuestionTypeDef["type"][] = [];
-  if (allowed(["letter_distance"], profile).length > 0) exoticSlots.push("letter_distance");
-  if (allowed(["only_true_statement"], profile).length > 0) exoticSlots.push("only_true_statement");
-  if (allowed(["consecutive_identical"], profile).length > 0)
-    exoticSlots.push("consecutive_identical");
+  if (allowed(["LetterDist"], profile).length > 0)
+    exoticSlots.push("LetterDist");
+  if (allowed(["TrueStmt"], profile).length > 0) exoticSlots.push("TrueStmt");
+  if (allowed(["ConsecIdent"], profile).length > 0)
+    exoticSlots.push("ConsecIdent");
   for (const type of exoticSlots) {
     if (assigned.size >= n) break;
     placeRule(type, assigned.size);
@@ -279,12 +295,17 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   // Phase 5: Fill remaining, reserving slots for structural rules
   const avStructural = avVariety.filter((t) => STRUCTURAL_TYPES.has(t));
-  const structuralReserve = Math.min(avStructural.length > 0 ? 1 : 0, n - assigned.size);
+  const structuralReserve = Math.min(
+    avStructural.length > 0 ? 1 : 0,
+    n - assigned.size,
+  );
   const fillTarget = n - structuralReserve;
 
-  const fillPool: QuestionTypeDef["type"][] = [...avEntry, ...avPositional, ...avVariety].filter(
-    (t) => profile.allowedTypes.includes(t) && t !== "answer_of_question",
-  );
+  const fillPool: QuestionTypeDef["type"][] = [
+    ...avEntry,
+    ...avPositional,
+    ...avVariety,
+  ].filter((t) => profile.allowedTypes.includes(t) && t !== "AnswerOf");
 
   while (assigned.size < fillTarget) {
     let placed = false;
@@ -296,8 +317,8 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     }
     if (!placed) {
       if (
-        !placeRule("answer_of_question", assigned.size) &&
-        !placeRule("answer_is_self", assigned.size)
+        !placeRule("AnswerOf", assigned.size) &&
+        !placeRule("AnswerIsSelf", assigned.size)
       )
         return null;
     }
@@ -306,7 +327,9 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // Phase 6: Structural rules — inspect solution, pick matching types
   for (let s = 0; s < structuralReserve && assigned.size < n; s++) {
     const qi = slots[assigned.size];
-    const fitting = avStructural.filter((t) => solutionCompatible(t, qi, solution, n));
+    const fitting = avStructural.filter((t) =>
+      solutionCompatible(t, qi, solution, n),
+    );
     rng.shuffle(fitting);
     let placed = false;
     for (const type of fitting) {
@@ -324,15 +347,17 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
       }
       if (
         !placed &&
-        !placeRule("answer_of_question", assigned.size) &&
-        !placeRule("answer_is_self", assigned.size)
+        !placeRule("AnswerOf", assigned.size) &&
+        !placeRule("AnswerIsSelf", assigned.size)
       )
         return null;
     }
   }
 
   // 3. Build and validate puzzle
-  const finalRules: QuestionTypeDef[] = rules.filter((r): r is QuestionTypeDef => r !== null);
+  const finalRules: QuestionTypeDef[] = rules.filter(
+    (t): t is QuestionTypeDef => t !== null,
+  );
   const questions = finalRules.map<QuestionDef>((questionType, i) => ({
     options: engineerOptions(questionType, i, solution, n, rng),
     questionType,
@@ -341,7 +366,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const puzzle: Puzzle = {
     id: `level-${profile.level}`,
     title: profile.name,
-    difficulty: profile.level,
+    difficulty: String(profile.level),
     questions,
   };
 
@@ -418,15 +443,17 @@ function repairDistractors(
     const correctOi = L2I[solution[qi]];
 
     if (CONSTRAINED_TYPES.has(rule.type)) continue;
-    if (rule.type === "only_true_statement") continue;
+    if (rule.type === "TrueStmt") continue;
 
     const opts = puzzle.questions[qi].options;
 
-    if (rule.type === "answer_of_question") {
+    if (rule.type === "AnswerOf") {
       const target = stuckAnswers[rule.questionIndex];
       if (target != null) {
         const correctIdx = L2I[target];
-        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
+        const pool = rng.shuffle(
+          [0, 1, 2, 3, 4].filter((i) => i !== correctIdx),
+        );
         let di = 0;
         for (let oi = 0; oi < 5; oi++) {
           if (oi !== correctOi) opts[oi] = { value: pool[di++] };
@@ -437,11 +464,13 @@ function repairDistractors(
 
     const correctVal = opts[correctOi].value;
 
-    if (rule.type === "letter_distance" && rule.questionIndex != null) {
+    if (rule.type === "LetterDist" && rule.questionIndex != null) {
       const other = stuckAnswers[rule.questionIndex];
       if (other != null) {
         const correctDist = Math.abs(L2I[solution[qi]] - L2I[other]);
-        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correctDist));
+        const pool = rng.shuffle(
+          [0, 1, 2, 3, 4].filter((v) => v !== correctDist),
+        );
         let di = 0;
         for (let oi = 0; oi < 5; oi++) {
           if (oi !== correctOi) opts[oi] = { value: pool[di++] };
@@ -451,7 +480,13 @@ function repairDistractors(
     }
 
     if (isCountingType(rule.type)) {
-      const distractors = repairCountingDistractors(rule, correctVal, stuckAnswers, n, rng);
+      const distractors = repairCountingDistractors(
+        rule,
+        correctVal,
+        stuckAnswers,
+        n,
+        rng,
+      );
       let di = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
@@ -459,8 +494,13 @@ function repairDistractors(
       continue;
     }
 
-    if (rule.type === "consecutive_identical") {
-      const distractors = repairPairDistractors(correctVal, stuckAnswers, n, rng);
+    if (rule.type === "ConsecIdent") {
+      const distractors = repairPairDistractors(
+        correctVal,
+        stuckAnswers,
+        n,
+        rng,
+      );
       let di = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
@@ -469,7 +509,14 @@ function repairDistractors(
     }
 
     // Positional rules — generate new distractors
-    const newDistractors = repairPositionalDistractors(rule, correctVal, qi, stuckAnswers, n, rng);
+    const newDistractors = repairPositionalDistractors(
+      rule,
+      correctVal,
+      qi,
+      stuckAnswers,
+      n,
+      rng,
+    );
     let di = 0;
     for (let oi = 0; oi < 5; oi++) {
       if (oi !== correctOi) opts[oi] = { value: newDistractors[di++] };
@@ -479,12 +526,12 @@ function repairDistractors(
 
 function isCountingType(type: string): boolean {
   return [
-    "count_answer",
-    "count_answer_before",
-    "count_answer_after",
-    "count_vowel_answers",
-    "count_consonant_answers",
-    "most_common_count",
+    "CountAnswer",
+    "CountAnswerBefore",
+    "CountAnswerAfter",
+    "CountVowel",
+    "CountConsonant",
+    "MostCommonCount",
   ].includes(type);
 }
 
@@ -495,8 +542,8 @@ function repairCountingDistractors(
   n: number,
   rng: RNG,
 ): (number | null)[] {
-  const from = rule.type === "count_answer_after" ? rule.afterIndex + 1 : 0;
-  const to = rule.type === "count_answer_before" ? rule.beforeIndex : n;
+  const from = rule.type === "CountAnswerAfter" ? rule.afterIndex + 1 : 0;
+  const to = rule.type === "CountAnswerBefore" ? rule.beforeIndex : n;
 
   let confirmed = 0;
   let unknown = 0;
@@ -504,9 +551,9 @@ function repairCountingDistractors(
     if (answers[i] == null) {
       unknown++;
     } else if (
-      rule.type === "count_vowel_answers"
+      rule.type === "CountVowel"
         ? answers[i] === "A" || answers[i] === "E"
-        : rule.type === "count_consonant_answers"
+        : rule.type === "CountConsonant"
           ? answers[i] !== "A" && answers[i] !== "E"
           : "answer" in rule && answers[i] === rule.answer
     ) {
@@ -516,11 +563,12 @@ function repairCountingDistractors(
 
   const pool: number[] = [];
   for (let v = 0; v < confirmed; v++) if (v !== correctVal) pool.push(v);
-  for (let v = confirmed + unknown + 1; v <= n; v++) if (v !== correctVal) pool.push(v);
+  for (let v = confirmed + unknown + 1; v <= n; v++)
+    if (v !== correctVal) pool.push(v);
   const max =
-    rule.type === "count_answer_before"
+    rule.type === "CountAnswerBefore"
       ? rule.beforeIndex
-      : rule.type === "count_answer_after"
+      : rule.type === "CountAnswerAfter"
         ? n - rule.afterIndex - 1
         : n;
   for (let v = 0; v <= Math.max(max, 4); v++) {
@@ -538,7 +586,11 @@ function repairPairDistractors(
   const pool: (number | null)[] = [];
   for (let i = 0; i < n - 1; i++) {
     if (i === correctVal) continue;
-    if (answers[i] != null && answers[i + 1] != null && answers[i] !== answers[i + 1]) {
+    if (
+      answers[i] != null &&
+      answers[i + 1] != null &&
+      answers[i] !== answers[i + 1]
+    ) {
       pool.unshift(i);
     } else {
       pool.push(i);
@@ -559,10 +611,10 @@ function repairPositionalDistractors(
   const answer = "answer" in rule ? rule.answer : undefined;
   let minPos = 0;
   let maxPos = n - 1;
-  if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
-  if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
-  if (rule.type === "previous_same_answer") maxPos = qi - 1;
-  if (rule.type === "next_same_answer") minPos = qi + 1;
+  if (rule.type === "ClosestAfter") minPos = rule.afterIndex + 1;
+  if (rule.type === "ClosestBefore") maxPos = rule.beforeIndex - 1;
+  if (rule.type === "PrevSame") maxPos = qi - 1;
+  if (rule.type === "NextSame") minPos = qi + 1;
 
   const pool: (number | null)[] = [];
 
@@ -575,7 +627,9 @@ function repairPositionalDistractors(
         pool.push(i);
       }
     }
-    const hasMatch = answers.slice(minPos, maxPos + 1).some((a) => a === answer);
+    const hasMatch = answers
+      .slice(minPos, maxPos + 1)
+      .some((a) => a === answer);
     if (correctVal != null && hasMatch) pool.unshift(null);
     else if (correctVal != null) pool.push(null);
   } else {
@@ -600,15 +654,27 @@ function applyDeduceAction(
   answers: (AnswerLetter | null)[],
   eliminated: number[],
 ) {
-  if (action.type === "force" && action.letter && action.questionIndex != null) {
+  if (
+    action.type === "force" &&
+    action.letter &&
+    action.questionIndex != null
+  ) {
     const oi = L2I[action.letter];
     eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
     answers[action.questionIndex] = action.letter;
-  } else if (action.type === "eliminateMulti" && action.questionMask != null && action.optionMask != null) {
+  } else if (
+    action.type === "eliminateMulti" &&
+    action.questionMask != null &&
+    action.optionMask != null
+  ) {
     for (let i = 0; i < eliminated.length; i++) {
       if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
     }
-  } else if (action.type === "eliminate" && action.questionIndex != null && action.optionIndex != null) {
+  } else if (
+    action.type === "eliminate" &&
+    action.questionIndex != null &&
+    action.optionIndex != null
+  ) {
     eliminated[action.questionIndex] |= 1 << action.optionIndex;
   }
 }
@@ -624,32 +690,32 @@ function makeRule(
   rng: RNG,
 ): QuestionTypeDef | null {
   switch (type) {
-    case "count_answer":
+    case "CountAnswer":
       return { type, answer: rng.pick(LETTERS) };
-    case "count_answer_before":
+    case "CountAnswerBefore":
       if (n < 6) return null;
       return {
         type,
         answer: rng.pick(LETTERS),
         beforeIndex: rng.int(4, n - 1),
       };
-    case "count_answer_after":
+    case "CountAnswerAfter":
       if (n < 6) return null;
       return {
         type,
         answer: rng.pick(LETTERS),
         afterIndex: rng.int(0, Math.max(0, n - 5)),
       };
-    case "count_vowel_answers":
-    case "count_consonant_answers":
-    case "most_common_count":
+    case "CountVowel":
+    case "CountConsonant":
+    case "MostCommonCount":
       return { type };
-    case "answer_of_question": {
+    case "AnswerOf": {
       const targets = [...assigned].filter((j) => j !== qi);
       if (targets.length === 0) return null;
       return { type, questionIndex: rng.pick(targets) };
     }
-    case "letter_distance": {
+    case "LetterDist": {
       const targets = [...assigned].filter((j) => j !== qi);
       if (targets.length === 0) {
         // Can point at any other question
@@ -659,50 +725,52 @@ function makeRule(
       }
       return { type, questionIndex: rng.pick(targets) };
     }
-    case "closest_after":
+    case "ClosestAfter":
       return {
         type,
         afterIndex: rng.int(0, Math.max(0, n - 5)),
         answer: rng.pick(LETTERS),
       };
-    case "closest_before":
+    case "ClosestBefore":
       if (n < 5) return null;
       return {
         type,
         beforeIndex: rng.int(4, n - 1),
         answer: rng.pick(LETTERS),
       };
-    case "first_with_answer":
-    case "last_with_answer":
+    case "FirstWith":
+    case "LastWith":
       return { type, answer: rng.pick(LETTERS) };
-    case "previous_same_answer":
+    case "PrevSame":
       if (qi < 4) return null;
       return { type };
-    case "next_same_answer":
+    case "NextSame":
       if (qi + 5 > n) return null;
       return { type };
-    case "only_same_answer":
-    case "same_answer_as":
-    case "consecutive_identical":
-    case "least_common_answer":
-    case "most_common_answer":
-    case "unique_answer":
+    case "OnlySame":
+    case "SameAs":
+    case "ConsecIdent":
+    case "LeastCommon":
+    case "MostCommon":
+    case "Unique":
       return { type };
-    case "equal_count_as": {
+    case "EqualCount": {
       const refLetter = rng.pick(LETTERS);
       const refCount = solution.filter((a) => a === refLetter).length;
       const hasMatch = LETTERS.some(
-        (l) => l !== refLetter && solution.filter((a) => a === l).length === refCount,
+        (l) =>
+          l !== refLetter &&
+          solution.filter((a) => a === l).length === refCount,
       );
       if (!hasMatch && rng.int(0, 4) > 1) return null;
       return { type, answer: refLetter };
     }
-    case "only_odd_with_answer":
-    case "only_even_with_answer":
+    case "OnlyOdd":
+    case "OnlyEven":
       return { type, answer: rng.pick(LETTERS) };
-    case "answer_is_self":
+    case "AnswerIsSelf":
       return { type };
-    case "only_true_statement":
+    case "TrueStmt":
       return { type };
   }
   return null;
@@ -710,27 +778,32 @@ function makeRule(
 
 // ── Structural checks ──
 
-function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): boolean {
+function checkStructural(
+  rule: QuestionTypeDef,
+  qi: number,
+  sol: AnswerLetter[],
+): boolean {
   switch (rule.type) {
-    case "only_same_answer": {
+    case "OnlySame": {
       let m = 0;
-      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) m++;
+      for (let i = 0; i < sol.length; i++)
+        if (i !== qi && sol[i] === sol[qi]) m++;
       return m === 1;
     }
-    case "consecutive_identical": {
+    case "ConsecIdent": {
       let p = 0;
       for (let i = 0; i < sol.length - 1; i++) if (sol[i] === sol[i + 1]) p++;
       return p === 1;
     }
-    case "only_odd_with_answer":
-    case "only_even_with_answer": {
-      const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
+    case "OnlyOdd":
+    case "OnlyEven": {
+      const parity = rule.type === "OnlyOdd" ? 1 : 0;
       let m = 0;
       for (let i = 0; i < sol.length; i++)
         if ((i + 1) % 2 === parity && sol[i] === rule.answer) m++;
       return m === 1;
     }
-    case "unique_answer":
+    case "Unique":
       return sol.filter((a) => a === sol[qi]).length === 1;
     default:
       return true;
@@ -744,24 +817,29 @@ function solutionHasStructural(
   n: number,
 ): boolean {
   switch (type) {
-    case "consecutive_identical": {
+    case "ConsecIdent": {
       let pairs = 0;
-      for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairs++;
+      for (let i = 0; i < n - 1; i++)
+        if (solution[i] === solution[i + 1]) pairs++;
       return pairs === 1;
     }
-    case "unique_answer":
-      return solution.slice(0, n).filter((a) => a === solution[qi]).length === 1;
-    case "only_same_answer": {
+    case "Unique":
+      return (
+        solution.slice(0, n).filter((a) => a === solution[qi]).length === 1
+      );
+    case "OnlySame": {
       let m = 0;
-      for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) m++;
+      for (let i = 0; i < n; i++)
+        if (i !== qi && solution[i] === solution[qi]) m++;
       return m === 1;
     }
-    case "only_odd_with_answer":
-    case "only_even_with_answer": {
-      const parity = type === "only_odd_with_answer" ? 1 : 0;
+    case "OnlyOdd":
+    case "OnlyEven": {
+      const parity = type === "OnlyOdd" ? 1 : 0;
       for (const letter of LETTERS) {
         let m = 0;
-        for (let i = 0; i < n; i++) if ((i + 1) % 2 === parity && solution[i] === letter) m++;
+        for (let i = 0; i < n; i++)
+          if ((i + 1) % 2 === parity && solution[i] === letter) m++;
         if (m === 1) return true;
       }
       return false;
@@ -777,22 +855,24 @@ function solutionCompatible(
   n: number,
 ): boolean {
   switch (type) {
-    case "least_common_answer": {
+    case "LeastCommon": {
       const c = letterCounts(solution.slice(0, n));
       return c.filter((v) => v === Math.min(...c)).length === 1;
     }
-    case "most_common_answer": {
+    case "MostCommon": {
       const c = letterCounts(solution.slice(0, n));
       return c.filter((v) => v === Math.max(...c)).length === 1;
     }
-    case "same_answer_as": {
-      for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
+    case "SameAs": {
+      for (let i = 0; i < n; i++)
+        if (i !== qi && solution[i] === solution[qi]) return true;
       return false;
     }
-    case "equal_count_as":
+    case "EqualCount":
       return true;
   }
-  if (STRUCTURAL_TYPES.has(type)) return solutionHasStructural(type, qi, solution, n);
+  if (STRUCTURAL_TYPES.has(type))
+    return solutionHasStructural(type, qi, solution, n);
   return true;
 }
 
@@ -812,18 +892,21 @@ function engineerOptions(
   rng: RNG,
 ): OptionDef[] {
   // Constrained types: value is the letter index (0=A, 1=B, etc.)
-  if (CONSTRAINED_TYPES.has(rule.type)) return LETTERS.map((_l, i) => ({ value: i }));
-  if (rule.type === "only_true_statement") return buildClaims(qi, solution, n, rng);
-  if (rule.type === "least_common_answer" || rule.type === "most_common_answer") {
+  if (CONSTRAINED_TYPES.has(rule.type))
+    return LETTERS.map((_l, i) => ({ value: i }));
+  if (rule.type === "TrueStmt") return buildClaims(qi, solution, n, rng);
+  if (rule.type === "LeastCommon" || rule.type === "MostCommon") {
     const counts = letterCounts(solution.slice(0, n));
-    const target = rule.type === "least_common_answer" ? Math.min(...counts) : Math.max(...counts);
+    const target =
+      rule.type === "LeastCommon" ? Math.min(...counts) : Math.max(...counts);
     const correctIdx = counts.indexOf(target);
     const targetIdx = L2I[solution[qi]];
     const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
     const opts: OptionDef[] = new Array(5);
     opts[targetIdx] = { value: correctIdx };
     let di = 0;
-    for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: pool[di++] };
+    for (let i = 0; i < 5; i++)
+      if (i !== targetIdx) opts[i] = { value: pool[di++] };
     return opts;
   }
   const correct = computeValue(rule, qi, solution);
@@ -832,68 +915,83 @@ function engineerOptions(
   const opts: OptionDef[] = new Array(5);
   opts[targetIdx] = { value: correct };
   let di = 0;
-  for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: distractors[di++] };
+  for (let i = 0; i < 5; i++)
+    if (i !== targetIdx) opts[i] = { value: distractors[di++] };
   return opts;
 }
 
-function computeValue(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): number | null {
+function computeValue(
+  rule: QuestionTypeDef,
+  qi: number,
+  sol: AnswerLetter[],
+): number | null {
   switch (rule.type) {
-    case "answer_of_question":
+    case "AnswerOf":
       return L2I[sol[rule.questionIndex]];
-    case "count_answer":
+    case "CountAnswer":
       return sol.filter((a) => a === rule.answer).length;
-    case "count_answer_before":
-      return sol.slice(0, rule.beforeIndex).filter((a) => a === rule.answer).length;
-    case "count_answer_after":
-      return sol.slice(rule.afterIndex + 1).filter((a) => a === rule.answer).length;
-    case "count_vowel_answers":
+    case "CountAnswerBefore":
+      return sol.slice(0, rule.beforeIndex).filter((a) => a === rule.answer)
+        .length;
+    case "CountAnswerAfter":
+      return sol.slice(rule.afterIndex + 1).filter((a) => a === rule.answer)
+        .length;
+    case "CountVowel":
       return sol.filter((a) => a === "A" || a === "E").length;
-    case "count_consonant_answers":
+    case "CountConsonant":
       return sol.filter((a) => a !== "A" && a !== "E").length;
-    case "most_common_count":
+    case "MostCommonCount":
       return Math.max(...letterCounts(sol));
-    case "closest_after":
-      for (let i = rule.afterIndex + 1; i < sol.length; i++) if (sol[i] === rule.answer) return i;
+    case "ClosestAfter":
+      for (let i = rule.afterIndex + 1; i < sol.length; i++)
+        if (sol[i] === rule.answer) return i;
       return null;
-    case "closest_before":
-      for (let i = rule.beforeIndex - 1; i >= 0; i--) if (sol[i] === rule.answer) return i;
+    case "ClosestBefore":
+      for (let i = rule.beforeIndex - 1; i >= 0; i--)
+        if (sol[i] === rule.answer) return i;
       return null;
-    case "first_with_answer":
+    case "FirstWith":
       for (let i = 0; i < sol.length; i++) if (sol[i] === rule.answer) return i;
       return null;
-    case "last_with_answer":
-      for (let i = sol.length - 1; i >= 0; i--) if (sol[i] === rule.answer) return i;
+    case "LastWith":
+      for (let i = sol.length - 1; i >= 0; i--)
+        if (sol[i] === rule.answer) return i;
       return null;
-    case "previous_same_answer":
+    case "PrevSame":
       for (let i = qi - 1; i >= 0; i--) if (sol[i] === sol[qi]) return i;
       return null;
-    case "next_same_answer":
-      for (let i = qi + 1; i < sol.length; i++) if (sol[i] === sol[qi]) return i;
+    case "NextSame":
+      for (let i = qi + 1; i < sol.length; i++)
+        if (sol[i] === sol[qi]) return i;
       return null;
-    case "only_same_answer":
-      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return i;
+    case "OnlySame":
+      for (let i = 0; i < sol.length; i++)
+        if (i !== qi && sol[i] === sol[qi]) return i;
       return null;
-    case "same_answer_as":
-      for (let i = 0; i < sol.length; i++) if (i !== qi && sol[i] === sol[qi]) return i;
+    case "SameAs":
+      for (let i = 0; i < sol.length; i++)
+        if (i !== qi && sol[i] === sol[qi]) return i;
       return null;
-    case "only_odd_with_answer":
-    case "only_even_with_answer": {
-      const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
+    case "OnlyOdd":
+    case "OnlyEven": {
+      const parity = rule.type === "OnlyOdd" ? 1 : 0;
       for (let i = 0; i < sol.length; i++)
         if ((i + 1) % 2 === parity && sol[i] === rule.answer) return i;
       return null;
     }
-    case "consecutive_identical":
-      for (let i = 0; i < sol.length - 1; i++) if (sol[i] === sol[i + 1]) return i;
+    case "ConsecIdent":
+      for (let i = 0; i < sol.length - 1; i++)
+        if (sol[i] === sol[i + 1]) return i;
       return null;
-    case "equal_count_as": {
+    case "EqualCount": {
       const refCount = sol.filter((a) => a === rule.answer).length;
       for (const l of LETTERS) {
-        if (l !== rule.answer && sol.filter((a) => a === l).length === refCount) return L2I[l];
+        if (l !== rule.answer && sol.filter((a) => a === l).length === refCount)
+          return L2I[l];
       }
       return null;
     }
-    case "letter_distance":
+    case "LetterDist":
       return Math.abs(L2I[sol[qi]] - L2I[sol[rule.questionIndex]]);
   }
   throw new Error(`computeValue: ${rule.type}`);
@@ -906,11 +1004,13 @@ function makeDistractors(
   n: number,
   rng: RNG,
 ): (number | null)[] {
-  if (rule.type === "answer_of_question")
+  if (rule.type === "AnswerOf")
     return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct));
-  if (rule.type === "letter_distance")
-    return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct)).slice(0, 4);
-  if (rule.type === "consecutive_identical") {
+  if (rule.type === "LetterDist")
+    return rng
+      .shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct))
+      .slice(0, 4);
+  if (rule.type === "ConsecIdent") {
     const pool: (number | null)[] = [];
     for (let i = 0; i < n - 1; i++) {
       if (i !== correct) pool.push(i);
@@ -920,23 +1020,23 @@ function makeDistractors(
   }
   if (
     [
-      "count_answer",
-      "count_answer_before",
-      "count_answer_after",
-      "count_vowel_answers",
-      "count_consonant_answers",
-      "most_common_count",
+      "CountAnswer",
+      "CountAnswerBefore",
+      "CountAnswerAfter",
+      "CountVowel",
+      "CountConsonant",
+      "MostCommonCount",
     ].includes(rule.type)
   ) {
     let max = n;
-    if (rule.type === "count_answer_before") max = rule.beforeIndex;
-    if (rule.type === "count_answer_after") max = n - rule.afterIndex - 1;
+    if (rule.type === "CountAnswerBefore") max = rule.beforeIndex;
+    if (rule.type === "CountAnswerAfter") max = n - rule.afterIndex - 1;
     const pool: number[] = [];
     for (let i = 0; i <= Math.max(max, 4); i++) if (i !== correct) pool.push(i);
     return rng.shuffle(pool).slice(0, 4);
   }
-  if (rule.type === "only_odd_with_answer" || rule.type === "only_even_with_answer") {
-    const parity = rule.type === "only_odd_with_answer" ? 1 : 0;
+  if (rule.type === "OnlyOdd" || rule.type === "OnlyEven") {
+    const parity = rule.type === "OnlyOdd" ? 1 : 0;
     const pool: (number | null)[] = [];
     for (let i = 0; i < n; i++) {
       if ((i + 1) % 2 === parity && i !== correct) pool.push(i);
@@ -944,7 +1044,7 @@ function makeDistractors(
     if (correct != null) pool.push(null);
     return rng.shuffle(pool).slice(0, 4);
   }
-  if (rule.type === "equal_count_as") {
+  if (rule.type === "EqualCount") {
     const pool: (number | null)[] = [];
     for (const l of LETTERS) {
       const li = L2I[l];
@@ -956,11 +1056,11 @@ function makeDistractors(
   // Positional (0-based indices)
   let minPos = 0,
     maxPos = n - 1;
-  if (rule.type === "closest_after") minPos = rule.afterIndex + 1;
-  if (rule.type === "closest_before") maxPos = rule.beforeIndex - 1;
-  if (rule.type === "previous_same_answer") maxPos = qi - 1;
-  if (rule.type === "next_same_answer") minPos = qi + 1;
-  const excludeSelf = rule.type === "only_same_answer" || rule.type === "same_answer_as";
+  if (rule.type === "ClosestAfter") minPos = rule.afterIndex + 1;
+  if (rule.type === "ClosestBefore") maxPos = rule.beforeIndex - 1;
+  if (rule.type === "PrevSame") maxPos = qi - 1;
+  if (rule.type === "NextSame") minPos = qi + 1;
+  const excludeSelf = rule.type === "OnlySame" || rule.type === "SameAs";
   const pool: (number | null)[] = [];
   for (let i = minPos; i <= maxPos; i++) {
     if (i !== correct && !(excludeSelf && i === qi)) pool.push(i);
@@ -969,7 +1069,12 @@ function makeDistractors(
   return rng.shuffle(pool).slice(0, 4);
 }
 
-function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG): StatementOption[] {
+function buildClaims(
+  qi: number,
+  solution: AnswerLetter[],
+  n: number,
+  rng: RNG,
+): StatementOption[] {
   const targetIdx = L2I[solution[qi]];
   const options: StatementOption[] = new Array(5);
   const trueClaim = makeTrueClaim(solution, n, rng);
@@ -998,26 +1103,26 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   if (t === 0) {
     const a = rng.pick(LETTERS);
     return {
-      type: "count_answer",
+      type: "CountAnswer",
       answer: a,
       value: sol.filter((x) => x === a).length,
     };
   }
   if (t === 1)
     return {
-      type: "count_consonant_answers",
+      type: "CountConsonant",
       value: sol.filter((a) => a !== "A" && a !== "E").length,
     };
   if (t === 2)
     return {
-      type: "count_vowel_answers",
+      type: "CountVowel",
       value: sol.filter((a) => a === "A" || a === "E").length,
     };
   if (t === 3) {
     const a = rng.pick(LETTERS);
     const ai = rng.int(0, Math.max(0, n - 5));
     return {
-      type: "count_answer_after",
+      type: "CountAnswerAfter",
       answer: a,
       afterIndex: ai,
       value: sol.slice(ai + 1).filter((x) => x === a).length,
@@ -1027,7 +1132,7 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
     const a = rng.pick(LETTERS);
     const bi = rng.int(4, n - 1);
     return {
-      type: "count_answer_before",
+      type: "CountAnswerBefore",
       answer: a,
       beforeIndex: bi,
       value: sol.slice(0, bi).filter((x) => x === a).length,
@@ -1036,7 +1141,7 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   if (t === 5) {
     const qi = rng.int(0, n - 1);
     return {
-      type: "answer_of_question",
+      type: "AnswerOf",
       questionIndex: qi,
       value: L2I[sol[qi]],
     };
@@ -1044,10 +1149,10 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   if (t === 6) {
     const a = rng.pick(LETTERS);
     const first = sol.indexOf(a);
-    if (first >= 0) return { type: "first_with_answer", answer: a, value: first };
+    if (first >= 0) return { type: "FirstWith", answer: a, value: first };
     const a2 = rng.pick(LETTERS);
     return {
-      type: "count_answer",
+      type: "CountAnswer",
       answer: a2,
       value: sol.filter((x) => x === a2).length,
     };
@@ -1055,10 +1160,10 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   if (t === 7) {
     const a = rng.pick(LETTERS);
     const last = sol.lastIndexOf(a);
-    if (last >= 0) return { type: "last_with_answer", answer: a, value: last };
+    if (last >= 0) return { type: "LastWith", answer: a, value: last };
     const a2 = rng.pick(LETTERS);
     return {
-      type: "count_answer",
+      type: "CountAnswer",
       answer: a2,
       value: sol.filter((x) => x === a2).length,
     };
@@ -1068,32 +1173,32 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   const max = Math.max(...counts);
   const most = LETTERS.filter((_, i) => counts[i] === max);
   if (most.length === 1) {
-    return { type: "most_common_answer", value: L2I[most[0]] };
+    return { type: "MostCommon", value: L2I[most[0]] };
   }
   const a = rng.pick(LETTERS);
   return {
-    type: "count_answer",
+    type: "CountAnswer",
     answer: a,
     value: sol.filter((x) => x === a).length,
   };
 }
 function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
   switch (claim.type) {
-    case "count_answer":
-    case "count_consonant_answers":
-    case "count_vowel_answers":
-    case "count_answer_after":
-    case "count_answer_before": {
+    case "CountAnswer":
+    case "CountConsonant":
+    case "CountVowel":
+    case "CountAnswerAfter":
+    case "CountAnswerBefore": {
       const offset = rng.pick([-2, -1, 1, 2]);
       const newVal = claim.value + offset;
       if (newVal < 0 || newVal > n) return null;
       return { ...claim, value: newVal };
     }
-    case "first_with_answer":
-    case "last_with_answer":
+    case "FirstWith":
+    case "LastWith":
       return { ...claim, value: rng.int(0, n - 1) };
-    case "answer_of_question":
-    case "most_common_answer":
+    case "AnswerOf":
+    case "MostCommon":
       return { ...claim, value: L2I[rng.pick(LETTERS)] };
     default:
       return null;
@@ -1105,27 +1210,27 @@ function makeFalseClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
     const fc = perturbClaim(base, n, rng);
     if (fc && !evaluateClaim(fc, sol)) return fc;
   }
-  return { type: "count_answer", answer: "A", value: n + 1 };
+  return { type: "CountAnswer", answer: "A", value: n + 1 };
 }
 function claimCategory(c: Claim): string {
   switch (c.type) {
-    case "count_answer":
+    case "CountAnswer":
       return "count:" + c.answer;
-    case "count_consonant_answers":
+    case "CountConsonant":
       return "consonant";
-    case "count_vowel_answers":
+    case "CountVowel":
       return "vowel";
-    case "count_answer_after":
+    case "CountAnswerAfter":
       return "after:" + c.answer;
-    case "count_answer_before":
+    case "CountAnswerBefore":
       return "before:" + c.answer;
-    case "answer_of_question":
+    case "AnswerOf":
       return "answerof:" + c.questionIndex;
-    case "first_with_answer":
+    case "FirstWith":
       return "first:" + c.answer;
-    case "last_with_answer":
+    case "LastWith":
       return "last:" + c.answer;
-    case "most_common_answer":
+    case "MostCommon":
       return "mostcommon";
     default:
       c satisfies never;
