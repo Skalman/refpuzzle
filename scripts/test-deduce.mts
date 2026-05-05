@@ -1,8 +1,9 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import type { AnswerLetter, FlatPuzzle, Puzzle } from "../src/engine/types.ts";
+import type { AnswerLetter, FlatPuzzle, Marks, Puzzle } from "../src/engine/types.ts";
 import { L2I, flattenPuzzle } from "../src/engine/types.ts";
+import { encodePlaygroundHash, savedStateFromMarks } from "../src/lib/playground.ts";
 import {
   deduce,
   deduceWithRule,
@@ -80,6 +81,33 @@ function applyState(
   return { answers, eliminated };
 }
 
+function stateToMarks(n: number, state: string[]): Marks[] {
+  const result: Marks[] = [];
+  for (let qi = 0; qi < n; qi++) {
+    const marks: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
+    const s = state[qi] || "";
+    for (const ch of s) {
+      if (isUpperAnswer(ch)) marks[L2I[ch]] = "correct";
+      else if (isLowerAnswer(ch)) marks[L2I[ch.toUpperCase()]] = "incorrect";
+    }
+    result.push(marks);
+  }
+  return result;
+}
+
+const PLAYGROUND_BASE =
+  process.env.PLAYGROUND_BASE_URL ?? "http://localhost:5173";
+
+async function playgroundLink(t: TestCase, n: number): Promise<string> {
+  const state = savedStateFromMarks(stateToMarks(n, t.state));
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+  const hash = await encodePlaygroundHash(
+    t.puzzle as Parameters<typeof encodePlaygroundHash>[0],
+    state,
+  );
+  return `${PLAYGROUND_BASE}/playground#${hash}`;
+}
+
 function formatAction(result: DeduceResult | null): string | null {
   if (!result) return null;
   const a = result.action;
@@ -153,6 +181,8 @@ for (const test of suite.tests) {
     console.log(`FAIL: ${t.name}`);
     console.log(`  expected: ${expected}`);
     console.log(`  got:      ${got}`);
+    // eslint-disable-next-line no-await-in-loop
+    console.log(`  link:     ${await playgroundLink(t, n)}`);
   }
 
   if (result && got === expected) {

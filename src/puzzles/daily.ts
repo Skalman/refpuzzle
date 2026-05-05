@@ -28,8 +28,19 @@ interface CompactQuestion {
   t: CompactQuestionTypeDef;
   c?: (CompactClaim | null)[];
 }
-interface CompactPuzzle {
+export interface CompactPuzzle {
   q: CompactQuestion[];
+}
+
+export function parseCompactPuzzle(compact: CompactPuzzle): Puzzle {
+  const questions = compact.q.map<QuestionDef>((cq) => {
+    const questionType = expandQuestion(cq.t);
+    const options: OptionDef[] = cq.c
+      ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
+      : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
+    return { options, questionType };
+  });
+  return { id: "playground", title: "", difficulty: "0", questions };
 }
 
 export function parseCompactYear(

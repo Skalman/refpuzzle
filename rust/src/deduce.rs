@@ -1615,6 +1615,53 @@ mod tests {
     use super::*;
     use serde_json::Value;
 
+    // Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
+    fn playground_link(puzzle: &Value, states: &[Value], n: usize) -> String {
+        use base64::Engine;
+        use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+        use flate2::Compression;
+        use flate2::write::DeflateEncoder;
+        use std::io::Write;
+
+        let puzzle_json = serde_json::to_string(puzzle).unwrap();
+        let mut encoder = DeflateEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(puzzle_json.as_bytes()).unwrap();
+        let p = URL_SAFE_NO_PAD.encode(encoder.finish().unwrap());
+
+        // History: one action per non-unmarked option, iterated in (qi, oi) order
+        // to match savedStateFromMarks in playground.ts.
+        let mut actions: Vec<String> = Vec::new();
+        for qi in 0..n {
+            let s = states.get(qi).and_then(|v| v.as_str()).unwrap_or("");
+            let mut correct: Option<usize> = None;
+            let mut incorrect = [false; 5];
+            for ch in s.chars() {
+                if ch.is_ascii_uppercase() {
+                    correct = Some((ch as u8 - b'A') as usize);
+                } else if ch.is_ascii_lowercase() {
+                    incorrect[(ch as u8 - b'a') as usize] = true;
+                }
+            }
+            for oi in 0..5 {
+                let letter = (b'A' + oi as u8) as char;
+                if Some(oi) == correct {
+                    actions.push(format!("{}{}", qi + 1, letter));
+                } else if incorrect[oi] {
+                    actions.push(format!("{}{}", qi + 1, letter.to_ascii_lowercase()));
+                }
+            }
+        }
+        let h = actions.join(".");
+
+        let base = std::env::var("PLAYGROUND_BASE_URL")
+            .unwrap_or_else(|_| "http://localhost:5173".to_string());
+        if h.is_empty() {
+            format!("{base}/playground#p={p}")
+        } else {
+            format!("{base}/playground#p={p}&h={h}")
+        }
+    }
+
     #[test]
     fn test_shared_deduce() {
         let json_str =
@@ -1704,6 +1751,10 @@ mod tests {
                 eprintln!("FAIL: {name}");
                 eprintln!("  expected: {expected}");
                 eprintln!("  got:      {got}");
+                eprintln!(
+                    "  link:     {}",
+                    playground_link(&test["puzzle"], states, n)
+                );
             }
 
             // DRY check

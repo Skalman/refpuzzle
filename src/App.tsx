@@ -26,7 +26,9 @@ import {
   isValidDate,
   dateStrFromOffset,
   puzzleId,
+  parseCompactPuzzle,
 } from "./puzzles/daily.ts";
+import { decodePlaygroundHash } from "./lib/playground.ts";
 import { hasState } from "./lib/store.ts";
 import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
@@ -1347,6 +1349,49 @@ function SyncRoute() {
   );
 }
 
+function PlaygroundRoute() {
+  const hash = window.location.hash.slice(1);
+  type State =
+    | { status: "loading" }
+    | { status: "error" }
+    | { status: "ready"; puzzle: Puzzle; stateHash: string | null };
+  const [state, setState] = useState<State>({ status: "loading" });
+
+  useEffect(() => {
+    if (!hash) {
+      setState({ status: "error" });
+      return;
+    }
+    decodePlaygroundHash(hash)
+      .then((decoded) => {
+        if (!decoded) {
+          setState({ status: "error" });
+          return;
+        }
+        setState({
+          status: "ready",
+          puzzle: parseCompactPuzzle(decoded.compact),
+          stateHash: decoded.stateHash,
+        });
+      })
+      .catch(() => setState({ status: "error" }));
+  }, [hash]);
+
+  if (state.status === "loading") return <div class="loading"><span class="spinner" /></div>;
+  if (state.status === "error") return <div class="loading">Invalid puzzle hash.</div>;
+  return (
+    <PuzzleView
+      key={hash}
+      puzzle={state.puzzle}
+      dateStr="playground"
+      level={0}
+      initialHash={state.stateHash}
+      onNextPuzzle={() => {}}
+      onChanged={() => {}}
+    />
+  );
+}
+
 function NotFound() {
   const s = t();
   return (
@@ -1367,6 +1412,7 @@ export function App() {
           <Route path="/past" component={PastPuzzlesPage} />
           <Route path="/day/:date" component={DayRoute} />
           <Route path="/sync" component={SyncRoute} />
+          <Route path="/playground" component={PlaygroundRoute} />
           <Route default component={NotFound} />
         </Router>
       </div>
