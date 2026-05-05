@@ -1,8 +1,10 @@
 import type { AnswerLetter, Puzzle, Marks } from "../src/engine/types.ts";
-import { LETTERS, flattenPuzzle } from "../src/engine/types.ts";
+import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluators.ts";
 import { checkAnswerValidity } from "../src/engine/check-validity.ts";
-import { deduce } from "../src/engine/deduce.ts";
+import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
+import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
+import { explainDeduce } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solver.ts";
 import { checkSolvable } from "../src/engine/solve.ts";
@@ -281,7 +283,7 @@ function testSolverEdgeCases() {
 // Hint engine tests
 // ════════════════════════════════════════════════
 
-const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
+
 
 function blankState(n: number): {
   answers: (AnswerLetter | null)[];
@@ -970,6 +972,88 @@ function testSharedSolve() {
 }
 
 // ════════════════════════════════════════════════
+// Shared deduce tests (correctness + explanations + DRY + coverage)
+// ════════════════════════════════════════════════
+
+function testSharedDeduce() {
+  const suite = JSON.parse(readFileSync(resolve(__dirname, "../tests/deduce.json"), "utf8"));
+  const coveredRules = new Set<string>();
+
+  function formatAction(dr: DeduceResult | undefined): string {
+    if (!dr) return "null";
+    const a = dr.action;
+    if (a.type === "force") return `${a.questionIndex + 1}${a.letter}`;
+    if (a.type === "eliminate") return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
+    if (a.type === "eliminateMulti") return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
+    return "null";
+  }
+
+  function parsePuzzle(compact: Record<string, unknown>) {
+    const wrapped = { "0101": { "1": compact } } as unknown as Parameters<typeof parseCompactYear>[0];
+    return parseCompactYear(wrapped)["0101"]["1"];
+  }
+
+  function applyState(n: number, state: string[]): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
+    const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+    const eliminated: number[] = new Array(n).fill(0);
+    for (let qi = 0; qi < n; qi++) {
+      const s = state[qi] || "";
+      for (const ch of s) {
+        if (ch >= "A" && ch <= "E") {
+          answers[qi] = ch as AnswerLetter;
+          eliminated[qi] = 0b11111 ^ (1 << L2I[ch]);
+        } else if (ch >= "a" && ch <= "e") {
+          eliminated[qi] |= 1 << L2I[ch.toUpperCase()];
+        }
+      }
+    }
+    return { answers, eliminated };
+  }
+
+  for (const test of suite.tests) {
+    if ("section" in test) continue;
+    const { name, state, expect, rule: ruleStr } = test;
+    const puzzle = parsePuzzle(test.puzzle);
+    const fp = flattenPuzzle(puzzle);
+    const n = puzzle.questions.length;
+    const { answers, eliminated } = applyState(n, state);
+
+    const parsedRule: DeduceRule | null = ruleStr && ALL_DEDUCE_RULES.includes(ruleStr) ? ruleStr : null;
+    if (parsedRule) coveredRules.add(parsedRule);
+
+    const results = parsedRule
+      ? deduceWithRule(fp, answers, eliminated, parsedRule)
+      : deduce(fp, answers, eliminated);
+    const got = formatAction(results[0]);
+    const expected = expect ?? "null";
+    assert(got === expected, `deduce: ${name}: expected ${expected}, got ${got}`);
+
+    // Explain check
+    if (results[0] && got === expected) {
+      try {
+        const steps = explainDeduce(puzzle, fp, answers, eliminated, results[0]);
+        const hasFallback = steps.some(
+          (s) => s.type === "simple" && (/^Q\d+ can't be [A-E]\.$/.test(s.text) || /^Q\d+ options? [A-E, ]+ can be ruled out\.$/.test(s.text)),
+        );
+        assert(!hasFallback, `deduce explain fallback: ${name}`);
+      } catch (e) {
+        assert(false, `deduce explain threw: ${name}: ${String(e)}`);
+      }
+    }
+
+    // DRY check
+    if (parsedRule && results[0] && got === expected) {
+      const without = deduceWithRule(fp, answers, eliminated, null, parsedRule);
+      const withoutGot = formatAction(without[0]);
+      assert(withoutGot !== got, `deduce DRY: ${name}: excluding "${parsedRule}" still produces ${got}`);
+    }
+  }
+
+  const uncovered = ALL_DEDUCE_RULES.filter((r) => !coveredRules.has(r));
+  assert(uncovered.length === 0, `deduce: missing test coverage for: ${uncovered.join(", ")}`);
+}
+
+// ════════════════════════════════════════════════
 // Run all
 // ════════════════════════════════════════════════
 
@@ -982,6 +1066,7 @@ function timed(name: string, fn: () => void) {
 }
 
 timed("Shared evaluator tests", testSharedEvaluators);
+timed("Shared deduce tests", testSharedDeduce);
 timed("Shared check-validity tests", testSharedCheckValidity);
 timed("Shared lookahead tests", testSharedLookahead);
 timed("Shared solve tests", testSharedSolve);

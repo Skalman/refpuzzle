@@ -35,7 +35,10 @@ import {
   RT_ANSWER_OF,
   RT_UNIQUE,
   RT_EQUAL_COUNT,
+  RT_LEAST_COMMON,
+  RT_MOST_COMMON,
   RT_LETTER_DIST,
+  RT_TRUE_STMT,
 } from "./types.ts";
 import type { DeduceResult } from "./deduce.ts";
 import type { LookaheadResult } from "./lookahead.ts";
@@ -330,6 +333,36 @@ function explainForce(
     }
   }
 
+  if (rule === "LeastCommonForce" && q.t === RT_LEAST_COMMON) {
+    steps.push(simple(`Only one answer can make its claimed letter the least common — ${Q(qi)} must be ${letter}.`));
+    return steps;
+  }
+
+  if (rule === "MostCommonForce" && q.t === RT_MOST_COMMON) {
+    steps.push(simple(`Only one answer can make its claimed letter the most common — ${Q(qi)} must be ${letter}.`));
+    return steps;
+  }
+
+  if (rule === "TrueStatementForward") {
+    for (let src = 0; src < n; src++) {
+      const srcAns = answers[src];
+      if (srcAns == null) continue;
+      if (fp.questions[src].t !== RT_TRUE_STMT) continue;
+      const claim = fp.optionClaims[src][letterIdx(srcAns)];
+      if (!claim) continue;
+      if (claim.type === "AnswerOf" && claim.questionIndex === qi) {
+        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(simple(`${Q(src)}'s true statement says ${Q(qi)}'s answer is ${letter}. So ${Q(qi)} must be ${letter}.`));
+        return steps;
+      }
+      if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
+        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(simple(`${Q(src)}'s true statement says ${Q(qi)} has answer ${letter}. So ${Q(qi)} must be ${letter}.`));
+        return steps;
+      }
+    }
+  }
+
   throw new Error(`explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`);
 }
 
@@ -395,6 +428,23 @@ function explainElimination(
       steps.push(simple(`${Q(qi)} can't be ${letter}.`));
     }
     return steps;
+  }
+
+  if (rule === "ConsecIdentReverse") {
+    for (let src = 0; src < n; src++) {
+      if (fp.questions[src].t !== RT_CONSEC_IDENT) continue;
+      const neighbor = qi > 0 && answers[qi - 1] === letter ? qi - 1
+        : qi + 1 < n && answers[qi + 1] === letter ? qi + 1 : null;
+      if (neighbor != null) {
+        steps.push(simple(`Try looking at ${Q(qi)}, ${Q(neighbor)}, and ${Q(src)}.`));
+        steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+        steps.push(simple(`${Q(qi)} and ${Q(neighbor)} would both be ${letter}, creating a consecutive pair — but ${Q(src)}'s remaining options don't allow that pair.`));
+      } else {
+        steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+        steps.push(simple(`That would create a consecutive pair not allowed by ${Q(src)}'s remaining options.`));
+      }
+      return steps;
+    }
   }
 
   if (rule === "VowelCrossElim" || rule === "ConsonantCrossElim") {
@@ -842,6 +892,40 @@ function explainElimDetail(
       return d(
         `${Q(qi)} option ${letter} claims ${LETTERS[v]}, but the question asks for a different letter with the same count as ${q.answer}.`,
       );
+  }
+
+  if (q.t === RT_LEAST_COMMON && v != null && v < 5) {
+    const counts = [0, 0, 0, 0, 0];
+    for (let j = 0; j < n; j++) {
+      if (answers[j] != null) counts[letterIdx(answers[j]!)]++;
+    }
+    const claimed = LETTERS[v];
+    const minCount = Math.min(...counts);
+    const minLetters = LETTERS.filter((_, i) => counts[i] === minCount);
+    if (counts[v] > minCount) {
+      return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} appears ${counts[v]} time(s) while ${minLetters[0]} appears only ${minCount}.`);
+    }
+    if (minLetters.length > 1) {
+      return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${minLetters.join(" and ")} are tied at ${minCount} — no unique least.`);
+    }
+    return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} can't be uniquely least.`);
+  }
+
+  if (q.t === RT_MOST_COMMON && v != null && v < 5) {
+    const counts = [0, 0, 0, 0, 0];
+    for (let j = 0; j < n; j++) {
+      if (answers[j] != null) counts[letterIdx(answers[j]!)]++;
+    }
+    const claimed = LETTERS[v];
+    const maxCount = Math.max(...counts);
+    const maxLetters = LETTERS.filter((_, i) => counts[i] === maxCount);
+    if (counts[v] < maxCount) {
+      return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} appears ${counts[v]} time(s) while ${maxLetters[0]} appears ${maxCount}.`);
+    }
+    if (maxLetters.length > 1) {
+      return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${maxLetters.join(" and ")} are tied at ${maxCount} — no unique most.`);
+    }
+    return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} can't be uniquely most.`);
   }
 
   return null;
