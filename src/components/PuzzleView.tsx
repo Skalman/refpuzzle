@@ -678,7 +678,7 @@ export function PuzzleView({
         const d = parseInt(buf.digits, 10);
         if (d >= 1 && d <= questionCount) navigateToQuestion(d);
         buf.digits = "";
-      }, 150);
+      }, 500);
     } else {
       if (parsed >= 1 && parsed <= questionCount) navigateToQuestion(parsed);
       buf.digits = "";
