@@ -1669,7 +1669,16 @@
           { "t": { "q": 8, "t": "AnswerOf" }, "o": [0, 2, 1, 4, 3] },
           { "t": { "a": 2, "t": "OnlyOdd" }, "o": [10, 6, 2, 8, 4] },
           { "t": { "t": "ConsecIdent" }, "o": [0, null, 1, 6, 4] },
-          { "t": { "t": "TrueStmt" }, "c": [{ "a": 0, "q": 0, "t": "CountAnswerAfter", "v": 3 }, { "q": 1, "t": "AnswerOf", "v": 0 }, { "t": "MostCommon", "v": 4 }, { "t": "CountConsonant", "v": 9 }, { "q": 6, "t": "AnswerOf", "v": 0 }] },
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 0, "q": 0, "t": "CountAnswerAfter", "v": 3 },
+              { "q": 1, "t": "AnswerOf", "v": 0 },
+              { "t": "MostCommon", "v": 4 },
+              { "t": "CountConsonant", "v": 9 },
+              { "q": 6, "t": "AnswerOf", "v": 0 }
+            ]
+          },
           { "t": { "a": 4, "q": 9, "t": "ClosestBefore" }, "o": [6, 8, 3, 7, 1] },
           { "t": { "a": 1, "t": "LastWith" }, "o": [11, 0, 10, 6, 8] },
           { "t": { "q": 0, "t": "AnswerOf" }, "o": [0, 3, 1, 4, 2] },
