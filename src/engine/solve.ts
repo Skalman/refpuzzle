@@ -87,11 +87,19 @@ function applyAction(
     const oi = letterIdx(action.letter);
     eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
     answers[action.questionIndex] = action.letter;
-  } else if (action.type === "eliminateMulti" && action.questionMask != null && action.optionMask != null) {
+  } else if (
+    action.type === "eliminateMulti" &&
+    action.questionMask != null &&
+    action.optionMask != null
+  ) {
     for (let i = 0; i < eliminated.length; i++) {
       if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
     }
-  } else if (action.type === "eliminate" && action.questionIndex != null && action.optionIndex != null) {
+  } else if (
+    action.type === "eliminate" &&
+    action.questionIndex != null &&
+    action.optionIndex != null
+  ) {
     eliminated[action.questionIndex] |= 1 << action.optionIndex;
   }
 }

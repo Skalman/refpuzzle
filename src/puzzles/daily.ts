@@ -9,10 +9,7 @@ import type {
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
-const YEAR_RAW = new Map<
-  string,
-  Record<string, Record<string, CompactPuzzle>> | null
->();
+const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
 interface CompactQuestionTypeDef {
@@ -127,10 +124,7 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).has("debug")
-  ) {
+  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
     return true;
   }
   const today = new Date();
@@ -166,9 +160,7 @@ async function fetchYearRaw(
   }
 }
 
-export async function fetchDaily(
-  dateStr: string,
-): Promise<Record<string, Puzzle> | null> {
+export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle> | null> {
   const key = dateStr;
   if (DAY_CACHE.has(key)) return DAY_CACHE.get(key)!;
   const year = dateStr.slice(0, 4);

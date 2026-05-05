@@ -469,10 +469,7 @@ export function PuzzleView({
     return solutionRef.current;
   }
 
-  function findError(
-    answers: (AnswerLetter | null)[],
-    eliminated: number[],
-  ): ExplainStep[] | null {
+  function findError(answers: (AnswerLetter | null)[], eliminated: number[]): ExplainStep[] | null {
     const solution = getSolution();
     const n = puzzle.questions.length;
     for (let qi = 0; qi < n; qi++) {
@@ -510,7 +507,9 @@ export function PuzzleView({
 
     const t0 = performance.now();
     const lr = lookaheadShortest(fp, answers, eliminated);
-    console.log(`lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`);
+    console.log(
+      `lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`,
+    );
     if (lr) {
       return { steps: explainLookahead(puzzle, fp, answers, eliminated, lr) };
     }
@@ -853,7 +852,7 @@ export function PuzzleView({
                   // oxlint-disable-next-line react/no-array-index-key
                   <li key={`h${i}`}>{line}</li>
                 ))}
-            </ul>
+              </ul>
             </div>
           ) : (
             hintText.text

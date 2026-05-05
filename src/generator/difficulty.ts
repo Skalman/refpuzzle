@@ -12,13 +12,7 @@ export const profiles: DifficultyProfile[] = [
     level: 1,
     name: "Beginner",
     questionCount: 4,
-    allowedTypes: [
-      "CountAnswer",
-      "AnswerOf",
-      "AnswerIsSelf",
-      "FirstWith",
-      "LastWith",
-    ],
+    allowedTypes: ["CountAnswer", "AnswerOf", "AnswerIsSelf", "FirstWith", "LastWith"],
   },
   {
     level: 2,

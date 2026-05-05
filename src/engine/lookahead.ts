@@ -13,10 +13,7 @@ export interface LookaheadResult {
   contradictionQi: number;
 }
 
-function hasContradiction(
-  action: DeduceAction,
-  answers: (AnswerLetter | null)[],
-): boolean {
+function hasContradiction(action: DeduceAction, answers: (AnswerLetter | null)[]): boolean {
   if (action.type === "force") {
     return answers[action.questionIndex] != null && answers[action.questionIndex] !== action.letter;
   }

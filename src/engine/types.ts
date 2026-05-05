@@ -1,16 +1,7 @@
 export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>([
-  "A",
-  "E",
-]);
+export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
-export type Marks = [
-  OptionMark,
-  OptionMark,
-  OptionMark,
-  OptionMark,
-  OptionMark,
-];
+export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
 
 export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
@@ -223,9 +214,7 @@ export function getFlatPuzzle(puzzle: Puzzle): FlatPuzzle {
 
 export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
   const n = puzzle.questions.length;
-  const questions = puzzle.questions.map((q) =>
-    flattenQuestion(q.questionType),
-  );
+  const questions = puzzle.questions.map((q) => flattenQuestion(q.questionType));
 
   // Build dependency map: affectedBy[j] = local rules to re-check when Q_j changes
   const affectedBy: number[][] = Array.from({ length: n }, () => []);

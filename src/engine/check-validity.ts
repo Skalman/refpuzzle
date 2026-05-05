@@ -58,11 +58,7 @@ function countMatching(
   return { count, remaining };
 }
 
-function countValidity(
-  count: number,
-  remaining: number,
-  value: number,
-): Validity {
+function countValidity(count: number, remaining: number, value: number): Validity {
   if (count > value || count + remaining < value) return "invalid";
   if (count === value && remaining === 0) return "valid";
   return "pending";
@@ -92,8 +88,7 @@ function firstInRange(
     let allCertain = true;
     for (let j = start; j < pos; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0)
-        allCertain = false;
+      if (answers[j] == null && (eliminated[j] & amask) === 0) allCertain = false;
     }
     if (answers[pos] === answer && allCertain) return "valid";
     return "pending";
@@ -101,8 +96,7 @@ function firstInRange(
     let couldExist = false;
     for (let j = start; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0)
-        couldExist = true;
+      if (answers[j] == null && (eliminated[j] & amask) === 0) couldExist = true;
     }
     return couldExist ? "pending" : "valid";
   }
@@ -123,8 +117,7 @@ function lastInRange(
     let allCertain = true;
     for (let j = pos + 1; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0)
-        allCertain = false;
+      if (answers[j] == null && (eliminated[j] & amask) === 0) allCertain = false;
     }
     if (answers[pos] === answer && allCertain) return "valid";
     return "pending";
@@ -132,8 +125,7 @@ function lastInRange(
     let couldExist = false;
     for (let j = start; j < end; j++) {
       if (answers[j] === answer) return "invalid";
-      if (answers[j] == null && (eliminated[j] & amask) === 0)
-        couldExist = true;
+      if (answers[j] == null && (eliminated[j] & amask) === 0) couldExist = true;
     }
     return couldExist ? "pending" : "valid";
   }
@@ -155,49 +147,24 @@ export function checkAnswerValidity(
   const n = fp.n;
 
   // ── Counting ──
-  if (
-    q.t === RT_COUNT_ANSWER ||
-    q.t === RT_COUNT_ANSWER_BEFORE ||
-    q.t === RT_COUNT_ANSWER_AFTER
-  ) {
+  if (q.t === RT_COUNT_ANSWER || q.t === RT_COUNT_ANSWER_BEFORE || q.t === RT_COUNT_ANSWER_AFTER) {
     if (v == null) return "pending";
     const answer = q.answer!;
     const [from, to] = countRange(q, n);
     const matchMask = 1 << letterIdx(answer);
-    const cr = countMatching(
-      answers,
-      eliminated,
-      (x) => x === answer,
-      matchMask,
-      from,
-      to,
-    );
+    const cr = countMatching(answers, eliminated, (x) => x === answer, matchMask, from, to);
     return countValidity(cr.count, cr.remaining, v);
   }
 
   if (q.t === RT_COUNT_VOWEL) {
     if (v == null) return "pending";
-    const cr = countMatching(
-      answers,
-      eliminated,
-      (x) => VOWELS.has(x),
-      0b10001,
-      0,
-      n,
-    );
+    const cr = countMatching(answers, eliminated, (x) => VOWELS.has(x), 0b10001, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
   if (q.t === RT_COUNT_CONSONANT) {
     if (v == null) return "pending";
-    const cr = countMatching(
-      answers,
-      eliminated,
-      (x) => !VOWELS.has(x),
-      0b01110,
-      0,
-      n,
-    );
+    const cr = countMatching(answers, eliminated, (x) => !VOWELS.has(x), 0b01110, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
@@ -219,12 +186,10 @@ export function checkAnswerValidity(
   }
 
   // ── Positional ──
-  if (q.t === RT_FIRST_WITH)
-    return firstInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === RT_FIRST_WITH) return firstInRange(answers, eliminated, q.answer!, 0, n, v);
   if (q.t === RT_CLOSEST_AFTER)
     return firstInRange(answers, eliminated, q.answer!, q.afterIndex + 1, n, v);
-  if (q.t === RT_LAST_WITH)
-    return lastInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === RT_LAST_WITH) return lastInRange(answers, eliminated, q.answer!, 0, n, v);
   if (q.t === RT_CLOSEST_BEFORE)
     return lastInRange(answers, eliminated, q.answer!, 0, q.beforeIndex, v);
 
@@ -258,8 +223,7 @@ export function checkAnswerValidity(
     for (let j = 0; j < n; j++) {
       if (j === qi) continue;
       if (answers[j] === a) others++;
-      else if (answers[j] == null && (eliminated[j] & amask) === 0)
-        couldMatch++;
+      else if (answers[j] == null && (eliminated[j] & amask) === 0) couldMatch++;
     }
     if (others > 0) return "invalid";
     if (couldMatch === 0) return "valid";
@@ -287,8 +251,7 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if (j === qi) continue;
         if (answers[j] === a) matches++;
-        else if (answers[j] == null && (eliminated[j] & amask) === 0)
-          couldMatch++;
+        else if (answers[j] == null && (eliminated[j] & amask) === 0) couldMatch++;
       }
       if (matches > 0) return "invalid";
       if (couldMatch === 0) return "valid";
@@ -305,8 +268,7 @@ export function checkAnswerValidity(
     for (let j = 0; j < n; j++) {
       if (j === qi || j === v) continue;
       if (answers[j] === a) otherMatches++;
-      else if (answers[j] == null && (eliminated[j] & amask) === 0)
-        otherRemaining++;
+      else if (answers[j] == null && (eliminated[j] & amask) === 0) otherRemaining++;
     }
 
     if (otherMatches > 0) return "invalid";
@@ -319,11 +281,7 @@ export function checkAnswerValidity(
     if (v != null) {
       if (v < 0 || v + 1 >= n) return "invalid";
 
-      if (
-        answers[v] != null &&
-        answers[v + 1] != null &&
-        answers[v] !== answers[v + 1]
-      )
+      if (answers[v] != null && answers[v + 1] != null && answers[v] !== answers[v + 1])
         return "invalid";
 
       let otherPairs = 0;
@@ -377,8 +335,7 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if (j === v || (j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) otherMatches++;
-        else if (answers[j] == null && (eliminated[j] & amask) === 0)
-          otherRemaining++;
+        else if (answers[j] == null && (eliminated[j] & amask) === 0) otherRemaining++;
       }
 
       if (otherMatches > 0) return "invalid";
@@ -390,8 +347,7 @@ export function checkAnswerValidity(
       for (let j = 0; j < n; j++) {
         if ((j + 1) % 2 !== parity) continue;
         if (answers[j] === answer) anyMatch = true;
-        if (answers[j] == null && (eliminated[j] & amask) === 0)
-          anyCould = true;
+        if (answers[j] == null && (eliminated[j] & amask) === 0) anyCould = true;
       }
       if (anyMatch) return "invalid";
       if (anyCould) return "pending";

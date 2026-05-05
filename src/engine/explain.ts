@@ -142,15 +142,7 @@ export function explainDeduce(
 ): ExplainStep[] {
   const a = result.action;
   if (a.type === "force") {
-    return explainForce(
-      puzzle,
-      fp,
-      answers,
-      eliminated,
-      a.questionIndex,
-      a.letter,
-      result.rule,
-    );
+    return explainForce(puzzle, fp, answers, eliminated, a.questionIndex, a.letter, result.rule);
   }
   if (a.type === "eliminateMulti") {
     const qis: number[] = [];
@@ -164,18 +156,9 @@ export function explainDeduce(
     const qList = qis.map(Q).join(", ");
     const optStr = optLetters.join(", ");
 
-    if (
-      result.rule === "PositionalRangeAnswered" ||
-      result.rule === "PositionalRangeUnanswered"
-    ) {
+    if (result.rule === "PositionalRangeAnswered" || result.rule === "PositionalRangeUnanswered") {
       const oi = optLetters.length === 1 ? letterIdx(optLetters[0]) : 0;
-      const src = findPositionalRangeSource(
-        fp,
-        answers,
-        eliminated,
-        qis[0],
-        oi,
-      );
+      const src = findPositionalRangeSource(fp, answers, eliminated, qis[0], oi);
       const steps: ExplainStep[] = [];
       if (src) {
         steps.push(simple(`Try looking at ${Q(src.srcQi)}.`));
@@ -183,9 +166,7 @@ export function explainDeduce(
         steps.push(simple(`Try looking at ${allQis.map(Q).join(", ")}.`));
         steps.push(simple(`${qList} can't be ${optStr}: ${src.text}`));
       } else {
-        console.error(
-          `No positional_range explain for ${qList} option ${optStr}`,
-        );
+        console.error(`No positional_range explain for ${qList} option ${optStr}`);
         steps.push(simple(`Try looking at ${qList}.`));
         steps.push(simple(`${qList} can't be ${optStr}.`));
       }
@@ -193,13 +174,7 @@ export function explainDeduce(
     }
 
     const firstQi = qis[0];
-    const reason = explainMultiElim(
-      fp,
-      answers,
-      eliminated,
-      firstQi,
-      a.optionMask,
-    );
+    const reason = explainMultiElim(fp, answers, eliminated, firstQi, a.optionMask);
     const steps: ExplainStep[] = [];
     if (reason.otherQi != null) {
       steps.push(simple(`Try looking at ${Q(reason.otherQi)}.`));
@@ -236,9 +211,7 @@ function explainForce(
   const n = fp.n;
 
   if (remainingCount(eliminated[qi]) === 1) {
-    steps.push(
-      simple(`${Q(qi)} has only one option left — it must be ${letter}.`),
-    );
+    steps.push(simple(`${Q(qi)} has only one option left — it must be ${letter}.`));
     return steps;
   }
 
@@ -256,10 +229,7 @@ function explainForce(
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (
-      otherR.t === RT_SAME_AS &&
-      fp.optionValues[other][letterIdx(otherAns)] === qi
-    ) {
+    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
       steps.push(
         simple(
@@ -269,9 +239,7 @@ function explainForce(
       return steps;
     }
     if (
-      (otherR.t === RT_PREV_SAME ||
-        otherR.t === RT_NEXT_SAME ||
-        otherR.t === RT_ONLY_SAME) &&
+      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     ) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
@@ -362,9 +330,7 @@ function explainForce(
     }
   }
 
-  throw new Error(
-    `explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`,
-  );
+  throw new Error(`explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`);
 }
 
 function findCountSatSource(
@@ -420,10 +386,7 @@ function explainElimination(
     return steps;
   }
 
-  if (
-    rule === "PositionalRangeAnswered" ||
-    rule === "PositionalRangeUnanswered"
-  ) {
+  if (rule === "PositionalRangeAnswered" || rule === "PositionalRangeUnanswered") {
     const src = findPositionalRangeSource(fp, answers, eliminated, qi, oi);
     if (src != null) {
       steps.push(simple(`Try looking at ${Q(src.srcQi)} and ${Q(qi)}.`));
@@ -437,9 +400,7 @@ function explainElimination(
   if (rule === "VowelCrossElim" || rule === "ConsonantCrossElim") {
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
     steps.push(
-      simple(
-        `${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`,
-      ),
+      simple(`${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`),
     );
     return steps;
   }
@@ -449,10 +410,7 @@ function explainElimination(
     steps.push(simple(`Try looking at ${Q(qi)} and ${Q(detail.otherQi)}.`));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-  if (!detail)
-    console.error(
-      `No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`,
-    );
+  if (!detail) console.error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
   steps.push(simple(detail ? detail.text : `${Q(qi)} can't be ${letter}.`));
   return steps;
 }
@@ -568,11 +526,7 @@ function explainCountSaturation(
         text: `${Q(src)} says there are ${value} ${countRuleLabel(q, value)}. There are already ${value}, so ${Q(qi)} can't also be ${LETTERS[oi]}.`,
       };
     }
-    if (
-      cr.count + cr.remaining === value &&
-      cr.remaining > 0 &&
-      !pred(LETTERS[oi])
-    ) {
+    if (cr.count + cr.remaining === value && cr.remaining > 0 && !pred(LETTERS[oi])) {
       return {
         srcQi: src,
         text: `${Q(src)} says there are ${value} ${countRuleLabel(q, value)}. Only ${cr.count} found so far, and all remaining unknowns must match — so ${Q(qi)} can't be ${LETTERS[oi]}.`,
@@ -678,8 +632,7 @@ function explainElimDetail(
     if (other == null && v != null) {
       let anyPossible = false;
       for (let ti = 0; ti < 5; ti++) {
-        if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v)
-          anyPossible = true;
+        if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v) anyPossible = true;
       }
       if (!anyPossible)
         return d(
@@ -782,12 +735,7 @@ function explainElimDetail(
           `${Q(qi)} option ${letter} claims ${Q(v)} has answer ${q.answer}, but ${Q(v)} is answered ${answers[v]}.`,
           v,
         );
-      if (
-        v >= 0 &&
-        v < n &&
-        answers[v] == null &&
-        isElim(eliminated, v, L2I[q.answer!])
-      )
+      if (v >= 0 && v < n && answers[v] == null && isElim(eliminated, v, L2I[q.answer!]))
         return d(
           `${Q(qi)} option ${letter} claims ${Q(v)} has answer ${q.answer}, but ${q.answer} is ruled out for ${Q(v)}.`,
           v,
@@ -805,9 +753,7 @@ function explainElimDetail(
 
   if (q.t === RT_CONSEC_IDENT) {
     if (v != null && v + 1 >= n)
-      return d(
-        `${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`,
-      );
+      return d(`${Q(qi)} option ${letter} claims ${Q(v)}-${Q(v + 1)}, but that's out of range.`);
     if (v != null && v + 1 < n) {
       if (v === qi || v + 1 === qi) {
         const partner = v === qi ? v + 1 : v;
@@ -826,11 +772,7 @@ function explainElimDetail(
         );
     } else if (v == null) {
       for (let i = 0; i < n - 1; i++) {
-        if (
-          answers[i] != null &&
-          answers[i + 1] != null &&
-          answers[i] === answers[i + 1]
-        )
+        if (answers[i] != null && answers[i + 1] != null && answers[i] === answers[i + 1])
           return d(
             `${Q(qi)} option ${letter} claims no consecutive pair exists, but ${Q(i)} and ${Q(i + 1)} both have answer ${answers[i]}.`,
             i,
@@ -841,9 +783,7 @@ function explainElimDetail(
 
   if (q.t === RT_PREV_SAME && v != null) {
     if (v >= qi)
-      return d(
-        `${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`,
-      );
+      return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`);
     if (isElim(eliminated, v, oi))
       return d(
         `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
@@ -860,9 +800,7 @@ function explainElimDetail(
 
   if (q.t === RT_NEXT_SAME && v != null) {
     if (v <= qi || v >= n)
-      return d(
-        `${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not after ${Q(qi)}.`,
-      );
+      return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not after ${Q(qi)}.`);
     if (isElim(eliminated, v, oi))
       return d(
         `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
@@ -930,15 +868,10 @@ function briefForceReason(
     const otherR = fp.questions[other];
     if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi)
       return `${Q(other)} is ${otherAns}, which implies ${letter}`;
-    if (
-      otherR.t === RT_SAME_AS &&
-      fp.optionValues[other][letterIdx(otherAns)] === qi
-    )
+    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi)
       return `same answer as ${Q(other)}`;
     if (
-      (otherR.t === RT_PREV_SAME ||
-        otherR.t === RT_NEXT_SAME ||
-        otherR.t === RT_ONLY_SAME) &&
+      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     )
       return `${Q(other)} is ${otherAns}, same answer as ${Q(qi)}`;
@@ -973,13 +906,7 @@ export function explainLookahead(
     const a = dr.action;
     if (a.type === "force") {
       involvedQis.add(a.questionIndex);
-      const reason = briefForceReason(
-        fp,
-        hypAnswers,
-        hypEliminated,
-        a.questionIndex,
-        a.letter,
-      );
+      const reason = briefForceReason(fp, hypAnswers, hypEliminated, a.questionIndex, a.letter);
       lines.push(
         reason
           ? `${Q(a.questionIndex)} must be ${a.letter} (${reason}).`
@@ -999,9 +926,7 @@ export function explainLookahead(
       for (let b = 0; b < 5; b++) {
         if ((a.optionMask >> b) & 1) optLetters.push(LETTERS[b]);
       }
-      lines.push(
-        `Eliminate ${optLetters.join(", ")} from ${qis.map(Q).join(", ")}.`,
-      );
+      lines.push(`Eliminate ${optLetters.join(", ")} from ${qis.map(Q).join(", ")}.`);
       for (const q of qis) hypEliminated[q] |= a.optionMask;
     } else {
       involvedQis.add(a.questionIndex);
@@ -1022,9 +947,7 @@ export function explainLookahead(
         console.error(
           `No explain for: ELIM ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]} (rule: ${dr.rule})`,
         );
-        lines.push(
-          `Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}.`,
-        );
+        lines.push(`Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}.`);
       }
       hypEliminated[a.questionIndex] |= 1 << a.optionIndex;
     }
@@ -1033,13 +956,7 @@ export function explainLookahead(
   const contradictionQi = result.contradictionQi;
   involvedQis.add(contradictionQi);
   let detail = `${Q(contradictionQi)} would be invalid`;
-  const reason = explainInvalidDetail(
-    fp,
-    puzzle,
-    hypAnswers,
-    hypEliminated,
-    contradictionQi,
-  );
+  const reason = explainInvalidDetail(fp, puzzle, hypAnswers, hypEliminated, contradictionQi);
   if (reason) {
     detail = reason.replace(" claims ", " would say ");
   }
@@ -1124,13 +1041,7 @@ function explainInvalidDetail(
   if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
     const label = q.t === RT_FIRST_WITH ? "first" : "closest";
     const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
-    if (
-      v != null &&
-      v >= 0 &&
-      v < n &&
-      answers[v] != null &&
-      answers[v] !== q.answer
-    )
+    if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== q.answer)
       return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
       for (let j = scanStart; j < v; j++) {
@@ -1149,13 +1060,7 @@ function explainInvalidDetail(
   if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
     const label = q.t === RT_LAST_WITH ? "last" : "closest";
     const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
-    if (
-      v != null &&
-      v >= 0 &&
-      v < n &&
-      answers[v] != null &&
-      answers[v] !== q.answer
-    )
+    if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== q.answer)
       return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
       for (let j = beforeIdx - 1; j > v; j--) {

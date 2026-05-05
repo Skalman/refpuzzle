@@ -95,13 +95,7 @@ export function renderClaimLabel(claim: Claim): string {
   return renderQuestionText(claim) + " " + renderOptionLabel(claim, claim.value, -1);
 }
 
-const LETTER_RULES = new Set([
-  "AnswerOf",
-  "LeastCommon",
-  "MostCommon",
-  "Unique",
-  "AnswerIsSelf",
-]);
+const LETTER_RULES = new Set(["AnswerOf", "LeastCommon", "MostCommon", "Unique", "AnswerIsSelf"]);
 
 function isLetterRule(type: string): boolean {
   return LETTER_RULES.has(type);

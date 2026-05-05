@@ -210,9 +210,7 @@ export function checkQuestionAgainstSolution(
     case RT_EQUAL_COUNT: {
       const refCount = countAnswer(answers, q.answer!);
       if (v == null)
-        return !LETTERS.some(
-          (l) => l !== q.answer && countAnswer(answers, l) === refCount,
-        );
+        return !LETTERS.some((l) => l !== q.answer && countAnswer(answers, l) === refCount);
       const claimed = LETTERS[v];
       return claimed !== q.answer && countAnswer(answers, claimed) === refCount;
     }
@@ -246,10 +244,7 @@ export function checkQuestionAgainstSolution(
   return false;
 }
 
-export function evaluateClaim(
-  claim: Claim,
-  answers: (AnswerLetter | null)[],
-): boolean {
+export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): boolean {
   switch (claim.type) {
     case "CountAnswer":
       return countAnswer(answers, claim.answer) === claim.value;
@@ -262,19 +257,12 @@ export function evaluateClaim(
 
     case "CountAnswerAfter":
       return (
-        countAnswerInRange(
-          answers,
-          claim.answer,
-          claim.afterIndex + 1,
-          answers.length,
-        ) === claim.value
+        countAnswerInRange(answers, claim.answer, claim.afterIndex + 1, answers.length) ===
+        claim.value
       );
 
     case "CountAnswerBefore":
-      return (
-        countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) ===
-        claim.value
-      );
+      return countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) === claim.value;
 
     case "AnswerOf":
       return answers[claim.questionIndex] === LETTERS[claim.value];
@@ -300,10 +288,7 @@ export function evaluateClaim(
         if (a !== null) counts[L2I[a]] += 1;
       }
       const max = Math.max(...counts);
-      return (
-        counts[claim.value] === max &&
-        counts.filter((c) => c === max).length === 1
-      );
+      return counts[claim.value] === max && counts.filter((c) => c === max).length === 1;
     }
   }
   claim satisfies never;

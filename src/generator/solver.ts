@@ -144,9 +144,7 @@ function solveFp(
     if (fixed[qi] != null) {
       current[qi] = fixed[qi];
       assignedBits |= bit;
-      if (
-        !hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)
-      ) {
+      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
         search(depth + 1);
       }
       current[qi] = null;
@@ -157,9 +155,7 @@ function solveFp(
     for (const letter of LETTERS) {
       current[qi] = letter;
       assignedBits |= bit;
-      if (
-        !hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)
-      ) {
+      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
         search(depth + 1);
         if (solutions.length >= maxSolutions) {
           current[qi] = null;
@@ -200,8 +196,7 @@ function hasContradiction(
   for (let k = 0; k < affected.length; k++) {
     const i = affected[k];
     if (answers[i] == null) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks))
-      return true;
+    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
   }
 
   // Check global rules for forward-checking bounds
@@ -210,8 +205,7 @@ function hasContradiction(
     const i = globals[k];
     if (answers[i] == null) continue;
     if (i === justAssigned) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks))
-      return true;
+    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
   }
 
   return false;
@@ -228,19 +222,12 @@ function checkRule(
 ): boolean {
   const q = fp.questions[i];
 
-  if (
-    allAnswered ||
-    canFullyEvaluateLocal(q, answers, assigned, rangeMasks, i)
-  ) {
+  if (allAnswered || canFullyEvaluateLocal(q, answers, assigned, rangeMasks, i)) {
     if (!evaluate(fp, i, answers[i]!, answers)) return true;
   }
 
   // Forward checking for counting rules
-  if (
-    q.t === RT_COUNT_ANSWER ||
-    q.t === RT_COUNT_ANSWER_BEFORE ||
-    q.t === RT_COUNT_ANSWER_AFTER
-  ) {
+  if (q.t === RT_COUNT_ANSWER || q.t === RT_COUNT_ANSWER_BEFORE || q.t === RT_COUNT_ANSWER_AFTER) {
     const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
     if (optVal == null) return false;
 
