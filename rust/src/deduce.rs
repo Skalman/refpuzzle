@@ -1380,6 +1380,9 @@ fn deduce_impl(
             }
         }
 
+        let mut can_be_least_opt = [false; 5];
+        let mut must_be_least_opt = [false; 5];
+
         for oi in 0..5usize {
             if is_elim(eliminated, qi, oi) {
                 continue;
@@ -1396,50 +1399,36 @@ fn deduce_impl(
             adj_min[self_letter] += 1;
             adj_max[self_letter] += 1;
 
-            if run(DeduceRule::LeastCommonElim) {
-                let can_be_least =
-                    (0..5).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
-                if !can_be_least {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::LeastCommonElim,
-                    );
-                }
+            let can_be_least = (0..5).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
+            let must_be_least = (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
+
+            can_be_least_opt[oi] = can_be_least;
+            must_be_least_opt[oi] = must_be_least;
+
+            if run(DeduceRule::LeastCommonElim) && !can_be_least {
+                push(
+                    DeduceAction::Eliminate { qi, oi },
+                    DeduceRule::LeastCommonElim,
+                );
             }
         }
 
         if run(DeduceRule::LeastCommonForce) {
-            let mut force_count = 0u8;
-            let mut force_oi = 0usize;
             for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
+                if !must_be_least_opt[oi] {
                     continue;
                 }
-                let v = fp.option_answers[qi][oi];
-                if v >= 5 {
-                    continue;
+                let only_viable = (0..5usize)
+                    .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_least_opt[oj]);
+                if only_viable {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::LeastCommonForce,
+                    );
                 }
-                let claimed = v as usize;
-                let self_letter = oi;
-                let mut adj_min = min_count;
-                let mut adj_max = max_count;
-                adj_min[self_letter] += 1;
-                adj_max[self_letter] += 1;
-                let must_be_least =
-                    (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
-                if must_be_least {
-                    force_count += 1;
-                    force_oi = oi;
-                }
-            }
-            if force_count == 1 {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[force_oi],
-                    },
-                    DeduceRule::LeastCommonForce,
-                );
             }
         }
     }
