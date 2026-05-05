@@ -347,10 +347,14 @@ fn check_json(path: &str, target: Option<&str>) {
             if ok {
                 solved += 1;
             } else {
-                let answered = steps
-                    .iter()
-                    .filter(|s| s.chars().last().map_or(false, |c| c.is_uppercase()))
-                    .count();
+                let mut answered_set = std::collections::HashSet::new();
+                for s in &steps {
+                    if s.chars().last().map_or(false, |c| c.is_uppercase()) {
+                        let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        answered_set.insert(qi);
+                    }
+                }
+                let answered = answered_set.len();
                 let year = &path
                     .replace(".json", "")
                     .chars()
@@ -369,14 +373,48 @@ fn check_json(path: &str, target: Option<&str>) {
                 failures.push(format!("{key}: {answered}/{} — {url}", fp.n));
             }
             if target.is_some() {
-                println!("{}", steps.join("."));
+                let mut answered_set = std::collections::HashSet::new();
+                for s in &steps {
+                    if s.chars().last().map_or(false, |c| c.is_uppercase()) {
+                        let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
+                        answered_set.insert(qi);
+                    }
+                }
+                let status = if ok {
+                    "solved"
+                } else if answered_set.len() == fp.n {
+                    "INVALID (all answered but solution is wrong)"
+                } else {
+                    "STUCK"
+                };
+                eprintln!(
+                    "Hint engine: {status} {}/{} answered",
+                    answered_set.len(),
+                    fp.n
+                );
+                eprintln!("  {}", steps.join("."));
+                if !ok {
+                    let year = &path
+                        .replace(".json", "")
+                        .chars()
+                        .rev()
+                        .take(4)
+                        .collect::<String>()
+                        .chars()
+                        .rev()
+                        .collect::<String>();
+                    let mm = &day[..2];
+                    let dd = &day[2..4];
+                    let hash = steps.join(".");
+                    eprintln!("  http://localhost:5173/day/{year}-{mm}-{dd}?l={lvl}&debug#{hash}");
+                }
                 let solutions = solver::solve(&fp, None, 10);
-                eprintln!("Solutions found: {}", solutions.len());
+                eprintln!("Brute-force: {} solution(s)", solutions.len());
                 for (i, sol) in solutions.iter().enumerate() {
                     let s: String = sol.iter().take(fp.n).map(|a| a.as_char()).collect();
                     eprintln!("  #{}: {}", i + 1, s);
                 }
-                if !ok {
+                if !ok || solutions.len() != 1 {
                     std::process::exit(1);
                 }
                 return;
