@@ -138,6 +138,17 @@
       },
       "expect": "solved"
     },
+    { "section": "=== Edge cases ===" },
+    {
+      "name": "Impossible: contradictory answer_of chain",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerOf", "q": 1 }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerOf", "q": 0 }, "o": [1, 0, 2, 3, 4] }
+        ]
+      },
+      "expect": "stuck"
+    },
     {
       "name": "Real: 1001-level-5 (12Q, with true_stmt)",
       "puzzle": {

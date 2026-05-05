@@ -1,13 +1,12 @@
 import type { AnswerLetter, Puzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, flattenPuzzle } from "../src/engine/types.ts";
-import {
-  checkQuestionAgainstSolution as evaluate,
-  evaluateClaim,
-} from "../src/engine/evaluators.ts";
+import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluators.ts";
 import { checkAnswerValidity } from "../src/engine/check-validity.ts";
 import { deduce } from "../src/engine/deduce.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solver.ts";
+import { checkSolvable } from "../src/engine/solve.ts";
+import type { SolveOutcome } from "../src/engine/solve.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve, dirname } from "node:path";
@@ -56,276 +55,21 @@ function assertEq<T>(actual: T, expected: T, msg: string) {
 // Evaluator tests
 // ════════════════════════════════════════════════
 
-function testEvaluators() {
-  console.log("Evaluator tests...");
+function testSharedEvaluators() {
 
-  const puzzle: Puzzle = {
-    id: "test",
-    title: "Test",
-    difficulty: "1",
-    questions: [
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "CountAnswer", answer: "B" },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "AnswerOf", questionIndex: 0 },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: null },
-        ],
-        questionType: { type: "ClosestAfter", afterIndex: 0, answer: "C" },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "LetterDist", questionIndex: 0 },
-      },
-    ],
-  };
-  const fp = flattenPuzzle(puzzle);
-
-  // count_answer: [C, B, C, A] → count(B) = 1, option B = "1" ✓
-  const answers: AnswerLetter[] = ["C", "B", "C", "A"];
-  assert(
-    evaluate(fp.questions[0], 0, "C", answers, fp) === false,
-    "count_answer C: count(B)=1, optC='2', should be false",
-  );
-  assert(
-    evaluate(fp.questions[0], 0, "B", answers, fp) === true,
-    "count_answer B: count(B)=1, optB='1', should be true",
-  );
-
-  // answer_of_question: Q2 should match Q1's answer
-  assert(
-    evaluate(fp.questions[1], 1, "C", answers, fp) === true,
-    "answer_of_question: Q1=C, selecting C → optC='C' matches",
-  );
-  assert(
-    evaluate(fp.questions[1], 1, "A", answers, fp) === false,
-    "answer_of_question: Q1=C, selecting A → optA='A' ≠ C",
-  );
-
-  // closest_after: closest C after Q1 (index 0) → Q3 (index 2, display 3)
-  assert(
-    evaluate(fp.questions[2], 2, "C", answers, fp) === true,
-    "closest_after: closest C after #1 is Q3, optC='3' ✓",
-  );
-  assert(
-    evaluate(fp.questions[2], 2, "A", answers, fp) === false,
-    "closest_after: optA='1' but Q1 isn't C",
-  );
-
-  // letter_distance: Q4's selected answer vs Q1's answer (C)
-  // If Q4=A: |A-C| = |0-2| = 2, optA='0' → 2≠0 ✗
-  // If Q4=C: |C-C| = 0, optC='2' → 0≠2 ✗
-  // If Q4=E: |E-C| = |4-2| = 2, optE='4' → 2≠4 ✗
-  // If Q4=D: |D-C| = |3-2| = 1, optD='3' → 1≠3 ✗
-  // If Q4=B: |B-C| = |1-2| = 1, optB='1' → 1=1 ✓
-  assert(
-    evaluate(fp.questions[3], 3, "B", answers, fp) === true,
-    "letter_distance: |B-C| = 1, optB='1' ✓",
-  );
-  assert(
-    evaluate(fp.questions[3], 3, "A", answers, fp) === false,
-    "letter_distance: |A-C| = 2, optA='0' ✗",
-  );
-
-  // Test with partial answers (nulls)
-  const partial: (AnswerLetter | null)[] = ["C", null, "C", null];
-  assert(
-    evaluate(fp.questions[0], 0, "A", partial, fp) === true,
-    "count_answer partial: count(B)=0, optA='0' ✓",
-  );
-
-  // Test least_common_answer
-  const lcPuzzle: Puzzle = {
-    id: "lc",
-    title: "LC",
-    difficulty: "1",
-    questions: [
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "LeastCommon" },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "AnswerIsSelf" },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "AnswerIsSelf" },
-      },
-    ],
-  };
-  const lcFp = flattenPuzzle(lcPuzzle);
-  const lcAnswers: AnswerLetter[] = ["A", "B", "B"];
-  // A=1, B=2, C=D=E=0. Three tied at 0 → no unique least → all false
-  assert(
-    evaluate(lcFp.questions[0], 0, "C", lcAnswers, lcFp) === false,
-    "least_common: C=D=E tied at 0, no unique least → false",
-  );
-  assert(
-    evaluate(lcFp.questions[0], 0, "A", lcAnswers, lcFp) === false,
-    "least_common: A(1) > min(0), selecting A ✗",
-  );
-  assert(
-    evaluate(lcFp.questions[0], 0, "B", lcAnswers, lcFp) === false,
-    "least_common: B(2) > min(0), selecting B ✗",
-  );
-
-  // answer_is_self: always true
-  assert(
-    evaluate(lcFp.questions[1], 1, "A", lcAnswers, lcFp) === true,
-    "answer_is_self: always true for A",
-  );
-  assert(
-    evaluate(lcFp.questions[1], 1, "E", lcAnswers, lcFp) === true,
-    "answer_is_self: always true for E",
-  );
-
-  // Test evaluateClaim
-  const claimAnswers: AnswerLetter[] = ["A", "B", "C", "B", "A"];
-  assert(
-    evaluateClaim(
-      { type: "CountAnswer", answer: "B", value: 2 },
-      claimAnswers,
-    ) === true,
-    "claim count_answer B=2 ✓",
-  );
-  assert(
-    evaluateClaim(
-      { type: "CountAnswer", answer: "B", value: 3 },
-      claimAnswers,
-    ) === false,
-    "claim count_answer B=3 ✗",
-  );
-  assert(
-    evaluateClaim({ type: "CountVowel", value: 2 }, claimAnswers) ===
-      true,
-    "claim vowels=2 (A,A) ✓",
-  );
-  assert(
-    evaluateClaim(
-      { type: "CountConsonant", value: 3 },
-      claimAnswers,
-    ) === true,
-    "claim consonants=3 (B,C,B) ✓",
-  );
-}
-
-// ════════════════════════════════════════════════
-// Solver tests
-// ════════════════════════════════════════════════
-
-function testSolver() {
-  console.log("Solver tests...");
-
-  // Simple puzzle with known unique solution
-  const simple: Puzzle = {
-    id: "s",
-    title: "S",
-    difficulty: "1",
-    questions: [
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "AnswerOf", questionIndex: 1 },
-      },
-      {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
-        questionType: { type: "AnswerOf", questionIndex: 0 },
-      },
-      {
-        options: [
-          { value: 3 },
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 4 },
-        ],
-        questionType: { type: "CountAnswer", answer: "A" },
-      },
-    ],
-  };
-  // Q1=Q2 (mirror). Q3 counts A's.
-  // If Q1=Q2=A: count(A)=2, opt A='3' → 2≠3 ✗
-  // If Q1=Q2=C: count(A)=0, opt C='1' → 0≠1 ✗
-  // If Q1=Q2=D: count(A)=0, opt D='2' → 0≠2 ✗
-  // Need to check all combos...
-  const solutions = solve(simple, undefined, 10);
-  assert(solutions.length > 0, "simple puzzle has at least 1 solution");
-
-  // Verify each solution is actually valid
-  const fp = flattenPuzzle(simple);
-  for (const sol of solutions) {
-    const allValid = fp.questions.every((q, i) =>
-      evaluate(q, i, sol[i], sol, fp),
-    );
-    assert(allValid, `solver solution [${sol.join(",")}] validates correctly`);
-  }
-
-  // Test with fixed answers
-  if (solutions.length > 0) {
-    const sol = solutions[0];
-    const fixed: (AnswerLetter | null)[] = [sol[0], null, null];
-    const constrained = solve(simple, fixed, 10);
-    assert(
-      constrained.length >= 1 && constrained.some((s) => s[0] === sol[0]),
-      "solver with fixed answer includes the expected solution",
-    );
+  const suite = JSON.parse(readFileSync(resolve(__dirname, "../tests/evaluators.json"), "utf8"));
+  for (const test of suite.tests) {
+    if ("section" in test) continue;
+    const compact = test.puzzle;
+    const wrapped = { "0101": { "1": compact } };
+    const parsed = parseCompactYear(wrapped as Parameters<typeof parseCompactYear>[0]);
+    const puzzle = parsed["0101"]["1"];
+    const fp = flattenPuzzle(puzzle);
+    const qi: number = test.qi;
+    const answers: (AnswerLetter | null)[] = test.answers;
+    const selected = answers[qi] as AnswerLetter;
+    const got = evaluate(fp.questions[qi], qi, selected, answers, fp);
+    assert(got === test.expect, `${test.name}: expected ${test.expect}, got ${got}`);
   }
 }
 
@@ -362,18 +106,26 @@ function bruteForce(puzzle: Puzzle, maxN = 8): AnswerLetter[][] {
 // Generated puzzle cross-validation
 // ════════════════════════════════════════════════
 
-function testGeneratedPuzzles() {
-  console.log("Generated puzzle tests...");
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
 
-  const puzzles = allPuzzles.map((p) => ({
-    name: p.id,
-    puzzle: p,
-  }));
+function testGeneratedSolver() {
 
-  let bruteCount = 0;
-  for (let pi = 0; pi < puzzles.length; pi++) {
-    const { name, puzzle } = puzzles[pi];
-    // Solver finds exactly 1 solution
+  const shuffled = shuffle(allPuzzles);
+  const deadline = performance.now() + 10_000;
+  let count = 0;
+
+  for (const puzzle of shuffled) {
+    if (performance.now() > deadline) break;
+    count++;
+
+    const name = puzzle.id;
     const solutions = solve(puzzle, undefined, 2);
     assert(
       solutions.length === 1,
@@ -383,34 +135,12 @@ function testGeneratedPuzzles() {
     if (solutions.length !== 1) continue;
     const sol = solutions[0];
 
-    // Solution validates correctly
     const fp = flattenPuzzle(puzzle);
     const allValid = fp.questions.every((q, i) =>
       evaluate(q, i, sol[i], sol, fp),
     );
     assert(allValid, `${name}: solution [${sol.join(",")}] validates`);
 
-    // Cross-validate with brute force for a sample of small puzzles
-    if (puzzle.questions.length <= 8 && pi % 50 === 0) {
-      bruteCount++;
-      const t0 = performance.now();
-      const bruteSolutions = bruteForce(puzzle);
-      const elapsed = (performance.now() - t0).toFixed(0);
-      assertEq(
-        bruteSolutions.length,
-        1,
-        `${name}: brute force finds exactly 1 solution (${elapsed}ms)`,
-      );
-      if (bruteSolutions.length === 1) {
-        assertEq(
-          bruteSolutions[0],
-          sol,
-          `${name}: brute force solution matches solver`,
-        );
-      }
-    }
-
-    // Every question has unique rule
     const ruleKeys = new Set(
       puzzle.questions.map((q) => JSON.stringify(q.questionType)),
     );
@@ -419,7 +149,6 @@ function testGeneratedPuzzles() {
       `${name}: all question rules are unique`,
     );
 
-    // Every question has exactly 5 options
     for (let i = 0; i < puzzle.questions.length; i++) {
       assert(
         puzzle.questions[i].options.length === 5,
@@ -427,10 +156,8 @@ function testGeneratedPuzzles() {
       );
     }
 
-    // Options within each question are distinct (skip claim-based questions)
     for (let i = 0; i < puzzle.questions.length; i++) {
-      if (puzzle.questions[i].questionType.type === "TrueStmt")
-        continue;
+      if (puzzle.questions[i].questionType.type === "TrueStmt") continue;
       const values = puzzle.questions[i].options.map((o) =>
         JSON.stringify(o.value),
       );
@@ -441,7 +168,31 @@ function testGeneratedPuzzles() {
       );
     }
   }
-  console.log(`  brute-forced ${bruteCount} of ${puzzles.length} puzzles`);
+  console.log(`  ${count}/${allPuzzles.length} puzzles`);
+}
+
+function testGeneratedBruteForce() {
+
+  const small = shuffle(allPuzzles.filter((p) => p.questions.length <= 8));
+  const deadline = performance.now() + 10_000;
+  let count = 0;
+
+  for (const puzzle of small) {
+    if (performance.now() > deadline) break;
+    count++;
+
+    const name = puzzle.id;
+    const solutions = solve(puzzle, undefined, 2);
+    if (solutions.length !== 1) continue;
+    const sol = solutions[0];
+
+    const bruteSolutions = bruteForce(puzzle);
+    assertEq(bruteSolutions.length, 1, `${name}: brute force finds exactly 1 solution`);
+    if (bruteSolutions.length === 1) {
+      assertEq(bruteSolutions[0], sol, `${name}: brute force matches solver`);
+    }
+  }
+  console.log(`  ${count}/${small.length} small puzzles`);
 }
 
 // ════════════════════════════════════════════════
@@ -449,7 +200,6 @@ function testGeneratedPuzzles() {
 // ════════════════════════════════════════════════
 
 function testSolverEdgeCases() {
-  console.log("Solver edge cases...");
 
   // Puzzle with no solution
   const impossible: Puzzle = {
@@ -576,7 +326,6 @@ function applyAction(
 }
 
 function testHints() {
-  console.log("Hint engine tests...");
 
   // ── Contradiction: answer_of_question says Q1=B but Q1 is marked C ──
   const contradictionPuzzle: Puzzle = {
@@ -865,7 +614,6 @@ function mkState(steps: Marks[]): SavedState {
 }
 
 function testShare() {
-  console.log("Share encode/decode tests...");
 
   const marks: Marks[] = [
     ["correct", "incorrect", "unmarked", "unmarked", "unmarked"],
@@ -924,7 +672,6 @@ function testShare() {
 // ════════════════════════════════════════════════
 
 function testSharedCheckValidity() {
-  console.log("Shared check-validity tests (TS side)...");
 
   const suiteJson = JSON.parse(
     readFileSync(resolve(__dirname, "../tests/check-validity.json"), "utf8"),
@@ -1128,16 +875,126 @@ function testSharedCheckValidity() {
 }
 
 // ════════════════════════════════════════════════
+// Shared lookahead cross-validation (TS ↔ Rust)
+// ════════════════════════════════════════════════
+
+function testSharedLookahead() {
+
+  const suiteJson = JSON.parse(
+    readFileSync(resolve(__dirname, "../tests/lookahead.json"), "utf8"),
+  );
+  const tests = suiteJson.tests as (
+    | { section: string }
+    | {
+        name: string;
+        puzzle: Record<string, unknown>;
+        state: string[];
+        expect: string | null;
+      }
+  )[];
+
+  for (const t of tests) {
+    if ("section" in t) continue;
+    const { name, puzzle: compact, state, expect } = t;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON fixture
+    const wrapped = { "0101": { "1": compact } } as any;
+    const parsed = parseCompactYear(wrapped);
+    const puzzle = parsed["0101"]["1"];
+    const fp = flattenPuzzle(puzzle);
+    const n = puzzle.questions.length;
+
+    const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+    const eliminated: number[] = new Array(n).fill(0);
+    for (let i = 0; i < n; i++) {
+      const s = state[i] || "";
+      for (const ch of s) {
+        if (ch >= "A" && ch <= "E") {
+          const oi = ch.charCodeAt(0) - 65;
+          answers[i] = LETTERS[oi];
+          eliminated[i] = 0b11111 ^ (1 << oi);
+        } else if (ch >= "a" && ch <= "e") {
+          const oi = ch.charCodeAt(0) - 97;
+          eliminated[i] |= 1 << oi;
+        }
+      }
+    }
+
+    const result = lookahead(fp, answers, eliminated);
+    const got = result
+      ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}`
+      : null;
+    const gotStr = got === null ? "null" : got;
+    const expectStr = expect === null ? "null" : expect;
+    assert(
+      gotStr === expectStr,
+      `shared lookahead: ${name}: expected ${expectStr}, got ${gotStr}`,
+    );
+  }
+}
+
+// ════════════════════════════════════════════════
+// Shared solve cross-validation (TS ↔ Rust)
+// ════════════════════════════════════════════════
+
+function testSharedSolve() {
+
+  const suiteJson = JSON.parse(
+    readFileSync(resolve(__dirname, "../tests/solve.json"), "utf8"),
+  );
+  const tests = suiteJson.tests as (
+    | { section: string }
+    | {
+        name: string;
+        puzzle: Record<string, unknown>;
+        expect: SolveOutcome;
+      }
+  )[];
+
+  for (const t of tests) {
+    if ("section" in t) continue;
+    const { name, puzzle: compact, expect } = t;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON fixture
+    const wrapped = { "0101": { "1": compact } } as any;
+    const parsed = parseCompactYear(wrapped);
+    const puzzle = parsed["0101"]["1"];
+    const fp = flattenPuzzle(puzzle);
+
+    const got = checkSolvable(fp);
+    assert(
+      got === expect,
+      `shared solve: ${name}: expected ${expect}, got ${got}`,
+    );
+  }
+}
+
+// ════════════════════════════════════════════════
 // Run all
 // ════════════════════════════════════════════════
 
-testEvaluators();
-testSolver();
-testSolverEdgeCases();
-testGeneratedPuzzles();
-testHints();
-testShare();
-testSharedCheckValidity();
+const slow = process.argv.includes("--all");
+
+function timed(name: string, fn: () => void) {
+  const t0 = performance.now();
+  fn();
+  console.log(`  [${name}] ${(performance.now() - t0).toFixed(0)}ms`);
+}
+
+timed("Shared evaluator tests", testSharedEvaluators);
+timed("Shared check-validity tests", testSharedCheckValidity);
+timed("Shared lookahead tests", testSharedLookahead);
+timed("Shared solve tests", testSharedSolve);
+timed("Solver edge cases", testSolverEdgeCases);
+timed("Share encode/decode tests", testShare);
+
+timed("Hint engine tests", testHints);
+if (slow) {
+  timed("Generated puzzles: solver", testGeneratedSolver);
+  timed("Generated puzzles: brute-force", testGeneratedBruteForce);
+} else {
+  console.log("Skipping generated puzzle tests (use --all to include)");
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -15,6 +15,7 @@
     "fmt:check": "oxfmt --check src/ tests/",
     "generate": "node scripts/generate-puzzles.ts",
     "test": "node scripts/test.ts",
+    "test:all": "node scripts/test.ts --all",
     "bench": "vite build --config scripts/vite-bench.config.ts && node dist-scripts/bench.js",
     "bench:profile": "vite build --config scripts/vite-bench.config.ts && node --prof dist-scripts/bench.js && node --prof-process isolate-*.log && rm isolate-*.log"
   },

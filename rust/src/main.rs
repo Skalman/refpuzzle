@@ -831,3 +831,119 @@ fn claim_to_json(claim: &Claim) -> Value {
         _ => serde_json::to_value(claim).unwrap(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn puzzle_json_files() -> Vec<std::path::PathBuf> {
+        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let daily_dir = manifest_dir.join("../public/puzzles/daily");
+        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&daily_dir)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", daily_dir.display()))
+            .filter_map(|entry| {
+                let path = entry.ok()?.path();
+                if path.extension().and_then(|s| s.to_str()) == Some("json") {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        files.sort();
+        files
+    }
+
+    fn all_puzzles() -> Vec<(String, FlatPuzzle)> {
+        let mut puzzles = Vec::new();
+        for path in &puzzle_json_files() {
+            let filename = path.file_name().unwrap().to_str().unwrap();
+            let text = std::fs::read_to_string(path)
+                .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+            let data: Value = serde_json::from_str(&text)
+                .unwrap_or_else(|e| panic!("invalid JSON in {}: {e}", path.display()));
+            let obj = data.as_object().unwrap();
+            for (day, levels) in obj {
+                let levels = match levels.as_object() {
+                    Some(l) => l,
+                    None => continue,
+                };
+                for (lvl, puzzle) in levels {
+                    let key = format!("{filename}/{day}-{lvl}");
+                    if let Some(fp) = parse_puzzle(puzzle) {
+                        puzzles.push((key, fp));
+                    }
+                }
+            }
+        }
+        puzzles
+    }
+
+    #[test]
+    fn generated_puzzles_hint_solvable() {
+        assert!(
+            cfg!(not(debug_assertions)),
+            "too slow in debug mode — run `cargo test --release`"
+        );
+        let puzzles = all_puzzles();
+        assert!(!puzzles.is_empty());
+        let mut failures: Vec<String> = Vec::new();
+
+        for (key, fp) in &puzzles {
+            let (ok, _steps) = run_check(fp, key);
+            if !ok {
+                failures.push(key.clone());
+            }
+        }
+
+        eprintln!(
+            "{}/{} hint-solvable",
+            puzzles.len() - failures.len(),
+            puzzles.len()
+        );
+        if !failures.is_empty() {
+            eprintln!("To inspect a failure, run:");
+            for f in &failures {
+                let (file, key) = f.split_once('/').unwrap();
+                eprintln!("  cargo run --release -- --check ../public/puzzles/daily/{file} {key}");
+            }
+            panic!("{} hint-solve failure(s)", failures.len());
+        }
+    }
+
+    #[test]
+    fn generated_puzzles_unique_solution() {
+        assert!(
+            cfg!(not(debug_assertions)),
+            "too slow in debug mode — run `cargo test --release`"
+        );
+        let puzzles = all_puzzles();
+        assert!(!puzzles.is_empty());
+        let mut failures: Vec<String> = Vec::new();
+
+        for (key, fp) in &puzzles {
+            let solutions = solver::solve(fp, None, 2);
+            if solutions.len() != 1 {
+                failures.push(format!("{key}: found {} solutions", solutions.len()));
+                continue;
+            }
+
+            let sol = &solutions[0];
+            let answers: [Option<Answer>; MAX_N] =
+                std::array::from_fn(|i| if i < fp.n { Some(sol[i]) } else { None });
+
+            for qi in 0..fp.n {
+                if !check_validity::check_question_against_solution(fp, qi, sol[qi], &answers) {
+                    failures.push(format!("{key}: Q{} fails validation", qi + 1));
+                }
+            }
+        }
+
+        eprintln!(
+            "{}/{} unique",
+            puzzles.len() - failures.len(),
+            puzzles.len()
+        );
+        assert!(failures.is_empty(), "uniqueness failures: {failures:?}");
+    }
+}

@@ -730,4 +730,56 @@ mod tests {
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
     }
+
+    #[test]
+    fn test_shared_evaluators() {
+        let json_str = std::fs::read_to_string("../tests/evaluators.json")
+            .expect("can't read tests/evaluators.json");
+        let suite: Value = serde_json::from_str(&json_str).unwrap();
+        let tests = suite["tests"].as_array().unwrap();
+
+        let mut passed = 0;
+        let mut failed = 0;
+
+        for test in tests {
+            if test.get("section").is_some() {
+                continue;
+            }
+            let name = test["name"].as_str().unwrap();
+            let qi = test["qi"].as_u64().unwrap() as usize;
+            let expect = test["expect"].as_bool().unwrap();
+
+            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = match fp {
+                Some(fp) => fp,
+                None => {
+                    eprintln!("SKIP: {name}: parse failed");
+                    continue;
+                }
+            };
+
+            let n = fp.n;
+            let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+            let answer_arr = test["answers"].as_array().unwrap();
+            for i in 0..n {
+                if let Some(s) = answer_arr[i].as_str() {
+                    answers[i] = Some(LETTERS[(s.as_bytes()[0] - b'A') as usize]);
+                }
+            }
+
+            let got = check_question_against_solution(&fp, qi, answers[qi].unwrap(), &answers);
+
+            if got == expect {
+                passed += 1;
+            } else {
+                failed += 1;
+                eprintln!("FAIL: {name}");
+                eprintln!("  expected: {expect}");
+                eprintln!("  got:      {got}");
+            }
+        }
+
+        eprintln!("{passed}/{} passed", passed + failed);
+        assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
 }

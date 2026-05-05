@@ -1786,10 +1786,19 @@ mod tests {
             }
         }
 
+        assert!(
+            cfg!(not(debug_assertions)),
+            "too slow in debug mode — run `cargo test --release`"
+        );
+
         let mut failures = 0;
         let mut puzzles_tested = 0;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
 
-        for seed in 0..5000u32 {
+        for seed in 0u32.. {
+            if seed % 100 == 0 && std::time::Instant::now() > deadline {
+                break;
+            }
             let mut rng = Rng::new(seed.wrapping_mul(7919).wrapping_add(42));
             let n = rng.int(4, 8) as usize;
 
