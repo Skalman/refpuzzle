@@ -506,6 +506,20 @@
       "state": ["C", "a", "A", ""],
       "expect": "valid"
     },
+    {
+      "name": "first_with: claimed position has answer eliminated → invalid",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, 3, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["D", "", "", "a"],
+      "expect": "invalid"
+    },
     { "section": "=== last_with_answer ===" },
     {
       "name": "last_with: later question has the answer → invalid",

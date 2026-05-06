@@ -95,6 +95,8 @@ fn first_in_range(
             if pa != answer {
                 return Validity::Invalid;
             }
+        } else if eliminated[p] & amask != 0 {
+            return Validity::Invalid;
         }
         let mut all_certain = true;
         for j in start..p {
@@ -146,6 +148,8 @@ fn last_in_range(
             if pa != answer {
                 return Validity::Invalid;
             }
+        } else if eliminated[p] & amask != 0 {
+            return Validity::Invalid;
         }
         let mut all_certain = true;
         for j in (p + 1)..end {

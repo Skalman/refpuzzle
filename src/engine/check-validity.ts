@@ -85,6 +85,7 @@ function firstInRange(
   if (pos != null) {
     if (pos < start || pos >= end) return "invalid";
     if (answers[pos] != null && answers[pos] !== answer) return "invalid";
+    if (answers[pos] == null && (eliminated[pos] & amask) !== 0) return "invalid";
     let allCertain = true;
     for (let j = start; j < pos; j++) {
       if (answers[j] === answer) return "invalid";
@@ -114,6 +115,7 @@ function lastInRange(
   if (pos != null) {
     if (pos < start || pos >= end) return "invalid";
     if (answers[pos] != null && answers[pos] !== answer) return "invalid";
+    if (answers[pos] == null && (eliminated[pos] & amask) !== 0) return "invalid";
     let allCertain = true;
     for (let j = pos + 1; j < end; j++) {
       if (answers[j] === answer) return "invalid";
