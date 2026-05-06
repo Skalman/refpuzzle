@@ -128,7 +128,17 @@ fn remaining_count(eliminated: u8) -> u32 {
 
 struct CountResult {
     count: i16,
-    remaining: i16,
+    guaranteed: i16,
+    possible: i16,
+}
+
+impl CountResult {
+    fn min(&self) -> i16 {
+        self.count + self.guaranteed
+    }
+    fn max(&self) -> i16 {
+        self.count + self.guaranteed + self.possible
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -165,15 +175,32 @@ fn count_matching(
 ) -> CountResult {
     let mask = pred.mask();
     let mut count: i16 = 0;
-    let mut remaining: i16 = 0;
+    let mut guaranteed: i16 = 0;
+    let mut possible: i16 = 0;
     for i in from..to {
         match answers[i] {
             Some(a) if pred.matches(a) => count += 1,
-            None if eliminated[i] & mask != mask => remaining += 1,
+            None => {
+                let remaining_bits = !eliminated[i] & 0b11111u8;
+                if remaining_bits == 0 {
+                    continue;
+                }
+                let matching = remaining_bits & mask;
+                let non_matching = remaining_bits & (!mask & 0b11111u8);
+                if matching != 0 && non_matching == 0 {
+                    guaranteed += 1;
+                } else if matching != 0 {
+                    possible += 1;
+                }
+            }
             _ => {}
         }
     }
-    CountResult { count, remaining }
+    CountResult {
+        count,
+        guaranteed,
+        possible,
+    }
 }
 
 fn count_pred(t: &QuestionType) -> Option<CountPred> {
@@ -264,9 +291,14 @@ fn deduce_impl(
         let cr = count_matching(answers, eliminated, pred, from, to);
 
         if run(DeduceRule::CountSaturated) {
-            if cr.count == on && cr.remaining > 0 {
+            if cr.min() == on && cr.possible > 0 {
+                let mask = pred.mask();
                 for j in from..to {
                     if answers[j].is_none() {
+                        let remaining_bits = !eliminated[j] & 0b11111u8;
+                        if remaining_bits & (!mask & 0b11111u8) == 0 {
+                            continue;
+                        }
                         for oi in 0..5usize {
                             if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
                                 push(
@@ -280,9 +312,9 @@ fn deduce_impl(
             }
         }
 
-        if cr.count + cr.remaining == on && cr.remaining > 0 {
+        if cr.max() == on && cr.possible > 0 {
             if run(DeduceRule::CountMustMatchForce) {
-                if cr.remaining == 1 {
+                if cr.possible == 1 {
                     for j in from..to {
                         if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
                             let mut match_count = 0;
@@ -530,12 +562,12 @@ fn deduce_impl(
             if let Some(pred) = count_pred(t) {
                 let (from, to) = count_range(t, n);
                 let cr = count_matching(answers, eliminated, pred, from, to);
-                if cr.remaining == 0 {
+                if cr.possible == 0 {
                     for oi in 0..5usize {
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        if fp.option_nums[qi][oi] == cr.count {
+                        if fp.option_nums[qi][oi] == cr.min() {
                             push(
                                 DeduceAction::Force {
                                     qi,
@@ -825,7 +857,7 @@ fn deduce_impl(
                     let cr =
                         count_matching(answers, eliminated, CountPred::IsAnswer(answer), from, to);
                     if run(DeduceRule::CountExceeded) {
-                        if cr.count > on {
+                        if cr.min() > on {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::CountExceeded,
@@ -833,7 +865,7 @@ fn deduce_impl(
                         }
                     }
                     if run(DeduceRule::CountImpossible) {
-                        if cr.count + cr.remaining < on {
+                        if cr.max() < on {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::CountImpossible,
@@ -849,7 +881,7 @@ fn deduce_impl(
                     };
                     let cr = count_matching(answers, eliminated, pred, 0, n);
                     if run(DeduceRule::CountExceeded) {
-                        if cr.count > on {
+                        if cr.min() > on {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::CountExceeded,
@@ -857,7 +889,7 @@ fn deduce_impl(
                         }
                     }
                     if run(DeduceRule::CountImpossible) {
-                        if cr.count + cr.remaining < on {
+                        if cr.max() < on {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::CountImpossible,
@@ -1678,15 +1710,15 @@ fn deduce_impl(
                     Claim::CountAnswer { answer, value } => {
                         let cr =
                             count_matching(answers, eliminated, CountPred::IsAnswer(answer), 0, n);
-                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                        cr.min() > value as i16 || cr.max() < value as i16
                     }
                     Claim::CountVowel { value } => {
                         let cr = count_matching(answers, eliminated, CountPred::IsVowel, 0, n);
-                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                        cr.min() > value as i16 || cr.max() < value as i16
                     }
                     Claim::CountConsonant { value } => {
                         let cr = count_matching(answers, eliminated, CountPred::IsConsonant, 0, n);
-                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                        cr.min() > value as i16 || cr.max() < value as i16
                     }
                     Claim::CountAnswerAfter {
                         answer,
@@ -1700,7 +1732,7 @@ fn deduce_impl(
                             after_index as usize + 1,
                             n,
                         );
-                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                        cr.min() > value as i16 || cr.max() < value as i16
                     }
                     Claim::CountAnswerBefore {
                         answer,
@@ -1714,7 +1746,7 @@ fn deduce_impl(
                             0,
                             before_index as usize,
                         );
-                        cr.count > value as i16 || cr.count + cr.remaining < value as i16
+                        cr.min() > value as i16 || cr.max() < value as i16
                     }
                     Claim::MostCommon { value } => {
                         let mut max_possible = 0i16;

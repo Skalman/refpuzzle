@@ -120,6 +120,15 @@ function remainingCount(eliminated: number): number {
   return c;
 }
 
+interface CountResult {
+  count: number;
+  guaranteed: number;
+  possible: number;
+}
+
+function crMin(cr: CountResult): number { return cr.count + cr.guaranteed; }
+function crMax(cr: CountResult): number { return cr.count + cr.guaranteed + cr.possible; }
+
 function countMatching(
   answers: (AnswerLetter | null)[],
   eliminated: number[],
@@ -127,18 +136,24 @@ function countMatching(
   matchMask: number,
   from: number,
   to: number,
-): { count: number; remaining: number } {
+): CountResult {
   let count = 0;
-  let remaining = 0;
+  let guaranteed = 0;
+  let possible = 0;
   for (let i = from; i < to; i++) {
     const a = answers[i];
     if (a != null) {
       if (pred(a)) count++;
-    } else if ((eliminated[i] & matchMask) !== matchMask) {
-      remaining++;
+    } else {
+      const remaining = ~eliminated[i] & 0b11111;
+      if (remaining === 0) continue;
+      const matching = remaining & matchMask;
+      const nonMatching = remaining & (~matchMask & 0b11111);
+      if (matching !== 0 && nonMatching === 0) guaranteed++;
+      else if (matching !== 0) possible++;
     }
   }
-  return { count, remaining };
+  return { count, guaranteed, possible };
 }
 
 function countPred(q: { t: number; answer: string | null }): { pred: Pred; mask: number } | null {
@@ -212,9 +227,11 @@ export function deduceWithRule(
     const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
 
     if (run("CountSaturated")) {
-      if (cr.count === v && cr.remaining > 0) {
+      if (crMin(cr) === v && cr.possible > 0) {
         for (let j = from; j < to; j++) {
           if (answers[j] != null) continue;
+          const remBits = ~eliminated[j] & 0b11111;
+          if ((remBits & (~cp.mask & 0b11111)) === 0) continue;
           for (let oi = 0; oi < 5; oi++) {
             if (!isElim(eliminated, j, oi) && cp.pred(LETTERS[oi])) {
               results.push(
@@ -226,9 +243,9 @@ export function deduceWithRule(
       }
     }
 
-    if (cr.count + cr.remaining === v && cr.remaining > 0) {
+    if (crMax(cr) === v && cr.possible > 0) {
       if (run("CountMustMatchForce")) {
-        if (cr.remaining === 1) {
+        if (cr.possible === 1) {
           for (let j = from; j < to; j++) {
             if (answers[j] != null || !canStillMatch(cp.pred, eliminated[j])) continue;
             let matchCount = 0;
@@ -451,10 +468,10 @@ export function deduceWithRule(
       if (cp) {
         const [from, to] = countRange(q, n);
         const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
-        if (cr.remaining === 0) {
+        if (cr.possible === 0) {
           for (let oi = 0; oi < 5; oi++) {
             if (isElim(eliminated, qi, oi)) continue;
-            if (fp.optionValues[qi][oi] === cr.count) {
+            if (fp.optionValues[qi][oi] === crMin(cr)) {
               results.push(
                 res({ type: "force", questionIndex: qi, letter: LETTERS[oi] }, "CountAllAnswered"),
               );
@@ -695,14 +712,14 @@ export function deduceWithRule(
         const [from, to] = countRange(q, n);
         const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
         if (run("CountExceeded")) {
-          if (v != null && cr.count > v) {
+          if (v != null && crMin(cr) > v) {
             results.push(
               res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "CountExceeded"),
             );
           }
         }
         if (run("CountImpossible")) {
-          if (v != null && cr.count + cr.remaining < v) {
+          if (v != null && crMax(cr) < v) {
             results.push(
               res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "CountImpossible"),
             );
@@ -1363,13 +1380,10 @@ export function deduceWithRule(
     }
   }
 
-  function countAnswersForDeduce(ans: (AnswerLetter | null)[], elim: number[], pred: Pred, from: number, to: number) {
-    let count = 0, remaining = 0;
-    for (let i = from; i < to; i++) {
-      if (ans[i] != null) { if (pred(ans[i]!)) count++; }
-      else { for (let b = 0; b < 5; b++) { if (!(elim[i] & (1 << b)) && pred(LETTERS[b])) { remaining++; break; } } }
-    }
-    return { count, remaining };
+  function predMask(pred: Pred): number {
+    let m = 0;
+    for (let i = 0; i < 5; i++) if (pred(LETTERS[i])) m |= 1 << i;
+    return m;
   }
 
   // TrueStatement claim invalid: claim contradicts known answers
@@ -1397,8 +1411,8 @@ export function deduceWithRule(
           if (pred) {
             const from = claim.type === "CountAnswerAfter" ? claim.afterIndex + 1 : 0;
             const to = claim.type === "CountAnswerBefore" ? claim.beforeIndex : n;
-            const cr = countAnswersForDeduce(answers, eliminated, pred, from, to);
-            if (cr.count > claim.value || cr.count + cr.remaining < claim.value) invalid = true;
+            const cr = countMatching(answers, eliminated, pred, predMask(pred), from, to);
+            if (crMin(cr) > claim.value || crMax(cr) < claim.value) invalid = true;
           }
         }
         if (claim.type === "MostCommon") {
