@@ -971,6 +971,25 @@ function explainElimDetail(
       return d(
         `${Q(qi)} option ${letter} claims ${LETTERS[v]}, but the question asks for a different letter with the same count as ${q.answer}.`,
       );
+    if (v != null && v >= 0 && v < 5) {
+      const claimed = LETTERS[v];
+      let rc = 0, rr = 0, sc = 0, sr = 0;
+      const refMask = 1 << letterIdx(q.answer!);
+      const claimedMask = 1 << v;
+      for (let j = 0; j < n; j++) {
+        if (answers[j] != null) {
+          if (answers[j] === q.answer) rc++;
+          if (answers[j] === claimed) sc++;
+        } else {
+          if ((eliminated[j] & refMask) === 0) rr++;
+          if ((eliminated[j] & claimedMask) === 0) sr++;
+        }
+      }
+      if (rc + rr < sc)
+        return d(`${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${q.answer} can have at most ${rc + rr} while ${claimed} already has ${sc}.`);
+      if (sc + sr < rc)
+        return d(`${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${claimed} can have at most ${sc + sr} while ${q.answer} already has ${rc}.`);
+    }
   }
 
   if (q.t === RT_LEAST_COMMON && v != null && v < 5) {

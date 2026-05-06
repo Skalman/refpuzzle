@@ -101,6 +101,7 @@ deduce_rules! {
     ConsecIdentForwardForce,
     ConsecIdentForwardElim,
     ConsecIdentForwardBothForce,
+    EqualCountRangeElim,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1303,6 +1304,40 @@ fn deduce_impl(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::EqualCountSelfRef,
                             );
+                        }
+                    }
+                    if run(DeduceRule::EqualCountRangeElim) {
+                        let claimed = LETTERS[on as usize];
+                        if claimed != answer {
+                            let ref_mask = 1u8 << answer.idx();
+                            let claimed_mask = 1u8 << claimed.idx();
+                            let mut rc = 0i16;
+                            let mut rr = 0i16;
+                            let mut sc = 0i16;
+                            let mut sr = 0i16;
+                            for j in 0..n {
+                                if let Some(a) = answers[j] {
+                                    if a == answer {
+                                        rc += 1;
+                                    }
+                                    if a == claimed {
+                                        sc += 1;
+                                    }
+                                } else {
+                                    if eliminated[j] & ref_mask == 0 {
+                                        rr += 1;
+                                    }
+                                    if eliminated[j] & claimed_mask == 0 {
+                                        sr += 1;
+                                    }
+                                }
+                            }
+                            if rc + rr < sc || sc + sr < rc {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::EqualCountRangeElim,
+                                );
+                            }
                         }
                     }
                 }

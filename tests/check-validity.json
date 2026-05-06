@@ -1331,6 +1331,21 @@
       "expect": "invalid"
     },
     {
+      "name": "equal_count: count ranges can't overlap → invalid",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["A", "A", "A", "b", "b"],
+      "expect": "invalid"
+    },
+    {
       "name": "equal_count: not all answered → pending",
       "qi": 0,
       "puzzle": {

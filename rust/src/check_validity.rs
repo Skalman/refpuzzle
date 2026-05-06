@@ -202,6 +202,26 @@ fn count_answer_simple(
     c
 }
 
+fn count_answer_with_remaining(
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    target: Answer,
+    from: usize,
+    to: usize,
+) -> (i16, i16) {
+    let mask = 1u8 << target.idx();
+    let mut count: i16 = 0;
+    let mut remaining: i16 = 0;
+    for i in from..to {
+        if answers[i] == Some(target) {
+            count += 1;
+        } else if answers[i].is_none() && eliminated[i] & mask == 0 {
+            remaining += 1;
+        }
+    }
+    (count, remaining)
+}
+
 fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
     let mut counts = [0i16; 5];
     for i in 0..n {
@@ -611,16 +631,19 @@ pub fn check_answer_validity(
                 if claimed == answer {
                     return Validity::Invalid;
                 }
-                if !all_answered(answers, n) {
-                    return Validity::Pending;
+                let (rc, rr) = count_answer_with_remaining(answers, eliminated, answer, 0, n);
+                let (sc, sr) = count_answer_with_remaining(answers, eliminated, claimed, 0, n);
+                if rc + rr < sc || sc + sr < rc {
+                    return Validity::Invalid;
                 }
-                let ref_count = count_answer_simple(answers, answer, 0, n);
-                let sel_count = count_answer_simple(answers, claimed, 0, n);
-                if ref_count == sel_count {
-                    Validity::Valid
-                } else {
-                    Validity::Invalid
+                if rr == 0 && sr == 0 {
+                    return if rc == sc {
+                        Validity::Valid
+                    } else {
+                        Validity::Invalid
+                    };
                 }
+                Validity::Pending
             } else {
                 if !all_answered(answers, n) {
                     return Validity::Pending;

@@ -91,6 +91,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "ConsecIdentForwardForce",
   "ConsecIdentForwardElim",
   "ConsecIdentForwardBothForce",
+  "EqualCountRangeElim",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
 ] as const;
@@ -1056,6 +1057,28 @@ export function deduceWithRule(
             results.push(
               res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "EqualCountSelfRef"),
             );
+          }
+        }
+        if (run("EqualCountRangeElim") && v != null && v >= 0 && v < 5) {
+          const claimed = LETTERS[v];
+          if (claimed !== q.answer) {
+            const refMask = 1 << letterIdx(q.answer!);
+            const claimedMask = 1 << v;
+            let rc = 0, rr = 0, sc = 0, sr = 0;
+            for (let j = 0; j < n; j++) {
+              if (answers[j] != null) {
+                if (answers[j] === q.answer) rc++;
+                if (answers[j] === claimed) sc++;
+              } else {
+                if ((eliminated[j] & refMask) === 0) rr++;
+                if ((eliminated[j] & claimedMask) === 0) sr++;
+              }
+            }
+            if (rc + rr < sc || sc + sr < rc) {
+              results.push(
+                res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "EqualCountRangeElim"),
+              );
+            }
           }
         }
       }

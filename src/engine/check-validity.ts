@@ -439,15 +439,15 @@ export function checkAnswerValidity(
     if (v != null) {
       const claimed = LETTERS[v];
       if (claimed === q.answer) return V_INVALID;
-      const allKnown = answers.slice(0, n).every((x) => x != null);
-      if (!allKnown) return V_PENDING;
-      let refCount = 0;
-      let selCount = 0;
-      for (let i = 0; i < n; i++) {
-        if (answers[i] === q.answer) refCount++;
-        if (answers[i] === claimed) selCount++;
-      }
-      return refCount === selCount ? V_VALID : V_INVALID;
+      const refMask = 1 << letterIdx(q.answer!);
+      const claimedMask = 1 << v;
+      const rc = countMatching(answers, eliminated, (x) => x === q.answer, refMask, 0, n);
+      const sc = countMatching(answers, eliminated, (x) => x === claimed, claimedMask, 0, n);
+      if (rc.count + rc.remaining < sc.count || sc.count + sc.remaining < rc.count)
+        return V_INVALID;
+      if (rc.remaining === 0 && sc.remaining === 0)
+        return rc.count === sc.count ? V_VALID : V_INVALID;
+      return V_PENDING;
     } else {
       const allKnown = answers.slice(0, n).every((x) => x != null);
       if (!allKnown) return V_PENDING;
