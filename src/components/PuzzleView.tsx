@@ -216,6 +216,23 @@ interface PuzzleViewProps {
   onChanged: () => void;
 }
 
+function HintStep({ step }: { step: ExplainStep }) {
+  if (step.type === "complex") {
+    return (
+      <div>
+        {step.header}
+        <ul class="hint-list">
+          {step.lines.map((line, i) => (
+            // oxlint-disable-next-line react/no-array-index-key
+            <li key={i}>{line}</li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  return <>{step.text}</>;
+}
+
 export function PuzzleView({
   puzzle,
   dateStr,
@@ -270,6 +287,7 @@ export function PuzzleView({
   });
   const [hintText, setHintText] = useState<ExplainStep | null>(null);
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
+  const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
 
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
@@ -582,6 +600,18 @@ export function PuzzleView({
     return null;
   }
 
+  // Auto-refresh all hint steps in debug mode on every move
+  useEffect(() => {
+    if (!debugMode || debugHints === null || completed) return;
+    try {
+      const result = computeHint();
+      setDebugHints(result?.steps ?? null);
+    } catch (e) {
+      console.error("Hint error:", e);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [questions]);
+
   function handleHint() {
     if (
       !debugMode &&
@@ -594,31 +624,26 @@ export function PuzzleView({
       return;
     }
 
-    let result: ReturnType<typeof computeHint>;
+    let result: { steps: ExplainStep[] };
     try {
-      result = computeHint();
+      result = computeHint() ?? {
+        steps: [
+          {
+            type: "simple",
+            text: "No obvious next step. Try making an assumption.",
+          },
+        ],
+      };
     } catch (e) {
       console.error("Hint error:", e);
-      result = null;
+      return;
     }
-    if (result) {
-      if (debugMode) {
-        hintRef.current = {
-          steps: result.steps,
-          step: result.steps.length - 1,
-        };
-        setHintText(result.steps[result.steps.length - 1]);
-      } else {
-        hintRef.current = { steps: result.steps, step: 0 };
-        setHintText(result.steps[0]);
-      }
-      pushHintMarker(debugMode ? result.steps.length : 1);
+    if (debugMode) {
+      setDebugHints(result.steps);
     } else {
-      hintRef.current = null;
-      setHintText({
-        type: "simple",
-        text: "No obvious next step. Try making an assumption.",
-      });
+      hintRef.current = { steps: result.steps, step: 0 };
+      setHintText(result.steps[0]);
+      pushHintMarker(1);
     }
   }
 
@@ -997,23 +1022,22 @@ export function PuzzleView({
       </div>
 
       {/* Hint display */}
-      {hintText && !completed && (
+      {!completed && debugMode && debugHints && (
         <div class="puzzle-hint">
-          {hintText.type === "complex" ? (
-            <div>
-              {hintText.header}
-              <ul class="hint-list">
-                {hintText.lines.map((line, i) => (
-                  // oxlint-disable-next-line react/no-array-index-key
-                  <li key={`h${i}`}>{line}</li>
-                ))}
-              </ul>
-            </div>
-          ) : (
-            hintText.text
-          )}
-          {!debugMode &&
-            hintRef.current &&
+          <ol>
+            {debugHints.map((step, i) => (
+              // oxlint-disable-next-line react/no-array-index-key
+              <li key={i}>
+                <HintStep step={step} />
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {!completed && !debugMode && hintText && (
+        <div class="puzzle-hint">
+          <HintStep step={hintText} />
+          {hintRef.current &&
             hintRef.current.step < hintRef.current.steps.length - 1 && (
               <button class="hint-more" onClick={handleHint}>
                 {s.puzzle.more}
