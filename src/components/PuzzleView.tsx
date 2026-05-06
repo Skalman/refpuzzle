@@ -10,11 +10,12 @@ import { explainDeduce, explainLookahead } from "../engine/explain.ts";
 import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
-import { loadState, saveState } from "../lib/store.ts";
-import type { QuestionState } from "../lib/store.ts";
+import { loadState, saveState, loadMeta, saveMeta, clearMeta } from "../lib/store.ts";
+import type { QuestionState, PuzzleMeta } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { confetti } from "../lib/confetti.ts";
+import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import {
@@ -356,6 +357,14 @@ export function PuzzleView({
   const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
   function applyChange(next: QuestionState[]) {
+    if (!wasStarted.current) {
+      wasStarted.current = true;
+      metaRef.current.sessions = 1;
+      metaRef.current.sessionStart = Date.now();
+      if (initialHash) metaRef.current.fromShared = true;
+      saveMeta(puzzle.id, metaRef.current);
+      track("puzzle_started", { puzzleId: puzzle.id, level, ...getClientInfo() });
+    }
     pushHistory(next);
     setQuestions(next);
     setHintText(null);
@@ -525,7 +534,13 @@ export function PuzzleView({
       return;
     }
 
-    const result = computeHint();
+    let result: ReturnType<typeof computeHint>;
+    try {
+      result = computeHint();
+    } catch (e) {
+      console.error("Hint error:", e);
+      result = null;
+    }
     if (result) {
       if (debugMode) {
         hintRef.current = { steps: result.steps, step: result.steps.length - 1 };
@@ -578,11 +593,70 @@ export function PuzzleView({
     return () => clearTimeout(timer);
   }, [resetPending]);
 
+  // Track first move
+  const wasStarted = useRef(initState.history.length > 1);
+
+  const metaRef = useRef<PuzzleMeta & { sessionStart: number | null }>({
+    ...loadMeta(puzzle.id),
+    sessionStart: null,
+  });
+
+  function flushElapsed() {
+    const m = metaRef.current;
+    if (m.sessionStart != null) {
+      m.elapsedMs += Date.now() - m.sessionStart;
+      m.sessionStart = null;
+      saveMeta(puzzle.id, m);
+    }
+  }
+
+  // Track visibility-based sessions
+  useEffect(() => {
+    if (wasStarted.current) {
+      metaRef.current.sessions++;
+      metaRef.current.sessionStart = Date.now();
+      saveMeta(puzzle.id, metaRef.current);
+    }
+
+    function onVisibility() {
+      if (document.hidden) {
+        flushElapsed();
+      } else if (wasStarted.current && !wasCompleted.current) {
+        metaRef.current.sessions++;
+        metaRef.current.sessionStart = Date.now();
+        saveMeta(puzzle.id, metaRef.current);
+      }
+    }
+
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      flushElapsed();
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Confetti + scroll to next puzzle on completion
   const wasCompleted = useRef(initState.completed);
   useEffect(() => {
     if (!completed || wasCompleted.current) return undefined;
     wasCompleted.current = true;
+    const m = metaRef.current;
+    if (m.sessionStart != null) {
+      m.elapsedMs += Date.now() - m.sessionStart;
+      m.sessionStart = null;
+    }
+    const hints = hintMarkers.current.size;
+    track("puzzle_completed", {
+      puzzleId: puzzle.id,
+      level,
+      elapsedS: Math.round(m.elapsedMs / 1000),
+      sessions: m.sessions,
+      ...(hints > 0 && { hints }),
+      ...(m.fromShared && { fromShared: true }),
+      ...getClientInfo(),
+    });
+    clearMeta(puzzle.id);
     confetti();
     const timer = setTimeout(() => {
       const btn = nextPuzzleRef.current;
@@ -591,7 +665,7 @@ export function PuzzleView({
       btn.focus({ preventScroll: true });
     }, 1800);
     return () => clearTimeout(timer);
-  }, [completed]);
+  }, [completed, level, puzzle.id]);
 
   // Init roving tabindex on controls toolbar
   useEffect(() => {
