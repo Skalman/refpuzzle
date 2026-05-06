@@ -788,6 +788,20 @@
       "expect": "1a"
     },
     {
+      "name": "OnlySameOtherMatch: Q3=B already, so Q1 option B (pointing to Q2) can't be 'only'",
+      "rule": "OnlySameOtherMatch",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "OnlySame" }, "o": [0, 1, 2, 3, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "", "B", ""],
+      "expect": "1b"
+    },
+    {
       "name": "ConsecIdent: one answered, other has that answer eliminated → eliminate",
       "rule": "ConsecIdentNoCommon",
       "puzzle": {
@@ -1868,6 +1882,62 @@
       },
       "state": ["C", "A", "", ""],
       "expect": "3a"
+    },
+    { "section": "=== PrevSameNoneMatch ===" },
+    {
+      "name": "PrevSameNoneMatch: None claims no previous B, but Q1=B → eliminate",
+      "rule": "PrevSameNoneMatch",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "PrevSame" }, "o": [0, null, 1, 2, 3] }
+        ]
+      },
+      "state": ["B", "", ""],
+      "expect": "3b"
+    },
+    { "section": "=== NextSameNoneMatch ===" },
+    {
+      "name": "NextSameNoneMatch: None claims no next B, but Q3=B → eliminate",
+      "rule": "NextSameNoneMatch",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "NextSame" }, "o": [1, null, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "", "B"],
+      "expect": "1b"
+    },
+    { "section": "=== OnlySameNoneMatch ===" },
+    {
+      "name": "OnlySameNoneMatch: None claims unique answer, but Q3=B → eliminate B",
+      "rule": "OnlySameNoneMatch",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "OnlySame" }, "o": [0, null, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "", "B"],
+      "expect": "2b"
+    },
+    { "section": "=== OnlySameNoneForward ===" },
+    {
+      "name": "OnlySameNoneForward: Q2=B (None), so eliminate B from others",
+      "rule": "OnlySameNoneForward",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "OnlySame" }, "o": [0, null, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "B", ""],
+      "expect": "1b"
     },
     { "section": "=== ConsecIdentForward ===" },
     {

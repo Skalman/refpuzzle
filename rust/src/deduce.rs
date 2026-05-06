@@ -102,6 +102,11 @@ deduce_rules! {
     ConsecIdentForwardElim,
     ConsecIdentForwardBothForce,
     EqualCountRangeElim,
+    OnlySameOtherMatch,
+    PrevSameNoneMatch,
+    NextSameNoneMatch,
+    OnlySameNoneMatch,
+    OnlySameNoneForward,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1341,6 +1346,16 @@ fn deduce_impl(
                         }
                     }
                 }
+                QuestionType::PrevSame if on == NONE_VAL => {
+                    if run(DeduceRule::PrevSameNoneMatch) {
+                        if (0..qi).any(|j| answers[j] == Some(LETTERS[oi])) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::PrevSameNoneMatch,
+                            );
+                        }
+                    }
+                }
                 QuestionType::PrevSame if on != NONE_VAL => {
                     let pos = on as usize;
                     if run(DeduceRule::PrevSameNotBefore) {
@@ -1373,6 +1388,16 @@ fn deduce_impl(
                         }
                     }
                 }
+                QuestionType::NextSame if on == NONE_VAL => {
+                    if run(DeduceRule::NextSameNoneMatch) {
+                        if ((qi + 1)..n).any(|j| answers[j] == Some(LETTERS[oi])) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::NextSameNoneMatch,
+                            );
+                        }
+                    }
+                }
                 QuestionType::NextSame if on != NONE_VAL => {
                     let pos = on as usize;
                     if run(DeduceRule::NextSameNotAfter) {
@@ -1402,6 +1427,16 @@ fn deduce_impl(
                         }
                     }
                 }
+                QuestionType::OnlySame if on == NONE_VAL => {
+                    if run(DeduceRule::OnlySameNoneMatch) {
+                        if (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi])) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlySameNoneMatch,
+                            );
+                        }
+                    }
+                }
                 QuestionType::OnlySame | QuestionType::SameAs if on != NONE_VAL => {
                     let pos = on as usize;
                     if run(DeduceRule::OnlySameSelfRef) {
@@ -1418,6 +1453,20 @@ fn deduce_impl(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::OnlySameRuledOut,
                             );
+                        }
+                    }
+                    if run(DeduceRule::OnlySameOtherMatch) && matches!(*t, QuestionType::OnlySame) {
+                        if pos < n && pos != qi {
+                            let letter = LETTERS[oi];
+                            for j in 0..n {
+                                if j != qi && j != pos && answers[j] == Some(letter) {
+                                    push(
+                                        DeduceAction::Eliminate { qi, oi },
+                                        DeduceRule::OnlySameOtherMatch,
+                                    );
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -1628,6 +1677,31 @@ fn deduce_impl(
                     }
                 }
                 _ => {}
+            }
+        }
+    }
+
+    // ── OnlySame None forward: answered None means no other question can have this letter ──
+    if run(DeduceRule::OnlySameNoneForward) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::OnlySame) {
+                continue;
+            }
+            let Some(a) = answers[qi] else { continue };
+            let v = fp.option_nums[qi][a.idx()];
+            if v != NONE_VAL {
+                continue;
+            }
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
+                    push(
+                        DeduceAction::Eliminate { qi: j, oi: a.idx() },
+                        DeduceRule::OnlySameNoneForward,
+                    );
+                }
             }
         }
     }

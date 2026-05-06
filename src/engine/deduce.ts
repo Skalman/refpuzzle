@@ -92,6 +92,11 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "ConsecIdentForwardElim",
   "ConsecIdentForwardBothForce",
   "EqualCountRangeElim",
+  "OnlySameOtherMatch",
+  "PrevSameNoneMatch",
+  "NextSameNoneMatch",
+  "OnlySameNoneMatch",
+  "OnlySameNoneForward",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
 ] as const;
@@ -1083,6 +1088,16 @@ export function deduceWithRule(
         }
       }
 
+      if (q.t === RT_PREV_SAME && v == null) {
+        if (run("PrevSameNoneMatch")) {
+          for (let j = 0; j < qi; j++) {
+            if (answers[j] === LETTERS[oi]) {
+              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "PrevSameNoneMatch"));
+              break;
+            }
+          }
+        }
+      }
       if (q.t === RT_PREV_SAME && v != null) {
         if (run("PrevSameNotBefore")) {
           if (v >= qi) {
@@ -1111,6 +1126,16 @@ export function deduceWithRule(
         }
       }
 
+      if (q.t === RT_NEXT_SAME && v == null) {
+        if (run("NextSameNoneMatch")) {
+          for (let j = qi + 1; j < n; j++) {
+            if (answers[j] === LETTERS[oi]) {
+              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "NextSameNoneMatch"));
+              break;
+            }
+          }
+        }
+      }
       if (q.t === RT_NEXT_SAME && v != null) {
         if (run("NextSameNotAfter")) {
           if (v <= qi || v >= n) {
@@ -1139,6 +1164,16 @@ export function deduceWithRule(
         }
       }
 
+      if (q.t === RT_ONLY_SAME && v == null) {
+        if (run("OnlySameNoneMatch")) {
+          for (let j = 0; j < n; j++) {
+            if (j !== qi && answers[j] === LETTERS[oi]) {
+              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameNoneMatch"));
+              break;
+            }
+          }
+        }
+      }
       if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
         if (run("OnlySameSelfRef")) {
           if (v === qi) {
@@ -1152,6 +1187,19 @@ export function deduceWithRule(
             results.push(
               res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameRuledOut"),
             );
+          }
+        }
+        if (run("OnlySameOtherMatch") && q.t === RT_ONLY_SAME) {
+          if (v >= 0 && v < n && v !== qi) {
+            const letter = LETTERS[oi];
+            for (let j = 0; j < n; j++) {
+              if (j !== qi && j !== v && answers[j] === letter) {
+                results.push(
+                  res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameOtherMatch"),
+                );
+                break;
+              }
+            }
           }
         }
       }
@@ -1352,6 +1400,23 @@ export function deduceWithRule(
               ),
             );
           }
+        }
+      }
+    }
+  }
+
+  // OnlySame None forward: answered None means no other question can have this letter
+  if (run("OnlySameNoneForward")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== RT_ONLY_SAME) continue;
+      if (answers[qi] == null) continue;
+      const ai = letterIdx(answers[qi]!);
+      const v = fp.optionValues[qi][ai];
+      if (v != null) continue;
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (answers[j] == null && !isElim(eliminated, j, ai)) {
+          results.push(res({ type: "eliminate", questionIndex: j, optionIndex: ai }, "OnlySameNoneForward"));
         }
       }
     }

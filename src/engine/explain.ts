@@ -483,6 +483,20 @@ function explainElimination(
     return steps;
   }
 
+  if (rule === "OnlySameNoneForward") {
+    for (let src = 0; src < n; src++) {
+      if (fp.questions[src].t !== RT_ONLY_SAME || answers[src] == null) continue;
+      const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
+      if (srcV != null) continue;
+      if (answers[src] === letter) {
+        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+        steps.push(simple(`${Q(src)} is ${letter} and claims no other question shares that answer, so ${Q(qi)} can't be ${letter}.`));
+        return steps;
+      }
+    }
+  }
+
   if (rule === "ConsecIdentForwardElim") {
     for (let src = 0; src < n; src++) {
       if (fp.questions[src].t !== RT_CONSEC_IDENT || answers[src] == null) continue;
@@ -910,6 +924,16 @@ function explainElimDetail(
     }
   }
 
+  if (q.t === RT_PREV_SAME && v == null) {
+    for (let j = 0; j < qi; j++) {
+      if (answers[j] === letter)
+        return d(
+          `${Q(qi)} option ${letter} claims no previous question has answer ${letter}, but ${Q(j)} does.`,
+          j,
+        );
+    }
+  }
+
   if (q.t === RT_PREV_SAME && v != null) {
     if (v >= qi)
       return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`);
@@ -922,6 +946,16 @@ function explainElimDetail(
       if (answers[j] === LETTERS[oi])
         return d(
           `${Q(qi)} option ${letter} claims previous same answer is ${Q(v)}, but ${Q(j)} also has answer ${letter} and is closer.`,
+          j,
+        );
+    }
+  }
+
+  if (q.t === RT_NEXT_SAME && v == null) {
+    for (let j = qi + 1; j < n; j++) {
+      if (answers[j] === letter)
+        return d(
+          `${Q(qi)} option ${letter} claims no later question has answer ${letter}, but ${Q(j)} does.`,
           j,
         );
     }
@@ -944,6 +978,16 @@ function explainElimDetail(
     }
   }
 
+  if (q.t === RT_ONLY_SAME && v == null) {
+    for (let j = 0; j < n; j++) {
+      if (j !== qi && answers[j] === letter)
+        return d(
+          `${Q(qi)} option ${letter} claims no other question has answer ${letter}, but ${Q(j)} does.`,
+          j,
+        );
+    }
+  }
+
   if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
     if (v === qi)
       return d(
@@ -954,6 +998,15 @@ function explainElimDetail(
         `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
         v,
       );
+    if (q.t === RT_ONLY_SAME && v >= 0 && v < n && v !== qi) {
+      for (let j = 0; j < n; j++) {
+        if (j !== qi && j !== v && answers[j] === letter)
+          return d(
+            `${Q(qi)} option ${letter} claims ${Q(v)} is the only other with answer ${letter}, but ${Q(j)} already has answer ${letter}.`,
+            j,
+          );
+      }
+    }
   }
 
   if (q.t === RT_UNIQUE) {
