@@ -169,9 +169,7 @@ export function explainDeduce(
         steps.push(simple(`Try looking at ${allQis.map(Q).join(", ")}.`));
         steps.push(simple(`${qList} can't be ${optStr}: ${src.text}`));
       } else {
-        console.error(`No positional_range explain for ${qList} option ${optStr}`);
-        steps.push(simple(`Try looking at ${qList}.`));
-        steps.push(simple(`${qList} can't be ${optStr}.`));
+        throw new Error(`No positional_range explain for ${qList} option ${optStr}`);
       }
       return steps;
     }
@@ -496,8 +494,8 @@ function explainElimination(
     steps.push(simple(`Try looking at ${Q(qi)} and ${Q(detail.otherQi)}.`));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-  if (!detail) console.error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
-  steps.push(simple(detail ? detail.text : `${Q(qi)} can't be ${letter}.`));
+  if (!detail) throw new Error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
+  steps.push(simple(detail.text));
   return steps;
 }
 
@@ -647,8 +645,18 @@ function explainMultiElim(
       otherQi: src,
     };
   }
-  console.error(`No explainMultiElim source for ${Q(qi)}`);
-  return { text: "incompatible with other constraints.", otherQi: null };
+  for (let src = 0; src < n; src++) {
+    if (src === qi) continue;
+    const srcR = fp.questions[src];
+    if ((srcR.t === RT_ONLY_ODD || srcR.t === RT_ONLY_EVEN) && srcR.answer != null) {
+      const parity = srcR.t === RT_ONLY_ODD ? "odd" : "even";
+      return {
+        text: `${Q(src)} asks for the only ${parity}-numbered question with answer ${srcR.answer}, limiting which ${parity} questions can have that answer.`,
+        otherQi: src,
+      };
+    }
+  }
+  throw new Error(`No explainMultiElim source for ${Q(qi)}`);
 }
 
 interface ElimDetail {
@@ -1064,10 +1072,9 @@ export function explainLookahead(
           `Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}: ${elimDetail.text}`,
         );
       } else {
-        console.error(
+        throw new Error(
           `No explain for: ELIM ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]} (rule: ${dr.rule})`,
         );
-        lines.push(`Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}.`);
       }
       hypEliminated[a.questionIndex] |= 1 << a.optionIndex;
     }
