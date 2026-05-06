@@ -46,12 +46,18 @@ export function exportData(): string {
   return JSON.stringify(data, null, 2);
 }
 
+function history(val: string): string {
+  const i = val.indexOf("|");
+  return i >= 0 ? val.slice(0, i) : val;
+}
+
 function isCompleted(val: string): boolean {
-  return val.endsWith(".x") || val === "x";
+  const h = history(val);
+  return h.endsWith(".x") || h === "x";
 }
 
 function stepCount(val: string): number {
-  return val.split(".").length;
+  return history(val).split(".").length;
 }
 
 export function planImport(json: string): ImportPlan {

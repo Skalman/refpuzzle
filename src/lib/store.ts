@@ -117,11 +117,39 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
   };
 }
 
+export interface PuzzleMeta {
+  sessions: number;
+  elapsedS: number;
+  fromShared?: boolean;
+}
+
+const META_SEP = "|";
+
+function stripMeta(raw: string): string {
+  const i = raw.indexOf(META_SEP);
+  return i >= 0 ? raw.slice(0, i) : raw;
+}
+
+function encodeMeta(meta: PuzzleMeta): string {
+  return `s${meta.sessions}e${meta.elapsedS}${meta.fromShared ? "f" : ""}`;
+}
+
+function parseMeta(s: string): PuzzleMeta {
+  const sm = /s(\d+)/.exec(s);
+  const em = /e(\d+)/.exec(s);
+  return {
+    sessions: sm ? Number(sm[1]) : 0,
+    elapsedS: em ? Number(em[1]) : 0,
+    fromShared: s.includes("f"),
+  };
+}
+
 export function hasState(puzzleId: string): { started: boolean; completed: boolean } {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return { started: false, completed: false };
-    return { started: true, completed: raw.endsWith(".x") || raw === "x" };
+    const history = stripMeta(raw);
+    return { started: true, completed: history.endsWith(".x") || history === "x" };
   } catch {
     return { started: false, completed: false };
   }
@@ -131,7 +159,7 @@ export function loadState(puzzleId: string, n: number): SavedState | null {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return null;
-    return decodeHistory(raw, n);
+    return decodeHistory(stripMeta(raw), n);
   } catch {
     return null;
   }
@@ -142,9 +170,40 @@ export function saveState(puzzleId: string, state: SavedState) {
     if (state.history.length <= 1 && !state.completed) {
       localStorage.removeItem(PREFIX + puzzleId);
     } else {
-      localStorage.setItem(PREFIX + puzzleId, encodeHistory(state));
+      const existing = localStorage.getItem(PREFIX + puzzleId);
+      const i = existing?.indexOf(META_SEP) ?? -1;
+      const metaSuffix = i >= 0 ? existing!.slice(i) : "";
+      localStorage.setItem(PREFIX + puzzleId, encodeHistory(state) + metaSuffix);
     }
   } catch {
     // storage full or unavailable
   }
+}
+
+export function loadMeta(puzzleId: string): PuzzleMeta {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return { sessions: 0, elapsedS: 0 };
+    const i = raw.indexOf(META_SEP);
+    return i >= 0 ? parseMeta(raw.slice(i + 1)) : { sessions: 0, elapsedS: 0 };
+  } catch {
+    return { sessions: 0, elapsedS: 0 };
+  }
+}
+
+export function saveMeta(puzzleId: string, meta: PuzzleMeta): void {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return;
+    localStorage.setItem(PREFIX + puzzleId, stripMeta(raw) + META_SEP + encodeMeta(meta));
+  } catch {}
+}
+
+export function clearMeta(puzzleId: string): void {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (raw?.includes(META_SEP)) {
+      localStorage.setItem(PREFIX + puzzleId, stripMeta(raw));
+    }
+  } catch {}
 }

@@ -1,7 +1,8 @@
 <?php
 
-$config = file_exists($f = __DIR__ . '/sync-config.php') ? require $f : [];
-$dir = $config['dir'] ?? '/tmp/refpuzzle-sync';
+require_once __DIR__ . '/analytics-helper.php';
+
+$dir = $GLOBALS['_app_config']['dir'] ?? '/tmp/refpuzzle-sync';
 $max_age = 300; // 5 minutes
 $max_files = 50;
 $max_body = 102400; // 100 KB
@@ -38,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
         file_put_contents("$dir/$code-b.json", $body);
+        analytics_log('sync_completed');
         echo json_encode(['ok' => true]);
         exit;
     }
@@ -56,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } while (file_exists("$dir/$code-a.json"));
 
     file_put_contents("$dir/$code-a.json", $body);
+    analytics_log('sync_started');
     echo json_encode(['code' => $code]);
     exit;
 }
