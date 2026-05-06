@@ -1854,6 +1854,52 @@
       "state": ["C", "A", "", ""],
       "expect": "3a"
     },
+    { "section": "=== ConsecIdentForward ===" },
+    {
+      "name": "ConsecIdentForwardForce: pair 2-3 answered, Q3=C → force Q4=C",
+      "rule": "ConsecIdentForwardForce",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "D", "C", "", ""],
+      "expect": "4C"
+    },
+    {
+      "name": "ConsecIdentForwardElim: pair 2-3, Q3 has C eliminated → eliminate Q4 C",
+      "rule": "ConsecIdentForwardElim",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "D", "c", "", ""],
+      "expect": "4c"
+    },
+    {
+      "name": "ConsecIdentForwardBothForce: pair 2-3, only B in common → force Q3=B",
+      "rule": "ConsecIdentForwardBothForce",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["", "D", "ade", "ace", ""],
+      "expect": "3B"
+    },
     { "section": "=== ConsecIdentReverse ===" },
     {
       "name": "ConsecIdentReverse: only pairs 1-2 and 2-3 possible, Q5=B → eliminate Q4 B",

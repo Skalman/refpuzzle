@@ -333,6 +333,14 @@ export function checkAnswerValidity(
       )
         return V_INVALID;
 
+      const possA = ~eliminated[v] & 0b11111;
+      const possB = ~eliminated[v + 1] & 0b11111;
+      if ((possA & possB) === 0) return V_INVALID;
+      if (answers[v] != null && (eliminated[v + 1] & (1 << letterIdx(answers[v]))) !== 0)
+        return V_INVALID;
+      if (answers[v + 1] != null && (eliminated[v] & (1 << letterIdx(answers[v + 1]!))) !== 0)
+        return V_INVALID;
+
       let otherPairs = 0;
       let uncertainPairs = 0;
       for (let j = 0; j < n - 1; j++) {

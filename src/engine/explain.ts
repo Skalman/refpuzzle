@@ -341,6 +341,25 @@ function explainForce(
     return steps;
   }
 
+  if (rule === "ConsecIdentForwardForce" || rule === "ConsecIdentForwardBothForce") {
+    for (let src = 0; src < n; src++) {
+      if (fp.questions[src].t !== RT_CONSEC_IDENT || answers[src] == null) continue;
+      const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
+      if (srcV == null) continue;
+      const p = srcV;
+      if (p === qi || p + 1 === qi) {
+        const partner = p === qi ? p + 1 : p;
+        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        if (answers[partner] != null) {
+          steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. ${Q(partner)} is ${answers[partner]}, so ${Q(qi)} must be ${letter}.`));
+        } else {
+          steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. Only ${letter} is possible for both, so ${Q(qi)} must be ${letter}.`));
+        }
+        return steps;
+      }
+    }
+  }
+
   if (rule === "TrueStatementForward") {
     for (let src = 0; src < n; src++) {
       const srcAns = answers[src];
@@ -462,6 +481,22 @@ function explainElimination(
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
     steps.push(simple(`${Q(qi)} option ${letter}'s statement contradicts itself.`));
     return steps;
+  }
+
+  if (rule === "ConsecIdentForwardElim") {
+    for (let src = 0; src < n; src++) {
+      if (fp.questions[src].t !== RT_CONSEC_IDENT || answers[src] == null) continue;
+      const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
+      if (srcV == null) continue;
+      const p = srcV;
+      if (p === qi || p + 1 === qi) {
+        const partner = p === qi ? p + 1 : p;
+        steps.push(simple(`Try looking at ${Q(qi)}, ${Q(partner)}, and ${Q(src)}.`));
+        steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+        steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} must have the same answer, but ${letter} is ruled out for ${Q(partner)}.`));
+        return steps;
+      }
+    }
   }
 
   if (rule === "ConsecIdentReverse") {

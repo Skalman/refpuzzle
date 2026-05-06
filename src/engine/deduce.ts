@@ -88,6 +88,9 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "MostCommonElim",
   "MostCommonForce",
   "ConsecIdentReverse",
+  "ConsecIdentForwardForce",
+  "ConsecIdentForwardElim",
+  "ConsecIdentForwardBothForce",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
 ] as const;
@@ -1326,6 +1329,50 @@ export function deduceWithRule(
               ),
             );
           }
+        }
+      }
+    }
+  }
+
+  // ConsecIdent forward: answered ConsecIdent constrains the pair
+  for (let qi = 0; qi < n; qi++) {
+    if (fp.questions[qi].t !== RT_CONSEC_IDENT) continue;
+    if (answers[qi] == null) continue;
+    const v = fp.optionValues[qi][letterIdx(answers[qi]!)];
+    if (v == null || v < 0 || v + 1 >= n) continue;
+    const p = v;
+    const possA = ~eliminated[p] & 0b11111;
+    const possB = ~eliminated[p + 1] & 0b11111;
+
+    if (run("ConsecIdentForwardForce")) {
+      if (answers[p] != null && answers[p + 1] == null) {
+        const oi = letterIdx(answers[p]);
+        if (!isElim(eliminated, p + 1, oi))
+          results.push(res({ type: "force", questionIndex: p + 1, letter: answers[p] }, "ConsecIdentForwardForce"));
+      }
+      if (answers[p + 1] != null && answers[p] == null) {
+        const oi = letterIdx(answers[p + 1]!);
+        if (!isElim(eliminated, p, oi))
+          results.push(res({ type: "force", questionIndex: p, letter: answers[p + 1]! }, "ConsecIdentForwardForce"));
+      }
+    }
+
+    if (run("ConsecIdentForwardElim")) {
+      for (let oi = 0; oi < 5; oi++) {
+        if (answers[p] == null && !isElim(eliminated, p, oi) && (possB & (1 << oi)) === 0)
+          results.push(res({ type: "eliminate", questionIndex: p, optionIndex: oi }, "ConsecIdentForwardElim"));
+        if (answers[p + 1] == null && !isElim(eliminated, p + 1, oi) && (possA & (1 << oi)) === 0)
+          results.push(res({ type: "eliminate", questionIndex: p + 1, optionIndex: oi }, "ConsecIdentForwardElim"));
+      }
+    }
+
+    if (run("ConsecIdentForwardBothForce")) {
+      if (answers[p] == null && answers[p + 1] == null) {
+        const common = possA & possB;
+        if (common !== 0 && (common & (common - 1)) === 0) {
+          const oi = Math.log2(common);
+          results.push(res({ type: "force", questionIndex: p, letter: LETTERS[oi] }, "ConsecIdentForwardBothForce"));
+          results.push(res({ type: "force", questionIndex: p + 1, letter: LETTERS[oi] }, "ConsecIdentForwardBothForce"));
         }
       }
     }

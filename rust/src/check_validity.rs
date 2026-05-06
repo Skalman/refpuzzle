@@ -453,6 +453,22 @@ pub fn check_answer_validity(
                     }
                 }
 
+                let poss_a = !eliminated[p] & 0b11111u8;
+                let poss_b = !eliminated[p + 1] & 0b11111u8;
+                if poss_a & poss_b == 0 {
+                    return Validity::Invalid;
+                }
+                if let Some(pa) = answers[p] {
+                    if eliminated[p + 1] & (1 << pa.idx()) != 0 {
+                        return Validity::Invalid;
+                    }
+                }
+                if let Some(pb) = answers[p + 1] {
+                    if eliminated[p] & (1 << pb.idx()) != 0 {
+                        return Validity::Invalid;
+                    }
+                }
+
                 let mut other_confirmed_pairs = 0i16;
                 let mut uncertain_pairs = 0i16;
                 for j in 0..n.saturating_sub(1) {

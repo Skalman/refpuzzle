@@ -507,6 +507,21 @@
       "expect": "valid"
     },
     {
+      "name": "consec_ident: Q1=C but C eliminated from Q2 → invalid",
+      "qi": 2,
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "state": ["C", "c", "C", "", ""],
+      "expect": "invalid"
+    },
+    {
       "name": "first_with: claimed position has answer eliminated → invalid",
       "qi": 0,
       "puzzle": {
