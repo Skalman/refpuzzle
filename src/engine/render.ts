@@ -31,6 +31,8 @@ export function renderQuestionText(qt: QuestionTypeDef): string {
       return "Which is the only other question with the same answer as this one?";
     case "SameAs":
       return "Which other question has the same answer as this one?";
+    case "SameAsWhich":
+      return `Which question has the same answer as question #${qt.questionIndex + 1}?`;
     case "OnlyOdd":
       return `Which is the only odd-numbered question with answer ${qt.answer}?`;
     case "OnlyEven":
@@ -66,6 +68,7 @@ const POSITIONAL_RULES = new Set([
   "NextSame",
   "OnlySame",
   "SameAs",
+  "SameAsWhich",
   "OnlyOdd",
   "OnlyEven",
   "ConsecIdent",

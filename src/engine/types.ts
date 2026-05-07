@@ -95,7 +95,10 @@ export type QuestionTypeDef =
   | { type: "LetterDist"; questionIndex: number }
 
   // ── Compound ──
-  | { type: "TrueStmt" };
+  | { type: "TrueStmt" }
+
+  // ── Global relationship ──
+  | { type: "SameAsWhich"; questionIndex: number };
 
 // Numeric question type IDs — top-level constants for V8 inlining
 export const RT_COUNT_ANSWER = 0;
@@ -123,6 +126,7 @@ export const RT_EQUAL_COUNT = 20;
 export const RT_SELF = 21;
 export const RT_LETTER_DIST = 22;
 export const RT_TRUE_STMT = 23;
+export const RT_SAME_AS_WHICH = 25;
 
 export type QuestionTypeId = number;
 
@@ -153,6 +157,7 @@ const RT_MAP: Record<string, QuestionTypeId> = {
   AnswerIsSelf: RT_SELF,
   LetterDist: RT_LETTER_DIST,
   TrueStmt: RT_TRUE_STMT,
+  SameAsWhich: RT_SAME_AS_WHICH,
 };
 
 // Flat representation for hot-path performance (single V8 hidden class)
@@ -201,6 +206,7 @@ const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
   RT_FIRST_WITH,
   RT_LAST_WITH,
   RT_SAME_AS,
+  RT_SAME_AS_WHICH,
 ]);
 
 let _fpCache: { puzzle: Puzzle; fp: FlatPuzzle } | null = null;

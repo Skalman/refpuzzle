@@ -764,6 +764,9 @@ function testSharedCheckValidity() {
           case "LetterDist":
             questionType = { type, questionIndex: qIdx! };
             break;
+          case "SameAsWhich":
+            questionType = { type, questionIndex: qIdx! };
+            break;
           case "EqualCount":
             questionType = { type, answer: a! };
             break;

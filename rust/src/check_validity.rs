@@ -359,6 +359,30 @@ pub fn check_answer_validity(
             }
         }
 
+        QuestionType::SameAsWhich { question_index } => {
+            if on < 0
+                || on as usize >= n
+                || on as usize == qi
+                || on as usize == question_index as usize
+            {
+                return Validity::Invalid;
+            }
+            let ref_ans = match answers[question_index as usize] {
+                Some(a) => a,
+                None => return Validity::Pending,
+            };
+            match answers[on as usize] {
+                Some(ta) => {
+                    if ta == ref_ans {
+                        Validity::Valid
+                    } else {
+                        Validity::Invalid
+                    }
+                }
+                None => Validity::Pending,
+            }
+        }
+
         // ── Unique ──
         QuestionType::Unique => {
             let amask = 1u8 << ai;

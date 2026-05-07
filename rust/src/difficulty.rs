@@ -73,6 +73,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
             ConsecIdent,
             OnlyOdd,
             OnlyEven,
+            SameAsWhich,
         ],
     },
     DifficultyProfile {
@@ -102,6 +103,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
             OnlyOdd,
             OnlyEven,
             TrueStmt,
+            SameAsWhich,
         ],
     },
 ];

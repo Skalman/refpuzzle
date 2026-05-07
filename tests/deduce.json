@@ -2011,17 +2011,82 @@
         "q": [
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "TrueStmt" }, "c": [
-            { "a": 0, "t": "CountAnswer", "v": 1 },
-            { "a": 0, "t": "CountAnswer", "v": 2 },
-            { "a": 0, "t": "FirstWith", "v": 2 },
-            { "a": 0, "t": "CountAnswer", "v": 0 },
-            { "t": "CountVowel", "v": 1 }
-          ]}
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 0, "t": "CountAnswer", "v": 1 },
+              { "a": 0, "t": "CountAnswer", "v": 2 },
+              { "a": 0, "t": "FirstWith", "v": 2 },
+              { "a": 0, "t": "CountAnswer", "v": 0 },
+              { "t": "CountVowel", "v": 1 }
+            ]
+          }
         ]
       },
       "state": ["", "", ""],
       "expect": "3c"
+    },
+    { "section": "=== SameAsWhichForward ===" },
+    {
+      "name": "SameAsWhichForward: ref answered, option target has wrong answer → eliminate",
+      "rule": "SameAsWhichForward",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "A", "B", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "SameAsWhichForward: target unanswered but ref answer eliminated → eliminate",
+      "rule": "SameAsWhichForward",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "", "B", "b", ""],
+      "expect": "1b"
+    },
+    { "section": "=== SameAsWhichReverse ===" },
+    {
+      "name": "SameAsWhichReverse: answered, ref known → force option target",
+      "rule": "SameAsWhichReverse",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["C", "", "B", "", ""],
+      "expect": "5B"
+    },
+    {
+      "name": "SameAsWhichReverse: answered, option target known → force ref",
+      "rule": "SameAsWhichReverse",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["C", "", "", "", "A"],
+      "expect": "3A"
     },
     { "section": "=== TrueStatementClaimInvalid ===" },
     {
@@ -2029,13 +2094,16 @@
       "rule": "TrueStatementClaimInvalid",
       "puzzle": {
         "q": [
-          { "t": { "t": "TrueStmt" }, "c": [
-            { "a": 0, "t": "FirstWith", "v": 1 },
-            { "a": 0, "t": "CountAnswer", "v": 1 },
-            { "a": 0, "t": "CountAnswer", "v": 2 },
-            { "a": 0, "t": "CountAnswer", "v": 0 },
-            { "t": "CountVowel", "v": 1 }
-          ]},
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 0, "t": "FirstWith", "v": 1 },
+              { "a": 0, "t": "CountAnswer", "v": 1 },
+              { "a": 0, "t": "CountAnswer", "v": 2 },
+              { "a": 0, "t": "CountAnswer", "v": 0 },
+              { "t": "CountVowel", "v": 1 }
+            ]
+          },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
         ]

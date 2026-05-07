@@ -128,6 +128,13 @@ pub fn solution_satisfies_type(
         }
         QuestionType::Unique => count_letter(sol, sol[qi], n) == 1,
         QuestionType::EqualCount { .. } => true,
+        QuestionType::SameAsWhich { question_index } => {
+            let ref_ans = sol[question_index as usize];
+            let has_match =
+                (0..n).any(|j| j != qi && j != question_index as usize && sol[j] == ref_ans);
+            let distractor_count = (0..n).filter(|&j| j != qi && sol[j] != ref_ans).count();
+            has_match && distractor_count >= 4
+        }
         _ => true,
     }
 }
@@ -482,6 +489,50 @@ pub fn repair_one_question(
                 fp.option_nums[qi][oi] = best_new;
             }
         }
+        QuestionType::SameAsWhich { question_index } => {
+            let ref_ans = solution[question_index as usize];
+            let correct_val = fp.option_nums[qi][correct_oi];
+            let mut best_oi = None;
+            let mut best_dist = u16::MAX;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_oi = Some(oi);
+                    }
+                }
+            }
+            if let Some(oi) = best_oi {
+                let old_val = fp.option_nums[qi][oi];
+                let mut best_new = old_val;
+                let mut best_new_dist = 0u16;
+                for j in 0..n as i16 {
+                    let ju = j as usize;
+                    if ju == qi || ju == question_index as usize || solution[ju] == ref_ans {
+                        continue;
+                    }
+                    if j == correct_val || j == old_val {
+                        continue;
+                    }
+                    let mut in_use = false;
+                    for k in 0..5 {
+                        if k != oi && fp.option_nums[qi][k] == j {
+                            in_use = true;
+                        }
+                    }
+                    if in_use {
+                        continue;
+                    }
+                    let d = (j - correct_val).unsigned_abs();
+                    if d > best_new_dist {
+                        best_new_dist = d;
+                        best_new = j;
+                    }
+                }
+                fp.option_nums[qi][oi] = best_new;
+            }
+        }
         _ => {
             // Positional, ConsecIdent, OnlyOdd, etc.: same strategy — find closest-to-correct
             // non-eliminated wrong option, replace with furthest available value.
@@ -710,6 +761,22 @@ pub fn build_flat_puzzle(
                 let distractors = parity_position_distractors(correct_val, n, start, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
+            QuestionType::SameAsWhich { question_index } => {
+                let ref_ans = solution[question_index as usize];
+                option_nums[qi][correct_oi] = correct_val;
+                let mut pool = [0i16; MAX_N];
+                let mut plen = 0;
+                for j in 0..n {
+                    if j != qi && j != question_index as usize && solution[j] != ref_ans {
+                        pool[plen] = j as i16;
+                        plen += 1;
+                    }
+                }
+                rng.shuffle(&mut pool[..plen]);
+                let mut distractors = [0i16; 4];
+                distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = positional_distractors(correct_val, qi, n, qt, rng);
@@ -820,6 +887,15 @@ pub fn correct_option_value(qt: &QuestionType, qi: usize, sol: &[Answer; MAX_N],
         QuestionType::OnlySame | QuestionType::SameAs => {
             for i in 0..n {
                 if i != qi && sol[i] == sol[qi] {
+                    return i as i16;
+                }
+            }
+            NONE_VAL
+        }
+        QuestionType::SameAsWhich { question_index } => {
+            let ref_ans = sol[question_index as usize];
+            for i in 0..n {
+                if i != qi && i != question_index as usize && sol[i] == ref_ans {
                     return i as i16;
                 }
             }

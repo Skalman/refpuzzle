@@ -76,6 +76,7 @@ pub enum QuestionTypeKind {
     AnswerIsSelf,
     LetterDist,
     TrueStmt,
+    SameAsWhich,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -150,6 +151,10 @@ pub enum QuestionType {
         question_index: u8,
     },
     TrueStmt,
+    SameAsWhich {
+        #[serde(rename = "q")]
+        question_index: u8,
+    },
 }
 
 impl QuestionType {
@@ -176,6 +181,7 @@ impl QuestionType {
                 | QuestionType::FirstWith { .. }
                 | QuestionType::LastWith { .. }
                 | QuestionType::SameAs
+                | QuestionType::SameAsWhich { .. }
         )
     }
 

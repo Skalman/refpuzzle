@@ -55,6 +55,7 @@ const FILL_TYPES: &[QuestionTypeKind] = &[
     QuestionTypeKind::EqualCount,
     QuestionTypeKind::AnswerIsSelf,
     QuestionTypeKind::TrueStmt,
+    QuestionTypeKind::SameAsWhich,
 ];
 
 // ── Placement state ──
@@ -458,6 +459,7 @@ fn solution_fits_type(kind: QuestionTypeKind, qi: usize, sol: &[Answer; MAX_N], 
             counts.iter().filter(|&&c| c == max).count() == 1
         }
         QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
+        QuestionTypeKind::SameAsWhich => true,
         QuestionTypeKind::Unique => {
             let counts = letter_counts(sol, n);
             counts.iter().filter(|&&c| c == 1).count() == 1
@@ -642,5 +644,21 @@ fn random_type_params(
         }
         QuestionTypeKind::AnswerIsSelf => Some(QuestionType::AnswerIsSelf),
         QuestionTypeKind::TrueStmt => Some(QuestionType::TrueStmt),
+        QuestionTypeKind::SameAsWhich => {
+            let mut pool = [0u8; MAX_N];
+            let mut plen = 0;
+            for j in 0..n {
+                if j != qi && (assigned & (1 << j)) != 0 {
+                    pool[plen] = j as u8;
+                    plen += 1;
+                }
+            }
+            if plen == 0 {
+                return None;
+            }
+            Some(QuestionType::SameAsWhich {
+                question_index: rng.pick(&pool[..plen]),
+            })
+        }
     }
 }

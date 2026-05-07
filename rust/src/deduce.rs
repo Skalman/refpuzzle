@@ -107,6 +107,8 @@ deduce_rules! {
     NextSameNoneMatch,
     OnlySameNoneMatch,
     OnlySameNoneForward,
+    SameAsWhichForward,
+    SameAsWhichReverse,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1412,6 +1414,26 @@ fn deduce_impl(
                         DeduceRule::OnlySameNoneMatch,
                     );
                 }
+                QuestionType::SameAsWhich { question_index }
+                    if run(DeduceRule::SameAsWhichForward)
+                        && let Some(ref_ans) = answers[question_index as usize]
+                        && on >= 0
+                        && (on as usize) < n
+                        && on as usize != qi
+                        && on as usize != question_index as usize =>
+                {
+                    let j = on as usize;
+                    let wrong = match answers[j] {
+                        Some(ja) => ja != ref_ans,
+                        None => is_elim(eliminated, j, ref_ans.idx()),
+                    };
+                    if wrong {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::SameAsWhichForward,
+                        );
+                    }
+                }
                 QuestionType::OnlySame | QuestionType::SameAs if on != NONE_VAL => {
                     let pos = on as usize;
                     if run(DeduceRule::OnlySameSelfRef) && pos == qi {
@@ -1762,6 +1784,49 @@ fn deduce_impl(
                         answer: LETTERS[oi],
                     },
                     DeduceRule::ConsecIdentForwardBothForce,
+                );
+            }
+        }
+    }
+
+    // ── SameAsWhich reverse: when answered, propagate to option target and ref question ──
+    if run(DeduceRule::SameAsWhichReverse) {
+        for src in 0..n {
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            let QuestionType::SameAsWhich { question_index } = fp.question_types[src] else {
+                continue;
+            };
+            let on = fp.option_nums[src][src_ans.idx()];
+            if on < 0 || (on as usize) >= n {
+                continue;
+            }
+            let j = on as usize;
+            let qi_ref = question_index as usize;
+
+            if let Some(ref_ans) = answers[qi_ref]
+                && answers[j].is_none()
+                && !is_elim(eliminated, j, ref_ans.idx())
+            {
+                push(
+                    DeduceAction::Force {
+                        qi: j,
+                        answer: ref_ans,
+                    },
+                    DeduceRule::SameAsWhichReverse,
+                );
+            }
+            if let Some(j_ans) = answers[j]
+                && answers[qi_ref].is_none()
+                && !is_elim(eliminated, qi_ref, j_ans.idx())
+            {
+                push(
+                    DeduceAction::Force {
+                        qi: qi_ref,
+                        answer: j_ans,
+                    },
+                    DeduceRule::SameAsWhichReverse,
                 );
             }
         }
@@ -2165,7 +2230,7 @@ mod tests {
         use crate::solver::solve;
 
         fn random_question_type(rng: &mut Rng, qi: usize, n: usize) -> QuestionType {
-            match rng.int(0, 23) {
+            match rng.int(0, 24) {
                 0 => QuestionType::CountAnswer {
                     answer: rng.pick(&LETTERS),
                 },
@@ -2226,6 +2291,14 @@ mod tests {
                         QuestionType::AnswerIsSelf
                     } else {
                         QuestionType::LetterDist { question_index: q }
+                    }
+                }
+                24 => {
+                    let q = rng.int(0, n as i32 - 1) as u8;
+                    if q as usize == qi {
+                        QuestionType::AnswerIsSelf
+                    } else {
+                        QuestionType::SameAsWhich { question_index: q }
                     }
                 }
                 _ => QuestionType::AnswerIsSelf,

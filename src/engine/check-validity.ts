@@ -28,6 +28,7 @@ import {
   RT_SELF,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
+  RT_SAME_AS_WHICH,
 } from "./types.ts";
 import { evaluateClaim } from "./evaluators.ts";
 
@@ -218,6 +219,15 @@ export function checkAnswerValidity(
     const ta = answers[v];
     if (ta == null) return V_PENDING;
     return ta === a ? V_VALID : V_INVALID;
+  }
+
+  if (q.t === RT_SAME_AS_WHICH) {
+    if (v == null || v < 0 || v >= n || v === qi || v === q.questionIndex) return V_INVALID;
+    const refAns = answers[q.questionIndex];
+    if (refAns == null) return V_PENDING;
+    const targetAns = answers[v];
+    if (targetAns == null) return V_PENDING;
+    return targetAns === refAns ? V_VALID : V_INVALID;
   }
 
   // ── Unique ──

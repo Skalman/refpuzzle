@@ -39,6 +39,7 @@ import {
   RT_MOST_COMMON,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
+  RT_SAME_AS_WHICH,
 } from "./types.ts";
 import type { DeduceResult } from "./deduce.ts";
 import type { LookaheadResult } from "./lookahead.ts";
@@ -250,6 +251,37 @@ function explainForce(
         ),
       );
       return steps;
+    }
+  }
+
+  // SameAsWhich reverse: answered SameAsWhich question propagates equality
+  for (let other = 0; other < n; other++) {
+    const otherAns = answers[other];
+    if (otherAns == null) continue;
+    const otherR = fp.questions[other];
+    if (otherR.t === RT_SAME_AS_WHICH) {
+      const targetQ = fp.optionValues[other][letterIdx(otherAns)];
+      const refQ = otherR.questionIndex;
+      if (targetQ != null && targetQ >= 0 && targetQ < n) {
+        if (targetQ === qi && answers[refQ] != null) {
+          steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+          steps.push(
+            simple(
+              `${Q(other)} is ${otherAns}, pointing to ${Q(qi)} as having the same answer as ${Q(refQ)} (${answers[refQ]}). So ${Q(qi)} must be ${letter}.`,
+            ),
+          );
+          return steps;
+        }
+        if (refQ === qi && answers[targetQ] != null) {
+          steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+          steps.push(
+            simple(
+              `${Q(other)} is ${otherAns}, pointing to ${Q(targetQ)} as having the same answer as ${Q(qi)}. ${Q(targetQ)} is ${answers[targetQ]}, so ${Q(qi)} must be ${letter}.`,
+            ),
+          );
+          return steps;
+        }
+      }
     }
   }
 
@@ -828,6 +860,23 @@ function explainElimDetail(
         `${Q(qi)} option ${letter} claims ${Q(q.questionIndex)}'s answer is ${LETTERS[v]}, but ${LETTERS[v]} is ruled out for ${Q(q.questionIndex)}.`,
         q.questionIndex,
       );
+  }
+
+  if (q.t === RT_SAME_AS_WHICH) {
+    const refAns = answers[q.questionIndex];
+    if (refAns != null && v != null && v >= 0 && v < n) {
+      const targetAns = answers[v];
+      if (targetAns != null && targetAns !== refAns)
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer as ${Q(q.questionIndex)} (${refAns}), but ${Q(v)} is answered ${targetAns}.`,
+          v,
+        );
+      if (targetAns == null && isElim(eliminated, v, letterIdx(refAns)))
+        return d(
+          `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer as ${Q(q.questionIndex)} (${refAns}), but ${refAns} is ruled out for ${Q(v)}.`,
+          v,
+        );
+    }
   }
 
   if (q.t === RT_LETTER_DIST) {

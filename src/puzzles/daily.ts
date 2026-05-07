@@ -105,6 +105,7 @@ function expandQuestion(q: CompactQuestionTypeDef): QuestionTypeDef {
       return { type, answer: L(q.a), beforeIndex: q.q! };
     case "AnswerOf":
     case "LetterDist":
+    case "SameAsWhich":
       return { type, questionIndex: q.q! };
     default: {
       (type) satisfies never;

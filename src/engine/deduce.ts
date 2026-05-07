@@ -26,6 +26,7 @@ import {
   RT_MOST_COMMON,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
+  RT_SAME_AS_WHICH,
 } from "./types.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
@@ -99,6 +100,8 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "OnlySameNoneForward",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
+  "SameAsWhichForward",
+  "SameAsWhichReverse",
 ] as const;
 export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] = ALL_DEDUCE_RULES_INTERNAL;
@@ -757,6 +760,25 @@ export function deduceWithRule(
                 res(
                   { type: "eliminate", questionIndex: qi, optionIndex: oi },
                   "AnswerOfTargetRuledOut",
+                ),
+              );
+            }
+          }
+        }
+      }
+
+      if (q.t === RT_SAME_AS_WHICH) {
+        if (run("SameAsWhichForward")) {
+          const refAns = answers[q.questionIndex];
+          if (refAns != null && v != null && v >= 0 && v < n && v !== qi && v !== q.questionIndex) {
+            const targetAns = answers[v];
+            const wrong =
+              targetAns != null ? targetAns !== refAns : isElim(eliminated, v, letterIdx(refAns));
+            if (wrong) {
+              results.push(
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "SameAsWhichForward",
                 ),
               );
             }
@@ -1510,6 +1532,33 @@ export function deduceWithRule(
             ),
           );
         }
+      }
+    }
+  }
+
+  // SameAsWhich reverse: when answered, propagate to option target and ref question
+  if (run("SameAsWhichReverse")) {
+    for (let src = 0; src < n; src++) {
+      const srcAns = answers[src];
+      if (srcAns == null) continue;
+      const srcR = fp.questions[src];
+      if (srcR.t !== RT_SAME_AS_WHICH) continue;
+      const on = fp.optionValues[src][letterIdx(srcAns)];
+      if (on == null || on < 0 || on >= n) continue;
+      const j = on;
+      const qiRef = srcR.questionIndex;
+
+      const refAns = answers[qiRef];
+      if (refAns != null && answers[j] == null && !isElim(eliminated, j, letterIdx(refAns))) {
+        results.push(
+          res({ type: "force", questionIndex: j, letter: refAns }, "SameAsWhichReverse"),
+        );
+      }
+      const jAns = answers[j];
+      if (jAns != null && answers[qiRef] == null && !isElim(eliminated, qiRef, letterIdx(jAns))) {
+        results.push(
+          res({ type: "force", questionIndex: qiRef, letter: jAns }, "SameAsWhichReverse"),
+        );
       }
     }
   }
