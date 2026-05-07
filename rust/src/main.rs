@@ -330,10 +330,10 @@ fn check_json(path: &str, target: Option<&str>) {
         let levels = levels.as_object().unwrap();
         for (lvl, puzzle) in levels {
             let key = format!("{day}-{lvl}");
-            if let Some(t) = target {
-                if key != t {
-                    continue;
-                }
+            if let Some(t) = target
+                && key != t
+            {
+                continue;
             }
             let fp = match parse_puzzle(puzzle) {
                 Some(fp) => fp,
@@ -349,7 +349,7 @@ fn check_json(path: &str, target: Option<&str>) {
             } else {
                 let mut answered_set = std::collections::HashSet::new();
                 for s in &steps {
-                    if s.chars().last().map_or(false, |c| c.is_uppercase()) {
+                    if s.chars().last().is_some_and(|c| c.is_uppercase()) {
                         let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
                         answered_set.insert(qi);
                     }
@@ -375,7 +375,7 @@ fn check_json(path: &str, target: Option<&str>) {
             if target.is_some() {
                 let mut answered_set = std::collections::HashSet::new();
                 for s in &steps {
-                    if s.chars().last().map_or(false, |c| c.is_uppercase()) {
+                    if s.chars().last().is_some_and(|c| c.is_uppercase()) {
                         let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
                         answered_set.insert(qi);
                     }

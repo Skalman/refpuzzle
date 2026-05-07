@@ -1164,10 +1164,10 @@ fn make_false_claim(
     for _ in 0..30 {
         let base = make_true_claim(sol, n, rng);
         let fc = perturb_claim(base, n, rng);
-        if let Some(fc) = fc {
-            if !evaluate_claim(&fc, opt_sol, n) {
-                return fc;
-            }
+        if let Some(fc) = fc
+            && !evaluate_claim(&fc, opt_sol, n)
+        {
+            return fc;
         }
     }
     Claim::CountAnswer {

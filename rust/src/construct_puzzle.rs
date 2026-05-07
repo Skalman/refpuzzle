@@ -85,6 +85,7 @@ impl PlacementState {
 
         let mut group_caps = [3u8; 8];
         let vc_group = symmetric_group(QuestionTypeKind::CountVowel).unwrap() as usize;
+        #[allow(clippy::if_same_then_else)]
         if n <= 8 {
             group_caps[vc_group] = 1;
         } else if rng.int(0, 1) == 0 {
@@ -122,10 +123,10 @@ impl PlacementState {
         if self.kind_counts[ki] >= self.caps[ki] {
             return false;
         }
-        if let Some(g) = gi {
-            if self.group_counts[g as usize] >= self.group_caps[g as usize] {
-                return false;
-            }
+        if let Some(g) = gi
+            && self.group_counts[g as usize] >= self.group_caps[g as usize]
+        {
+            return false;
         }
         if !solution_fits_type(kind, self.slots[self.assigned_count] as usize, solution, n) {
             return false;
@@ -134,10 +135,10 @@ impl PlacementState {
         let qi = self.slots[self.assigned_count] as usize;
         for _ in 0..10 {
             if let Some(qt) = random_type_params(kind, qi, n, solution, self.assigned, rng) {
-                if let Some(a) = count_type_answer(&qt) {
-                    if self.count_letter_counts[a.idx()] >= self.count_letter_cap {
-                        continue;
-                    }
+                if let Some(a) = count_type_answer(&qt)
+                    && self.count_letter_counts[a.idx()] >= self.count_letter_cap
+                {
+                    continue;
                 }
                 if types_contain(&self.used_types, self.used_count, &qt) {
                     continue;

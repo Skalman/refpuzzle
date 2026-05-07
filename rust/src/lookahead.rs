@@ -112,12 +112,11 @@ fn has_contradiction(action: &DeduceAction, answers: &[Option<Answer>; MAX_N]) -
             option_mask,
         } => {
             for i in 0..MAX_N {
-                if (question_mask >> i) & 1 == 1 {
-                    if let Some(a) = answers[i] {
-                        if (option_mask >> a.idx()) & 1 == 1 {
-                            return true;
-                        }
-                    }
+                if (question_mask >> i) & 1 == 1
+                    && let Some(a) = answers[i]
+                    && (option_mask >> a.idx()) & 1 == 1
+                {
+                    return true;
                 }
             }
             false

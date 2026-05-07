@@ -16,6 +16,7 @@ struct CountResult {
 }
 
 #[derive(Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
 enum Pred {
     IsAnswer(Answer),
     IsVowel,
@@ -429,10 +430,10 @@ pub fn check_answer_validity(
                     return Validity::Invalid;
                 }
 
-                if let Some(ta) = answers[target] {
-                    if ta != a {
-                        return Validity::Invalid;
-                    }
+                if let Some(ta) = answers[target]
+                    && ta != a
+                {
+                    return Validity::Invalid;
                 }
 
                 let mut other_matches: i16 = 0;
@@ -467,10 +468,10 @@ pub fn check_answer_validity(
                     return Validity::Invalid;
                 }
 
-                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1]) {
-                    if pa != pb {
-                        return Validity::Invalid;
-                    }
+                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1])
+                    && pa != pb
+                {
+                    return Validity::Invalid;
                 }
 
                 let poss_a = !eliminated[p] & 0b11111u8;
@@ -478,15 +479,15 @@ pub fn check_answer_validity(
                 if poss_a & poss_b == 0 {
                     return Validity::Invalid;
                 }
-                if let Some(pa) = answers[p] {
-                    if eliminated[p + 1] & (1 << pa.idx()) != 0 {
-                        return Validity::Invalid;
-                    }
+                if let Some(pa) = answers[p]
+                    && eliminated[p + 1] & (1 << pa.idx()) != 0
+                {
+                    return Validity::Invalid;
                 }
-                if let Some(pb) = answers[p + 1] {
-                    if eliminated[p] & (1 << pb.idx()) != 0 {
-                        return Validity::Invalid;
-                    }
+                if let Some(pb) = answers[p + 1]
+                    && eliminated[p] & (1 << pb.idx()) != 0
+                {
+                    return Validity::Invalid;
                 }
 
                 let mut other_confirmed_pairs = 0i16;
@@ -506,10 +507,11 @@ pub fn check_answer_validity(
                     return Validity::Invalid;
                 }
 
-                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1]) {
-                    if pa == pb && uncertain_pairs == 0 {
-                        return Validity::Valid;
-                    }
+                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1])
+                    && pa == pb
+                    && uncertain_pairs == 0
+                {
+                    return Validity::Valid;
                 }
 
                 Validity::Pending
@@ -547,10 +549,10 @@ pub fn check_answer_validity(
                     return Validity::Invalid;
                 }
 
-                if let Some(pa) = answers[p] {
-                    if pa != answer {
-                        return Validity::Invalid;
-                    }
+                if let Some(pa) = answers[p]
+                    && pa != answer
+                {
+                    return Validity::Invalid;
                 }
 
                 let mut other_matches: i16 = 0;

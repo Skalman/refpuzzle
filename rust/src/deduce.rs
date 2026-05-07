@@ -151,6 +151,7 @@ impl CountResult {
 }
 
 #[derive(Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
 enum CountPred {
     IsAnswer(Answer),
     IsVowel,
@@ -299,22 +300,20 @@ fn deduce_impl(
         let (from, to) = count_range(t, n);
         let cr = count_matching(answers, eliminated, pred, from, to);
 
-        if run(DeduceRule::CountSaturated) {
-            if cr.min() == on && cr.possible > 0 {
-                let mask = pred.mask();
-                for j in from..to {
-                    if answers[j].is_none() {
-                        let remaining_bits = !eliminated[j] & 0b11111u8;
-                        if remaining_bits & (!mask & 0b11111u8) == 0 {
-                            continue;
-                        }
-                        for oi in 0..5usize {
-                            if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
-                                push(
-                                    DeduceAction::Eliminate { qi: j, oi },
-                                    DeduceRule::CountSaturated,
-                                );
-                            }
+        if run(DeduceRule::CountSaturated) && cr.min() == on && cr.possible > 0 {
+            let mask = pred.mask();
+            for j in from..to {
+                if answers[j].is_none() {
+                    let remaining_bits = !eliminated[j] & 0b11111u8;
+                    if remaining_bits & (!mask & 0b11111u8) == 0 {
+                        continue;
+                    }
+                    for oi in 0..5usize {
+                        if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
+                            push(
+                                DeduceAction::Eliminate { qi: j, oi },
+                                DeduceRule::CountSaturated,
+                            );
                         }
                     }
                 }
@@ -322,27 +321,25 @@ fn deduce_impl(
         }
 
         if cr.max() == on && cr.possible > 0 {
-            if run(DeduceRule::CountMustMatchForce) {
-                if cr.possible == 1 {
-                    for j in from..to {
-                        if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
-                            let mut match_count = 0;
-                            let mut match_oi = 0;
-                            for oi in 0..5usize {
-                                if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
-                                    match_count += 1;
-                                    match_oi = oi;
-                                }
+            if run(DeduceRule::CountMustMatchForce) && cr.possible == 1 {
+                for j in from..to {
+                    if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
+                        let mut match_count = 0;
+                        let mut match_oi = 0;
+                        for oi in 0..5usize {
+                            if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
+                                match_count += 1;
+                                match_oi = oi;
                             }
-                            if match_count == 1 {
-                                push(
-                                    DeduceAction::Force {
-                                        qi: j,
-                                        answer: LETTERS[match_oi],
-                                    },
-                                    DeduceRule::CountMustMatchForce,
-                                );
-                            }
+                        }
+                        if match_count == 1 {
+                            push(
+                                DeduceAction::Force {
+                                    qi: j,
+                                    answer: LETTERS[match_oi],
+                                },
+                                DeduceRule::CountMustMatchForce,
+                            );
                         }
                     }
                 }
@@ -372,33 +369,30 @@ fn deduce_impl(
         }
         let t = &fp.question_types[qi];
 
-        if run(DeduceRule::OnlyOptionLeft) {
-            if remaining_count(eliminated[qi]) == 1 {
-                let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[oi as usize],
-                    },
-                    DeduceRule::OnlyOptionLeft,
-                );
-            }
+        if run(DeduceRule::OnlyOptionLeft) && remaining_count(eliminated[qi]) == 1 {
+            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
+            push(
+                DeduceAction::Force {
+                    qi,
+                    answer: LETTERS[oi as usize],
+                },
+                DeduceRule::OnlyOptionLeft,
+            );
         }
 
-        if run(DeduceRule::AnswerOfForward) {
-            if let QuestionType::AnswerOf { question_index } = *t
-                && let Some(target) = answers[question_index as usize]
-            {
-                for oi in 0..5usize {
-                    if fp.option_answers[qi][oi] == target as u8 {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[oi],
-                            },
-                            DeduceRule::AnswerOfForward,
-                        );
-                    }
+        if run(DeduceRule::AnswerOfForward)
+            && let QuestionType::AnswerOf { question_index } = *t
+            && let Some(target) = answers[question_index as usize]
+        {
+            for oi in 0..5usize {
+                if fp.option_answers[qi][oi] == target as u8 {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::AnswerOfForward,
+                    );
                 }
             }
         }
@@ -408,83 +402,81 @@ fn deduce_impl(
                 continue;
             };
 
-            if run(DeduceRule::AnswerOfReverse) {
-                if let QuestionType::AnswerOf { question_index } = fp.question_types[other]
-                    && question_index as usize == qi
-                {
-                    let implied = fp.option_answers[other][other_ans.idx()];
-                    if implied <= 4 {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[implied as usize],
-                            },
-                            DeduceRule::AnswerOfReverse,
-                        );
-                    }
+            if run(DeduceRule::AnswerOfReverse)
+                && let QuestionType::AnswerOf { question_index } = fp.question_types[other]
+                && question_index as usize == qi
+            {
+                let implied = fp.option_answers[other][other_ans.idx()];
+                if implied <= 4 {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[implied as usize],
+                        },
+                        DeduceRule::AnswerOfReverse,
+                    );
                 }
             }
 
-            if run(DeduceRule::SameAsReverse) {
-                if let QuestionType::SameAs = fp.question_types[other] {
-                    let target_q = fp.option_nums[other][other_ans.idx()];
-                    if target_q >= 0 && target_q as usize == qi {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: other_ans,
-                            },
-                            DeduceRule::SameAsReverse,
-                        );
-                    }
+            if run(DeduceRule::SameAsReverse)
+                && let QuestionType::SameAs = fp.question_types[other]
+            {
+                let target_q = fp.option_nums[other][other_ans.idx()];
+                if target_q >= 0 && target_q as usize == qi {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: other_ans,
+                        },
+                        DeduceRule::SameAsReverse,
+                    );
                 }
             }
 
-            if run(DeduceRule::PrevNextOnlySameReverse) {
-                if matches!(
+            if run(DeduceRule::PrevNextOnlySameReverse)
+                && matches!(
                     fp.question_types[other],
                     QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame
-                ) {
-                    let target_q = fp.option_nums[other][other_ans.idx()];
-                    if target_q >= 0 && target_q as usize == qi {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: other_ans,
-                            },
-                            DeduceRule::PrevNextOnlySameReverse,
-                        );
-                    }
+                )
+            {
+                let target_q = fp.option_nums[other][other_ans.idx()];
+                if target_q >= 0 && target_q as usize == qi {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: other_ans,
+                        },
+                        DeduceRule::PrevNextOnlySameReverse,
+                    );
                 }
             }
         }
 
-        if run(DeduceRule::LetterDistForward) {
-            if let QuestionType::LetterDist { question_index } = *t
-                && let Some(other_ans) = answers[question_index as usize]
-            {
-                let other_idx = other_ans.idx();
-                let mut valid_count = 0u8;
-                let mut valid_letter = Answer::A;
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let dist = (oi as i16 - other_idx as i16).abs();
-                    if dist == fp.option_nums[qi][oi] {
-                        valid_count += 1;
-                        valid_letter = LETTERS[oi];
-                    }
+        if run(DeduceRule::LetterDistForward)
+            && let QuestionType::LetterDist { question_index } = *t
+            && let Some(other_ans) = answers[question_index as usize]
+        {
+            let other_idx = other_ans.idx();
+            let mut valid_count = 0u8;
+            let mut valid_letter = Answer::A;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
                 }
-                if valid_count == 1 {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: valid_letter,
-                        },
-                        DeduceRule::LetterDistForward,
-                    );
+                let dist = (oi as i16 - other_idx as i16).abs();
+                if dist == fp.option_nums[qi][oi] {
+                    valid_count += 1;
+                    valid_letter = LETTERS[oi];
                 }
+            }
+            if valid_count == 1 {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: valid_letter,
+                    },
+                    DeduceRule::LetterDistForward,
+                );
             }
         }
 
@@ -516,27 +508,25 @@ fn deduce_impl(
                             elim_mask |= 1 << oi;
                         }
                     }
-                    if run(DeduceRule::LetterDistReverseForce) {
-                        if valid_count == 1 && elim_mask != 0 {
-                            push(
-                                DeduceAction::Force {
-                                    qi,
-                                    answer: LETTERS[valid_oi],
-                                },
-                                DeduceRule::LetterDistReverseForce,
-                            );
-                        }
+                    if run(DeduceRule::LetterDistReverseForce) && valid_count == 1 && elim_mask != 0
+                    {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[valid_oi],
+                            },
+                            DeduceRule::LetterDistReverseForce,
+                        );
                     }
-                    if run(DeduceRule::LetterDistReverseElim) {
-                        if elim_mask != 0 && valid_count != 1 {
-                            push(
-                                DeduceAction::EliminateMulti {
-                                    question_mask: 1 << qi,
-                                    option_mask: elim_mask,
-                                },
-                                DeduceRule::LetterDistReverseElim,
-                            );
-                        }
+                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 && valid_count != 1
+                    {
+                        push(
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << qi,
+                                option_mask: elim_mask,
+                            },
+                            DeduceRule::LetterDistReverseElim,
+                        );
                     }
                 } else {
                     for oi in 0..5usize {
@@ -552,39 +542,37 @@ fn deduce_impl(
                             elim_mask |= 1 << oi;
                         }
                     }
-                    if run(DeduceRule::LetterDistReverseElim) {
-                        if elim_mask != 0 {
-                            push(
-                                DeduceAction::EliminateMulti {
-                                    question_mask: 1 << qi,
-                                    option_mask: elim_mask,
-                                },
-                                DeduceRule::LetterDistReverseElim,
-                            );
-                        }
+                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 {
+                        push(
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << qi,
+                                option_mask: elim_mask,
+                            },
+                            DeduceRule::LetterDistReverseElim,
+                        );
                     }
                 }
             }
         }
 
-        if run(DeduceRule::CountAllAnswered) {
-            if let Some(pred) = count_pred(t) {
-                let (from, to) = count_range(t, n);
-                let cr = count_matching(answers, eliminated, pred, from, to);
-                if cr.possible == 0 {
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        if fp.option_nums[qi][oi] == cr.min() {
-                            push(
-                                DeduceAction::Force {
-                                    qi,
-                                    answer: LETTERS[oi],
-                                },
-                                DeduceRule::CountAllAnswered,
-                            );
-                        }
+        if run(DeduceRule::CountAllAnswered)
+            && let Some(pred) = count_pred(t)
+        {
+            let (from, to) = count_range(t, n);
+            let cr = count_matching(answers, eliminated, pred, from, to);
+            if cr.possible == 0 {
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    if fp.option_nums[qi][oi] == cr.min() {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[oi],
+                            },
+                            DeduceRule::CountAllAnswered,
+                        );
                     }
                 }
             }
@@ -865,21 +853,17 @@ fn deduce_impl(
                     let (from, to) = count_range(t, n);
                     let cr =
                         count_matching(answers, eliminated, CountPred::IsAnswer(answer), from, to);
-                    if run(DeduceRule::CountExceeded) {
-                        if cr.min() > on {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::CountExceeded,
-                            );
-                        }
+                    if run(DeduceRule::CountExceeded) && cr.min() > on {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountExceeded,
+                        );
                     }
-                    if run(DeduceRule::CountImpossible) {
-                        if cr.max() < on {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::CountImpossible,
-                            );
-                        }
+                    if run(DeduceRule::CountImpossible) && cr.max() < on {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountImpossible,
+                        );
                     }
                 }
                 QuestionType::CountVowel | QuestionType::CountConsonant if on != NAN_VAL => {
@@ -889,78 +873,71 @@ fn deduce_impl(
                         CountPred::IsConsonant
                     };
                     let cr = count_matching(answers, eliminated, pred, 0, n);
-                    if run(DeduceRule::CountExceeded) {
-                        if cr.min() > on {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::CountExceeded,
-                            );
-                        }
+                    if run(DeduceRule::CountExceeded) && cr.min() > on {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountExceeded,
+                        );
                     }
-                    if run(DeduceRule::CountImpossible) {
-                        if cr.max() < on {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::CountImpossible,
-                            );
-                        }
+                    if run(DeduceRule::CountImpossible) && cr.max() < on {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountImpossible,
+                        );
                     }
                 }
                 QuestionType::AnswerOf { question_index } => {
                     let ov = fp.option_answers[qi][oi];
-                    if ov <= 4 {
-                        if run(DeduceRule::AnswerOfTargetRuledOut) {
-                            if let Some(target) = answers[question_index as usize] {
-                                if target as u8 != ov {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::AnswerOfTargetRuledOut,
-                                    );
-                                }
-                            } else if is_elim(eliminated, question_index as usize, ov as usize) {
+                    if ov <= 4 && run(DeduceRule::AnswerOfTargetRuledOut) {
+                        if let Some(target) = answers[question_index as usize] {
+                            if target as u8 != ov {
                                 push(
                                     DeduceAction::Eliminate { qi, oi },
                                     DeduceRule::AnswerOfTargetRuledOut,
                                 );
                             }
+                        } else if is_elim(eliminated, question_index as usize, ov as usize) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::AnswerOfTargetRuledOut,
+                            );
                         }
                     }
                 }
                 QuestionType::LetterDist { question_index } => {
                     let max_dist = oi.max(4 - oi) as i16;
-                    if run(DeduceRule::LetterDistImpossible) {
-                        if on != NAN_VAL && on > max_dist {
+                    if run(DeduceRule::LetterDistImpossible) && on != NAN_VAL && on > max_dist {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::LetterDistImpossible,
+                        );
+                    }
+                    if run(DeduceRule::LetterDistWrong)
+                        && let Some(other) = answers[question_index as usize]
+                    {
+                        let dist = (oi as i16 - other.idx() as i16).abs();
+                        if dist != on {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LetterDistImpossible,
+                                DeduceRule::LetterDistWrong,
                             );
                         }
                     }
-                    if run(DeduceRule::LetterDistWrong) {
-                        if let Some(other) = answers[question_index as usize] {
-                            let dist = (oi as i16 - other.idx() as i16).abs();
-                            if dist != on {
+                    if run(DeduceRule::LetterDistNoMatch)
+                        && on != NAN_VAL
+                        && answers[question_index as usize].is_none()
+                    {
+                        let max_dist = oi.max(4 - oi) as i16;
+                        if on <= max_dist {
+                            let no_match = !(0..5usize).any(|ti| {
+                                !is_elim(eliminated, question_index as usize, ti)
+                                    && (oi as i16 - ti as i16).abs() == on
+                            });
+                            if no_match {
                                 push(
                                     DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::LetterDistWrong,
+                                    DeduceRule::LetterDistNoMatch,
                                 );
-                            }
-                        }
-                    }
-                    if run(DeduceRule::LetterDistNoMatch) {
-                        if on != NAN_VAL && answers[question_index as usize].is_none() {
-                            let max_dist = oi.max(4 - oi) as i16;
-                            if on <= max_dist {
-                                let no_match = !(0..5usize).any(|ti| {
-                                    !is_elim(eliminated, question_index as usize, ti)
-                                        && (oi as i16 - ti as i16).abs() == on
-                                });
-                                if no_match {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::LetterDistNoMatch,
-                                    );
-                                }
                             }
                         }
                     }
@@ -970,33 +947,34 @@ fn deduce_impl(
                     after_index,
                 } => {
                     let scan_start = after_index as usize + 1;
-                    if run(DeduceRule::FirstClosestAfterOutOfRange) {
-                        if on != NONE_VAL && ((on as usize) < scan_start || (on as usize) >= n) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterOutOfRange,
-                            );
-                        }
+                    if run(DeduceRule::FirstClosestAfterOutOfRange)
+                        && on != NONE_VAL
+                        && ((on as usize) < scan_start || (on as usize) >= n)
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::FirstClosestAfterOutOfRange,
+                        );
                     }
                     if on != NONE_VAL && (on as usize) >= scan_start && (on as usize) < n {
                         let pos = on as usize;
-                        if run(DeduceRule::FirstClosestAfterWrongAnswer) {
-                            if let Some(pa) = answers[pos] {
-                                if pa != answer {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::FirstClosestAfterWrongAnswer,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::FirstClosestAfterWrongAnswer)
+                            && let Some(pa) = answers[pos]
+                            && pa != answer
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::FirstClosestAfterWrongAnswer,
+                            );
                         }
-                        if run(DeduceRule::FirstClosestAfterRuledOut) {
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::FirstClosestAfterRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::FirstClosestAfterRuledOut)
+                            && answers[pos].is_none()
+                            && is_elim(eliminated, pos, answer.idx())
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::FirstClosestAfterRuledOut,
+                            );
                         }
                         if run(DeduceRule::FirstClosestAfterEarlierMatch) {
                             for j in scan_start..pos {
@@ -1008,53 +986,57 @@ fn deduce_impl(
                                 }
                             }
                         }
-                        if run(DeduceRule::FirstClosestAfterSelfRef) {
-                            if LETTERS[oi] == answer && qi >= scan_start && qi < pos {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::FirstClosestAfterSelfRef,
-                                );
-                            }
-                        }
-                    }
-                    if run(DeduceRule::FirstClosestAfterNoneMatch) {
-                        if on == NONE_VAL && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+                        if run(DeduceRule::FirstClosestAfterSelfRef)
+                            && LETTERS[oi] == answer
+                            && qi >= scan_start
+                            && qi < pos
+                        {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterNoneMatch,
+                                DeduceRule::FirstClosestAfterSelfRef,
                             );
                         }
+                    }
+                    if run(DeduceRule::FirstClosestAfterNoneMatch)
+                        && on == NONE_VAL
+                        && (scan_start..n).any(|j| answers[j] == Some(answer))
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::FirstClosestAfterNoneMatch,
+                        );
                     }
                 }
                 QuestionType::FirstWith { answer } => {
                     let scan_start = 0usize;
-                    if run(DeduceRule::FirstClosestAfterOutOfRange) {
-                        if on != NONE_VAL && ((on as usize) < scan_start || (on as usize) >= n) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterOutOfRange,
-                            );
-                        }
+                    if run(DeduceRule::FirstClosestAfterOutOfRange)
+                        && on != NONE_VAL
+                        && ((on as usize) < scan_start || (on as usize) >= n)
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::FirstClosestAfterOutOfRange,
+                        );
                     }
                     if on != NONE_VAL && (on as usize) < n {
                         let pos = on as usize;
-                        if run(DeduceRule::FirstClosestAfterWrongAnswer) {
-                            if let Some(pa) = answers[pos] {
-                                if pa != answer {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::FirstClosestAfterWrongAnswer,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::FirstClosestAfterWrongAnswer)
+                            && let Some(pa) = answers[pos]
+                            && pa != answer
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::FirstClosestAfterWrongAnswer,
+                            );
                         }
-                        if run(DeduceRule::FirstClosestAfterRuledOut) {
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::FirstClosestAfterRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::FirstClosestAfterRuledOut)
+                            && answers[pos].is_none()
+                            && is_elim(eliminated, pos, answer.idx())
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::FirstClosestAfterRuledOut,
+                            );
                         }
                         if run(DeduceRule::FirstClosestAfterEarlierMatch) {
                             for j in scan_start..pos {
@@ -1066,22 +1048,25 @@ fn deduce_impl(
                                 }
                             }
                         }
-                        if run(DeduceRule::FirstClosestAfterSelfRef) {
-                            if LETTERS[oi] == answer && qi >= scan_start && qi < pos {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::FirstClosestAfterSelfRef,
-                                );
-                            }
-                        }
-                    }
-                    if run(DeduceRule::FirstClosestAfterNoneMatch) {
-                        if on == NONE_VAL && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+                        if run(DeduceRule::FirstClosestAfterSelfRef)
+                            && LETTERS[oi] == answer
+                            && qi >= scan_start
+                            && qi < pos
+                        {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterNoneMatch,
+                                DeduceRule::FirstClosestAfterSelfRef,
                             );
                         }
+                    }
+                    if run(DeduceRule::FirstClosestAfterNoneMatch)
+                        && on == NONE_VAL
+                        && (scan_start..n).any(|j| answers[j] == Some(answer))
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::FirstClosestAfterNoneMatch,
+                        );
                     }
                 }
                 QuestionType::ClosestBefore {
@@ -1089,33 +1074,34 @@ fn deduce_impl(
                     before_index,
                 } => {
                     let before_idx = before_index as usize;
-                    if run(DeduceRule::LastClosestBeforeOutOfRange) {
-                        if on != NONE_VAL && (on < 0 || (on as usize) >= before_idx) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeOutOfRange,
-                            );
-                        }
+                    if run(DeduceRule::LastClosestBeforeOutOfRange)
+                        && on != NONE_VAL
+                        && (on < 0 || (on as usize) >= before_idx)
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::LastClosestBeforeOutOfRange,
+                        );
                     }
                     if on != NONE_VAL && on >= 0 && (on as usize) < before_idx {
                         let pos = on as usize;
-                        if run(DeduceRule::LastClosestBeforeWrongAnswer) {
-                            if let Some(pa) = answers[pos] {
-                                if pa != answer {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::LastClosestBeforeWrongAnswer,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::LastClosestBeforeWrongAnswer)
+                            && let Some(pa) = answers[pos]
+                            && pa != answer
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeWrongAnswer,
+                            );
                         }
-                        if run(DeduceRule::LastClosestBeforeRuledOut) {
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::LastClosestBeforeRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::LastClosestBeforeRuledOut)
+                            && answers[pos].is_none()
+                            && is_elim(eliminated, pos, answer.idx())
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeRuledOut,
+                            );
                         }
                         if run(DeduceRule::LastClosestBeforeLaterMatch) {
                             for j in ((pos + 1)..before_idx).rev() {
@@ -1127,53 +1113,57 @@ fn deduce_impl(
                                 }
                             }
                         }
-                        if run(DeduceRule::LastClosestBeforeSelfRef) {
-                            if LETTERS[oi] == answer && qi > pos && qi < before_idx {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::LastClosestBeforeSelfRef,
-                                );
-                            }
-                        }
-                    }
-                    if run(DeduceRule::LastClosestBeforeNoneMatch) {
-                        if on == NONE_VAL && (0..before_idx).any(|j| answers[j] == Some(answer)) {
+                        if run(DeduceRule::LastClosestBeforeSelfRef)
+                            && LETTERS[oi] == answer
+                            && qi > pos
+                            && qi < before_idx
+                        {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeNoneMatch,
+                                DeduceRule::LastClosestBeforeSelfRef,
                             );
                         }
+                    }
+                    if run(DeduceRule::LastClosestBeforeNoneMatch)
+                        && on == NONE_VAL
+                        && (0..before_idx).any(|j| answers[j] == Some(answer))
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::LastClosestBeforeNoneMatch,
+                        );
                     }
                 }
                 QuestionType::LastWith { answer } => {
                     let before_idx = n;
-                    if run(DeduceRule::LastClosestBeforeOutOfRange) {
-                        if on != NONE_VAL && (on < 0 || (on as usize) >= before_idx) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeOutOfRange,
-                            );
-                        }
+                    if run(DeduceRule::LastClosestBeforeOutOfRange)
+                        && on != NONE_VAL
+                        && (on < 0 || (on as usize) >= before_idx)
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::LastClosestBeforeOutOfRange,
+                        );
                     }
                     if on != NONE_VAL && on >= 0 && (on as usize) < before_idx {
                         let pos = on as usize;
-                        if run(DeduceRule::LastClosestBeforeWrongAnswer) {
-                            if let Some(pa) = answers[pos] {
-                                if pa != answer {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::LastClosestBeforeWrongAnswer,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::LastClosestBeforeWrongAnswer)
+                            && let Some(pa) = answers[pos]
+                            && pa != answer
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeWrongAnswer,
+                            );
                         }
-                        if run(DeduceRule::LastClosestBeforeRuledOut) {
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::LastClosestBeforeRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::LastClosestBeforeRuledOut)
+                            && answers[pos].is_none()
+                            && is_elim(eliminated, pos, answer.idx())
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeRuledOut,
+                            );
                         }
                         if run(DeduceRule::LastClosestBeforeLaterMatch) {
                             for j in ((pos + 1)..before_idx).rev() {
@@ -1185,22 +1175,25 @@ fn deduce_impl(
                                 }
                             }
                         }
-                        if run(DeduceRule::LastClosestBeforeSelfRef) {
-                            if LETTERS[oi] == answer && qi > pos && qi < before_idx {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::LastClosestBeforeSelfRef,
-                                );
-                            }
-                        }
-                    }
-                    if run(DeduceRule::LastClosestBeforeNoneMatch) {
-                        if on == NONE_VAL && (0..before_idx).any(|j| answers[j] == Some(answer)) {
+                        if run(DeduceRule::LastClosestBeforeSelfRef)
+                            && LETTERS[oi] == answer
+                            && qi > pos
+                            && qi < before_idx
+                        {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeNoneMatch,
+                                DeduceRule::LastClosestBeforeSelfRef,
                             );
                         }
+                    }
+                    if run(DeduceRule::LastClosestBeforeNoneMatch)
+                        && on == NONE_VAL
+                        && (0..before_idx).any(|j| answers[j] == Some(answer))
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::LastClosestBeforeNoneMatch,
+                        );
                     }
                 }
                 QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
@@ -1210,106 +1203,97 @@ fn deduce_impl(
                     };
                     if on != NONE_VAL {
                         let pos = on as usize;
-                        if run(DeduceRule::OnlyOddEvenWrongParity) {
-                            if (pos + 1) % 2 != parity {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::OnlyOddEvenWrongParity,
-                                );
-                            }
+                        if run(DeduceRule::OnlyOddEvenWrongParity) && (pos + 1) % 2 != parity {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlyOddEvenWrongParity,
+                            );
                         }
                         if (pos + 1) % 2 == parity && pos < n {
-                            if run(DeduceRule::OnlyOddEvenWrongAnswer) {
-                                if let Some(pa) = answers[pos] {
-                                    if pa != answer {
-                                        push(
-                                            DeduceAction::Eliminate { qi, oi },
-                                            DeduceRule::OnlyOddEvenWrongAnswer,
-                                        );
-                                    }
-                                }
+                            if run(DeduceRule::OnlyOddEvenWrongAnswer)
+                                && let Some(pa) = answers[pos]
+                                && pa != answer
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::OnlyOddEvenWrongAnswer,
+                                );
                             }
-                            if run(DeduceRule::OnlyOddEvenRuledOut) {
-                                if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx())
-                                {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::OnlyOddEvenRuledOut,
-                                    );
-                                }
+                            if run(DeduceRule::OnlyOddEvenRuledOut)
+                                && answers[pos].is_none()
+                                && is_elim(eliminated, pos, answer.idx())
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::OnlyOddEvenRuledOut,
+                                );
                             }
                         }
                     } else {
-                        if run(DeduceRule::OnlyOddEvenNoneMatch) {
-                            if (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer)) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::OnlyOddEvenNoneMatch,
-                                );
-                            }
+                        if run(DeduceRule::OnlyOddEvenNoneMatch)
+                            && (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlyOddEvenNoneMatch,
+                            );
                         }
                     }
                 }
                 QuestionType::ConsecIdent => {
                     if on != NONE_VAL {
                         let pos = on as usize;
-                        if run(DeduceRule::ConsecIdentOutOfRange) {
-                            if pos + 1 >= n {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::ConsecIdentOutOfRange,
-                                );
-                            }
+                        if run(DeduceRule::ConsecIdentOutOfRange) && pos + 1 >= n {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::ConsecIdentOutOfRange,
+                            );
                         }
                         if pos + 1 < n {
                             let possible_a = !eliminated[pos] & 0b11111u8;
                             let possible_b = !eliminated[pos + 1] & 0b11111u8;
-                            if run(DeduceRule::ConsecIdentNoCommon) {
-                                if possible_a & possible_b == 0 {
+                            if run(DeduceRule::ConsecIdentNoCommon) && possible_a & possible_b == 0
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::ConsecIdentNoCommon,
+                                );
+                            }
+                            if possible_a & possible_b != 0
+                                && run(DeduceRule::ConsecIdentSelfRef)
+                                && (pos == qi || pos + 1 == qi)
+                            {
+                                let partner = if pos == qi { pos + 1 } else { pos };
+                                if is_elim(eliminated, partner, oi) {
                                     push(
                                         DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::ConsecIdentNoCommon,
+                                        DeduceRule::ConsecIdentSelfRef,
                                     );
-                                }
-                            }
-                            if possible_a & possible_b != 0 {
-                                if run(DeduceRule::ConsecIdentSelfRef) {
-                                    if pos == qi || pos + 1 == qi {
-                                        let partner = if pos == qi { pos + 1 } else { pos };
-                                        if is_elim(eliminated, partner, oi) {
-                                            push(
-                                                DeduceAction::Eliminate { qi, oi },
-                                                DeduceRule::ConsecIdentSelfRef,
-                                            );
-                                        }
-                                    }
                                 }
                             }
                         }
                     } else {
-                        if run(DeduceRule::ConsecIdentNonePair) {
-                            if (0..n.saturating_sub(1)).any(|i| {
+                        if run(DeduceRule::ConsecIdentNonePair)
+                            && (0..n.saturating_sub(1)).any(|i| {
                                 matches!(
                                     (answers[i], answers[i + 1]),
                                     (Some(a), Some(b)) if a == b
                                 )
-                            }) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::ConsecIdentNonePair,
-                                );
-                            }
+                            })
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::ConsecIdentNonePair,
+                            );
                         }
                     }
                 }
                 QuestionType::EqualCount { answer } if on != NONE_VAL => {
-                    if run(DeduceRule::EqualCountSelfRef) {
-                        if LETTERS[on as usize] == answer {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::EqualCountSelfRef,
-                            );
-                        }
+                    if run(DeduceRule::EqualCountSelfRef) && LETTERS[on as usize] == answer {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::EqualCountSelfRef,
+                        );
                     }
                     if run(DeduceRule::EqualCountRangeElim) {
                         let claimed = LETTERS[on as usize];
@@ -1346,126 +1330,116 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::PrevSame if on == NONE_VAL => {
-                    if run(DeduceRule::PrevSameNoneMatch) {
-                        if (0..qi).any(|j| answers[j] == Some(LETTERS[oi])) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::PrevSameNoneMatch,
-                            );
-                        }
-                    }
+                QuestionType::PrevSame
+                    if on == NONE_VAL
+                        && run(DeduceRule::PrevSameNoneMatch)
+                        && (0..qi).any(|j| answers[j] == Some(LETTERS[oi])) =>
+                {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::PrevSameNoneMatch,
+                    );
                 }
                 QuestionType::PrevSame if on != NONE_VAL => {
                     let pos = on as usize;
-                    if run(DeduceRule::PrevSameNotBefore) {
-                        if pos >= qi {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::PrevSameNotBefore,
-                            );
-                        }
+                    if run(DeduceRule::PrevSameNotBefore) && pos >= qi {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::PrevSameNotBefore,
+                        );
                     }
                     if pos < qi {
-                        if run(DeduceRule::PrevSameRuledOut) {
-                            if is_elim(eliminated, pos, oi) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::PrevSameRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::PrevSameRuledOut) && is_elim(eliminated, pos, oi) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::PrevSameRuledOut,
+                            );
                         }
-                        if run(DeduceRule::PrevSameCloser) {
-                            if ((pos + 1)..qi)
+                        if run(DeduceRule::PrevSameCloser)
+                            && ((pos + 1)..qi)
                                 .rev()
                                 .any(|j| answers[j] == Some(LETTERS[oi]))
-                            {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::PrevSameCloser,
-                                );
-                            }
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::PrevSameCloser,
+                            );
                         }
                     }
                 }
-                QuestionType::NextSame if on == NONE_VAL => {
-                    if run(DeduceRule::NextSameNoneMatch) {
-                        if ((qi + 1)..n).any(|j| answers[j] == Some(LETTERS[oi])) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::NextSameNoneMatch,
-                            );
-                        }
-                    }
+                QuestionType::NextSame
+                    if on == NONE_VAL
+                        && run(DeduceRule::NextSameNoneMatch)
+                        && ((qi + 1)..n).any(|j| answers[j] == Some(LETTERS[oi])) =>
+                {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::NextSameNoneMatch,
+                    );
                 }
                 QuestionType::NextSame if on != NONE_VAL => {
                     let pos = on as usize;
-                    if run(DeduceRule::NextSameNotAfter) {
-                        if pos <= qi || pos >= n {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::NextSameNotAfter,
-                            );
-                        }
+                    if run(DeduceRule::NextSameNotAfter) && (pos <= qi || pos >= n) {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::NextSameNotAfter,
+                        );
                     }
                     if pos > qi && pos < n {
-                        if run(DeduceRule::NextSameRuledOut) {
-                            if is_elim(eliminated, pos, oi) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::NextSameRuledOut,
-                                );
-                            }
+                        if run(DeduceRule::NextSameRuledOut) && is_elim(eliminated, pos, oi) {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::NextSameRuledOut,
+                            );
                         }
-                        if run(DeduceRule::NextSameCloser) {
-                            if ((qi + 1)..pos).any(|j| answers[j] == Some(LETTERS[oi])) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::NextSameCloser,
-                                );
-                            }
+                        if run(DeduceRule::NextSameCloser)
+                            && ((qi + 1)..pos).any(|j| answers[j] == Some(LETTERS[oi]))
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::NextSameCloser,
+                            );
                         }
                     }
                 }
-                QuestionType::OnlySame if on == NONE_VAL => {
-                    if run(DeduceRule::OnlySameNoneMatch) {
-                        if (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi])) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::OnlySameNoneMatch,
-                            );
-                        }
-                    }
+                QuestionType::OnlySame
+                    if on == NONE_VAL
+                        && run(DeduceRule::OnlySameNoneMatch)
+                        && (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi])) =>
+                {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::OnlySameNoneMatch,
+                    );
                 }
                 QuestionType::OnlySame | QuestionType::SameAs if on != NONE_VAL => {
                     let pos = on as usize;
-                    if run(DeduceRule::OnlySameSelfRef) {
-                        if pos == qi {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::OnlySameSelfRef,
-                            );
-                        }
+                    if run(DeduceRule::OnlySameSelfRef) && pos == qi {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::OnlySameSelfRef,
+                        );
                     }
-                    if run(DeduceRule::OnlySameRuledOut) {
-                        if pos < n && is_elim(eliminated, pos, oi) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::OnlySameRuledOut,
-                            );
-                        }
+                    if run(DeduceRule::OnlySameRuledOut) && pos < n && is_elim(eliminated, pos, oi)
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::OnlySameRuledOut,
+                        );
                     }
-                    if run(DeduceRule::OnlySameOtherMatch) && matches!(*t, QuestionType::OnlySame) {
-                        if pos < n && pos != qi {
-                            let letter = LETTERS[oi];
-                            for j in 0..n {
-                                if j != qi && j != pos && answers[j] == Some(letter) {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::OnlySameOtherMatch,
-                                    );
-                                    break;
-                                }
+                    if run(DeduceRule::OnlySameOtherMatch)
+                        && matches!(*t, QuestionType::OnlySame)
+                        && pos < n
+                        && pos != qi
+                    {
+                        let letter = LETTERS[oi];
+                        for j in 0..n {
+                            if j != qi && j != pos && answers[j] == Some(letter) {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::OnlySameOtherMatch,
+                                );
+                                break;
                             }
                         }
                     }
@@ -1768,26 +1742,27 @@ fn deduce_impl(
             }
         }
 
-        if run(DeduceRule::ConsecIdentForwardBothForce) {
-            if answers[p].is_none() && answers[p + 1].is_none() {
-                let common = poss_a & poss_b;
-                if common.count_ones() == 1 {
-                    let oi = common.trailing_zeros() as usize;
-                    push(
-                        DeduceAction::Force {
-                            qi: p,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::ConsecIdentForwardBothForce,
-                    );
-                    push(
-                        DeduceAction::Force {
-                            qi: p + 1,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::ConsecIdentForwardBothForce,
-                    );
-                }
+        if run(DeduceRule::ConsecIdentForwardBothForce)
+            && answers[p].is_none()
+            && answers[p + 1].is_none()
+        {
+            let common = poss_a & poss_b;
+            if common.count_ones() == 1 {
+                let oi = common.trailing_zeros() as usize;
+                push(
+                    DeduceAction::Force {
+                        qi: p,
+                        answer: LETTERS[oi],
+                    },
+                    DeduceRule::ConsecIdentForwardBothForce,
+                );
+                push(
+                    DeduceAction::Force {
+                        qi: p + 1,
+                        answer: LETTERS[oi],
+                    },
+                    DeduceRule::ConsecIdentForwardBothForce,
+                );
             }
         }
     }
@@ -1816,24 +1791,26 @@ fn deduce_impl(
                 if possible_pairs & (1 << j) != 0 {
                     continue;
                 }
-                if let Some(a) = answers[j] {
-                    if answers[j + 1].is_none() && !is_elim(eliminated, j + 1, a.idx()) {
-                        push(
-                            DeduceAction::Eliminate {
-                                qi: j + 1,
-                                oi: a.idx(),
-                            },
-                            DeduceRule::ConsecIdentReverse,
-                        );
-                    }
+                if let Some(a) = answers[j]
+                    && answers[j + 1].is_none()
+                    && !is_elim(eliminated, j + 1, a.idx())
+                {
+                    push(
+                        DeduceAction::Eliminate {
+                            qi: j + 1,
+                            oi: a.idx(),
+                        },
+                        DeduceRule::ConsecIdentReverse,
+                    );
                 }
-                if let Some(b) = answers[j + 1] {
-                    if answers[j].is_none() && !is_elim(eliminated, j, b.idx()) {
-                        push(
-                            DeduceAction::Eliminate { qi: j, oi: b.idx() },
-                            DeduceRule::ConsecIdentReverse,
-                        );
-                    }
+                if let Some(b) = answers[j + 1]
+                    && answers[j].is_none()
+                    && !is_elim(eliminated, j, b.idx())
+                {
+                    push(
+                        DeduceAction::Eliminate { qi: j, oi: b.idx() },
+                        DeduceRule::ConsecIdentReverse,
+                    );
                 }
             }
         }
@@ -1954,10 +1931,10 @@ fn deduce_impl(
                             }
                             let mut c = 0i16;
                             for j in 0..n {
-                                if let Some(a) = answers[j] {
-                                    if a.idx() == li {
-                                        c += 1;
-                                    }
+                                if let Some(a) = answers[j]
+                                    && a.idx() == li
+                                {
+                                    c += 1;
                                 }
                             }
                             if c > max_possible {
