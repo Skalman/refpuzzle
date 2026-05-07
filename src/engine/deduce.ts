@@ -135,8 +135,12 @@ interface CountResult {
   possible: number;
 }
 
-function crMin(cr: CountResult): number { return cr.count + cr.guaranteed; }
-function crMax(cr: CountResult): number { return cr.count + cr.guaranteed + cr.possible; }
+function crMin(cr: CountResult): number {
+  return cr.count + cr.guaranteed;
+}
+function crMax(cr: CountResult): number {
+  return cr.count + cr.guaranteed + cr.possible;
+}
 
 function countMatching(
   answers: (AnswerLetter | null)[],
@@ -1069,7 +1073,10 @@ export function deduceWithRule(
           if (claimed !== q.answer) {
             const refMask = 1 << letterIdx(q.answer!);
             const claimedMask = 1 << v;
-            let rc = 0, rr = 0, sc = 0, sr = 0;
+            let rc = 0,
+              rr = 0,
+              sc = 0,
+              sr = 0;
             for (let j = 0; j < n; j++) {
               if (answers[j] != null) {
                 if (answers[j] === q.answer) rc++;
@@ -1081,7 +1088,10 @@ export function deduceWithRule(
             }
             if (rc + rr < sc || sc + sr < rc) {
               results.push(
-                res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "EqualCountRangeElim"),
+                res(
+                  { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                  "EqualCountRangeElim",
+                ),
               );
             }
           }
@@ -1092,7 +1102,9 @@ export function deduceWithRule(
         if (run("PrevSameNoneMatch")) {
           for (let j = 0; j < qi; j++) {
             if (answers[j] === LETTERS[oi]) {
-              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "PrevSameNoneMatch"));
+              results.push(
+                res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "PrevSameNoneMatch"),
+              );
               break;
             }
           }
@@ -1130,7 +1142,9 @@ export function deduceWithRule(
         if (run("NextSameNoneMatch")) {
           for (let j = qi + 1; j < n; j++) {
             if (answers[j] === LETTERS[oi]) {
-              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "NextSameNoneMatch"));
+              results.push(
+                res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "NextSameNoneMatch"),
+              );
               break;
             }
           }
@@ -1168,7 +1182,9 @@ export function deduceWithRule(
         if (run("OnlySameNoneMatch")) {
           for (let j = 0; j < n; j++) {
             if (j !== qi && answers[j] === LETTERS[oi]) {
-              results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameNoneMatch"));
+              results.push(
+                res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameNoneMatch"),
+              );
               break;
             }
           }
@@ -1195,7 +1211,10 @@ export function deduceWithRule(
             for (let j = 0; j < n; j++) {
               if (j !== qi && j !== v && answers[j] === letter) {
                 results.push(
-                  res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "OnlySameOtherMatch"),
+                  res(
+                    { type: "eliminate", questionIndex: qi, optionIndex: oi },
+                    "OnlySameOtherMatch",
+                  ),
                 );
                 break;
               }
@@ -1416,7 +1435,9 @@ export function deduceWithRule(
       for (let j = 0; j < n; j++) {
         if (j === qi) continue;
         if (answers[j] == null && !isElim(eliminated, j, ai)) {
-          results.push(res({ type: "eliminate", questionIndex: j, optionIndex: ai }, "OnlySameNoneForward"));
+          results.push(
+            res({ type: "eliminate", questionIndex: j, optionIndex: ai }, "OnlySameNoneForward"),
+          );
         }
       }
     }
@@ -1436,21 +1457,38 @@ export function deduceWithRule(
       if (answers[p] != null && answers[p + 1] == null) {
         const oi = letterIdx(answers[p]);
         if (!isElim(eliminated, p + 1, oi))
-          results.push(res({ type: "force", questionIndex: p + 1, letter: answers[p] }, "ConsecIdentForwardForce"));
+          results.push(
+            res(
+              { type: "force", questionIndex: p + 1, letter: answers[p] },
+              "ConsecIdentForwardForce",
+            ),
+          );
       }
       if (answers[p + 1] != null && answers[p] == null) {
         const oi = letterIdx(answers[p + 1]!);
         if (!isElim(eliminated, p, oi))
-          results.push(res({ type: "force", questionIndex: p, letter: answers[p + 1]! }, "ConsecIdentForwardForce"));
+          results.push(
+            res(
+              { type: "force", questionIndex: p, letter: answers[p + 1]! },
+              "ConsecIdentForwardForce",
+            ),
+          );
       }
     }
 
     if (run("ConsecIdentForwardElim")) {
       for (let oi = 0; oi < 5; oi++) {
         if (answers[p] == null && !isElim(eliminated, p, oi) && (possB & (1 << oi)) === 0)
-          results.push(res({ type: "eliminate", questionIndex: p, optionIndex: oi }, "ConsecIdentForwardElim"));
+          results.push(
+            res({ type: "eliminate", questionIndex: p, optionIndex: oi }, "ConsecIdentForwardElim"),
+          );
         if (answers[p + 1] == null && !isElim(eliminated, p + 1, oi) && (possA & (1 << oi)) === 0)
-          results.push(res({ type: "eliminate", questionIndex: p + 1, optionIndex: oi }, "ConsecIdentForwardElim"));
+          results.push(
+            res(
+              { type: "eliminate", questionIndex: p + 1, optionIndex: oi },
+              "ConsecIdentForwardElim",
+            ),
+          );
       }
     }
 
@@ -1459,8 +1497,18 @@ export function deduceWithRule(
         const common = possA & possB;
         if (common !== 0 && (common & (common - 1)) === 0) {
           const oi = Math.log2(common);
-          results.push(res({ type: "force", questionIndex: p, letter: LETTERS[oi] }, "ConsecIdentForwardBothForce"));
-          results.push(res({ type: "force", questionIndex: p + 1, letter: LETTERS[oi] }, "ConsecIdentForwardBothForce"));
+          results.push(
+            res(
+              { type: "force", questionIndex: p, letter: LETTERS[oi] },
+              "ConsecIdentForwardBothForce",
+            ),
+          );
+          results.push(
+            res(
+              { type: "force", questionIndex: p + 1, letter: LETTERS[oi] },
+              "ConsecIdentForwardBothForce",
+            ),
+          );
         }
       }
     }
@@ -1482,12 +1530,19 @@ export function deduceWithRule(
         if (answers[j] != null && answers[j + 1] == null) {
           const oi = letterIdx(answers[j]!);
           if (!isElim(eliminated, j + 1, oi))
-            results.push(res({ type: "eliminate", questionIndex: j + 1, optionIndex: oi }, "ConsecIdentReverse"));
+            results.push(
+              res(
+                { type: "eliminate", questionIndex: j + 1, optionIndex: oi },
+                "ConsecIdentReverse",
+              ),
+            );
         }
         if (answers[j + 1] != null && answers[j] == null) {
           const oi = letterIdx(answers[j + 1]!);
           if (!isElim(eliminated, j, oi))
-            results.push(res({ type: "eliminate", questionIndex: j, optionIndex: oi }, "ConsecIdentReverse"));
+            results.push(
+              res({ type: "eliminate", questionIndex: j, optionIndex: oi }, "ConsecIdentReverse"),
+            );
         }
       }
     }
@@ -1502,14 +1557,24 @@ export function deduceWithRule(
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
         let contradicts = false;
-        if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi && claim.answer !== LETTERS[oi]) {
+        if (
+          (claim.type === "FirstWith" || claim.type === "LastWith") &&
+          claim.value === qi &&
+          claim.answer !== LETTERS[oi]
+        ) {
           contradicts = true;
         }
-        if (claim.type === "AnswerOf" && claim.questionIndex === qi && LETTERS[claim.value] !== LETTERS[oi]) {
+        if (
+          claim.type === "AnswerOf" &&
+          claim.questionIndex === qi &&
+          LETTERS[claim.value] !== LETTERS[oi]
+        ) {
           contradicts = true;
         }
         if (contradicts) {
-          results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "TrueStatementSelfRef"));
+          results.push(
+            res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "TrueStatementSelfRef"),
+          );
         }
       }
     }
@@ -1535,14 +1600,29 @@ export function deduceWithRule(
           if (answers[tqi] != null && answers[tqi] !== claim.answer) invalid = true;
         }
         if (claim.type === "AnswerOf" && claim.questionIndex < n) {
-          if (answers[claim.questionIndex] != null && letterIdx(answers[claim.questionIndex]!) !== claim.value) invalid = true;
+          if (
+            answers[claim.questionIndex] != null &&
+            letterIdx(answers[claim.questionIndex]!) !== claim.value
+          )
+            invalid = true;
         }
-        if (claim.type === "CountAnswer" || claim.type === "CountVowel" || claim.type === "CountConsonant" || claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore") {
+        if (
+          claim.type === "CountAnswer" ||
+          claim.type === "CountVowel" ||
+          claim.type === "CountConsonant" ||
+          claim.type === "CountAnswerAfter" ||
+          claim.type === "CountAnswerBefore"
+        ) {
           const pred: Pred | null =
-            claim.type === "CountAnswer" ? (a) => a === claim.answer :
-            claim.type === "CountVowel" ? (a) => VOWELS.has(a) :
-            claim.type === "CountConsonant" ? (a) => !VOWELS.has(a) :
-            (claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore") ? (a) => a === claim.answer : null;
+            claim.type === "CountAnswer"
+              ? (a) => a === claim.answer
+              : claim.type === "CountVowel"
+                ? (a) => VOWELS.has(a)
+                : claim.type === "CountConsonant"
+                  ? (a) => !VOWELS.has(a)
+                  : claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore"
+                    ? (a) => a === claim.answer
+                    : null;
           if (pred) {
             const from = claim.type === "CountAnswerAfter" ? claim.afterIndex + 1 : 0;
             const to = claim.type === "CountAnswerBefore" ? claim.beforeIndex : n;
@@ -1567,7 +1647,12 @@ export function deduceWithRule(
           if (claimedMax < maxOther) invalid = true;
         }
         if (invalid) {
-          results.push(res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "TrueStatementClaimInvalid"));
+          results.push(
+            res(
+              { type: "eliminate", questionIndex: qi, optionIndex: oi },
+              "TrueStatementClaimInvalid",
+            ),
+          );
         }
       }
     }

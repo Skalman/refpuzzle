@@ -50,8 +50,7 @@ function parseUA(): { os: string; browser: string } {
 
 export function getClientInfo(): { os: string; browser: string; standalone?: true } {
   const standalone =
-    window.matchMedia("(display-mode: standalone)").matches ||
-    navigator.standalone === true;
+    window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   return { ...parseUA(), standalone: standalone || undefined };
 }
 

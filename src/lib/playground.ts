@@ -54,15 +54,18 @@ function toBase64Url(bytes: Uint8Array): string {
 }
 
 function fromBase64Url(str: string): Uint8Array {
-  const padded = str.replace(/-/g, "+").replace(/_/g, "/").padEnd(
-    str.length + ((4 - (str.length % 4)) % 4),
-    "=",
-  );
+  const padded = str
+    .replace(/-/g, "+")
+    .replace(/_/g, "/")
+    .padEnd(str.length + ((4 - (str.length % 4)) % 4), "=");
   const binary = atob(padded);
   return Uint8Array.from({ length: binary.length }, (_, i) => binary.charCodeAt(i));
 }
 
-export async function encodePlaygroundHash(compact: CompactPuzzle, state?: SavedState): Promise<string> {
+export async function encodePlaygroundHash(
+  compact: CompactPuzzle,
+  state?: SavedState,
+): Promise<string> {
   const p = toBase64Url(await deflate(JSON.stringify(compact)));
   const h = state ? encodeHistory(state) : null;
   return h ? `p=${p}&h=${h}` : `p=${p}`;

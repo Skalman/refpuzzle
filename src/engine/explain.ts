@@ -332,12 +332,20 @@ function explainForce(
   }
 
   if (rule === "LeastCommonForce" && q.t === RT_LEAST_COMMON) {
-    steps.push(simple(`Only one answer can make its claimed letter the least common — ${Q(qi)} must be ${letter}.`));
+    steps.push(
+      simple(
+        `Only one answer can make its claimed letter the least common — ${Q(qi)} must be ${letter}.`,
+      ),
+    );
     return steps;
   }
 
   if (rule === "MostCommonForce" && q.t === RT_MOST_COMMON) {
-    steps.push(simple(`Only one answer can make its claimed letter the most common — ${Q(qi)} must be ${letter}.`));
+    steps.push(
+      simple(
+        `Only one answer can make its claimed letter the most common — ${Q(qi)} must be ${letter}.`,
+      ),
+    );
     return steps;
   }
 
@@ -351,9 +359,17 @@ function explainForce(
         const partner = p === qi ? p + 1 : p;
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
         if (answers[partner] != null) {
-          steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. ${Q(partner)} is ${answers[partner]}, so ${Q(qi)} must be ${letter}.`));
+          steps.push(
+            simple(
+              `${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. ${Q(partner)} is ${answers[partner]}, so ${Q(qi)} must be ${letter}.`,
+            ),
+          );
         } else {
-          steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. Only ${letter} is possible for both, so ${Q(qi)} must be ${letter}.`));
+          steps.push(
+            simple(
+              `${Q(src)} says ${Q(p)} and ${Q(p + 1)} have the same answer. Only ${letter} is possible for both, so ${Q(qi)} must be ${letter}.`,
+            ),
+          );
         }
         return steps;
       }
@@ -369,12 +385,20 @@ function explainForce(
       if (!claim) continue;
       if (claim.type === "AnswerOf" && claim.questionIndex === qi) {
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
-        steps.push(simple(`${Q(src)}'s true statement says ${Q(qi)}'s answer is ${letter}. So ${Q(qi)} must be ${letter}.`));
+        steps.push(
+          simple(
+            `${Q(src)}'s true statement says ${Q(qi)}'s answer is ${letter}. So ${Q(qi)} must be ${letter}.`,
+          ),
+        );
         return steps;
       }
       if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
-        steps.push(simple(`${Q(src)}'s true statement says ${Q(qi)} has answer ${letter}. So ${Q(qi)} must be ${letter}.`));
+        steps.push(
+          simple(
+            `${Q(src)}'s true statement says ${Q(qi)} has answer ${letter}. So ${Q(qi)} must be ${letter}.`,
+          ),
+        );
         return steps;
       }
     }
@@ -449,20 +473,40 @@ function explainElimination(
 
   if (rule === "TrueStatementClaimInvalid") {
     const claim = fp.optionClaims[qi][oi];
-    if (claim && (claim.type === "FirstWith" || claim.type === "LastWith") && claim.value < n && answers[claim.value] != null) {
+    if (
+      claim &&
+      (claim.type === "FirstWith" || claim.type === "LastWith") &&
+      claim.value < n &&
+      answers[claim.value] != null
+    ) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.value)}.`));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(claim.value)} has answer ${claim.answer}, but ${Q(claim.value)} is ${answers[claim.value]}.`));
+      steps.push(
+        simple(
+          `${Q(qi)} option ${letter}'s statement says ${Q(claim.value)} has answer ${claim.answer}, but ${Q(claim.value)} is ${answers[claim.value]}.`,
+        ),
+      );
       return steps;
     }
-    if (claim && claim.type === "AnswerOf" && claim.questionIndex < n && answers[claim.questionIndex] != null) {
+    if (
+      claim &&
+      claim.type === "AnswerOf" &&
+      claim.questionIndex < n &&
+      answers[claim.questionIndex] != null
+    ) {
       steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.questionIndex)}.`));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(claim.questionIndex)}'s answer is ${LETTERS[claim.value]}, but ${Q(claim.questionIndex)} is ${answers[claim.questionIndex]}.`));
+      steps.push(
+        simple(
+          `${Q(qi)} option ${letter}'s statement says ${Q(claim.questionIndex)}'s answer is ${LETTERS[claim.value]}, but ${Q(claim.questionIndex)} is ${answers[claim.questionIndex]}.`,
+        ),
+      );
       return steps;
     }
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-    steps.push(simple(`${Q(qi)} option ${letter}'s statement is contradicted by the current answers.`));
+    steps.push(
+      simple(`${Q(qi)} option ${letter}'s statement is contradicted by the current answers.`),
+    );
     return steps;
   }
 
@@ -470,12 +514,20 @@ function explainElimination(
     const claim = fp.optionClaims[qi][oi];
     if (claim && (claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(qi)} has answer ${claim.answer}, but that contradicts ${Q(qi)} being ${letter}.`));
+      steps.push(
+        simple(
+          `${Q(qi)} option ${letter}'s statement says ${Q(qi)} has answer ${claim.answer}, but that contradicts ${Q(qi)} being ${letter}.`,
+        ),
+      );
       return steps;
     }
     if (claim && claim.type === "AnswerOf" && claim.questionIndex === qi) {
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-      steps.push(simple(`${Q(qi)} option ${letter}'s statement says ${Q(qi)}'s answer is ${LETTERS[claim.value]}, but that contradicts ${Q(qi)} being ${letter}.`));
+      steps.push(
+        simple(
+          `${Q(qi)} option ${letter}'s statement says ${Q(qi)}'s answer is ${LETTERS[claim.value]}, but that contradicts ${Q(qi)} being ${letter}.`,
+        ),
+      );
       return steps;
     }
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
@@ -491,7 +543,11 @@ function explainElimination(
       if (answers[src] === letter) {
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-        steps.push(simple(`${Q(src)} is ${letter} and claims no other question shares that answer, so ${Q(qi)} can't be ${letter}.`));
+        steps.push(
+          simple(
+            `${Q(src)} is ${letter} and claims no other question shares that answer, so ${Q(qi)} can't be ${letter}.`,
+          ),
+        );
         return steps;
       }
     }
@@ -507,7 +563,11 @@ function explainElimination(
         const partner = p === qi ? p + 1 : p;
         steps.push(simple(`Try looking at ${Q(qi)}, ${Q(partner)}, and ${Q(src)}.`));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-        steps.push(simple(`${Q(src)} says ${Q(p)} and ${Q(p + 1)} must have the same answer, but ${letter} is ruled out for ${Q(partner)}.`));
+        steps.push(
+          simple(
+            `${Q(src)} says ${Q(p)} and ${Q(p + 1)} must have the same answer, but ${letter} is ruled out for ${Q(partner)}.`,
+          ),
+        );
         return steps;
       }
     }
@@ -516,15 +576,27 @@ function explainElimination(
   if (rule === "ConsecIdentReverse") {
     for (let src = 0; src < n; src++) {
       if (fp.questions[src].t !== RT_CONSEC_IDENT) continue;
-      const neighbor = qi > 0 && answers[qi - 1] === letter ? qi - 1
-        : qi + 1 < n && answers[qi + 1] === letter ? qi + 1 : null;
+      const neighbor =
+        qi > 0 && answers[qi - 1] === letter
+          ? qi - 1
+          : qi + 1 < n && answers[qi + 1] === letter
+            ? qi + 1
+            : null;
       if (neighbor != null) {
         steps.push(simple(`Try looking at ${Q(qi)}, ${Q(neighbor)}, and ${Q(src)}.`));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-        steps.push(simple(`${Q(qi)} and ${Q(neighbor)} would both be ${letter}, creating a consecutive pair — but ${Q(src)}'s remaining options don't allow that pair.`));
+        steps.push(
+          simple(
+            `${Q(qi)} and ${Q(neighbor)} would both be ${letter}, creating a consecutive pair — but ${Q(src)}'s remaining options don't allow that pair.`,
+          ),
+        );
       } else {
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-        steps.push(simple(`That would create a consecutive pair not allowed by ${Q(src)}'s remaining options.`));
+        steps.push(
+          simple(
+            `That would create a consecutive pair not allowed by ${Q(src)}'s remaining options.`,
+          ),
+        );
       }
       return steps;
     }
@@ -543,7 +615,8 @@ function explainElimination(
     steps.push(simple(`Try looking at ${Q(qi)} and ${Q(detail.otherQi)}.`));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
-  if (!detail) throw new Error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
+  if (!detail)
+    throw new Error(`No explainElimDetail for ${Q(qi)} option ${letter} (rule: ${rule})`);
   steps.push(simple(detail.text));
   return steps;
 }
@@ -896,7 +969,9 @@ function explainElimDetail(
 
   if (q.t === RT_CONSEC_IDENT) {
     if (v != null && v + 1 >= n)
-      return d(`${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)}, but that's out of range.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)}, but that's out of range.`,
+      );
     if (v != null && v + 1 < n) {
       if (v === qi || v + 1 === qi) {
         const partner = v === qi ? v + 1 : v;
@@ -1026,7 +1101,10 @@ function explainElimDetail(
       );
     if (v != null && v >= 0 && v < 5) {
       const claimed = LETTERS[v];
-      let rc = 0, rr = 0, sc = 0, sr = 0;
+      let rc = 0,
+        rr = 0,
+        sc = 0,
+        sr = 0;
       const refMask = 1 << letterIdx(q.answer!);
       const claimedMask = 1 << v;
       for (let j = 0; j < n; j++) {
@@ -1039,9 +1117,13 @@ function explainElimDetail(
         }
       }
       if (rc + rr < sc)
-        return d(`${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${q.answer} can have at most ${rc + rr} while ${claimed} already has ${sc}.`);
+        return d(
+          `${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${q.answer} can have at most ${rc + rr} while ${claimed} already has ${sc}.`,
+        );
       if (sc + sr < rc)
-        return d(`${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${claimed} can have at most ${sc + sr} while ${q.answer} already has ${rc}.`);
+        return d(
+          `${Q(qi)} option ${letter} claims ${claimed} has the same count as ${q.answer}, but ${claimed} can have at most ${sc + sr} while ${q.answer} already has ${rc}.`,
+        );
     }
   }
 
@@ -1054,12 +1136,18 @@ function explainElimDetail(
     const minCount = Math.min(...counts);
     const minLetters = LETTERS.filter((_, i) => counts[i] === minCount);
     if (counts[v] > minCount) {
-      return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} appears ${counts[v]} time(s) while ${minLetters[0]} appears only ${minCount}.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} appears ${counts[v]} time(s) while ${minLetters[0]} appears only ${minCount}.`,
+      );
     }
     if (minLetters.length > 1) {
-      return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${minLetters.join(" and ")} are tied at ${minCount} — no unique least.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${minLetters.join(" and ")} are tied at ${minCount} — no unique least.`,
+      );
     }
-    return d(`${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} can't be uniquely least.`);
+    return d(
+      `${Q(qi)} option ${letter} claims ${claimed} is the least common, but ${claimed} can't be uniquely least.`,
+    );
   }
 
   if (q.t === RT_MOST_COMMON && v != null && v < 5) {
@@ -1071,12 +1159,18 @@ function explainElimDetail(
     const maxCount = Math.max(...counts);
     const maxLetters = LETTERS.filter((_, i) => counts[i] === maxCount);
     if (counts[v] < maxCount) {
-      return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} appears ${counts[v]} time(s) while ${maxLetters[0]} appears ${maxCount}.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} appears ${counts[v]} time(s) while ${maxLetters[0]} appears ${maxCount}.`,
+      );
     }
     if (maxLetters.length > 1) {
-      return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${maxLetters.join(" and ")} are tied at ${maxCount} — no unique most.`);
+      return d(
+        `${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${maxLetters.join(" and ")} are tied at ${maxCount} — no unique most.`,
+      );
     }
-    return d(`${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} can't be uniquely most.`);
+    return d(
+      `${Q(qi)} option ${letter} claims ${claimed} is the most common, but ${claimed} can't be uniquely most.`,
+    );
   }
 
   return null;

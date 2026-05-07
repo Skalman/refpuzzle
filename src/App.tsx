@@ -1377,7 +1377,12 @@ function PlaygroundRoute() {
       .catch(() => setState({ status: "error" }));
   }, [hash]);
 
-  if (state.status === "loading") return <div class="loading"><span class="spinner" /></div>;
+  if (state.status === "loading")
+    return (
+      <div class="loading">
+        <span class="spinner" />
+      </div>
+    );
   if (state.status === "error") return <div class="loading">Invalid puzzle hash.</div>;
   return (
     <PuzzleView
