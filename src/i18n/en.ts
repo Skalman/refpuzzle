@@ -68,16 +68,8 @@ export default {
       identical: "Identical — no change",
     } as Record<string, string>,
   },
-  onboarding: {
-    welcome: "Welcome to Refpuzzle!",
-    step1: "Click an option to mark it incorrect",
-    step2: "Click again to select it as your answer",
-    step3: "Each question refers to the puzzle itself, so every answer affects the others",
-    gotIt: "Got it!",
-  },
   aria: {
     close: "Close",
-    help: "Help",
     toggleTheme: "Toggle theme",
     more: "More",
     logo: "Refpuzzle logo",
@@ -96,20 +88,16 @@ export default {
     title: "How to play",
     howToPlaySteps: [
       "Click an option to mark it incorrect",
-      "Click it again to select it as your answer (one per question)",
-    ],
-    howToSolve: "Solving tips",
-    howToSolveSteps: [
-      "Read through all the questions first to get a feel for the puzzle",
-      "Eliminate options that are obviously wrong",
-      "Start with questions that constrain several others at once",
-      "Revisit earlier questions as you learn more",
-      "Every bar turns green once you've found the solution",
+      "Click it again to select it as your answer",
+      "Click once more to clear it",
+      "The bar beside each question shows the answer's validity",
     ],
     whatIs: "What is a self-referential puzzle?",
-    description:
-      "Each question refers to the puzzle itself — how many questions have a certain answer, which answers appear where, and so on. Your goal is to find the unique set of answers where every question is true.",
-    inspiredBy: "Inspired by",
+    descriptionParagraphs: [
+      'Each question refers to the puzzle itself: how many questions have a certain answer, which answers appear where, and so on. There is exactly one combination of answers that satisfies every question; this fact may help you find the answer to a particular question. Note that "answers" means the answers you give — the puzzle is entirely self-contained.',
+      "Solving one requires logic and deduction: you often can't answer a question in isolation, so you work through the puzzle iteratively — eliminating wrong options, making tentative selections, and revising as new constraints emerge.",
+      "The format was created by mathematician Jim Propp, whose original Self-Referential Aptitude Test had 20 questions and only one that could be solved without reference to the others.",
+    ],
   },
   sync: {
     title: "Sync devices",

@@ -1,33 +1,5 @@
-/* ── Onboarding banner ── */
-.onboarding-banner {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.onboarding-content {
-  font-size: 0.85rem;
-
-  & strong {
-    display: block;
-    margin-bottom: 0.35rem;
-    color: var(--accent);
-  }
-  & ul {
-    margin: 0;
-    padding-left: 1.25rem;
-    color: var(--text-muted);
-    line-height: 1.6;
-  }
-}
-
-.onboarding-dismiss {
+/* ── Primary action button ── */
+.primary-btn {
   background: var(--accent);
   color: white;
   border: none;
@@ -140,6 +112,25 @@
     margin: 0;
     padding-left: 1.5rem;
   }
+}
+
+.how-to-play {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  margin: 0 -0.75rem;
+  transition:
+    background 2s ease,
+    border-color 2s ease;
+
+  & h4 {
+    margin-top: 0;
+  }
+}
+
+.how-to-play--first-visit {
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 /* ── Import preview ── */

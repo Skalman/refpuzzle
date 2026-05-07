@@ -2,10 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
-import { KeyboardHelp, KeyboardShortcutList } from "./components/KeyboardHelp.tsx";
+import { KeyboardHelp } from "./components/KeyboardHelp.tsx";
 import {
   IconCalendar,
-  IconHelp,
   IconMoon,
   IconSun,
   IconSunMoon,
@@ -120,76 +119,31 @@ function useInstall(): InstallState {
   return state;
 }
 
-function OnboardingBanner() {
+function InlineHelp() {
   const s = t();
-  const [visible, setVisible] = useState(() => {
+  const [firstVisit, setFirstVisit] = useState(() => {
     try {
       return !localStorage.getItem("refpuzzle:onboarded");
     } catch {
-      return true;
+      return false;
     }
   });
 
-  if (!visible) return null;
-
-  function dismiss() {
-    setVisible(false);
+  useEffect(() => {
+    if (!firstVisit) return undefined;
     try {
       localStorage.setItem("refpuzzle:onboarded", "1");
     } catch {
       // ignore
     }
-  }
+    const timer = setTimeout(() => setFirstVisit(false), 15000);
+    return () => clearTimeout(timer);
+  }, [firstVisit]);
 
   return (
-    <div class="onboarding-banner">
-      <div class="onboarding-content">
-        <strong>{s.onboarding.welcome}</strong>
-        <ul>
-          <li>
-            {s.onboarding.step1}{" "}
-            <span class="nowrap">
-              (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
-            </span>
-          </li>
-          <li>
-            {s.onboarding.step2}{" "}
-            <span class="nowrap">
-              (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
-            </span>
-          </li>
-          <li>{s.onboarding.step3}</li>
-        </ul>
-      </div>
-      <button class="onboarding-dismiss" onClick={dismiss}>
-        {s.onboarding.gotIt}
-      </button>
-    </div>
-  );
-}
-
-function HelpPanel({ onClose }: { onClose: () => void }) {
-  const s = t();
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
-  return (
-    <dialog
-      ref={ref}
-      class="help-panel"
-      onClose={onClose}
-      onClick={(e) => {
-        if (e.target === ref.current) onClose();
-      }}
-    >
-      <div class="help-panel-inner">
-        <div class="help-panel-header">
-          <h3>{s.help.title}</h3>
-          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
-            &times;
-          </button>
-        </div>
+    <div class="inline-help">
+      <div class={`how-to-play${firstVisit ? " how-to-play--first-visit" : ""}`}>
+        <h4>{s.help.title}</h4>
         <ol>
           {s.help.howToPlaySteps.map((step, i) => (
             <li key={step}>
@@ -198,8 +152,7 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
                 <>
                   {" "}
                   <span class="nowrap">
-                    (
-                    <IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
+                    (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
                   </span>
                 </>
               )}
@@ -207,41 +160,28 @@ function HelpPanel({ onClose }: { onClose: () => void }) {
                 <>
                   {" "}
                   <span class="nowrap">
-                    (
-                    <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
+                    (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
                   </span>
                 </>
               )}
             </li>
           ))}
         </ol>
-        <h4>{s.help.howToSolve}</h4>
-        <ol>
-          {s.help.howToSolveSteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-        <h4>{s.help.whatIs}</h4>
-        <p>{s.help.description}</p>
-        <h4>{s.keyboard.title}</h4>
-        <KeyboardShortcutList />
-        <p class="help-credit">
-          {s.help.inspiredBy}{" "}
-          <a href="https://www.logiquiz.com/" target="_blank" rel="noopener noreferrer">
-            Logiquiz
-          </a>
-        </p>
       </div>
-    </dialog>
+      <h4>{s.help.whatIs}</h4>
+      {s.help.descriptionParagraphs.map((p) => (
+        <p key={p}>{p}</p>
+      ))}
+    </div>
   );
 }
 
 function AppHeader({
-  onHelp,
+  onKeyboardHelp,
   onPrint,
   onBackup,
 }: {
-  onHelp: () => void;
+  onKeyboardHelp?: () => void;
   onPrint?: () => void;
   onBackup: () => void;
 }) {
@@ -321,14 +261,6 @@ function AppHeader({
         <button
           class="header-btn hide-mobile"
           tabIndex={-1}
-          onClick={onHelp}
-          aria-label={s.aria.help}
-        >
-          <IconHelp /> {s.help.title}
-        </button>
-        <button
-          class="header-btn hide-mobile"
-          tabIndex={-1}
           onClick={theme.cycle}
           aria-label={s.aria.toggleTheme}
         >
@@ -372,16 +304,6 @@ function AppHeader({
               <button
                 class="more-menu-item show-mobile"
                 role="menuitem"
-                onClick={() => {
-                  setMoreMenu(false);
-                  onHelp();
-                }}
-              >
-                {s.help.title}
-              </button>
-              <button
-                class="more-menu-item show-mobile"
-                role="menuitem"
                 onClick={(e) => {
                   e.stopPropagation();
                   theme.cycle();
@@ -390,6 +312,18 @@ function AppHeader({
                 {theme.icon} {s.header.theme}
               </button>
               <hr class="more-menu-divider show-mobile" />
+              {onKeyboardHelp && (
+                <button
+                  class="more-menu-item hide-mobile"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreMenu(false);
+                    onKeyboardHelp();
+                  }}
+                >
+                  {s.keyboard.title}
+                </button>
+              )}
               {onPrint && (
                 <button
                   class="more-menu-item"
@@ -428,7 +362,7 @@ function AppHeader({
           >
             {install?.type === "native" && (
               <button
-                class="onboarding-dismiss install-btn"
+                class="primary-btn install-btn"
                 ref={(el) => el?.focus()}
                 onClick={() => install.fire()}
               >
@@ -461,7 +395,6 @@ function DailyPage() {
 
 function DayView({ dateStr }: { dateStr: string }) {
   const s = t();
-  const [showHelp, setShowHelp] = useState(false);
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -598,12 +531,13 @@ function DayView({ dateStr }: { dateStr: string }) {
   return (
     <>
       <AppHeader
-        onHelp={() => setShowHelp(true)}
+        onKeyboardHelp={() => {
+          showKeyboardHelpRef.current = true;
+          setShowKeyboardHelp(true);
+        }}
         onPrint={puzzles ? () => window.print() : undefined}
         onBackup={() => setShowBackup(true)}
       />
-      {isToday && <OnboardingBanner />}
-
       <div class="daily-header">
         {!isToday && (
           <a href="/past" class="back-link">
@@ -662,7 +596,6 @@ function DayView({ dateStr }: { dateStr: string }) {
         />
       )}
 
-      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
       {showKeyboardHelp && (
         <KeyboardHelp
           onClose={() => {
@@ -672,16 +605,7 @@ function DayView({ dateStr }: { dateStr: string }) {
         />
       )}
 
-      <div class="inline-help">
-        <h4>{s.help.whatIs}</h4>
-        <p>{s.help.description}</p>
-        <h4>{s.help.title}</h4>
-        <ol>
-          {s.help.howToPlaySteps.map((step) => (
-            <li key={step}>{step}</li>
-          ))}
-        </ol>
-      </div>
+      <InlineHelp />
 
       {puzzles && (
         <div class="print-only">
@@ -838,7 +762,7 @@ function ImportPreview({
         <div class="import-actions">
           {hasChanges ? (
             <>
-              <button class="onboarding-dismiss" onClick={onConfirm}>
+              <button class="primary-btn" onClick={onConfirm}>
                 {s.backup.confirmImport}
               </button>
               <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>
@@ -846,7 +770,7 @@ function ImportPreview({
               </button>
             </>
           ) : (
-            <button class="onboarding-dismiss" onClick={onCancel}>
+            <button class="primary-btn" onClick={onCancel}>
               {s.backup.ok}
             </button>
           )}
@@ -891,7 +815,7 @@ function BackupDialog({
         </div>
         <div class="backup-actions">
           <button
-            class="onboarding-dismiss backup-action-btn"
+            class="primary-btn backup-action-btn"
             onClick={() => {
               onClose();
               onExport();
@@ -899,11 +823,11 @@ function BackupDialog({
           >
             {s.backup.exportBackup}
           </button>
-          <label class="onboarding-dismiss backup-action-btn">
+          <label class="primary-btn backup-action-btn">
             {s.backup.importBackup}
             <input type="file" accept=".json" class="file-input" onChange={(e) => onImport(e)} />
           </label>
-          <button class="onboarding-dismiss backup-action-btn" onClick={onSync}>
+          <button class="primary-btn backup-action-btn" onClick={onSync}>
             {s.sync.title}
           </button>
         </div>
@@ -1010,7 +934,7 @@ function SyncDialog({
 
         {!code && !scanning && (
           <>
-            <button class="onboarding-dismiss sync-start-btn" onClick={handleStart} disabled={busy}>
+            <button class="primary-btn sync-start-btn" onClick={handleStart} disabled={busy}>
               {s.sync.start}
             </button>
             {error && <p class="sync-error">{error}</p>}
@@ -1041,7 +965,7 @@ function SyncDialog({
                 }}
               />
               <button
-                class="onboarding-dismiss"
+                class="primary-btn"
                 onClick={() => handleJoinCode(inputCode.trim())}
                 disabled={busy || inputCode.trim().length !== 6}
               >
@@ -1146,7 +1070,6 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
 
 function PastPuzzlesPage() {
   const s = t();
-  const [showHelp, setShowHelp] = useState(false);
   const [showBackup, setShowBackup] = useState(false);
   const [showSync, setShowSync] = useState(false);
   const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
@@ -1187,7 +1110,7 @@ function PastPuzzlesPage() {
 
   return (
     <>
-      <AppHeader onHelp={() => setShowHelp(true)} onBackup={() => setShowBackup(true)} />
+      <AppHeader onBackup={() => setShowBackup(true)} />
 
       <div class="history-page">
         <h2>{s.daily.pastPuzzles}</h2>
@@ -1210,8 +1133,6 @@ function PastPuzzlesPage() {
           );
         })}
       </div>
-
-      {showHelp && <HelpPanel onClose={() => setShowHelp(false)} />}
 
       {showBackup && (
         <BackupDialog
