@@ -32,10 +32,18 @@
   background: transparent;
 
   &.neutral {
-    background: linear-gradient(to right, var(--neutral-bar) 3px, transparent 3px);
+    position: relative;
+  }
+  &.neutral::before {
+    content: "";
+    position: absolute;
+    inset: 0 1px 0 0;
+    background: var(--neutral-bar);
+    border-radius: 999px;
   }
   &.valid {
     background: var(--valid);
+    border-radius: 999px;
   }
   &.pending {
     border-left: 4px dotted var(--pending);
