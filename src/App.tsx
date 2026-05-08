@@ -395,6 +395,7 @@ function DailyPage() {
 
 function DayView({ dateStr }: { dateStr: string }) {
   const s = t();
+  const { path, route } = useLocation();
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
@@ -415,10 +416,10 @@ function DayView({ dateStr }: { dateStr: string }) {
   const selectLevel = useCallback(
     (level: number) => {
       setActiveLevel(level);
-      window.history.replaceState(null, "", `/day/${dateStr}?l=${level}`);
+      route(`/day/${dateStr}?l=${level}`, path.startsWith("/day/"));
       replayLogoAnimation();
     },
-    [dateStr],
+    [dateStr, path, route],
   );
 
   // Page-level keyboard shortcuts
