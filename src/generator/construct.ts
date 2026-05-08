@@ -975,7 +975,7 @@ function makeDistractors(
 function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG): StatementOption[] {
   const targetIdx = L2I[solution[qi]];
   const options: StatementOption[] = new Array(5);
-  const trueClaim = makeTrueClaim(solution, n, rng);
+  const trueClaim = makeTrueClaim(solution, qi, n, rng);
   options[targetIdx] = { value: null, claim: trueClaim };
   const usedKeys = new Set([claimCategory(trueClaim)]);
   for (let i = 0; i < 5; i++) {
@@ -996,74 +996,186 @@ function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG):
   }
   return options;
 }
-function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
-  const t = rng.int(0, 8);
-  if (t === 0) {
+type ClaimGen = (sol: AnswerLetter[], qi: number, n: number, rng: RNG) => Claim | null;
+
+const CLAIM_GENS: ClaimGen[] = [
+  (sol, _qi, _n, rng) => {
     const a = rng.pick(LETTERS);
     return {
       questionType: { type: "CountAnswer", answer: a },
       value: sol.filter((x) => x === a).length,
     };
-  }
-  if (t === 1)
-    return {
-      questionType: { type: "CountConsonant" },
-      value: sol.filter((a) => a !== "A" && a !== "E").length,
-    };
-  if (t === 2)
-    return {
-      questionType: { type: "CountVowel" },
-      value: sol.filter((a) => a === "A" || a === "E").length,
-    };
-  if (t === 3) {
+  },
+  (sol) => ({
+    questionType: { type: "CountConsonant" },
+    value: sol.filter((a) => a !== "A" && a !== "E").length,
+  }),
+  (sol) => ({
+    questionType: { type: "CountVowel" },
+    value: sol.filter((a) => a === "A" || a === "E").length,
+  }),
+  (sol, _qi, n, rng) => {
     const a = rng.pick(LETTERS);
     const ai = rng.int(0, Math.max(0, n - 5));
     return {
       questionType: { type: "CountAnswerAfter", answer: a, afterIndex: ai },
       value: sol.slice(ai + 1).filter((x) => x === a).length,
     };
-  }
-  if (t === 4) {
+  },
+  (sol, _qi, n, rng) => {
     const a = rng.pick(LETTERS);
     const bi = rng.int(4, n - 1);
     return {
       questionType: { type: "CountAnswerBefore", answer: a, beforeIndex: bi },
       value: sol.slice(0, bi).filter((x) => x === a).length,
     };
-  }
-  if (t === 5) {
-    const targetQi = rng.int(0, n - 1);
+  },
+  (sol, _qi, n, rng) => {
+    const target = rng.int(0, n - 1);
     return {
-      questionType: { type: "AnswerOf", questionIndex: targetQi },
-      value: L2I[sol[targetQi]],
+      questionType: { type: "AnswerOf", questionIndex: target },
+      value: L2I[sol[target]],
     };
-  }
-  if (t === 6) {
+  },
+  (sol, _qi, _n, rng) => {
     const a = rng.pick(LETTERS);
     const first = sol.indexOf(a);
-    if (first >= 0) return { questionType: { type: "FirstWith", answer: a }, value: first };
-    const a2 = rng.pick(LETTERS);
-    return {
-      questionType: { type: "CountAnswer", answer: a2 },
-      value: sol.filter((x) => x === a2).length,
-    };
-  }
-  if (t === 7) {
+    if (first < 0) return null;
+    return { questionType: { type: "FirstWith", answer: a }, value: first };
+  },
+  (sol, _qi, _n, rng) => {
     const a = rng.pick(LETTERS);
     const last = sol.lastIndexOf(a);
-    if (last >= 0) return { questionType: { type: "LastWith", answer: a }, value: last };
-    const a2 = rng.pick(LETTERS);
+    if (last < 0) return null;
+    return { questionType: { type: "LastWith", answer: a }, value: last };
+  },
+  (sol) => {
+    const counts = [0, 0, 0, 0, 0];
+    for (const a of sol) counts[L2I[a]] += 1;
+    const max = Math.max(...counts);
+    if (counts.filter((c) => c === max).length !== 1) return null;
+    const idx = counts.indexOf(max);
+    return { questionType: { type: "MostCommon" }, value: idx };
+  },
+  // Newly enabled claim shapes
+  (sol, _qi, n, rng) => {
+    const a = rng.pick(LETTERS);
+    const ai = rng.int(0, Math.max(0, n - 2));
+    let target = -1;
+    for (let i = ai + 1; i < sol.length; i++) {
+      if (sol[i] === a) {
+        target = i;
+        break;
+      }
+    }
+    if (target < 0) return null;
     return {
-      questionType: { type: "CountAnswer", answer: a2 },
-      value: sol.filter((x) => x === a2).length,
+      questionType: { type: "ClosestAfter", answer: a, afterIndex: ai },
+      value: target,
     };
-  }
-  const counts = [0, 0, 0, 0, 0];
-  for (const a of sol) counts[L2I[a]] += 1;
-  const max = Math.max(...counts);
-  const most = LETTERS.filter((_, i) => counts[i] === max);
-  if (most.length === 1) {
-    return { questionType: { type: "MostCommon" }, value: L2I[most[0]] };
+  },
+  (sol, _qi, n, rng) => {
+    const a = rng.pick(LETTERS);
+    const bi = rng.int(2, n - 1);
+    let target = -1;
+    for (let i = bi - 1; i >= 0; i--) {
+      if (sol[i] === a) {
+        target = i;
+        break;
+      }
+    }
+    if (target < 0) return null;
+    return {
+      questionType: { type: "ClosestBefore", answer: a, beforeIndex: bi },
+      value: target,
+    };
+  },
+  (sol) => {
+    const counts = [0, 0, 0, 0, 0];
+    for (const a of sol) counts[L2I[a]] += 1;
+    const max = Math.max(...counts);
+    return { questionType: { type: "MostCommonCount" }, value: max };
+  },
+  (sol) => {
+    const counts = [0, 0, 0, 0, 0];
+    for (const a of sol) counts[L2I[a]] += 1;
+    const min = Math.min(...counts);
+    if (counts.filter((c) => c === min).length !== 1) return null;
+    return { questionType: { type: "LeastCommon" }, value: counts.indexOf(min) };
+  },
+  (sol) => {
+    const counts = [0, 0, 0, 0, 0];
+    for (const a of sol) counts[L2I[a]] += 1;
+    if (counts.filter((c) => c === 1).length !== 1) return null;
+    return { questionType: { type: "Unique" }, value: counts.indexOf(1) };
+  },
+  (sol, _qi, _n, rng) => {
+    const ref = rng.pick(LETTERS);
+    const refCount = sol.filter((x) => x === ref).length;
+    const candidates = LETTERS.filter(
+      (l) => l !== ref && sol.filter((x) => x === l).length === refCount,
+    );
+    if (candidates.length === 0) return null;
+    const target = rng.pick(candidates);
+    return {
+      questionType: { type: "EqualCount", answer: ref },
+      value: L2I[target],
+    };
+  },
+  (sol) => {
+    for (let i = 0; i < sol.length - 1; i++) {
+      if (sol[i] === sol[i + 1]) {
+        return { questionType: { type: "ConsecIdent" }, value: i };
+      }
+    }
+    return { questionType: { type: "ConsecIdent" }, value: -1 };
+  },
+  (sol, _qi, _n, rng) => {
+    const a = rng.pick(LETTERS);
+    let found = -1;
+    let count = 0;
+    for (let i = 0; i < sol.length; i++) {
+      if ((i + 1) % 2 === 1 && sol[i] === a) {
+        found = i;
+        count++;
+      }
+    }
+    if (count !== 1) return null;
+    return { questionType: { type: "OnlyOdd", answer: a }, value: found };
+  },
+  (sol, _qi, _n, rng) => {
+    const a = rng.pick(LETTERS);
+    let found = -1;
+    let count = 0;
+    for (let i = 0; i < sol.length; i++) {
+      if ((i + 1) % 2 === 0 && sol[i] === a) {
+        found = i;
+        count++;
+      }
+    }
+    if (count !== 1) return null;
+    return { questionType: { type: "OnlyEven", answer: a }, value: found };
+  },
+  (sol, _qi, n, rng) => {
+    const ref = rng.int(0, n - 1);
+    const refAns = sol[ref];
+    const matches: number[] = [];
+    for (let i = 0; i < n; i++) {
+      if (i !== ref && sol[i] === refAns) matches.push(i);
+    }
+    if (matches.length === 0) return null;
+    return {
+      questionType: { type: "SameAsWhich", questionIndex: ref },
+      value: rng.pick(matches),
+    };
+  },
+];
+
+function makeTrueClaim(sol: AnswerLetter[], qi: number, n: number, rng: RNG): Claim {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const gen = rng.pick(CLAIM_GENS);
+    const claim = gen(sol, qi, n, rng);
+    if (claim != null && evaluateClaim(claim, qi, sol)) return claim;
   }
   const a = rng.pick(LETTERS);
   return {
@@ -1071,13 +1183,16 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
     value: sol.filter((x) => x === a).length,
   };
 }
+
 function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
-  switch (claim.questionType.type) {
+  const qt = claim.questionType.type;
+  switch (qt) {
     case "CountAnswer":
     case "CountConsonant":
     case "CountVowel":
     case "CountAnswerAfter":
-    case "CountAnswerBefore": {
+    case "CountAnswerBefore":
+    case "MostCommonCount": {
       const offset = rng.pick([-2, -1, 1, 2]);
       const newVal = claim.value + offset;
       if (newVal < 0 || newVal > n) return null;
@@ -1085,17 +1200,27 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     }
     case "FirstWith":
     case "LastWith":
+    case "ClosestAfter":
+    case "ClosestBefore":
+    case "ConsecIdent":
+    case "OnlyOdd":
+    case "OnlyEven":
+    case "SameAsWhich":
       return { ...claim, value: rng.int(0, n - 1) };
     case "AnswerOf":
     case "MostCommon":
+    case "LeastCommon":
+    case "Unique":
+    case "EqualCount":
       return { ...claim, value: L2I[rng.pick(LETTERS)] };
     default:
       return null;
   }
 }
+
 function makeFalseClaim(sol: AnswerLetter[], qi: number, n: number, rng: RNG): Claim {
   for (let i = 0; i < 30; i++) {
-    const base = makeTrueClaim(sol, n, rng);
+    const base = makeTrueClaim(sol, qi, n, rng);
     const fc = perturbClaim(base, n, rng);
     if (fc && !evaluateClaim(fc, qi, sol)) return fc;
   }
@@ -1122,6 +1247,26 @@ function claimCategory(c: Claim): string {
       return "last:" + qt.answer;
     case "MostCommon":
       return "mostcommon";
+    case "ClosestAfter":
+      return "closestafter:" + qt.answer + ":" + qt.afterIndex;
+    case "ClosestBefore":
+      return "closestbefore:" + qt.answer + ":" + qt.beforeIndex;
+    case "MostCommonCount":
+      return "mostcommoncount";
+    case "LeastCommon":
+      return "leastcommon";
+    case "Unique":
+      return "unique";
+    case "EqualCount":
+      return "equalcount:" + qt.answer;
+    case "ConsecIdent":
+      return "consecident";
+    case "OnlyOdd":
+      return "onlyodd:" + qt.answer;
+    case "OnlyEven":
+      return "onlyeven:" + qt.answer;
+    case "SameAsWhich":
+      return "sameaswhich:" + qt.questionIndex;
     default:
       return "unknown:" + qt.type;
   }

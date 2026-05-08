@@ -54,8 +54,7 @@ pub fn evaluate_claim(
             before_index,
         } => count_answer(answers, answer, 0, before_index as usize) == value,
         QuestionType::AnswerOf { question_index } => {
-            value >= 0
-                && value <= 4
+            (0..=4).contains(&value)
                 && answers[question_index as usize].map(|a| a.idx() as i16) == Some(value)
         }
         QuestionType::FirstWith { answer } => {
