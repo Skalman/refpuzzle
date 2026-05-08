@@ -7,14 +7,14 @@ export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 // Fast char-code based lookup: 'A'.charCodeAt(0)=65, so L2I_FAST[65]=0, etc.
-const _l2i = new Int8Array(70);
-_l2i[65] = 0;
-_l2i[66] = 1;
-_l2i[67] = 2;
-_l2i[68] = 3;
-_l2i[69] = 4;
+const l2i = new Int8Array(70);
+l2i[65] = 0;
+l2i[66] = 1;
+l2i[67] = 2;
+l2i[68] = 3;
+l2i[69] = 4;
 export function letterIdx(s: string): number {
-  return _l2i[s.charCodeAt(0)];
+  return l2i[s.charCodeAt(0)];
 }
 
 export interface Puzzle {
@@ -210,12 +210,12 @@ const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
   RT_SAME_AS_WHICH,
 ]);
 
-let _fpCache: { puzzle: Puzzle; fp: FlatPuzzle } | null = null;
+let fpCache: { puzzle: Puzzle; fp: FlatPuzzle } | null = null;
 
 export function getFlatPuzzle(puzzle: Puzzle): FlatPuzzle {
-  if (_fpCache && _fpCache.puzzle === puzzle) return _fpCache.fp;
+  if (fpCache && fpCache.puzzle === puzzle) return fpCache.fp;
   const fp = flattenPuzzle(puzzle);
-  _fpCache = { puzzle, fp };
+  fpCache = { puzzle, fp };
   return fp;
 }
 

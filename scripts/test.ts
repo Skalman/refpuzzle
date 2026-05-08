@@ -11,19 +11,13 @@ import { checkSolvable } from "../src/engine/solve.ts";
 import type { SolveOutcome } from "../src/engine/solve.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolve } from "node:path";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const dailyDir = resolve(__dirname, "../public/puzzles/daily");
+const dailyDir = resolve(import.meta.dirname, "../public/puzzles/daily");
 
 const allPuzzles: Puzzle[] = [];
-for (const file of readdirSync(dailyDir).filter((f: string) =>
-  f.endsWith(".json"),
-)) {
-  const yearData = parseCompactYear(
-    JSON.parse(readFileSync(resolve(dailyDir, file), "utf8")),
-  );
+for (const file of readdirSync(dailyDir).filter((f: string) => f.endsWith(".json"))) {
+  const yearData = parseCompactYear(JSON.parse(readFileSync(resolve(dailyDir, file), "utf8")));
   for (const dateKey of Object.keys(yearData)) {
     for (const [levelKey, puzzle] of Object.entries(yearData[dateKey])) {
       puzzle.id = `${file.replace(".json", "")}-${dateKey}-${levelKey}`;
@@ -58,8 +52,9 @@ function assertEq<T>(actual: T, expected: T, msg: string) {
 // ════════════════════════════════════════════════
 
 function testSharedEvaluators() {
-
-  const suite = JSON.parse(readFileSync(resolve(__dirname, "../tests/evaluators.json"), "utf8"));
+  const suite = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/evaluators.json"), "utf8"),
+  );
   for (const test of suite.tests) {
     if ("section" in test) continue;
     const compact = test.puzzle;
@@ -88,9 +83,7 @@ function bruteForce(puzzle: Puzzle, maxN = 8): AnswerLetter[][] {
 
   function recurse(depth: number) {
     if (depth === n) {
-      const valid = fp.questions.every((q, i) =>
-        evaluate(q, i, current[i], current, fp),
-      );
+      const valid = fp.questions.every((q, i) => evaluate(q, i, current[i], current, fp));
       if (valid) solutions.push([...current]);
       return;
     }
@@ -118,7 +111,6 @@ function shuffle<T>(arr: T[]): T[] {
 }
 
 function testGeneratedSolver() {
-
   const shuffled = shuffle(allPuzzles);
   const deadline = performance.now() + 10_000;
   let count = 0;
@@ -138,31 +130,19 @@ function testGeneratedSolver() {
     const sol = solutions[0];
 
     const fp = flattenPuzzle(puzzle);
-    const allValid = fp.questions.every((q, i) =>
-      evaluate(q, i, sol[i], sol, fp),
-    );
+    const allValid = fp.questions.every((q, i) => evaluate(q, i, sol[i], sol, fp));
     assert(allValid, `${name}: solution [${sol.join(",")}] validates`);
 
-    const ruleKeys = new Set(
-      puzzle.questions.map((q) => JSON.stringify(q.questionType)),
-    );
-    assert(
-      ruleKeys.size === puzzle.questions.length,
-      `${name}: all question rules are unique`,
-    );
+    const ruleKeys = new Set(puzzle.questions.map((q) => JSON.stringify(q.questionType)));
+    assert(ruleKeys.size === puzzle.questions.length, `${name}: all question rules are unique`);
 
     for (let i = 0; i < puzzle.questions.length; i++) {
-      assert(
-        puzzle.questions[i].options.length === 5,
-        `${name} Q${i + 1}: has 5 options`,
-      );
+      assert(puzzle.questions[i].options.length === 5, `${name} Q${i + 1}: has 5 options`);
     }
 
     for (let i = 0; i < puzzle.questions.length; i++) {
       if (puzzle.questions[i].questionType.type === "TrueStmt") continue;
-      const values = puzzle.questions[i].options.map((o) =>
-        JSON.stringify(o.value),
-      );
+      const values = puzzle.questions[i].options.map((o) => JSON.stringify(o.value));
       const unique = new Set(values);
       assert(
         unique.size === 5,
@@ -174,7 +154,6 @@ function testGeneratedSolver() {
 }
 
 function testGeneratedBruteForce() {
-
   const small = shuffle(allPuzzles.filter((p) => p.questions.length <= 8));
   const deadline = performance.now() + 10_000;
   let count = 0;
@@ -202,7 +181,6 @@ function testGeneratedBruteForce() {
 // ════════════════════════════════════════════════
 
 function testSolverEdgeCases() {
-
   // Puzzle with no solution
   const impossible: Puzzle = {
     id: "imp",
@@ -210,23 +188,11 @@ function testSolverEdgeCases() {
     difficulty: "1",
     questions: [
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerOf", questionIndex: 1 },
       },
       {
-        options: [
-          { value: 1 },
-          { value: 0 },
-          { value: 3 },
-          { value: 4 },
-          { value: 2 },
-        ],
+        options: [{ value: 1 }, { value: 0 }, { value: 3 }, { value: 4 }, { value: 2 }],
         // Q2 mirrors Q1, but options are swapped so Q1=Q2 is impossible
         // Q1=A → optA='A' → Q2 must be A → Q2=A → optA='B' → Q1 must be B → contradiction
         questionType: { type: "AnswerOf", questionIndex: 0 },
@@ -236,11 +202,7 @@ function testSolverEdgeCases() {
   const impSol = solve(impossible, undefined, 5);
   // Check via brute force too
   const impBrute = bruteForce(impossible);
-  assertEq(
-    impSol.length,
-    impBrute.length,
-    "impossible puzzle: solver agrees with brute force",
-  );
+  assertEq(impSol.length, impBrute.length, "impossible puzzle: solver agrees with brute force");
 
   // Puzzle with multiple solutions: two answer_is_self questions (any combo works)
   const multi: Puzzle = {
@@ -249,41 +211,24 @@ function testSolverEdgeCases() {
     difficulty: "1",
     questions: [
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerIsSelf" },
       },
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerIsSelf" },
       },
     ],
   };
   const multiSol = solve(multi, undefined, 30);
   const multiBrute = bruteForce(multi);
-  assert(
-    multiBrute.length === 25,
-    `answer_is_self x2: brute force finds 25 solutions (5x5)`,
-  );
+  assert(multiBrute.length === 25, `answer_is_self x2: brute force finds 25 solutions (5x5)`);
   assertEq(multiSol.length, 25, "multi-solution: solver finds all 25");
 }
 
 // ════════════════════════════════════════════════
 // Hint engine tests
 // ════════════════════════════════════════════════
-
-
 
 function blankState(n: number): {
   answers: (AnswerLetter | null)[];
@@ -328,7 +273,6 @@ function applyAction(
 }
 
 function testHints() {
-
   // ── Contradiction: answer_of_question says Q1=B but Q1 is marked C ──
   const contradictionPuzzle: Puzzle = {
     id: "h1",
@@ -336,23 +280,11 @@ function testHints() {
     difficulty: "1",
     questions: [
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerIsSelf" },
       },
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerOf", questionIndex: 0 },
       },
     ],
@@ -407,33 +339,15 @@ function testHints() {
     difficulty: "1",
     questions: [
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "CountAnswer", answer: "A" },
       },
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerIsSelf" },
       },
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerIsSelf" },
       },
     ],
@@ -468,23 +382,11 @@ function testHints() {
     difficulty: "1",
     questions: [
       {
-        options: [
-          { value: 0 },
-          { value: 1 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerOf", questionIndex: 1 },
       },
       {
-        options: [
-          { value: 1 },
-          { value: 0 },
-          { value: 2 },
-          { value: 3 },
-          { value: 4 },
-        ],
+        options: [{ value: 1 }, { value: 0 }, { value: 2 }, { value: 3 }, { value: 4 }],
         questionType: { type: "AnswerOf", questionIndex: 0 },
       },
     ],
@@ -510,23 +412,11 @@ function testHints() {
       difficulty: "1",
       questions: [
         {
-          options: [
-            { value: 0 },
-            { value: 1 },
-            { value: 2 },
-            { value: 3 },
-            { value: 4 },
-          ],
+          options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
           questionType: { type: "AnswerIsSelf" },
         },
         {
-          options: [
-            { value: 0 },
-            { value: 1 },
-            { value: 2 },
-            { value: 3 },
-            { value: 4 },
-          ],
+          options: [{ value: 0 }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }],
           questionType: { type: "AnswerIsSelf" },
         },
       ],
@@ -570,8 +460,7 @@ function testHints() {
     if (!stuck && answers.every((a) => a != null)) {
       const solutions = solve(puzzle, undefined, 2);
       assert(
-        solutions.length === 1 &&
-          JSON.stringify(answers) === JSON.stringify(solutions[0]),
+        solutions.length === 1 && JSON.stringify(answers) === JSON.stringify(solutions[0]),
         `${puzzle.id}: hint engine solves to the unique solution`,
       );
     } else {
@@ -587,13 +476,7 @@ function testHints() {
 function mkState(steps: Marks[]): SavedState {
   const history: { marks: Marks }[][] = [
     steps.map(() => ({
-      marks: [
-        "unmarked",
-        "unmarked",
-        "unmarked",
-        "unmarked",
-        "unmarked",
-      ] as Marks,
+      marks: ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"] as Marks,
     })),
   ];
   let current = history[0].map((q) => ({ marks: [...q.marks] as Marks }));
@@ -616,7 +499,6 @@ function mkState(steps: Marks[]): SavedState {
 }
 
 function testShare() {
-
   const marks: Marks[] = [
     ["correct", "incorrect", "unmarked", "unmarked", "unmarked"],
     ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"],
@@ -634,9 +516,7 @@ function testShare() {
   );
 
   // All unmarked — single-step history, encode/decode should roundtrip
-  const blankState = mkState([
-    ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"],
-  ]);
+  const blankState = mkState([["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"]]);
   const blankEncoded = encodeHistory(blankState);
   const blankDecoded = decodeHistory(blankEncoded, 1);
   assert(blankDecoded != null, "decode: blank returns non-null");
@@ -647,9 +527,7 @@ function testShare() {
   );
 
   // All correct
-  const correctState = mkState([
-    ["correct", "correct", "correct", "correct", "correct"],
-  ]);
+  const correctState = mkState([["correct", "correct", "correct", "correct", "correct"]]);
   const correctEncoded = encodeHistory(correctState);
   const correctDecoded = decodeHistory(correctEncoded, 1);
   assert(correctDecoded != null, "decode: all-correct returns non-null");
@@ -674,7 +552,6 @@ function testShare() {
 // ════════════════════════════════════════════════
 
 function testSharedCheckValidity() {
-
   const suiteJson = JSON.parse(
     readFileSync(resolve(__dirname, "../tests/check-validity.json"), "utf8"),
   );
@@ -716,135 +593,132 @@ function testSharedCheckValidity() {
     };
     const n = puz.q.length;
 
-    const questions = puz.q.map(
-      (q): import("../src/engine/types.ts").QuestionDef => {
-        const r = q.t as Record<string, unknown>;
-        const type = r.t as string;
-        const a = typeof r.a === "number" ? LETTERS[r.a as number] : undefined;
-        const qIdx = r.q as number | undefined;
+    const questions = puz.q.map((q): import("../src/engine/types.ts").QuestionDef => {
+      const r = q.t as Record<string, unknown>;
+      const type = r.t as string;
+      const a = typeof r.a === "number" ? LETTERS[r.a as number] : undefined;
+      const qIdx = r.q as number | undefined;
 
-        let questionType: import("../src/engine/types.ts").QuestionTypeDef;
-        switch (type) {
-          case "CountAnswer":
-            questionType = { type, answer: a! };
-            break;
-          case "CountAnswerBefore":
-            questionType = { type, answer: a!, beforeIndex: qIdx! };
-            break;
-          case "CountAnswerAfter":
-            questionType = { type, answer: a!, afterIndex: qIdx! };
-            break;
-          case "CountVowel":
-          case "CountConsonant":
-          case "MostCommonCount":
-            questionType = {
-              type,
-            } as import("../src/engine/types.ts").QuestionTypeDef;
-            break;
-          case "ClosestAfter":
-            questionType = { type, afterIndex: qIdx!, answer: a! };
-            break;
-          case "ClosestBefore":
-            questionType = { type, beforeIndex: qIdx!, answer: a! };
-            break;
-          case "FirstWith":
-          case "LastWith":
-            questionType = { type, answer: a! };
-            break;
-          case "OnlyOdd":
-          case "OnlyEven":
-            questionType = {
-              type,
-              answer: a!,
-            } as import("../src/engine/types.ts").QuestionTypeDef;
-            break;
-          case "AnswerOf":
-            questionType = { type, questionIndex: qIdx! };
-            break;
-          case "LetterDist":
-            questionType = { type, questionIndex: qIdx! };
-            break;
-          case "SameAsWhich":
-            questionType = { type, questionIndex: qIdx! };
-            break;
-          case "EqualCount":
-            questionType = { type, answer: a! };
-            break;
-          default:
-            questionType = {
-              type,
-            } as import("../src/engine/types.ts").QuestionTypeDef;
-            break;
-        }
+      let questionType: import("../src/engine/types.ts").QuestionTypeDef;
+      switch (type) {
+        case "CountAnswer":
+          questionType = { type, answer: a! };
+          break;
+        case "CountAnswerBefore":
+          questionType = { type, answer: a!, beforeIndex: qIdx! };
+          break;
+        case "CountAnswerAfter":
+          questionType = { type, answer: a!, afterIndex: qIdx! };
+          break;
+        case "CountVowel":
+        case "CountConsonant":
+        case "MostCommonCount":
+          questionType = {
+            type,
+          } as import("../src/engine/types.ts").QuestionTypeDef;
+          break;
+        case "ClosestAfter":
+          questionType = { type, afterIndex: qIdx!, answer: a! };
+          break;
+        case "ClosestBefore":
+          questionType = { type, beforeIndex: qIdx!, answer: a! };
+          break;
+        case "FirstWith":
+        case "LastWith":
+          questionType = { type, answer: a! };
+          break;
+        case "OnlyOdd":
+        case "OnlyEven":
+          questionType = {
+            type,
+            answer: a!,
+          } as import("../src/engine/types.ts").QuestionTypeDef;
+          break;
+        case "AnswerOf":
+          questionType = { type, questionIndex: qIdx! };
+          break;
+        case "LetterDist":
+          questionType = { type, questionIndex: qIdx! };
+          break;
+        case "SameAsWhich":
+          questionType = { type, questionIndex: qIdx! };
+          break;
+        case "EqualCount":
+          questionType = { type, answer: a! };
+          break;
+        default:
+          questionType = {
+            type,
+          } as import("../src/engine/types.ts").QuestionTypeDef;
+          break;
+      }
 
-        const options: import("../src/engine/types.ts").OptionDef[] = [];
-        if (q.c) {
-          for (const c of q.c) {
-            if (c == null) {
-              options.push({
-                value: null,
-                claim: { type: "CountAnswer", answer: "A", value: 0 },
-              });
-            } else {
-              const ct = c.t as string;
-              const ca =
-                typeof c.a === "number" ? LETTERS[c.a as number] : undefined;
-              const cv = c.v as number;
-              let claim: import("../src/engine/types.ts").Claim;
-              switch (ct) {
-                case "CountAnswer":
-                  claim = { type: ct, answer: ca!, value: cv };
-                  break;
-                case "CountConsonant":
-                  claim = { type: ct, value: cv };
-                  break;
-                case "CountVowel":
-                  claim = { type: ct, value: cv };
-                  break;
-                case "CountAnswerAfter":
-                  claim = {
-                    type: ct,
-                    answer: ca!,
-                    afterIndex: c.q as number,
-                    value: cv,
-                  };
-                  break;
-                case "CountAnswerBefore":
-                  claim = {
-                    type: ct,
-                    answer: ca!,
-                    beforeIndex: c.q as number,
-                    value: cv,
-                  };
-                  break;
-                case "AnswerOf":
-                  claim = { type: ct, questionIndex: c.q as number, value: cv };
-                  break;
-                case "FirstWith":
-                  claim = { type: ct, answer: ca!, value: cv };
-                  break;
-                case "LastWith":
-                  claim = { type: ct, answer: ca!, value: cv };
-                  break;
-                case "MostCommon":
-                  claim = { type: ct, value: cv };
-                  break;
-                default:
-                  claim = { type: "CountAnswer", answer: "A", value: 0 };
-                  break;
-              }
-              options.push({ value: null, claim });
+      const options: import("../src/engine/types.ts").OptionDef[] = [];
+      if (q.c) {
+        for (const c of q.c) {
+          if (c == null) {
+            options.push({
+              value: null,
+              claim: { type: "CountAnswer", answer: "A", value: 0 },
+            });
+          } else {
+            const ct = c.t as string;
+            const ca = typeof c.a === "number" ? LETTERS[c.a as number] : undefined;
+            const cv = c.v as number;
+            let claim: import("../src/engine/types.ts").Claim;
+            switch (ct) {
+              case "CountAnswer":
+                claim = { type: ct, answer: ca!, value: cv };
+                break;
+              case "CountConsonant":
+                claim = { type: ct, value: cv };
+                break;
+              case "CountVowel":
+                claim = { type: ct, value: cv };
+                break;
+              case "CountAnswerAfter":
+                claim = {
+                  type: ct,
+                  answer: ca!,
+                  afterIndex: c.q as number,
+                  value: cv,
+                };
+                break;
+              case "CountAnswerBefore":
+                claim = {
+                  type: ct,
+                  answer: ca!,
+                  beforeIndex: c.q as number,
+                  value: cv,
+                };
+                break;
+              case "AnswerOf":
+                claim = { type: ct, questionIndex: c.q as number, value: cv };
+                break;
+              case "FirstWith":
+                claim = { type: ct, answer: ca!, value: cv };
+                break;
+              case "LastWith":
+                claim = { type: ct, answer: ca!, value: cv };
+                break;
+              case "MostCommon":
+                claim = { type: ct, value: cv };
+                break;
+              default:
+                claim = { type: "CountAnswer", answer: "A", value: 0 };
+                break;
             }
-          }
-        } else if (q.o) {
-          for (const v of q.o) {
-            options.push({ value: v });
+            options.push({ value: null, claim });
           }
         }
+      } else if (q.o) {
+        for (const v of q.o) {
+          options.push({ value: v });
+        }
+      }
 
-        return { options, questionType };
-      },
-    );
+      return { options, questionType };
+    });
 
     const puzzle: import("../src/engine/types.ts").Puzzle = {
       id: "cv",
@@ -854,8 +728,9 @@ function testSharedCheckValidity() {
     };
     const fp = flattenPuzzle(puzzle);
 
-    const answers: (import("../src/engine/types.ts").AnswerLetter | null)[] =
-      new Array(n).fill(null);
+    const answers: (import("../src/engine/types.ts").AnswerLetter | null)[] = new Array(n).fill(
+      null,
+    );
     const eliminated: number[] = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       const s = state[i];
@@ -872,10 +747,7 @@ function testSharedCheckValidity() {
     }
 
     const got = checkAnswerValidity(fp, answers, eliminated, qi);
-    assert(
-      got === expect,
-      `shared check-validity: ${name}: expected ${expect}, got ${got}`,
-    );
+    assert(got === expect, `shared check-validity: ${name}: expected ${expect}, got ${got}`);
   }
 }
 
@@ -884,10 +756,7 @@ function testSharedCheckValidity() {
 // ════════════════════════════════════════════════
 
 function testSharedLookahead() {
-
-  const suiteJson = JSON.parse(
-    readFileSync(resolve(__dirname, "../tests/lookahead.json"), "utf8"),
-  );
+  const suiteJson = JSON.parse(readFileSync(resolve(__dirname, "../tests/lookahead.json"), "utf8"));
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -926,15 +795,10 @@ function testSharedLookahead() {
     }
 
     const result = lookahead(fp, answers, eliminated);
-    const got = result
-      ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}`
-      : null;
+    const got = result ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}` : null;
     const gotStr = got === null ? "null" : got;
     const expectStr = expect === null ? "null" : expect;
-    assert(
-      gotStr === expectStr,
-      `shared lookahead: ${name}: expected ${expectStr}, got ${gotStr}`,
-    );
+    assert(gotStr === expectStr, `shared lookahead: ${name}: expected ${expectStr}, got ${gotStr}`);
   }
 }
 
@@ -943,10 +807,7 @@ function testSharedLookahead() {
 // ════════════════════════════════════════════════
 
 function testSharedSolve() {
-
-  const suiteJson = JSON.parse(
-    readFileSync(resolve(__dirname, "../tests/solve.json"), "utf8"),
-  );
+  const suiteJson = JSON.parse(readFileSync(resolve(__dirname, "../tests/solve.json"), "utf8"));
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -967,10 +828,7 @@ function testSharedSolve() {
     const fp = flattenPuzzle(puzzle);
 
     const got = checkSolvable(fp);
-    assert(
-      got === expect,
-      `shared solve: ${name}: expected ${expect}, got ${got}`,
-    );
+    assert(got === expect, `shared solve: ${name}: expected ${expect}, got ${got}`);
   }
 }
 
@@ -987,16 +845,22 @@ function testSharedDeduce() {
     const a = dr.action;
     if (a.type === "force") return `${a.questionIndex + 1}${a.letter}`;
     if (a.type === "eliminate") return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
-    if (a.type === "eliminateMulti") return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
+    if (a.type === "eliminateMulti")
+      return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
     return "null";
   }
 
   function parsePuzzle(compact: Record<string, unknown>) {
-    const wrapped = { "0101": { "1": compact } } as unknown as Parameters<typeof parseCompactYear>[0];
+    const wrapped = { "0101": { "1": compact } } as unknown as Parameters<
+      typeof parseCompactYear
+    >[0];
     return parseCompactYear(wrapped)["0101"]["1"];
   }
 
-  function applyState(n: number, state: string[]): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
+  function applyState(
+    n: number,
+    state: string[],
+  ): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
     const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(0);
     for (let qi = 0; qi < n; qi++) {
@@ -1021,7 +885,8 @@ function testSharedDeduce() {
     const n = puzzle.questions.length;
     const { answers, eliminated } = applyState(n, state);
 
-    const parsedRule: DeduceRule | null = ruleStr && ALL_DEDUCE_RULES.includes(ruleStr) ? ruleStr : null;
+    const parsedRule: DeduceRule | null =
+      ruleStr && ALL_DEDUCE_RULES.includes(ruleStr) ? ruleStr : null;
     if (parsedRule) coveredRules.add(parsedRule);
 
     const results = parsedRule
@@ -1036,7 +901,10 @@ function testSharedDeduce() {
       try {
         const steps = explainDeduce(puzzle, fp, answers, eliminated, results[0]);
         const hasFallback = steps.some(
-          (s) => s.type === "simple" && (/^Q\d+ can't be [A-E]\.$/.test(s.text) || /^Q\d+ options? [A-E, ]+ can be ruled out\.$/.test(s.text)),
+          (s) =>
+            s.type === "simple" &&
+            (/^Q\d+ can't be [A-E]\.$/.test(s.text) ||
+              /^Q\d+ options? [A-E, ]+ can be ruled out\.$/.test(s.text)),
         );
         assert(!hasFallback, `deduce explain fallback: ${name}`);
       } catch (e) {
@@ -1048,7 +916,10 @@ function testSharedDeduce() {
     if (parsedRule && results[0] && got === expected) {
       const without = deduceWithRule(fp, answers, eliminated, null, parsedRule);
       const withoutGot = formatAction(without[0]);
-      assert(withoutGot !== got, `deduce DRY: ${name}: excluding "${parsedRule}" still produces ${got}`);
+      assert(
+        withoutGot !== got,
+        `deduce DRY: ${name}: excluding "${parsedRule}" still produces ${got}`,
+      );
     }
   }
 

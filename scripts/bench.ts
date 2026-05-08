@@ -1,4 +1,4 @@
-import { generate } from "../src/generator/assemble.ts";
+import { generateConstructive } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
 
@@ -10,7 +10,7 @@ const times: number[] = [];
 for (let s = 0; s < seeds; s++) {
 	const rng = new RNG(42 + s * 7919);
 	const t0 = performance.now();
-	const result = generate(profile, rng);
+	const result = generateConstructive(profile, rng);
 	const elapsed = performance.now() - t0;
 	times.push(elapsed);
 	console.log(

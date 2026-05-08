@@ -1,14 +1,11 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
+import type { CompactPuzzle } from "../src/puzzles/daily.ts";
 import type { FlatPuzzle, Puzzle } from "../src/engine/types.ts";
 import { flattenPuzzle } from "../src/engine/types.ts";
 import { checkSolvable } from "../src/engine/solve.ts";
 import type { SolveOutcome } from "../src/engine/solve.ts";
-
-interface CompactPuzzle {
-  q: unknown[];
-}
 
 interface TestCase {
   name: string;

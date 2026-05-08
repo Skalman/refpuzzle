@@ -32,13 +32,18 @@ import {
 } from "./types.ts";
 
 // Reusable scratch for letter frequency counts (avoids allocation in hot path)
-const _counts = [0, 0, 0, 0, 0];
+const reusableCounts = [0, 0, 0, 0, 0];
 function fillCounts(answers: (AnswerLetter | null)[]): number[] {
-  _counts[0] = _counts[1] = _counts[2] = _counts[3] = _counts[4] = 0;
+  reusableCounts[0] =
+    reusableCounts[1] =
+    reusableCounts[2] =
+    reusableCounts[3] =
+    reusableCounts[4] =
+      0;
   for (const a of answers) {
-    if (a != null) _counts[letterIdx(a)]++;
+    if (a != null) reusableCounts[letterIdx(a)]++;
   }
-  return _counts;
+  return reusableCounts;
 }
 
 function countAnswer(answers: (AnswerLetter | null)[], target: string): number {

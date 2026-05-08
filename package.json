@@ -1,7 +1,7 @@
 {
   "name": "refpuzzle",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "lint": "pnpm lint:src && pnpm lint:scripts && pnpm lint:test",
     "lint:src": "oxlint --tsconfig tsconfig.app.json --type-aware --type-check src/",
-    "lint:scripts": "oxlint -D correctness -D suspicious -D perf -A no-unused-vars -A no-shadow -A no-map-spread scripts/*.ts scripts/*.mts",
+    "lint:scripts": "oxlint -D correctness -D suspicious -D perf -A no-unused-vars -A no-shadow -A no-map-spread -A no-unsafe-type-assertion -A no-unnecessary-type-assertion --type-aware --type-check scripts/*.ts scripts/*.mts",
     "lint:test": "oxlint --tsconfig tsconfig.node.json --type-aware --type-check -A no-unused-vars -A no-shadow -A no-map-spread -A no-unnecessary-boolean-literal-compare -A no-unsafe-type-assertion -A no-unnecessary-type-assertion scripts/test.ts scripts/test-deduce.mts",
     "fmt": "oxfmt --write src/ tests/",
     "fmt:check": "oxfmt --check src/ tests/",
@@ -21,18 +21,18 @@
   },
   "dependencies": {
     "jsqr": "^1.4.0",
-    "preact": "^10.28.4",
-    "preact-iso": "^2.11.1",
+    "preact": "^10.29.1",
+    "preact-iso": "^2.12.0",
     "tinykeys": "^3.0.0",
     "uqr": "^0.1.3"
   },
   "devDependencies": {
-    "@preact/preset-vite": "^2.10.3",
-    "@types/node": "^24.12.0",
-    "oxfmt": "^0.45.0",
-    "oxlint": "^1.57.0",
-    "oxlint-tsgolint": "^0.21.1",
-    "vite": "^8.0.0"
+    "@preact/preset-vite": "^2.10.5",
+    "@types/node": "^25.6.0",
+    "oxfmt": "^0.47.0",
+    "oxlint": "^1.62.0",
+    "oxlint-tsgolint": "^0.22.1",
+    "vite": "^8.0.10"
   },
   "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
 }
