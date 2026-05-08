@@ -1388,6 +1388,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
 fn make_true_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> Claim {
     for _ in 0..20 {
         if let Some(claim) = try_make_claim(sol, qi, n, rng) {
+            debug_assert!(evaluate_claim(&claim, qi, &to_optional(sol, n), n));
             return claim;
         }
     }
