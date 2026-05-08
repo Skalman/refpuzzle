@@ -116,9 +116,7 @@ function expandQuestion(q: CompactQuestionTypeDef): QuestionTypeDef {
 }
 
 function expandClaim(c: CompactClaim): Claim {
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const rule = expandQuestion(c) as QuestionTypeDef & { type: Claim["type"] };
-  return { ...rule, value: c.v };
+  return { questionType: expandQuestion(c), value: c.v };
 }
 
 export function todayDateStr(): string {

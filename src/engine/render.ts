@@ -95,7 +95,11 @@ export function renderOptionLabel(qt: QuestionTypeDef, value: number | null, _qi
 }
 
 export function renderClaimLabel(claim: Claim): string {
-  return renderQuestionText(claim) + " " + renderOptionLabel(claim, claim.value, -1);
+  return (
+    renderQuestionText(claim.questionType) +
+    " " +
+    renderOptionLabel(claim.questionType, claim.value, -1)
+  );
 }
 
 const LETTER_RULES = new Set(["AnswerOf", "LeastCommon", "MostCommon", "Unique", "AnswerIsSelf"]);

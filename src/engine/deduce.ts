@@ -1400,13 +1400,14 @@ export function deduceWithRule(
       const claim = fp.optionClaims[qi][letterIdx(a)];
       if (!claim) continue;
 
+      const cqt = claim.questionType;
       if (
-        (claim.type === "FirstWith" || claim.type === "LastWith") &&
+        (cqt.type === "FirstWith" || cqt.type === "LastWith") &&
         claim.value >= 0 &&
         claim.value < n
       ) {
         const targetQi = claim.value;
-        const targetLetter = claim.answer;
+        const targetLetter = cqt.answer;
         if (answers[targetQi] == null) {
           const targetOi = letterIdx(targetLetter);
           if (!isElim(eliminated, targetQi, targetOi)) {
@@ -1424,8 +1425,8 @@ export function deduceWithRule(
         }
       }
 
-      if (claim.type === "AnswerOf" && claim.value >= 0 && claim.value < 5) {
-        const targetQi = claim.questionIndex;
+      if (cqt.type === "AnswerOf" && claim.value >= 0 && claim.value < 5) {
+        const targetQi = cqt.questionIndex;
         const targetLetter = LETTERS[claim.value];
         if (answers[targetQi] == null) {
           const targetOi = claim.value;
@@ -1605,17 +1606,18 @@ export function deduceWithRule(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
+        const cqt = claim.questionType;
         let contradicts = false;
         if (
-          (claim.type === "FirstWith" || claim.type === "LastWith") &&
+          (cqt.type === "FirstWith" || cqt.type === "LastWith") &&
           claim.value === qi &&
-          claim.answer !== LETTERS[oi]
+          cqt.answer !== LETTERS[oi]
         ) {
           contradicts = true;
         }
         if (
-          claim.type === "AnswerOf" &&
-          claim.questionIndex === qi &&
+          cqt.type === "AnswerOf" &&
+          cqt.questionIndex === qi &&
           LETTERS[claim.value] !== LETTERS[oi]
         ) {
           contradicts = true;
@@ -1643,43 +1645,44 @@ export function deduceWithRule(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
+        const cqt = claim.questionType;
         let invalid = false;
-        if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value < n) {
+        if ((cqt.type === "FirstWith" || cqt.type === "LastWith") && claim.value < n) {
           const tqi = claim.value;
-          if (answers[tqi] != null && answers[tqi] !== claim.answer) invalid = true;
+          if (answers[tqi] != null && answers[tqi] !== cqt.answer) invalid = true;
         }
-        if (claim.type === "AnswerOf" && claim.questionIndex < n) {
+        if (cqt.type === "AnswerOf" && cqt.questionIndex < n) {
           if (
-            answers[claim.questionIndex] != null &&
-            letterIdx(answers[claim.questionIndex]!) !== claim.value
+            answers[cqt.questionIndex] != null &&
+            letterIdx(answers[cqt.questionIndex]!) !== claim.value
           )
             invalid = true;
         }
         if (
-          claim.type === "CountAnswer" ||
-          claim.type === "CountVowel" ||
-          claim.type === "CountConsonant" ||
-          claim.type === "CountAnswerAfter" ||
-          claim.type === "CountAnswerBefore"
+          cqt.type === "CountAnswer" ||
+          cqt.type === "CountVowel" ||
+          cqt.type === "CountConsonant" ||
+          cqt.type === "CountAnswerAfter" ||
+          cqt.type === "CountAnswerBefore"
         ) {
           const pred: Pred | null =
-            claim.type === "CountAnswer"
-              ? (a) => a === claim.answer
-              : claim.type === "CountVowel"
+            cqt.type === "CountAnswer"
+              ? (a) => a === cqt.answer
+              : cqt.type === "CountVowel"
                 ? (a) => VOWELS.has(a)
-                : claim.type === "CountConsonant"
+                : cqt.type === "CountConsonant"
                   ? (a) => !VOWELS.has(a)
-                  : claim.type === "CountAnswerAfter" || claim.type === "CountAnswerBefore"
-                    ? (a) => a === claim.answer
+                  : cqt.type === "CountAnswerAfter" || cqt.type === "CountAnswerBefore"
+                    ? (a) => a === cqt.answer
                     : null;
           if (pred) {
-            const from = claim.type === "CountAnswerAfter" ? claim.afterIndex + 1 : 0;
-            const to = claim.type === "CountAnswerBefore" ? claim.beforeIndex : n;
+            const from = cqt.type === "CountAnswerAfter" ? cqt.afterIndex + 1 : 0;
+            const to = cqt.type === "CountAnswerBefore" ? cqt.beforeIndex : n;
             const cr = countMatching(answers, eliminated, pred, predMask(pred), from, to);
             if (crMin(cr) > claim.value || crMax(cr) < claim.value) invalid = true;
           }
         }
-        if (claim.type === "MostCommon") {
+        if (cqt.type === "MostCommon") {
           const claimedLetter = LETTERS[claim.value];
           let maxOther = 0;
           for (let li = 0; li < 5; li++) {

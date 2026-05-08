@@ -40,26 +40,10 @@ export interface StatementOption {
   claim: Claim;
 }
 
-export type Claim =
-  | { type: "CountAnswer"; answer: AnswerLetter; value: number }
-  | { type: "CountConsonant"; value: number }
-  | { type: "CountVowel"; value: number }
-  | {
-      type: "CountAnswerAfter";
-      answer: AnswerLetter;
-      afterIndex: number;
-      value: number;
-    }
-  | {
-      type: "CountAnswerBefore";
-      answer: AnswerLetter;
-      beforeIndex: number;
-      value: number;
-    }
-  | { type: "AnswerOf"; questionIndex: number; value: number }
-  | { type: "FirstWith"; answer: AnswerLetter; value: number }
-  | { type: "LastWith"; answer: AnswerLetter; value: number }
-  | { type: "MostCommon"; value: number };
+export interface Claim {
+  questionType: QuestionTypeDef;
+  value: number;
+}
 
 export type QuestionTypeDef =
   // ── Counting ──

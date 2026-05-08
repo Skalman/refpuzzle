@@ -802,7 +802,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
     let mut option_answers = [[0xFFu8; 5]; MAX_N];
-    let mut option_claims = [[Claim::None; 5]; MAX_N];
+    let mut option_claims: [[Option<Claim>; 5]; MAX_N] = [[None; 5]; MAX_N];
 
     for (qi, q) in qs.iter().enumerate() {
         let t = q.get("t")?;
@@ -814,7 +814,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                 if c.is_null() {
                     continue;
                 }
-                option_claims[qi][oi] = serde_json::from_value(c.clone()).ok()?;
+                option_claims[qi][oi] = Some(serde_json::from_value(c.clone()).ok()?);
                 option_nums[qi][oi] = NAN_VAL;
             }
         } else if let Some(opts) = q.get("o") {
@@ -863,10 +863,10 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     })
 }
 
-fn claim_to_json(claim: &Claim) -> Value {
+fn claim_to_json(claim: &Option<Claim>) -> Value {
     match claim {
-        Claim::None => Value::Null,
-        _ => serde_json::to_value(claim).unwrap(),
+        None => Value::Null,
+        Some(c) => serde_json::to_value(c).unwrap(),
     }
 }
 

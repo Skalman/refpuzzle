@@ -206,62 +206,11 @@ impl QuestionType {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
-#[serde(tag = "t")]
-pub enum Claim {
-    #[serde(skip)]
-    None,
-    CountAnswer {
-        #[serde(rename = "a")]
-        answer: Answer,
-        #[serde(rename = "v")]
-        value: u8,
-    },
-    CountConsonant {
-        #[serde(rename = "v")]
-        value: u8,
-    },
-    CountVowel {
-        #[serde(rename = "v")]
-        value: u8,
-    },
-    CountAnswerAfter {
-        #[serde(rename = "a")]
-        answer: Answer,
-        #[serde(rename = "q")]
-        after_index: u8,
-        #[serde(rename = "v")]
-        value: u8,
-    },
-    CountAnswerBefore {
-        #[serde(rename = "a")]
-        answer: Answer,
-        #[serde(rename = "q")]
-        before_index: u8,
-        #[serde(rename = "v")]
-        value: u8,
-    },
-    AnswerOf {
-        #[serde(rename = "q")]
-        question_index: u8,
-        #[serde(rename = "v")]
-        value: Answer,
-    },
-    FirstWith {
-        #[serde(rename = "a")]
-        value: Answer,
-        #[serde(rename = "v")]
-        question_index: u8,
-    },
-    LastWith {
-        #[serde(rename = "a")]
-        value: Answer,
-        #[serde(rename = "v")]
-        question_index: u8,
-    },
-    MostCommon {
-        #[serde(rename = "v")]
-        value: Answer,
-    },
+pub struct Claim {
+    #[serde(flatten)]
+    pub question_type: QuestionType,
+    #[serde(rename = "v")]
+    pub value: i16,
 }
 
 #[derive(Clone)]
@@ -287,7 +236,7 @@ pub struct FlatPuzzle {
     pub question_types: [QuestionType; MAX_N],
     pub option_nums: [[i16; 5]; MAX_N],
     pub option_answers: [[u8; 5]; MAX_N],
-    pub option_claims: [[Claim; 5]; MAX_N],
+    pub option_claims: [[Option<Claim>; 5]; MAX_N],
     pub affected_by: [SmallList; MAX_N],
     pub global_indices: SmallList,
     pub n: usize,

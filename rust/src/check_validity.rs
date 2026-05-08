@@ -633,7 +633,9 @@ pub fn check_answer_validity(
             let mut true_count = 0u8;
             let mut selected_true = false;
             for i in 0..5 {
-                if claims[i] != Claim::None && evaluate_claim(&claims[i], answers, n) {
+                if let Some(c) = &claims[i]
+                    && evaluate_claim(c, qi, answers, n)
+                {
                     true_count += 1;
                     if i == ai {
                         selected_true = true;

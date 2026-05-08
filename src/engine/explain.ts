@@ -415,7 +415,8 @@ function explainForce(
       if (fp.questions[src].t !== RT_TRUE_STMT) continue;
       const claim = fp.optionClaims[src][letterIdx(srcAns)];
       if (!claim) continue;
-      if (claim.type === "AnswerOf" && claim.questionIndex === qi) {
+      const cqt = claim.questionType;
+      if (cqt.type === "AnswerOf" && cqt.questionIndex === qi) {
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
         steps.push(
           simple(
@@ -424,7 +425,7 @@ function explainForce(
         );
         return steps;
       }
-      if ((claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
+      if ((cqt.type === "FirstWith" || cqt.type === "LastWith") && claim.value === qi) {
         steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
         steps.push(
           simple(
@@ -505,9 +506,11 @@ function explainElimination(
 
   if (rule === "TrueStatementClaimInvalid") {
     const claim = fp.optionClaims[qi][oi];
+    const cqt = claim?.questionType;
     if (
       claim &&
-      (claim.type === "FirstWith" || claim.type === "LastWith") &&
+      cqt &&
+      (cqt.type === "FirstWith" || cqt.type === "LastWith") &&
       claim.value < n &&
       answers[claim.value] != null
     ) {
@@ -515,22 +518,23 @@ function explainElimination(
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(
-          `${Q(qi)} option ${letter}'s statement says ${Q(claim.value)} has answer ${claim.answer}, but ${Q(claim.value)} is ${answers[claim.value]}.`,
+          `${Q(qi)} option ${letter}'s statement says ${Q(claim.value)} has answer ${cqt.answer}, but ${Q(claim.value)} is ${answers[claim.value]}.`,
         ),
       );
       return steps;
     }
     if (
       claim &&
-      claim.type === "AnswerOf" &&
-      claim.questionIndex < n &&
-      answers[claim.questionIndex] != null
+      cqt &&
+      cqt.type === "AnswerOf" &&
+      cqt.questionIndex < n &&
+      answers[cqt.questionIndex] != null
     ) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.questionIndex)}.`));
+      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(cqt.questionIndex)}.`));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(
-          `${Q(qi)} option ${letter}'s statement says ${Q(claim.questionIndex)}'s answer is ${LETTERS[claim.value]}, but ${Q(claim.questionIndex)} is ${answers[claim.questionIndex]}.`,
+          `${Q(qi)} option ${letter}'s statement says ${Q(cqt.questionIndex)}'s answer is ${LETTERS[claim.value]}, but ${Q(cqt.questionIndex)} is ${answers[cqt.questionIndex]}.`,
         ),
       );
       return steps;
@@ -544,16 +548,22 @@ function explainElimination(
 
   if (rule === "TrueStatementSelfRef") {
     const claim = fp.optionClaims[qi][oi];
-    if (claim && (claim.type === "FirstWith" || claim.type === "LastWith") && claim.value === qi) {
+    const cqt = claim?.questionType;
+    if (
+      claim &&
+      cqt &&
+      (cqt.type === "FirstWith" || cqt.type === "LastWith") &&
+      claim.value === qi
+    ) {
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(
-          `${Q(qi)} option ${letter}'s statement says ${Q(qi)} has answer ${claim.answer}, but that contradicts ${Q(qi)} being ${letter}.`,
+          `${Q(qi)} option ${letter}'s statement says ${Q(qi)} has answer ${cqt.answer}, but that contradicts ${Q(qi)} being ${letter}.`,
         ),
       );
       return steps;
     }
-    if (claim && claim.type === "AnswerOf" && claim.questionIndex === qi) {
+    if (claim && cqt && cqt.type === "AnswerOf" && cqt.questionIndex === qi) {
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(

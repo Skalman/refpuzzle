@@ -1638,38 +1638,39 @@ fn deduce_impl(
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
                 continue;
             }
-            let claim = &fp.option_claims[qi][a.idx()];
-            match *claim {
-                Claim::FirstWith {
-                    value: answer,
-                    question_index,
-                }
-                | Claim::LastWith {
-                    value: answer,
-                    question_index,
-                } => {
-                    let tqi = question_index as usize;
-                    if tqi < n && answers[tqi].is_none() && !is_elim(eliminated, tqi, answer.idx())
+            let Some(claim) = &fp.option_claims[qi][a.idx()] else {
+                continue;
+            };
+            match claim.question_type {
+                QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                    let tqi = claim.value;
+                    if tqi >= 0
+                        && (tqi as usize) < n
+                        && answers[tqi as usize].is_none()
+                        && !is_elim(eliminated, tqi as usize, answer.idx())
                     {
                         push(
-                            DeduceAction::Force { qi: tqi, answer },
+                            DeduceAction::Force {
+                                qi: tqi as usize,
+                                answer,
+                            },
                             DeduceRule::TrueStatementForward,
                         );
                     }
                 }
-                Claim::AnswerOf {
-                    question_index,
-                    value,
-                } => {
+                QuestionType::AnswerOf { question_index } => {
                     let tqi = question_index as usize;
-                    if tqi < n && answers[tqi].is_none() && !is_elim(eliminated, tqi, value.idx()) {
-                        push(
-                            DeduceAction::Force {
-                                qi: tqi,
-                                answer: value,
-                            },
-                            DeduceRule::TrueStatementForward,
-                        );
+                    if claim.value >= 0 && claim.value <= 4 && tqi < n && answers[tqi].is_none() {
+                        let letter = LETTERS[claim.value as usize];
+                        if !is_elim(eliminated, tqi, letter.idx()) {
+                            push(
+                                DeduceAction::Force {
+                                    qi: tqi,
+                                    answer: letter,
+                                },
+                                DeduceRule::TrueStatementForward,
+                            );
+                        }
                     }
                 }
                 _ => {}
@@ -1891,20 +1892,19 @@ fn deduce_impl(
                 if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                let claim = &fp.option_claims[qi][oi];
-                let contradicts = match *claim {
-                    Claim::FirstWith {
-                        value,
-                        question_index,
+                let Some(claim) = &fp.option_claims[qi][oi] else {
+                    continue;
+                };
+                let contradicts = match claim.question_type {
+                    QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                        claim.value as usize == qi && answer != LETTERS[oi]
                     }
-                    | Claim::LastWith {
-                        value,
-                        question_index,
-                    } => question_index as usize == qi && value != LETTERS[oi],
-                    Claim::AnswerOf {
-                        question_index,
-                        value,
-                    } => question_index as usize == qi && value != LETTERS[oi],
+                    QuestionType::AnswerOf { question_index } => {
+                        question_index as usize == qi
+                            && claim.value >= 0
+                            && claim.value <= 4
+                            && LETTERS[claim.value as usize] != LETTERS[oi]
+                    }
                     _ => false,
                 };
                 if contradicts {
@@ -1927,43 +1927,41 @@ fn deduce_impl(
                 if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                let claim = &fp.option_claims[qi][oi];
-                let invalid = match *claim {
-                    Claim::FirstWith {
-                        value,
-                        question_index,
+                let Some(claim) = &fp.option_claims[qi][oi] else {
+                    continue;
+                };
+                let invalid = match claim.question_type {
+                    QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                        let tqi = claim.value;
+                        tqi >= 0
+                            && (tqi as usize) < n
+                            && answers[tqi as usize].is_some()
+                            && answers[tqi as usize].unwrap() != answer
                     }
-                    | Claim::LastWith {
-                        value,
-                        question_index,
-                    } => {
+                    QuestionType::AnswerOf { question_index } => {
                         let tqi = question_index as usize;
-                        tqi < n && answers[tqi].is_some() && answers[tqi].unwrap() != value
+                        tqi < n
+                            && answers[tqi].is_some()
+                            && claim.value >= 0
+                            && claim.value <= 4
+                            && answers[tqi].unwrap() != LETTERS[claim.value as usize]
                     }
-                    Claim::AnswerOf {
-                        question_index,
-                        value,
-                    } => {
-                        let tqi = question_index as usize;
-                        tqi < n && answers[tqi].is_some() && answers[tqi].unwrap() != value
-                    }
-                    Claim::CountAnswer { answer, value } => {
+                    QuestionType::CountAnswer { answer } => {
                         let cr =
                             count_matching(answers, eliminated, CountPred::IsAnswer(answer), 0, n);
-                        cr.min() > value as i16 || cr.max() < value as i16
+                        cr.min() > claim.value || cr.max() < claim.value
                     }
-                    Claim::CountVowel { value } => {
+                    QuestionType::CountVowel => {
                         let cr = count_matching(answers, eliminated, CountPred::IsVowel, 0, n);
-                        cr.min() > value as i16 || cr.max() < value as i16
+                        cr.min() > claim.value || cr.max() < claim.value
                     }
-                    Claim::CountConsonant { value } => {
+                    QuestionType::CountConsonant => {
                         let cr = count_matching(answers, eliminated, CountPred::IsConsonant, 0, n);
-                        cr.min() > value as i16 || cr.max() < value as i16
+                        cr.min() > claim.value || cr.max() < claim.value
                     }
-                    Claim::CountAnswerAfter {
+                    QuestionType::CountAnswerAfter {
                         answer,
                         after_index,
-                        value,
                     } => {
                         let cr = count_matching(
                             answers,
@@ -1972,12 +1970,11 @@ fn deduce_impl(
                             after_index as usize + 1,
                             n,
                         );
-                        cr.min() > value as i16 || cr.max() < value as i16
+                        cr.min() > claim.value || cr.max() < claim.value
                     }
-                    Claim::CountAnswerBefore {
+                    QuestionType::CountAnswerBefore {
                         answer,
                         before_index,
-                        value,
                     } => {
                         let cr = count_matching(
                             answers,
@@ -1986,39 +1983,44 @@ fn deduce_impl(
                             0,
                             before_index as usize,
                         );
-                        cr.min() > value as i16 || cr.max() < value as i16
+                        cr.min() > claim.value || cr.max() < claim.value
                     }
-                    Claim::MostCommon { value } => {
-                        let mut max_possible = 0i16;
-                        for li in 0..5usize {
-                            if LETTERS[li] == value {
-                                continue;
-                            }
-                            let mut c = 0i16;
-                            for j in 0..n {
-                                if let Some(a) = answers[j]
-                                    && a.idx() == li
-                                {
-                                    c += 1;
+                    QuestionType::MostCommon => {
+                        if !(0..=4).contains(&claim.value) {
+                            true
+                        } else {
+                            let target = LETTERS[claim.value as usize];
+                            let mut max_possible = 0i16;
+                            for li in 0..5usize {
+                                if LETTERS[li] == target {
+                                    continue;
+                                }
+                                let mut c = 0i16;
+                                for j in 0..n {
+                                    if let Some(a) = answers[j]
+                                        && a.idx() == li
+                                    {
+                                        c += 1;
+                                    }
+                                }
+                                if c > max_possible {
+                                    max_possible = c;
                                 }
                             }
-                            if c > max_possible {
-                                max_possible = c;
-                            }
-                        }
-                        let mut claimed_max = 0i16;
-                        for j in 0..n {
-                            if let Some(a) = answers[j] {
-                                if a == value {
+                            let mut claimed_max = 0i16;
+                            for j in 0..n {
+                                if let Some(a) = answers[j] {
+                                    if a == target {
+                                        claimed_max += 1;
+                                    }
+                                } else if !is_elim(eliminated, j, target.idx()) {
                                     claimed_max += 1;
                                 }
-                            } else if !is_elim(eliminated, j, value.idx()) {
-                                claimed_max += 1;
                             }
+                            claimed_max < max_possible
                         }
-                        claimed_max < max_possible
                     }
-                    Claim::None => false,
+                    _ => false,
                 };
                 if invalid {
                     push(

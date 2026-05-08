@@ -553,7 +553,7 @@ function testShare() {
 
 function testSharedCheckValidity() {
   const suiteJson = JSON.parse(
-    readFileSync(resolve(__dirname, "../tests/check-validity.json"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "../tests/check-validity.json"), "utf8"),
   );
   const tests = suiteJson.tests as {
     section?: string;
@@ -659,56 +659,43 @@ function testSharedCheckValidity() {
           if (c == null) {
             options.push({
               value: null,
-              claim: { type: "CountAnswer", answer: "A", value: 0 },
+              claim: {
+                questionType: { type: "CountAnswer", answer: "A" },
+                value: 0,
+              },
             });
           } else {
             const ct = c.t as string;
             const ca = typeof c.a === "number" ? LETTERS[c.a as number] : undefined;
             const cv = c.v as number;
-            let claim: import("../src/engine/types.ts").Claim;
+            let qt: import("../src/engine/types.ts").QuestionTypeDef;
             switch (ct) {
               case "CountAnswer":
-                claim = { type: ct, answer: ca!, value: cv };
+                qt = { type: ct, answer: ca! };
                 break;
               case "CountConsonant":
-                claim = { type: ct, value: cv };
-                break;
               case "CountVowel":
-                claim = { type: ct, value: cv };
+              case "MostCommon":
+                qt = { type: ct };
                 break;
               case "CountAnswerAfter":
-                claim = {
-                  type: ct,
-                  answer: ca!,
-                  afterIndex: c.q as number,
-                  value: cv,
-                };
+                qt = { type: ct, answer: ca!, afterIndex: c.q as number };
                 break;
               case "CountAnswerBefore":
-                claim = {
-                  type: ct,
-                  answer: ca!,
-                  beforeIndex: c.q as number,
-                  value: cv,
-                };
+                qt = { type: ct, answer: ca!, beforeIndex: c.q as number };
                 break;
               case "AnswerOf":
-                claim = { type: ct, questionIndex: c.q as number, value: cv };
+                qt = { type: ct, questionIndex: c.q as number };
                 break;
               case "FirstWith":
-                claim = { type: ct, answer: ca!, value: cv };
-                break;
               case "LastWith":
-                claim = { type: ct, answer: ca!, value: cv };
-                break;
-              case "MostCommon":
-                claim = { type: ct, value: cv };
+                qt = { type: ct, answer: ca! };
                 break;
               default:
-                claim = { type: "CountAnswer", answer: "A", value: 0 };
+                qt = { type: "CountAnswer", answer: "A" };
                 break;
             }
-            options.push({ value: null, claim });
+            options.push({ value: null, claim: { questionType: qt, value: cv } });
           }
         }
       } else if (q.o) {
@@ -756,7 +743,7 @@ function testSharedCheckValidity() {
 // ════════════════════════════════════════════════
 
 function testSharedLookahead() {
-  const suiteJson = JSON.parse(readFileSync(resolve(__dirname, "../tests/lookahead.json"), "utf8"));
+  const suiteJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/lookahead.json"), "utf8"));
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -807,7 +794,7 @@ function testSharedLookahead() {
 // ════════════════════════════════════════════════
 
 function testSharedSolve() {
-  const suiteJson = JSON.parse(readFileSync(resolve(__dirname, "../tests/solve.json"), "utf8"));
+  const suiteJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/solve.json"), "utf8"));
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -837,7 +824,7 @@ function testSharedSolve() {
 // ════════════════════════════════════════════════
 
 function testSharedDeduce() {
-  const suite = JSON.parse(readFileSync(resolve(__dirname, "../tests/deduce.json"), "utf8"));
+  const suite = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/deduce.json"), "utf8"));
   const coveredRules = new Set<string>();
 
   function formatAction(dr: DeduceResult | undefined): string {

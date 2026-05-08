@@ -238,7 +238,7 @@ export function checkQuestionAgainstSolution(
       for (let i = 0; i < 5; i++) {
         const claim = claims[i];
         if (!claim) continue;
-        const isTrue = evaluateClaim(claim, answers);
+        const isTrue = evaluateClaim(claim, questionIdx, answers);
         if (isTrue) trueCount++;
         if (LETTERS[i] === selectedAnswer && isTrue) selectedIsTrue = true;
       }
@@ -249,53 +249,166 @@ export function checkQuestionAgainstSolution(
   return false;
 }
 
-export function evaluateClaim(claim: Claim, answers: (AnswerLetter | null)[]): boolean {
-  switch (claim.type) {
+export function evaluateClaim(claim: Claim, qi: number, answers: (AnswerLetter | null)[]): boolean {
+  const qt = claim.questionType;
+  const value = claim.value;
+  const n = answers.length;
+
+  switch (qt.type) {
     case "CountAnswer":
-      return countAnswer(answers, claim.answer) === claim.value;
-
+      return countAnswer(answers, qt.answer) === value;
     case "CountConsonant":
-      return countConsonants(answers) === claim.value;
-
+      return countConsonants(answers) === value;
     case "CountVowel":
-      return countVowels(answers) === claim.value;
-
+      return countVowels(answers) === value;
     case "CountAnswerAfter":
-      return (
-        countAnswerInRange(answers, claim.answer, claim.afterIndex + 1, answers.length) ===
-        claim.value
-      );
-
+      return countAnswerInRange(answers, qt.answer, qt.afterIndex + 1, n) === value;
     case "CountAnswerBefore":
-      return countAnswerInRange(answers, claim.answer, 0, claim.beforeIndex) === claim.value;
-
+      return countAnswerInRange(answers, qt.answer, 0, qt.beforeIndex) === value;
     case "AnswerOf":
-      return answers[claim.questionIndex] === LETTERS[claim.value];
-
+      return value >= 0 && value <= 4 && answers[qt.questionIndex] === LETTERS[value];
     case "FirstWith": {
-      for (let i = 0; i < answers.length; i++) {
-        if (answers[i] === claim.answer) return i === claim.value;
+      for (let i = 0; i < n; i++) {
+        if (answers[i] === qt.answer) return i === value;
       }
       return false;
     }
-
     case "LastWith": {
       let last = -1;
-      for (let i = 0; i < answers.length; i++) {
-        if (answers[i] === claim.answer) last = i;
+      for (let i = 0; i < n; i++) {
+        if (answers[i] === qt.answer) last = i;
       }
-      return last === claim.value;
+      return last === value;
     }
-
     case "MostCommon": {
+      if (value < 0 || value > 4) return false;
       const counts = [0, 0, 0, 0, 0];
       for (const a of answers) {
         if (a !== null) counts[L2I[a]] += 1;
       }
       const max = Math.max(...counts);
-      return counts[claim.value] === max && counts.filter((c) => c === max).length === 1;
+      return counts[value] === max && counts.filter((c) => c === max).length === 1;
     }
+    case "ClosestAfter": {
+      for (let i = qt.afterIndex + 1; i < n; i++) {
+        if (answers[i] === qt.answer) return i === value;
+      }
+      return value === -1;
+    }
+    case "ClosestBefore": {
+      for (let i = qt.beforeIndex - 1; i >= 0; i--) {
+        if (answers[i] === qt.answer) return i === value;
+      }
+      return value === -1;
+    }
+    case "MostCommonCount": {
+      const counts = [0, 0, 0, 0, 0];
+      for (const a of answers) {
+        if (a !== null) counts[L2I[a]] += 1;
+      }
+      return Math.max(...counts) === value;
+    }
+    case "LeastCommon": {
+      if (value < 0 || value > 4) return false;
+      const counts = [0, 0, 0, 0, 0];
+      for (const a of answers) {
+        if (a !== null) counts[L2I[a]] += 1;
+      }
+      const min = Math.min(...counts);
+      return counts[value] === min && counts.filter((c) => c === min).length === 1;
+    }
+    case "Unique": {
+      if (value < 0 || value > 4) return false;
+      const counts = [0, 0, 0, 0, 0];
+      for (const a of answers) {
+        if (a !== null) counts[L2I[a]] += 1;
+      }
+      return counts[value] === 1 && counts.filter((c) => c === 1).length === 1;
+    }
+    case "EqualCount": {
+      if (value < 0 || value > 4) return false;
+      const refCount = countAnswer(answers, qt.answer);
+      const counts = [0, 0, 0, 0, 0];
+      for (const a of answers) {
+        if (a !== null) counts[L2I[a]] += 1;
+      }
+      return counts[value] === refCount && value !== L2I[qt.answer];
+    }
+    case "ConsecIdent": {
+      for (let i = 0; i < n - 1; i++) {
+        if (answers[i] !== null && answers[i] === answers[i + 1]) return i === value;
+      }
+      return value === -1;
+    }
+    case "OnlyOdd":
+    case "OnlyEven": {
+      const parity = qt.type === "OnlyEven" ? 1 : 0;
+      let found = -1;
+      let count = 0;
+      for (let i = 0; i < n; i++) {
+        if (i % 2 === parity && answers[i] === qt.answer) {
+          found = i;
+          count++;
+        }
+      }
+      return count === 1 && found === value;
+    }
+    case "PrevSame": {
+      const selfAns = answers[qi];
+      if (selfAns == null) return false;
+      for (let i = qi - 1; i >= 0; i--) {
+        if (answers[i] === selfAns) return i === value;
+      }
+      return value === -1;
+    }
+    case "NextSame": {
+      const selfAns = answers[qi];
+      if (selfAns == null) return false;
+      for (let i = qi + 1; i < n; i++) {
+        if (answers[i] === selfAns) return i === value;
+      }
+      return value === -1;
+    }
+    case "OnlySame": {
+      const selfAns = answers[qi];
+      if (selfAns == null) return false;
+      let found = -1;
+      let count = 0;
+      for (let i = 0; i < n; i++) {
+        if (i !== qi && answers[i] === selfAns) {
+          found = i;
+          count++;
+        }
+      }
+      if (count === 0) return value === -1;
+      return count === 1 && found === value;
+    }
+    case "SameAs": {
+      const selfAns = answers[qi];
+      if (selfAns == null) return false;
+      return value >= 0 && value < n && value !== qi && answers[value] === selfAns;
+    }
+    case "SameAsWhich": {
+      const refAns = answers[qt.questionIndex];
+      if (refAns == null) return false;
+      return (
+        value >= 0 &&
+        value < n &&
+        value !== qi &&
+        value !== qt.questionIndex &&
+        answers[value] === refAns
+      );
+    }
+    case "LetterDist": {
+      const selfAns = answers[qi];
+      const other = answers[qt.questionIndex];
+      if (selfAns == null || other == null) return false;
+      return Math.abs(L2I[selfAns] - L2I[other]) === value;
+    }
+    case "AnswerIsSelf":
+    case "TrueStmt":
+      return false;
   }
-  claim satisfies never;
+  qt satisfies never;
   return false;
 }

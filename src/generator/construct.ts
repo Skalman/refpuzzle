@@ -981,7 +981,7 @@ function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG):
   for (let i = 0; i < 5; i++) {
     if (i === targetIdx) continue;
     for (let att = 0; att < 30; att++) {
-      const fc = makeFalseClaim(solution, n, rng);
+      const fc = makeFalseClaim(solution, qi, n, rng);
       const key = claimCategory(fc);
       if (!usedKeys.has(key)) {
         usedKeys.add(key);
@@ -990,7 +990,7 @@ function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG):
       }
     }
     if (!options[i]) {
-      const fc = makeFalseClaim(solution, n, rng);
+      const fc = makeFalseClaim(solution, qi, n, rng);
       options[i] = { value: null, claim: fc };
     }
   }
@@ -1001,28 +1001,25 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   if (t === 0) {
     const a = rng.pick(LETTERS);
     return {
-      type: "CountAnswer",
-      answer: a,
+      questionType: { type: "CountAnswer", answer: a },
       value: sol.filter((x) => x === a).length,
     };
   }
   if (t === 1)
     return {
-      type: "CountConsonant",
+      questionType: { type: "CountConsonant" },
       value: sol.filter((a) => a !== "A" && a !== "E").length,
     };
   if (t === 2)
     return {
-      type: "CountVowel",
+      questionType: { type: "CountVowel" },
       value: sol.filter((a) => a === "A" || a === "E").length,
     };
   if (t === 3) {
     const a = rng.pick(LETTERS);
     const ai = rng.int(0, Math.max(0, n - 5));
     return {
-      type: "CountAnswerAfter",
-      answer: a,
-      afterIndex: ai,
+      questionType: { type: "CountAnswerAfter", answer: a, afterIndex: ai },
       value: sol.slice(ai + 1).filter((x) => x === a).length,
     };
   }
@@ -1030,39 +1027,34 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
     const a = rng.pick(LETTERS);
     const bi = rng.int(4, n - 1);
     return {
-      type: "CountAnswerBefore",
-      answer: a,
-      beforeIndex: bi,
+      questionType: { type: "CountAnswerBefore", answer: a, beforeIndex: bi },
       value: sol.slice(0, bi).filter((x) => x === a).length,
     };
   }
   if (t === 5) {
-    const qi = rng.int(0, n - 1);
+    const targetQi = rng.int(0, n - 1);
     return {
-      type: "AnswerOf",
-      questionIndex: qi,
-      value: L2I[sol[qi]],
+      questionType: { type: "AnswerOf", questionIndex: targetQi },
+      value: L2I[sol[targetQi]],
     };
   }
   if (t === 6) {
     const a = rng.pick(LETTERS);
     const first = sol.indexOf(a);
-    if (first >= 0) return { type: "FirstWith", answer: a, value: first };
+    if (first >= 0) return { questionType: { type: "FirstWith", answer: a }, value: first };
     const a2 = rng.pick(LETTERS);
     return {
-      type: "CountAnswer",
-      answer: a2,
+      questionType: { type: "CountAnswer", answer: a2 },
       value: sol.filter((x) => x === a2).length,
     };
   }
   if (t === 7) {
     const a = rng.pick(LETTERS);
     const last = sol.lastIndexOf(a);
-    if (last >= 0) return { type: "LastWith", answer: a, value: last };
+    if (last >= 0) return { questionType: { type: "LastWith", answer: a }, value: last };
     const a2 = rng.pick(LETTERS);
     return {
-      type: "CountAnswer",
-      answer: a2,
+      questionType: { type: "CountAnswer", answer: a2 },
       value: sol.filter((x) => x === a2).length,
     };
   }
@@ -1071,17 +1063,16 @@ function makeTrueClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
   const max = Math.max(...counts);
   const most = LETTERS.filter((_, i) => counts[i] === max);
   if (most.length === 1) {
-    return { type: "MostCommon", value: L2I[most[0]] };
+    return { questionType: { type: "MostCommon" }, value: L2I[most[0]] };
   }
   const a = rng.pick(LETTERS);
   return {
-    type: "CountAnswer",
-    answer: a,
+    questionType: { type: "CountAnswer", answer: a },
     value: sol.filter((x) => x === a).length,
   };
 }
 function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
-  switch (claim.type) {
+  switch (claim.questionType.type) {
     case "CountAnswer":
     case "CountConsonant":
     case "CountVowel":
@@ -1102,36 +1093,36 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
       return null;
   }
 }
-function makeFalseClaim(sol: AnswerLetter[], n: number, rng: RNG): Claim {
+function makeFalseClaim(sol: AnswerLetter[], qi: number, n: number, rng: RNG): Claim {
   for (let i = 0; i < 30; i++) {
     const base = makeTrueClaim(sol, n, rng);
     const fc = perturbClaim(base, n, rng);
-    if (fc && !evaluateClaim(fc, sol)) return fc;
+    if (fc && !evaluateClaim(fc, qi, sol)) return fc;
   }
-  return { type: "CountAnswer", answer: "A", value: n + 1 };
+  return { questionType: { type: "CountAnswer", answer: "A" }, value: n + 1 };
 }
 function claimCategory(c: Claim): string {
-  switch (c.type) {
+  const qt = c.questionType;
+  switch (qt.type) {
     case "CountAnswer":
-      return "count:" + c.answer;
+      return "count:" + qt.answer;
     case "CountConsonant":
       return "consonant";
     case "CountVowel":
       return "vowel";
     case "CountAnswerAfter":
-      return "after:" + c.answer;
+      return "after:" + qt.answer;
     case "CountAnswerBefore":
-      return "before:" + c.answer;
+      return "before:" + qt.answer;
     case "AnswerOf":
-      return "answerof:" + c.questionIndex;
+      return "answerof:" + qt.questionIndex;
     case "FirstWith":
-      return "first:" + c.answer;
+      return "first:" + qt.answer;
     case "LastWith":
-      return "last:" + c.answer;
+      return "last:" + qt.answer;
     case "MostCommon":
       return "mostcommon";
     default:
-      c satisfies never;
-      return "unknown";
+      return "unknown:" + qt.type;
   }
 }

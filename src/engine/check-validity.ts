@@ -387,7 +387,7 @@ export function checkAnswerValidity(
     let selectedTrue = false;
     for (let i = 0; i < 5; i++) {
       const claim = claims[i];
-      if (claim && evaluateClaim(claim, answers)) {
+      if (claim && evaluateClaim(claim, qi, answers)) {
         trueCount++;
         if (i === ai) selectedTrue = true;
       }
