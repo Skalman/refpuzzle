@@ -1308,17 +1308,22 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
             })
         }
         15 => {
+            let mut pair_idx: i16 = NONE_VAL;
+            let mut pair_count = 0;
             for i in 0..n.saturating_sub(1) {
                 if sol[i] == sol[i + 1] {
-                    return Some(Claim {
-                        question_type: QuestionType::ConsecIdent,
-                        value: i as i16,
-                    });
+                    if pair_count == 0 {
+                        pair_idx = i as i16;
+                    }
+                    pair_count += 1;
                 }
+            }
+            if pair_count > 1 {
+                return None;
             }
             Some(Claim {
                 question_type: QuestionType::ConsecIdent,
-                value: NONE_VAL,
+                value: pair_idx,
             })
         }
         16 => {
@@ -1362,7 +1367,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
             let ref_ans = sol[ref_qi as usize];
             let mut matches = ArrayVec::<usize, MAX_N>::new();
             for i in 0..n {
-                if i != ref_qi as usize && sol[i] == ref_ans {
+                if i != ref_qi as usize && i != _qi && sol[i] == ref_ans {
                     matches.push(i);
                 }
             }

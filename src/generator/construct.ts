@@ -1123,12 +1123,16 @@ const CLAIM_GENS: ClaimGen[] = [
     };
   },
   (sol) => {
+    let pairIdx = -1;
+    let pairCount = 0;
     for (let i = 0; i < sol.length - 1; i++) {
       if (sol[i] === sol[i + 1]) {
-        return { questionType: { type: "ConsecIdent" }, value: i };
+        if (pairCount === 0) pairIdx = i;
+        pairCount++;
       }
     }
-    return { questionType: { type: "ConsecIdent" }, value: -1 };
+    if (pairCount > 1) return null;
+    return { questionType: { type: "ConsecIdent" }, value: pairIdx };
   },
   (sol, _qi, _n, rng) => {
     const a = rng.pick(LETTERS);
@@ -1156,12 +1160,12 @@ const CLAIM_GENS: ClaimGen[] = [
     if (count !== 1) return null;
     return { questionType: { type: "OnlyEven", answer: a }, value: found };
   },
-  (sol, _qi, n, rng) => {
+  (sol, qi, n, rng) => {
     const ref = rng.int(0, n - 1);
     const refAns = sol[ref];
     const matches: number[] = [];
     for (let i = 0; i < n; i++) {
-      if (i !== ref && sol[i] === refAns) matches.push(i);
+      if (i !== ref && i !== qi && sol[i] === refAns) matches.push(i);
     }
     if (matches.length === 0) return null;
     return {
