@@ -1930,99 +1930,16 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let invalid = match claim.question_type {
-                    QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
-                        let tqi = claim.value;
-                        tqi >= 0
-                            && (tqi as usize) < n
-                            && answers[tqi as usize].is_some()
-                            && answers[tqi as usize].unwrap() != answer
-                    }
-                    QuestionType::AnswerOf { question_index } => {
-                        let tqi = question_index as usize;
-                        tqi < n
-                            && answers[tqi].is_some()
-                            && claim.value >= 0
-                            && claim.value <= 4
-                            && answers[tqi].unwrap() != LETTERS[claim.value as usize]
-                    }
-                    QuestionType::CountAnswer { answer } => {
-                        let cr =
-                            count_matching(answers, eliminated, CountPred::IsAnswer(answer), 0, n);
-                        cr.min() > claim.value || cr.max() < claim.value
-                    }
-                    QuestionType::CountVowel => {
-                        let cr = count_matching(answers, eliminated, CountPred::IsVowel, 0, n);
-                        cr.min() > claim.value || cr.max() < claim.value
-                    }
-                    QuestionType::CountConsonant => {
-                        let cr = count_matching(answers, eliminated, CountPred::IsConsonant, 0, n);
-                        cr.min() > claim.value || cr.max() < claim.value
-                    }
-                    QuestionType::CountAnswerAfter {
-                        answer,
-                        after_index,
-                    } => {
-                        let cr = count_matching(
-                            answers,
-                            eliminated,
-                            CountPred::IsAnswer(answer),
-                            after_index as usize + 1,
-                            n,
-                        );
-                        cr.min() > claim.value || cr.max() < claim.value
-                    }
-                    QuestionType::CountAnswerBefore {
-                        answer,
-                        before_index,
-                    } => {
-                        let cr = count_matching(
-                            answers,
-                            eliminated,
-                            CountPred::IsAnswer(answer),
-                            0,
-                            before_index as usize,
-                        );
-                        cr.min() > claim.value || cr.max() < claim.value
-                    }
-                    QuestionType::MostCommon => {
-                        if !(0..=4).contains(&claim.value) {
-                            true
-                        } else {
-                            let target = LETTERS[claim.value as usize];
-                            let mut max_possible = 0i16;
-                            for li in 0..5usize {
-                                if LETTERS[li] == target {
-                                    continue;
-                                }
-                                let mut c = 0i16;
-                                for j in 0..n {
-                                    if let Some(a) = answers[j]
-                                        && a.idx() == li
-                                    {
-                                        c += 1;
-                                    }
-                                }
-                                if c > max_possible {
-                                    max_possible = c;
-                                }
-                            }
-                            let mut claimed_max = 0i16;
-                            for j in 0..n {
-                                if let Some(a) = answers[j] {
-                                    if a == target {
-                                        claimed_max += 1;
-                                    }
-                                } else if !is_elim(eliminated, j, target.idx()) {
-                                    claimed_max += 1;
-                                }
-                            }
-                            claimed_max < max_possible
-                        }
-                    }
-                    _ => false,
-                };
-                if invalid {
+                let v = crate::check_validity::check_value_validity(
+                    &claim.question_type,
+                    claim.value,
+                    LETTERS[oi],
+                    qi,
+                    answers,
+                    eliminated,
+                    n,
+                );
+                if v == crate::check_validity::Validity::Invalid {
                     push(
                         DeduceAction::Eliminate { qi, oi },
                         DeduceRule::TrueStatementClaimInvalid,

@@ -235,57 +235,41 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
 
 // ── Main function ──
 
-pub fn check_answer_validity(
-    fp: &FlatPuzzle,
+pub fn check_value_validity(
+    qt: &QuestionType,
+    value: i16,
+    self_letter: Answer,
+    qi: usize,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
-    qi: usize,
+    n: usize,
 ) -> Validity {
-    let a = match answers[qi] {
-        Some(a) => a,
-        None => return Validity::Pending,
-    };
-    let ai = a.idx();
-    let t = &fp.question_types[qi];
-    let on = fp.option_nums[qi][ai];
-    let n = fp.n;
+    let si = self_letter.idx();
 
-    match *t {
+    match *qt {
         // ── Counting ──
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
-            if on == NAN_VAL {
-                return Validity::Pending;
-            }
-            let (from, to) = count_range(t, n);
+            let (from, to) = count_range(qt, n);
             let cr = count_matching(answers, eliminated, Pred::IsAnswer(answer), from, to);
-            count_validity(cr, on)
+            count_validity(cr, value)
         }
 
         QuestionType::CountVowel => {
-            if on == NAN_VAL {
-                return Validity::Pending;
-            }
             let cr = count_matching(answers, eliminated, Pred::IsVowel, 0, n);
-            count_validity(cr, on)
+            count_validity(cr, value)
         }
 
         QuestionType::CountConsonant => {
-            if on == NAN_VAL {
-                return Validity::Pending;
-            }
             let cr = count_matching(answers, eliminated, Pred::IsConsonant, 0, n);
-            count_validity(cr, on)
+            count_validity(cr, value)
         }
 
         QuestionType::MostCommonCount => {
-            if on == NAN_VAL {
-                return Validity::Pending;
-            }
             let c = fill_counts(answers, n);
             for i in 0..5 {
-                if c[i] > on {
+                if c[i] > value {
                     return Validity::Invalid;
                 }
             }
@@ -293,7 +277,7 @@ pub fn check_answer_validity(
                 return Validity::Pending;
             }
             let max = c.iter().copied().max().unwrap_or(0);
-            if max == on {
+            if max == value {
                 Validity::Valid
             } else {
                 Validity::Invalid
@@ -301,27 +285,38 @@ pub fn check_answer_validity(
         }
 
         // ── Positional: first/closest-after ──
-        QuestionType::FirstWith { answer } => first_in_range(answers, eliminated, answer, 0, n, on),
-
+        QuestionType::FirstWith { answer } => {
+            first_in_range(answers, eliminated, answer, 0, n, value)
+        }
         QuestionType::ClosestAfter {
             after_index,
             answer,
-        } => first_in_range(answers, eliminated, answer, after_index as usize + 1, n, on),
+        } => first_in_range(
+            answers,
+            eliminated,
+            answer,
+            after_index as usize + 1,
+            n,
+            value,
+        ),
 
         // ── Positional: last/closest-before ──
-        QuestionType::LastWith { answer } => last_in_range(answers, eliminated, answer, 0, n, on),
-
+        QuestionType::LastWith { answer } => {
+            last_in_range(answers, eliminated, answer, 0, n, value)
+        }
         QuestionType::ClosestBefore {
             before_index,
             answer,
-        } => last_in_range(answers, eliminated, answer, 0, before_index as usize, on),
+        } => last_in_range(answers, eliminated, answer, 0, before_index as usize, value),
 
         // ── Reference ──
         QuestionType::AnswerOf { question_index } => {
-            let claimed = fp.option_answers[qi][ai];
+            if !(0..=4).contains(&value) {
+                return Validity::Invalid;
+            }
             match answers[question_index as usize] {
                 Some(target) => {
-                    if target as u8 == claimed {
+                    if target.idx() as i16 == value {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -333,8 +328,8 @@ pub fn check_answer_validity(
 
         QuestionType::LetterDist { question_index } => match answers[question_index as usize] {
             Some(other) => {
-                let dist = (ai as i16 - other.idx() as i16).abs();
-                if dist == on {
+                let dist = (si as i16 - other.idx() as i16).abs();
+                if dist == value {
                     Validity::Valid
                 } else {
                     Validity::Invalid
@@ -344,12 +339,12 @@ pub fn check_answer_validity(
         },
 
         QuestionType::SameAs => {
-            if on < 0 || on as usize >= n || on as usize == qi {
+            if value < 0 || value as usize >= n || value as usize == qi {
                 return Validity::Invalid;
             }
-            match answers[on as usize] {
+            match answers[value as usize] {
                 Some(ta) => {
-                    if ta == a {
+                    if ta == self_letter {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -360,10 +355,10 @@ pub fn check_answer_validity(
         }
 
         QuestionType::SameAsWhich { question_index } => {
-            if on < 0
-                || on as usize >= n
-                || on as usize == qi
-                || on as usize == question_index as usize
+            if value < 0
+                || value as usize >= n
+                || value as usize == qi
+                || value as usize == question_index as usize
             {
                 return Validity::Invalid;
             }
@@ -371,7 +366,7 @@ pub fn check_answer_validity(
                 Some(a) => a,
                 None => return Validity::Pending,
             };
-            match answers[on as usize] {
+            match answers[value as usize] {
                 Some(ta) => {
                     if ta == ref_ans {
                         Validity::Valid
@@ -385,22 +380,25 @@ pub fn check_answer_validity(
 
         // ── Unique ──
         QuestionType::Unique => {
-            let amask = 1u8 << ai;
-            let mut others: i16 = 0;
+            if !(0..=4).contains(&value) {
+                return Validity::Invalid;
+            }
+            let letter = LETTERS[value as usize];
+            let amask = 1u8 << value;
+            let mut count: i16 = 0;
             let mut could_match: i16 = 0;
             for j in 0..n {
-                if j == qi {
-                    continue;
-                }
                 match answers[j] {
-                    Some(x) if x == a => others += 1,
+                    Some(x) if x == letter => count += 1,
                     None if eliminated[j] & amask == 0 => could_match += 1,
                     _ => {}
                 }
             }
-            if others > 0 {
+            if count > 1 {
                 Validity::Invalid
-            } else if could_match == 0 {
+            } else if count == 0 && could_match == 0 {
+                Validity::Invalid
+            } else if count == 1 && could_match == 0 {
                 Validity::Valid
             } else {
                 Validity::Pending
@@ -409,24 +407,24 @@ pub fn check_answer_validity(
 
         // ── Previous/Next same ──
         QuestionType::PrevSame => {
-            if on != NONE_VAL && (on < 0 || on as usize >= qi) {
+            if value != NONE_VAL && (value < 0 || value as usize >= qi) {
                 return Validity::Invalid;
             }
-            last_in_range(answers, eliminated, a, 0, qi, on)
+            last_in_range(answers, eliminated, self_letter, 0, qi, value)
         }
 
         QuestionType::NextSame => {
-            if on != NONE_VAL && (on as usize <= qi || on as usize >= n) {
+            if value != NONE_VAL && (value as usize <= qi || value as usize >= n) {
                 return Validity::Invalid;
             }
-            first_in_range(answers, eliminated, a, qi + 1, n, on)
+            first_in_range(answers, eliminated, self_letter, qi + 1, n, value)
         }
 
         // ── Only same ──
         QuestionType::OnlySame => {
-            let amask = 1u8 << ai;
+            let amask = 1u8 << si;
 
-            if on == NONE_VAL {
+            if value == NONE_VAL {
                 let mut matches: i16 = 0;
                 let mut could_match: i16 = 0;
                 for j in 0..n {
@@ -434,7 +432,7 @@ pub fn check_answer_validity(
                         continue;
                     }
                     match answers[j] {
-                        Some(x) if x == a => matches += 1,
+                        Some(x) if x == self_letter => matches += 1,
                         None if eliminated[j] & amask == 0 => could_match += 1,
                         _ => {}
                     }
@@ -446,16 +444,16 @@ pub fn check_answer_validity(
                 } else {
                     Validity::Pending
                 }
-            } else if on < 0 || on as usize >= n {
+            } else if value < 0 || value as usize >= n {
                 Validity::Invalid
             } else {
-                let target = on as usize;
+                let target = value as usize;
                 if target == qi {
                     return Validity::Invalid;
                 }
 
                 if let Some(ta) = answers[target]
-                    && ta != a
+                    && ta != self_letter
                 {
                     return Validity::Invalid;
                 }
@@ -467,7 +465,7 @@ pub fn check_answer_validity(
                         continue;
                     }
                     match answers[j] {
-                        Some(x) if x == a => other_matches += 1,
+                        Some(x) if x == self_letter => other_matches += 1,
                         None if eliminated[j] & amask == 0 => other_remaining += 1,
                         _ => {}
                     }
@@ -476,7 +474,7 @@ pub fn check_answer_validity(
                 if other_matches > 0 {
                     return Validity::Invalid;
                 }
-                if answers[target] == Some(a) && other_remaining == 0 {
+                if answers[target] == Some(self_letter) && other_remaining == 0 {
                     Validity::Valid
                 } else {
                     Validity::Pending
@@ -486,8 +484,8 @@ pub fn check_answer_validity(
 
         // ── Consecutive identical ──
         QuestionType::ConsecIdent => {
-            if on != NONE_VAL {
-                let p = on as usize;
+            if value != NONE_VAL {
+                let p = value as usize;
                 if p + 1 >= n {
                     return Validity::Invalid;
                 }
@@ -561,14 +559,14 @@ pub fn check_answer_validity(
 
         // ── Only odd / only even ──
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-            let parity = match *t {
+            let parity = match *qt {
                 QuestionType::OnlyOdd { .. } => 1,
                 _ => 0,
             };
             let amask = 1u8 << answer.idx();
 
-            if on != NONE_VAL {
-                let p = on as usize;
+            if value != NONE_VAL {
+                let p = value as usize;
                 if (p + 1) % 2 != parity {
                     return Validity::Invalid;
                 }
@@ -624,38 +622,13 @@ pub fn check_answer_validity(
             }
         }
 
-        // ── True statement ──
-        QuestionType::TrueStmt => {
-            if !all_answered(answers, n) {
-                return Validity::Pending;
-            }
-            let claims = &fp.option_claims[qi];
-            let mut true_count = 0u8;
-            let mut selected_true = false;
-            for i in 0..5 {
-                if let Some(c) = &claims[i]
-                    && evaluate_claim(c, qi, answers, n)
-                {
-                    true_count += 1;
-                    if i == ai {
-                        selected_true = true;
-                    }
-                }
-            }
-            if selected_true && true_count == 1 {
-                Validity::Valid
-            } else {
-                Validity::Invalid
-            }
-        }
-
-        // ── Always valid ──
-        QuestionType::AnswerIsSelf => Validity::Valid,
-
         // ── Equal count ──
         QuestionType::EqualCount { answer } => {
-            if on != NONE_VAL {
-                let claimed = LETTERS[on as usize];
+            if value != NONE_VAL {
+                if !(0..=4).contains(&value) {
+                    return Validity::Invalid;
+                }
+                let claimed = LETTERS[value as usize];
                 if claimed == answer {
                     return Validity::Invalid;
                 }
@@ -690,18 +663,17 @@ pub fn check_answer_validity(
 
         // ── Global: need all answers ──
         QuestionType::LeastCommon | QuestionType::MostCommon => {
+            if !(0..=4).contains(&value) {
+                return Validity::Invalid;
+            }
             if !all_answered(answers, n) {
                 return Validity::Pending;
             }
-            let claimed = fp.option_answers[qi][ai] as usize;
-            if claimed >= 5 {
-                return Validity::Invalid;
-            }
             let c = fill_counts(answers, n);
-            match *t {
+            match *qt {
                 QuestionType::LeastCommon => {
                     let min = c.iter().copied().min().unwrap_or(0);
-                    if c[claimed] == min && c.iter().filter(|&&x| x == min).count() == 1 {
+                    if c[value as usize] == min && c.iter().filter(|&&x| x == min).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -709,7 +681,7 @@ pub fn check_answer_validity(
                 }
                 QuestionType::MostCommon => {
                     let max = c.iter().copied().max().unwrap_or(0);
-                    if c[claimed] == max && c.iter().filter(|&&x| x == max).count() == 1 {
+                    if c[value as usize] == max && c.iter().filter(|&&x| x == max).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -718,7 +690,68 @@ pub fn check_answer_validity(
                 _ => unreachable!(),
             }
         }
+
+        // ── Always valid ──
+        QuestionType::AnswerIsSelf => Validity::Valid,
+
+        // TrueStmt can't be checked via check_value_validity
+        QuestionType::TrueStmt => Validity::Pending,
     }
+}
+
+pub fn check_answer_validity(
+    fp: &FlatPuzzle,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    qi: usize,
+) -> Validity {
+    let a = match answers[qi] {
+        Some(a) => a,
+        None => return Validity::Pending,
+    };
+    let ai = a.idx();
+    let t = &fp.question_types[qi];
+    let n = fp.n;
+
+    if matches!(t, QuestionType::TrueStmt) {
+        if !all_answered(answers, n) {
+            return Validity::Pending;
+        }
+        let claims = &fp.option_claims[qi];
+        let mut true_count = 0u8;
+        let mut selected_true = false;
+        for i in 0..5 {
+            if let Some(c) = &claims[i]
+                && evaluate_claim(c, qi, answers, n)
+            {
+                true_count += 1;
+                if i == ai {
+                    selected_true = true;
+                }
+            }
+        }
+        return if selected_true && true_count == 1 {
+            Validity::Valid
+        } else {
+            Validity::Invalid
+        };
+    }
+
+    let value = match *t {
+        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => {
+            fp.option_answers[qi][ai] as i16
+        }
+        QuestionType::Unique | QuestionType::AnswerIsSelf => ai as i16,
+        _ => {
+            let on = fp.option_nums[qi][ai];
+            if on == NAN_VAL {
+                return Validity::Pending;
+            }
+            on
+        }
+    };
+
+    check_value_validity(t, value, a, qi, answers, eliminated, n)
 }
 
 pub fn check_question_against_solution(
