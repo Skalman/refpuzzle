@@ -1,5 +1,6 @@
 use crate::check_validity::check_question_against_solution;
 use crate::types::*;
+use arrayvec::ArrayVec;
 
 pub fn solve(
     fp: &FlatPuzzle,
@@ -46,10 +47,14 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
     indices[..n].sort_by(|&a, &b| {
         let a = a as usize;
         let b = b as usize;
-        ref_count[b].cmp(&ref_count[a]).then_with(|| {
-            let a_global = fp.question_types[a].is_solver_global() as u8;
-            let b_global = fp.question_types[b].is_solver_global() as u8;
-            a_global.cmp(&b_global)
+        let a_self = matches!(fp.question_types[a], QuestionType::AnswerIsSelf) as u8;
+        let b_self = matches!(fp.question_types[b], QuestionType::AnswerIsSelf) as u8;
+        a_self.cmp(&b_self).then_with(|| {
+            ref_count[b].cmp(&ref_count[a]).then_with(|| {
+                let a_global = fp.question_types[a].is_solver_global() as u8;
+                let b_global = fp.question_types[b].is_solver_global() as u8;
+                a_global.cmp(&b_global)
+            })
         })
     });
 
@@ -88,6 +93,131 @@ fn compute_range_masks(fp: &FlatPuzzle) -> [u16; MAX_N] {
         };
     }
     masks
+}
+
+// If question qi is answered, does it force a specific answer at another position?
+// Returns (target_position, forced_letter) if so.
+fn get_force(
+    fp: &FlatPuzzle,
+    current: &[Option<Answer>; MAX_N],
+    qi: usize,
+) -> Option<(usize, Answer)> {
+    let letter = current[qi]?;
+    let ai = letter.idx();
+    let t = &fp.question_types[qi];
+    match *t {
+        QuestionType::AnswerOf { question_index } => {
+            let claimed = fp.option_answers[qi][ai];
+            if claimed < 5 {
+                Some((question_index as usize, LETTERS[claimed as usize]))
+            } else {
+                None
+            }
+        }
+        QuestionType::FirstWith { answer }
+        | QuestionType::LastWith { answer }
+        | QuestionType::ClosestAfter { answer, .. }
+        | QuestionType::ClosestBefore { answer, .. }
+        | QuestionType::OnlyOdd { answer }
+        | QuestionType::OnlyEven { answer } => {
+            let v = fp.option_nums[qi][ai];
+            if v >= 0 && (v as usize) < fp.n {
+                Some((v as usize, answer))
+            } else {
+                None
+            }
+        }
+        QuestionType::SameAs
+        | QuestionType::OnlySame
+        | QuestionType::PrevSame
+        | QuestionType::NextSame => {
+            let v = fp.option_nums[qi][ai];
+            if v >= 0 && (v as usize) < fp.n {
+                Some((v as usize, letter))
+            } else {
+                None
+            }
+        }
+        QuestionType::SameAsWhich { question_index } => {
+            let v = fp.option_nums[qi][ai];
+            if v >= 0 && (v as usize) < fp.n {
+                current[question_index as usize].map(|ref_ans| (v as usize, ref_ans))
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+fn propagate_forces(
+    fp: &FlatPuzzle,
+    current: &mut [Option<Answer>; MAX_N],
+    assigned_bits: &mut u16,
+    just_assigned: usize,
+    forced: &mut ArrayVec<usize, MAX_N>,
+) -> bool {
+    let mut queue = ArrayVec::<usize, MAX_N>::new();
+    queue.push(just_assigned);
+
+    while let Some(qi) = queue.pop() {
+        if let Some((target, answer)) = get_force(fp, current, qi) {
+            if let Some(existing) = current[target] {
+                if existing != answer {
+                    return false;
+                }
+            } else {
+                current[target] = Some(answer);
+                *assigned_bits |= 1 << target;
+                forced.push(target);
+                queue.push(target);
+            }
+        }
+
+        // Reverse AnswerOf: if qi was just determined and some unanswered
+        // AnswerOf question references qi, we can determine it too — the
+        // correct option is whichever one claims qi's actual answer.
+        let affected = &fp.affected_by[qi];
+        for k in 0..affected.len as usize {
+            let j = affected.data[k] as usize;
+            if current[j].is_some() {
+                continue;
+            }
+            if let QuestionType::AnswerOf { question_index } = fp.question_types[j] {
+                if question_index as usize == qi {
+                    let target_oi = current[qi].unwrap().idx() as u8;
+                    let mut found: Option<usize> = None;
+                    for oi in 0..5usize {
+                        if fp.option_answers[j][oi] == target_oi {
+                            if found.is_some() {
+                                found = None;
+                                break;
+                            }
+                            found = Some(oi);
+                        }
+                    }
+                    if let Some(oi) = found {
+                        current[j] = Some(LETTERS[oi]);
+                        *assigned_bits |= 1 << j;
+                        forced.push(j);
+                        queue.push(j);
+                    }
+                }
+            }
+        }
+    }
+    true
+}
+
+fn undo_propagation(
+    current: &mut [Option<Answer>; MAX_N],
+    assigned_bits: &mut u16,
+    forced: &ArrayVec<usize, MAX_N>,
+) {
+    for &qi in forced {
+        current[qi] = None;
+        *assigned_bits &= !(1 << qi);
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -129,10 +259,29 @@ fn search(
     let qi = order[depth] as usize;
     let bit = 1u16 << qi;
 
+    // Skip if already assigned by propagation
+    if current[qi].is_some() {
+        search(
+            fp,
+            fixed,
+            solutions,
+            current,
+            order,
+            all_bits,
+            assigned_bits,
+            range_masks,
+            depth + 1,
+            max_solutions,
+        );
+        return;
+    }
+
     if let Some(letter) = fixed[qi] {
         current[qi] = Some(letter);
         *assigned_bits |= bit;
-        if !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
+        let mut forced = ArrayVec::<usize, MAX_N>::new();
+        let ok = propagate_forces(fp, current, assigned_bits, qi, &mut forced);
+        if ok && !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
             search(
                 fp,
                 fixed,
@@ -146,6 +295,7 @@ fn search(
                 max_solutions,
             );
         }
+        undo_propagation(current, assigned_bits, &forced);
         current[qi] = None;
         *assigned_bits &= !bit;
         return;
@@ -154,7 +304,9 @@ fn search(
     for &letter in &LETTERS {
         current[qi] = Some(letter);
         *assigned_bits |= bit;
-        if !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
+        let mut forced = ArrayVec::<usize, MAX_N>::new();
+        let ok = propagate_forces(fp, current, assigned_bits, qi, &mut forced);
+        if ok && !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
             search(
                 fp,
                 fixed,
@@ -168,11 +320,13 @@ fn search(
                 max_solutions,
             );
             if solutions.len() >= max_solutions {
+                undo_propagation(current, assigned_bits, &forced);
                 current[qi] = None;
                 *assigned_bits &= !bit;
                 return;
             }
         }
+        undo_propagation(current, assigned_bits, &forced);
     }
     current[qi] = None;
     *assigned_bits &= !bit;
@@ -212,7 +366,7 @@ fn has_contradiction(
     let globals = &fp.global_indices;
     for k in 0..globals.len as usize {
         let i = globals.data[k] as usize;
-        if answers[i].is_none() || i == just_assigned {
+        if answers[i].is_none() {
             continue;
         }
         if check_rule(fp, answers, n, i, all_answered, assigned, range_masks) {

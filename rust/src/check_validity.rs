@@ -737,21 +737,29 @@ pub fn check_answer_validity(
         };
     }
 
-    let value = match *t {
+    let on = fp.option_nums[qi][ai];
+    match *t {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => {
-            fp.option_answers[qi][ai] as i16
+            check_value_validity(
+                t,
+                fp.option_answers[qi][ai] as i16,
+                a,
+                qi,
+                answers,
+                eliminated,
+                n,
+            )
         }
-        QuestionType::Unique | QuestionType::AnswerIsSelf => ai as i16,
+        QuestionType::Unique | QuestionType::AnswerIsSelf => {
+            check_value_validity(t, ai as i16, a, qi, answers, eliminated, n)
+        }
         _ => {
-            let on = fp.option_nums[qi][ai];
             if on == NAN_VAL {
                 return Validity::Pending;
             }
-            on
+            check_value_validity(t, on, a, qi, answers, eliminated, n)
         }
-    };
-
-    check_value_validity(t, value, a, qi, answers, eliminated, n)
+    }
 }
 
 pub fn check_question_against_solution(
