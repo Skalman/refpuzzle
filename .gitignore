@@ -23,4 +23,4 @@ dist-scripts
 test-results/
 
 # Rust
-rust/target/
+target/
