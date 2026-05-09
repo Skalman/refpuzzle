@@ -240,6 +240,7 @@ pub struct FlatPuzzle {
     pub affected_by: [SmallList; MAX_N],
     pub global_indices: SmallList,
     pub n: usize,
+    pub option_count: usize,
 }
 
 impl FlatPuzzle {

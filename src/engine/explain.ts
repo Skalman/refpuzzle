@@ -170,7 +170,7 @@ export function explainDeduce(
         steps.push(simple(`Try looking at ${allQis.map(Q).join(", ")}.`));
         steps.push(simple(`${qList} can't be ${optStr}: ${src.text}`));
       } else {
-        throw new Error(`No positional_range explain for ${qList} option ${optStr}`);
+        steps.push(simple(`${qList} can't be ${optStr}.`));
       }
       return steps;
     }

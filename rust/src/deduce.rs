@@ -387,7 +387,7 @@ fn deduce_impl(
             && let Some(target) = answers[question_index as usize]
         {
             for oi in 0..5usize {
-                if fp.option_answers[qi][oi] == target as u8 {
+                if !is_elim(eliminated, qi, oi) && fp.option_answers[qi][oi] == target as u8 {
                     push(
                         DeduceAction::Force {
                             qi,
@@ -2249,7 +2249,7 @@ mod tests {
             }
 
             let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                build_flat_puzzle(&question_types, &solution, n, &mut Rng::new(seed))
+                build_flat_puzzle(&question_types, &solution, n, 5, &mut Rng::new(seed))
             }));
             let Ok(Some(fp)) = fp else { continue };
 

@@ -3,16 +3,35 @@ use crate::types::QuestionTypeKind::*;
 
 pub struct DifficultyProfile {
     pub question_count: usize,
+    pub option_count: usize,
     pub allowed_types: &'static [QuestionTypeKind],
 }
 
-pub static PROFILES: [DifficultyProfile; 5] = [
+pub static PROFILES: [DifficultyProfile; 6] = [
+    // Level 0: Intro
+    DifficultyProfile {
+        question_count: 3,
+        option_count: 3,
+        allowed_types: &[
+            CountAnswer,
+            AnswerOf,
+            AnswerIsSelf,
+            FirstWith,
+            LastWith,
+            SameAs,
+            PrevSame,
+            NextSame,
+        ],
+    },
+    // Level 1: Beginner
     DifficultyProfile {
         question_count: 4,
+        option_count: 5,
         allowed_types: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
     },
     DifficultyProfile {
         question_count: 5,
+        option_count: 5,
         allowed_types: &[
             CountAnswer,
             AnswerOf,
@@ -27,6 +46,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
     },
     DifficultyProfile {
         question_count: 8,
+        option_count: 5,
         allowed_types: &[
             CountAnswer,
             AnswerOf,
@@ -49,6 +69,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
     },
     DifficultyProfile {
         question_count: 10,
+        option_count: 5,
         allowed_types: &[
             CountAnswer,
             AnswerOf,
@@ -78,6 +99,7 @@ pub static PROFILES: [DifficultyProfile; 5] = [
     },
     DifficultyProfile {
         question_count: 12,
+        option_count: 5,
         allowed_types: &[
             CountAnswer,
             AnswerOf,

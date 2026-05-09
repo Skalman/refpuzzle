@@ -33,6 +33,10 @@ import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
 import { Logo, replayLogoAnimation } from "./components/Logo.tsx";
 
+if (new URLSearchParams(window.location.search).has("debug")) {
+  sessionStorage.setItem("debug", "1");
+}
+
 function updateThemeColor(dark: boolean) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fa");
@@ -407,11 +411,13 @@ function DayView({ dateStr }: { dateStr: string }) {
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
   const initialHash = window.location.hash.slice(1) || null;
-  const [activeLevel, setActiveLevel] = useState(hashLevel >= 1 && hashLevel <= 5 ? hashLevel : 1);
+  const [activeLevel, setActiveLevel] = useState(hashLevel >= 0 && hashLevel <= 5 ? hashLevel : 1);
 
   const activeLevelRef = useRef(activeLevel);
   activeLevelRef.current = activeLevel;
   const showKeyboardHelpRef = useRef(false);
+
+  const tabsRef = useRef<HTMLDivElement>(null);
 
   const selectLevel = useCallback(
     (level: number) => {
@@ -422,12 +428,20 @@ function DayView({ dateStr }: { dateStr: string }) {
     [dateStr, path, route],
   );
 
+  useEffect(() => {
+    const container = tabsRef.current;
+    if (!container) return;
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const tab = container.children[activeLevel] as HTMLElement | undefined;
+    if (tab) tab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }, [activeLevel]);
+
   // Page-level keyboard shortcuts
   useEffect(() => {
     const g = guarded;
     const unsubscribe = tinykeys(window, {
       "[": g(() => {
-        if (activeLevelRef.current > 1) selectLevel(activeLevelRef.current - 1);
+        if (activeLevelRef.current > 0) selectLevel(activeLevelRef.current - 1);
       }),
       "]": g(() => {
         if (activeLevelRef.current < 5) selectLevel(activeLevelRef.current + 1);
@@ -548,8 +562,13 @@ function DayView({ dateStr }: { dateStr: string }) {
         <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
       </div>
 
-      <div class="difficulty-tabs" role="tablist" onKeyDown={arrowNavHandler(".difficulty-tab")}>
-        {[1, 2, 3, 4, 5].map((level) => {
+      <div
+        ref={tabsRef}
+        class="difficulty-tabs"
+        role="tablist"
+        onKeyDown={arrowNavHandler(".difficulty-tab")}
+      >
+        {[0, 1, 2, 3, 4, 5].map((level) => {
           const state = hasState(puzzleId(dateStr, level));
           const { started, completed: solved } = state;
           return (
@@ -613,7 +632,7 @@ function DayView({ dateStr }: { dateStr: string }) {
           <h1>
             {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
           </h1>
-          {[1, 2, 3, 4, 5].map((lvl) => {
+          {[0, 1, 2, 3, 4, 5].map((lvl) => {
             const p = puzzles[`${lvl}`];
             if (!p) return null;
             return (
@@ -1030,7 +1049,7 @@ function SyncDialog({
 
 function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
   const s = t();
-  const levels = [1, 2, 3, 4, 5].map((l) => {
+  const levels = [0, 1, 2, 3, 4, 5].map((l) => {
     const { started, completed } = hasState(puzzleId(dateStr, l));
     return { level: l, started, completed };
   });
@@ -1043,7 +1062,7 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
         <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
       </span>
       <span class="history-progress">
-        {solved.length === 5 ? (
+        {solved.length === 6 ? (
           s.daily.allSolved
         ) : solved.length > 0 || started.length > 0 ? (
           <>

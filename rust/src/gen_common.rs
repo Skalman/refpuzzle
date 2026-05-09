@@ -139,8 +139,13 @@ pub fn solution_satisfies_type(
     }
 }
 
+pub fn phantom_mask(option_count: usize) -> u8 {
+    (0b11111u8) & !((1u8 << option_count) - 1)
+}
+
 fn try_solve(fp: &FlatPuzzle, stats: &mut Stats) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
-    try_solve_from(fp, [None; MAX_N], [0u8; MAX_N], stats)
+    let pm = phantom_mask(fp.option_count);
+    try_solve_from(fp, [None; MAX_N], [pm; MAX_N], stats)
 }
 
 fn try_solve_from(
@@ -207,6 +212,10 @@ fn try_solve_from(
                 }
             }
             continue;
+        }
+
+        if fp.option_count < 5 {
+            return (false, answers, eliminated);
         }
 
         stats.lookahead_calls += 1;
@@ -395,7 +404,7 @@ pub fn repair_one_question(
             let correct_answer = solution[question_index as usize];
             let mut pool = [Answer::A; 4];
             let mut plen = 0;
-            for &l in &LETTERS {
+            for &l in &LETTERS[..fp.option_count] {
                 if l != correct_answer {
                     pool[plen] = l;
                     plen += 1;
@@ -628,6 +637,7 @@ pub fn build_flat_puzzle(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
     n: usize,
+    option_count: usize,
     rng: &mut Rng,
 ) -> Option<FlatPuzzle> {
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
@@ -658,6 +668,7 @@ pub fn build_flat_puzzle(
         }
 
         let correct_val = correct_option_value(qt, qi, solution, n);
+        let letters = &LETTERS[..option_count];
 
         match *qt {
             QuestionType::AnswerOf { question_index } => {
@@ -665,7 +676,7 @@ pub fn build_flat_puzzle(
                 let correct_answer = solution[question_index as usize];
                 let mut pool = [Answer::A; 4];
                 let mut plen = 0;
-                for &l in &LETTERS {
+                for &l in letters {
                     if l != correct_answer {
                         pool[plen] = l;
                         plen += 1;
@@ -695,7 +706,7 @@ pub fn build_flat_puzzle(
                 option_answers[qi][correct_oi] = *correct_letter as u8;
                 let mut pool = [Answer::A; 4];
                 let mut plen = 0;
-                for &l in &LETTERS {
+                for &l in letters {
                     if l != *correct_letter {
                         pool[plen] = l;
                         plen += 1;
@@ -714,7 +725,7 @@ pub fn build_flat_puzzle(
                 option_nums[qi][correct_oi] = correct_val;
                 let mut pool = [0i16; 4];
                 let mut plen = 0;
-                for &l in &LETTERS {
+                for &l in letters {
                     if l != answer && l.idx() as i16 != correct_val {
                         pool[plen] = l.idx() as i16;
                         plen += 1;
@@ -747,8 +758,12 @@ pub fn build_flat_puzzle(
             }
             _ if is_counting_type(qt) => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors =
-                    count_distractors(correct_val as i32, count_max(qt, n) as i32, rng);
+                let distractors = count_distractors(
+                    correct_val as i32,
+                    count_max(qt, n) as i32,
+                    option_count - 1,
+                    rng,
+                );
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::OnlyOdd { .. } | QuestionType::OnlyEven { .. } => {
@@ -795,6 +810,7 @@ pub fn build_flat_puzzle(
         affected_by,
         global_indices,
         n,
+        option_count,
     })
 }
 
@@ -957,8 +973,12 @@ fn count_max(qt: &QuestionType, n: usize) -> usize {
     }
 }
 
-fn count_distractors(correct: i32, max: i32, rng: &mut Rng) -> [i16; 4] {
-    let upper = max.max(4);
+fn count_distractors(correct: i32, max: i32, need: usize, rng: &mut Rng) -> [i16; 4] {
+    let upper = if max >= need as i32 {
+        max
+    } else {
+        max.max(need as i32)
+    };
     let mut pool = [0i16; 32];
     let mut plen = 0;
     for i in 0..=upper {

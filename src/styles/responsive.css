@@ -20,6 +20,17 @@
     display: block !important;
   }
 
+  .difficulty-tabs {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+      display: none;
+    }
+  }
+  .difficulty-tab {
+    flex: none;
+    padding: 0.4rem 0.7rem;
+  }
+
   .questions-grid {
     display: block;
   }

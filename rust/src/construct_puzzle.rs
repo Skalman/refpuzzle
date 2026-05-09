@@ -116,6 +116,7 @@ impl PlacementState {
         kind: QuestionTypeKind,
         solution: &[Answer; MAX_N],
         n: usize,
+        oc: usize,
         rng: &mut Rng,
     ) -> bool {
         let ki = kind as u8 as usize;
@@ -135,7 +136,7 @@ impl PlacementState {
 
         let qi = self.slots[self.assigned_count] as usize;
         for _ in 0..10 {
-            if let Some(qt) = random_type_params(kind, qi, n, solution, self.assigned, rng) {
+            if let Some(qt) = random_type_params(kind, qi, n, oc, solution, self.assigned, rng) {
                 if let Some(a) = count_type_answer(&qt)
                     && self.count_letter_counts[a.idx()] >= self.count_letter_cap
                 {
@@ -189,9 +190,11 @@ fn try_construct(
     stats: &mut Stats,
 ) -> Option<GenerateResult> {
     let n = profile.question_count;
+    let oc = profile.option_count;
+    let letters = &LETTERS[..oc];
 
     let mut solution: [Answer; MAX_N] =
-        std::array::from_fn(|i| if i < n { rng.pick(&LETTERS) } else { Answer::A });
+        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
 
     bias_consecutive_pair(&mut solution, n, profile, rng);
 
@@ -210,13 +213,17 @@ fn try_construct(
     let av_fill = filter_allowed(FILL_TYPES, profile);
 
     // Phase 1: Counting entry point
-    if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), &solution, n, rng) {
+    if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng) {
         return None;
     }
 
     // Phase 2: answer_of backbone
     let chain_count = if extra_chain {
         3
+    } else if n <= 3 && rng.int(0, 1) == 0 {
+        0
+    } else if n <= 3 {
+        1
     } else if n <= 5 && rng.int(0, 1) == 0 {
         1
     } else {
@@ -224,7 +231,7 @@ fn try_construct(
     }
     .min(n - state.assigned_count);
     for _ in 0..chain_count {
-        if !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, rng) {
+        if !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng) {
             return None;
         }
     }
@@ -238,19 +245,19 @@ fn try_construct(
         let (kind, needed_qi) = candidates[rng.int(0, 1) as usize];
         if profile.allowed_types.contains(&kind) && (state.assigned & (1 << needed_qi)) == 0 {
             state.swap_slot_to_front(needed_qi);
-            state.try_place(kind, &solution, n, rng);
+            state.try_place(kind, &solution, n, oc, rng);
         }
     }
 
-    // Phase 4: Positional types
-    let pos_count = if av_positional.is_empty() {
+    // Phase 4: Positional types (skip for tiny puzzles — let the fill pool decide)
+    let pos_count = if av_positional.is_empty() || n <= 3 {
         0
     } else {
         2.max(n / 5).min(n - state.assigned_count)
     };
     for _ in 0..pos_count {
         if !av_positional.is_empty() && state.assigned_count < n {
-            state.try_place(rng.pick(&av_positional), &solution, n, rng);
+            state.try_place(rng.pick(&av_positional), &solution, n, oc, rng);
         }
     }
 
@@ -265,7 +272,7 @@ fn try_construct(
             break;
         }
         if profile.allowed_types.contains(&kind) {
-            state.try_place(kind, &solution, n, rng);
+            state.try_place(kind, &solution, n, oc, rng);
         }
     }
 
@@ -291,14 +298,15 @@ fn try_construct(
     while state.assigned_count < fill_target {
         let mut placed = false;
         for _ in 0..20 {
-            if !fill_pool.is_empty() && state.try_place(rng.pick(&fill_pool), &solution, n, rng) {
+            if !fill_pool.is_empty() && state.try_place(rng.pick(&fill_pool), &solution, n, oc, rng)
+            {
                 placed = true;
                 break;
             }
         }
         if !placed
-            && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, rng)
-            && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, rng)
+            && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
+            && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
         {
             return None;
         }
@@ -318,29 +326,36 @@ fn try_construct(
         rng.shuffle(&mut fitting);
         let mut placed = false;
         for &kind in &fitting {
-            if state.try_place(kind, &solution, n, rng) {
+            if state.try_place(kind, &solution, n, oc, rng) {
                 placed = true;
                 break;
             }
         }
         if !placed {
             for _ in 0..20 {
-                if !fill_pool.is_empty() && state.try_place(rng.pick(&fill_pool), &solution, n, rng)
+                if !fill_pool.is_empty()
+                    && state.try_place(rng.pick(&fill_pool), &solution, n, oc, rng)
                 {
                     placed = true;
                     break;
                 }
             }
             if !placed
-                && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, rng)
-                && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, rng)
+                && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
+                && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
             {
                 return None;
             }
         }
     }
 
-    let mut fp = build_flat_puzzle(&state.question_types, &solution, n, rng)?;
+    let mut fp = build_flat_puzzle(
+        &state.question_types,
+        &solution,
+        n,
+        profile.option_count,
+        rng,
+    )?;
 
     if !validate_and_repair(&state.question_types, &solution, &mut fp, n, rng, stats) {
         return None;
@@ -385,7 +400,7 @@ fn bias_consecutive_pair(
             if k != keep {
                 let pos = pair_positions[k] as usize + 1;
                 loop {
-                    let new_letter = rng.pick(&LETTERS);
+                    let new_letter = rng.pick(&LETTERS[..profile.option_count]);
                     if new_letter != solution[pos - 1]
                         && (pos + 1 >= n || new_letter != solution[pos + 1])
                     {
@@ -520,20 +535,22 @@ fn random_type_params(
     kind: QuestionTypeKind,
     qi: usize,
     n: usize,
+    option_count: usize,
     solution: &[Answer; MAX_N],
     assigned: u16,
     rng: &mut Rng,
 ) -> Option<QuestionType> {
+    let letters = &LETTERS[..option_count];
     match kind {
         QuestionTypeKind::CountAnswer => Some(QuestionType::CountAnswer {
-            answer: rng.pick(&LETTERS),
+            answer: rng.pick(letters),
         }),
         QuestionTypeKind::CountAnswerBefore => {
             if n < 6 {
                 return None;
             }
             Some(QuestionType::CountAnswerBefore {
-                answer: rng.pick(&LETTERS),
+                answer: rng.pick(letters),
                 before_index: rng.int(4, n as i32 - 1) as u8,
             })
         }
@@ -542,7 +559,7 @@ fn random_type_params(
                 return None;
             }
             Some(QuestionType::CountAnswerAfter {
-                answer: rng.pick(&LETTERS),
+                answer: rng.pick(letters),
                 after_index: rng.int(0, (n as i32 - 5).max(0)) as u8,
             })
         }
@@ -588,7 +605,7 @@ fn random_type_params(
         }
         QuestionTypeKind::ClosestAfter => Some(QuestionType::ClosestAfter {
             after_index: rng.int(0, (n as i32 - 5).max(0)) as u8,
-            answer: rng.pick(&LETTERS),
+            answer: rng.pick(letters),
         }),
         QuestionTypeKind::ClosestBefore => {
             if n < 5 {
@@ -596,14 +613,14 @@ fn random_type_params(
             }
             Some(QuestionType::ClosestBefore {
                 before_index: rng.int(4, n as i32 - 1) as u8,
-                answer: rng.pick(&LETTERS),
+                answer: rng.pick(letters),
             })
         }
         QuestionTypeKind::FirstWith => Some(QuestionType::FirstWith {
-            answer: rng.pick(&LETTERS),
+            answer: rng.pick(letters),
         }),
         QuestionTypeKind::LastWith => Some(QuestionType::LastWith {
-            answer: rng.pick(&LETTERS),
+            answer: rng.pick(letters),
         }),
         QuestionTypeKind::PrevSame => {
             if qi < 4 {
@@ -621,7 +638,7 @@ fn random_type_params(
         QuestionTypeKind::SameAs => Some(QuestionType::SameAs),
         QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
-            let answer = rng.pick(&LETTERS);
+            let answer = rng.pick(letters);
             Some(if kind == QuestionTypeKind::OnlyOdd {
                 QuestionType::OnlyOdd { answer }
             } else {
@@ -632,7 +649,7 @@ fn random_type_params(
         QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
         QuestionTypeKind::Unique => Some(QuestionType::Unique),
         QuestionTypeKind::EqualCount => {
-            let ref_letter = rng.pick(&LETTERS);
+            let ref_letter = rng.pick(letters);
             let ref_count = count_letter(solution, ref_letter, n);
             let has_match = LETTERS
                 .iter()

@@ -14,6 +14,7 @@ export default {
     solvedCount: (solved: number, total: number) => `${solved}/${total}`,
   },
   difficulty: {
+    0: "Intro",
     1: "Beginner",
     2: "Easy",
     3: "Medium",

@@ -33,6 +33,7 @@ export interface CompactPuzzle {
 }
 
 export function parseCompactPuzzle(compact: CompactPuzzle): Puzzle {
+  const optionCount = compact.q[0]?.o?.length ?? 5;
   const questions = compact.q.map<QuestionDef>((cq) => {
     const questionType = expandQuestion(cq.t);
     const options: OptionDef[] = cq.c
@@ -40,7 +41,7 @@ export function parseCompactPuzzle(compact: CompactPuzzle): Puzzle {
       : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
     return { options, questionType };
   });
-  return { id: "playground", title: "", difficulty: "0", questions };
+  return { id: "playground", title: "", difficulty: "0", questions, optionCount };
 }
 
 export function parseCompactYear(
@@ -57,11 +58,13 @@ export function parseCompactYear(
           : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
         return { options, questionType };
       });
+      const optionCount = compact.q[0]?.o?.length ?? 5;
       result[mmdd][lvl] = {
         id: "",
         title: "",
         difficulty: lvl,
         questions,
+        optionCount,
       };
     }
   }
@@ -134,7 +137,11 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug")) {
+  if (
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).has("debug") ||
+      sessionStorage.getItem("debug") === "1")
+  ) {
     return true;
   }
   const today = new Date();

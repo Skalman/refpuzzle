@@ -46,7 +46,7 @@ fn main() {
             "--level" | "-l" => {
                 i += 1;
                 let l: u8 = args[i].parse().expect("invalid level");
-                assert!((1..=5).contains(&l), "level must be 1-5");
+                assert!((0..=5).contains(&l), "level must be 0-5");
                 level_filter = Some(l);
             }
             "--stats" => {
@@ -61,14 +61,14 @@ fn main() {
             }
             "--help" | "-h" => {
                 eprintln!(
-                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-5] [--attempts A] [--stats]"
+                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 0-5] [--attempts A] [--stats]"
                 );
                 eprintln!("       logiquiz-gen --check <file.json> [MMDD-level-N]");
                 eprintln!("  Generates a year of daily puzzles.");
                 eprintln!(
                     "  Seeds are derived from the date, so the same date always produces the same puzzle."
                 );
-                eprintln!("  --level  generate only this level (default: all 5)");
+                eprintln!("  --level  generate only this level (default: all 6)");
                 eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026).");
                 eprintln!("  --stats  show generation statistics");
                 eprintln!("  --check  verify solvability of puzzles in a JSON file");
@@ -105,7 +105,7 @@ fn main() {
     let start_time = Instant::now();
     let levels: Vec<u8> = match level_filter {
         Some(l) => vec![l],
-        None => vec![1, 2, 3, 4, 5],
+        None => vec![0, 1, 2, 3, 4, 5],
     };
 
     // Generate all (day, level) pairs in parallel
@@ -135,7 +135,7 @@ fn main() {
 
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    let done_by_level: [AtomicUsize; 5] = std::array::from_fn(|_| AtomicUsize::new(0));
+    let done_by_level: [AtomicUsize; 6] = std::array::from_fn(|_| AtomicUsize::new(0));
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
@@ -143,7 +143,7 @@ fn main() {
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), seeds)| {
-            let profile = &PROFILES[level as usize - 1];
+            let profile = &PROFILES[level as usize];
             let mut result = None;
             let mut stats = gen_common::Stats::default();
             for &s in seeds {
@@ -155,17 +155,17 @@ fn main() {
                     break;
                 }
             }
-            done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
+            done_by_level[level as usize].fetch_add(1, Ordering::Relaxed);
             if let Ok(mut last) = last_report.try_lock()
                 && last.elapsed().as_secs() >= 15
             {
-                let counts: Vec<usize> = (0..5)
+                let counts: Vec<usize> = (0..6)
                     .map(|i| done_by_level[i].load(Ordering::Relaxed))
                     .collect();
                 let done_total: usize = counts.iter().sum();
                 eprintln!(
-                    "  {done_total}/{total}: L1={} L2={} L3={} L4={} L5={}",
-                    counts[0], counts[1], counts[2], counts[3], counts[4],
+                    "  {done_total}/{total}: L0={} L1={} L2={} L3={} L4={} L5={}",
+                    counts[0], counts[1], counts[2], counts[3], counts[4], counts[5],
                 );
                 *last = Instant::now();
             }
@@ -259,17 +259,18 @@ fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -
 
 fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
     let n = result.n;
+    let oc = result.fp.option_count;
     let questions: Vec<Value> = (0..n)
         .map(|qi| {
             let qt = &result.question_types[qi];
             let mut q = serde_json::Map::new();
             if let QuestionType::TrueStmt = qt {
-                let claims: Vec<Value> = (0..5)
+                let claims: Vec<Value> = (0..oc)
                     .map(|oi| claim_to_json(&result.fp.option_claims[qi][oi]))
                     .collect();
                 q.insert("c".into(), json!(claims));
             } else {
-                let options: Vec<Value> = (0..5)
+                let options: Vec<Value> = (0..oc)
                     .map(|oi| option_value_json(qt, qi, oi, &result.fp))
                     .collect();
                 q.insert("o".into(), json!(options));
@@ -640,8 +641,9 @@ fn report_first_incorrect_if_needed(
 
 fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
     let n = fp.n;
+    let pm = gen_common::phantom_mask(fp.option_count);
     let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-    let mut eliminated = [0u8; MAX_N];
+    let mut eliminated = [pm; MAX_N];
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
     let mut action_log: Vec<CheckAction> = Vec::new();
     let mut conflict_reported = false;
@@ -799,6 +801,12 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         return None;
     }
 
+    let option_count = qs
+        .first()
+        .and_then(|q| q.get("o"))
+        .and_then(|o| o.as_array())
+        .map_or(5, |a| a.len());
+
     let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
     let mut option_answers = [[0xFFu8; 5]; MAX_N];
@@ -860,6 +868,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         affected_by,
         global_indices,
         n,
+        option_count,
     })
 }
 

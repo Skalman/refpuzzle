@@ -162,6 +162,9 @@ fn propagate_forces(
 
     while let Some(qi) = queue.pop() {
         if let Some((target, answer)) = get_force(fp, current, qi) {
+            if answer.idx() >= fp.option_count {
+                return false;
+            }
             if let Some(existing) = current[target] {
                 if existing != answer {
                     return false;
@@ -301,7 +304,7 @@ fn search(
         return;
     }
 
-    for &letter in &LETTERS {
+    for &letter in &LETTERS[..fp.option_count] {
         current[qi] = Some(letter);
         *assigned_bits |= bit;
         let mut forced = ArrayVec::<usize, MAX_N>::new();

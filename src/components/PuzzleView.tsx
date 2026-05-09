@@ -221,7 +221,9 @@ export function PuzzleView({
 }: PuzzleViewProps) {
   const s = t();
   const debugMode =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).has("debug");
+    typeof window !== "undefined" &&
+    (new URLSearchParams(window.location.search).has("debug") ||
+      sessionStorage.getItem("debug") === "1");
 
   // Initialize synchronously to avoid flicker
   const initState = (() => {
@@ -251,7 +253,10 @@ export function PuzzleView({
   }
   const [validity, setValidity] = useState<Validity[]>(() => {
     const fp = getFlatPuzzle(puzzle);
-    const { answers, eliminated } = deriveState(initState.questions.map((q) => q.marks));
+    const { answers, eliminated } = deriveState(
+      initState.questions.map((q) => q.marks),
+      puzzle.optionCount,
+    );
     return answers.map((a, qi) =>
       a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
     );
@@ -346,7 +351,10 @@ export function PuzzleView({
   const revalidate = useCallback(
     (qs: QuestionState[]) => {
       const fp = getFlatPuzzle(puzzle);
-      const { answers, eliminated } = deriveState(qs.map((q) => q.marks));
+      const { answers, eliminated } = deriveState(
+        qs.map((q) => q.marks),
+        puzzle.optionCount,
+      );
       const result: Validity[] = answers.map((a, qi) =>
         a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
       );
@@ -536,7 +544,7 @@ export function PuzzleView({
   function computeHint(): { steps: ExplainStep[] } | null {
     const fp = getFlatPuzzle(puzzle);
     const markSets = questionsRef.current.map((q) => q.marks);
-    const { answers, eliminated } = deriveState(markSets);
+    const { answers, eliminated } = deriveState(markSets, puzzle.optionCount);
 
     const errorSteps = findError(answers, eliminated);
     if (errorSteps) return { steps: errorSteps };
@@ -931,7 +939,7 @@ export function PuzzleView({
       {/* Questions */}
       <div
         ref={gridRef}
-        class="questions-grid"
+        class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}`}
         style={{
           gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
         }}

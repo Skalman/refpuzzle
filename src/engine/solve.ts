@@ -6,8 +6,9 @@ import { checkAnswerValidity } from "./check-validity.ts";
 
 export function solvePuzzle(fp: FlatPuzzle): (AnswerLetter | null)[] {
   const n = fp.n;
+  const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
   const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(0);
+  const eliminated: number[] = new Array(n).fill(phantomMask);
 
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.slice(0, n).every((a) => a != null)) break;
@@ -34,8 +35,9 @@ export type SolveOutcome = "solved" | "stuck";
 
 export function checkSolvable(fp: FlatPuzzle): SolveOutcome {
   const n = fp.n;
+  const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
   const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(0);
+  const eliminated: number[] = new Array(n).fill(phantomMask);
 
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.slice(0, n).every((a) => a != null)) return "solved";

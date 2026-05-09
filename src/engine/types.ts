@@ -20,8 +20,9 @@ export function letterIdx(s: string): number {
 export interface Puzzle {
   id: string;
   title: string;
-  difficulty: string; // "1" | "2" | "3" | "4" | "5"
+  difficulty: string;
   questions: QuestionDef[];
+  optionCount?: number;
 }
 
 export interface QuestionDef {
@@ -172,6 +173,7 @@ export interface FlatPuzzle {
   affectedBy: number[][]; // affectedBy[j] = question indices to re-check when Q_j changes
   globalIndices: number[]; // indices of questions with global rules (need all answers)
   n: number;
+  optionCount: number;
 }
 
 const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
@@ -243,5 +245,6 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
     affectedBy,
     globalIndices,
     n,
+    optionCount: puzzle.optionCount ?? 5,
   };
 }
