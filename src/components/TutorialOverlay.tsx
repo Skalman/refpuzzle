@@ -149,8 +149,10 @@ export function TutorialOverlay({
     if (!step) return;
     if (step.kind === "intro") {
       goToStep(currentIdx + 1);
+    } else if (phase === "show") {
+      setPhase("focus");
     } else {
-      if (phase === "show" || phase === "focus") {
+      if (phase === "focus") {
         onApplyRef.current(step);
       }
       goToStep(currentIdx + 1);

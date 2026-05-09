@@ -418,7 +418,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const showKeyboardHelpRef = useRef(false);
 
   const tabsRef = useRef<HTMLDivElement>(null);
-  const startTutorialRef = useRef(false);
+  const [pendingTutorial, setPendingTutorial] = useState(false);
   const [highlightTab, setHighlightTab] = useState<number | null>(null);
 
   const selectLevel = useCallback(
@@ -617,24 +617,18 @@ function DayView({ dateStr }: { dateStr: string }) {
           onChanged={handleChanged}
           onStartTutorial={() => {
             if (activeLevel === 0) {
-              startTutorialRef.current = true;
-              selectLevel(0);
+              setPendingTutorial(true);
             } else {
               setHighlightTab(0);
               setTimeout(() => {
                 setHighlightTab(null);
-                startTutorialRef.current = true;
+                setPendingTutorial(true);
                 selectLevel(0);
               }, 1200);
             }
           }}
-          autoStartTutorial={(() => {
-            if (startTutorialRef.current && activeLevel === 0) {
-              startTutorialRef.current = false;
-              return true;
-            }
-            return false;
-          })()}
+          autoStartTutorial={pendingTutorial && activeLevel === 0}
+          onTutorialConsumed={() => setPendingTutorial(false)}
         />
       )}
 

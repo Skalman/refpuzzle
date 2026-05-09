@@ -197,6 +197,7 @@ interface PuzzleViewProps {
   onChanged: () => void;
   onStartTutorial?: () => void;
   autoStartTutorial?: boolean;
+  onTutorialConsumed?: () => void;
 }
 
 function HintStep({ step }: { step: ExplainStep }) {
@@ -225,6 +226,7 @@ export function PuzzleView({
   onChanged,
   onStartTutorial,
   autoStartTutorial,
+  onTutorialConsumed,
 }: PuzzleViewProps) {
   const s = t();
   const debugMode =
@@ -274,7 +276,7 @@ export function PuzzleView({
 
   // Tutorial mode
   const isIntro = (puzzle.optionCount ?? 5) < 5;
-  const [tutorialActive, setTutorialActive] = useState(autoStartTutorial ?? false);
+  const [tutorialActive, setTutorialActive] = useState(false);
   const [tutorialWelcome, setTutorialWelcome] = useState(() => {
     try {
       return !localStorage.getItem("refpuzzle:tutorial-seen");
@@ -412,6 +414,13 @@ export function PuzzleView({
   }, [questions, revalidate, tutorialActive]);
 
   useEffect(() => {
+    if (autoStartTutorial && !tutorialActive) {
+      setTutorialActive(true);
+      onTutorialConsumed?.();
+    }
+  }, [autoStartTutorial, tutorialActive, onTutorialConsumed]);
+
+  useEffect(() => {
     if (!tutorialWelcome || tutorialActive) return undefined;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -531,7 +540,9 @@ export function PuzzleView({
     }
   }
 
-  function tutorialRevalidate(qs: QuestionState[]) {
+  const tutorialSnapshotsRef = useRef<QuestionState[][]>([]);
+
+  function tutorialSetState(qs: QuestionState[]) {
     setQuestions(qs);
     const fp = getFlatPuzzle(puzzle);
     const { answers: ans, eliminated: elim } = deriveState(
@@ -545,6 +556,7 @@ export function PuzzleView({
 
   function handleTutorialApply(step: TutorialStep) {
     if (step.kind !== "deduce") return;
+    tutorialSnapshotsRef.current.push(cloneStates(questionsRef.current));
     const next = cloneStates(questionsRef.current);
     if (step.isForce) {
       for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
@@ -553,20 +565,12 @@ export function PuzzleView({
     } else {
       next[step.questionIndex].marks[step.optionIndex] = "incorrect";
     }
-    tutorialRevalidate(next);
+    tutorialSetState(next);
   }
 
-  function handleTutorialUnapply(step: TutorialStep) {
-    if (step.kind !== "deduce") return;
-    const next = cloneStates(questionsRef.current);
-    if (step.isForce) {
-      for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
-        next[step.questionIndex].marks[oi] = "unmarked";
-      }
-    } else {
-      next[step.questionIndex].marks[step.optionIndex] = "unmarked";
-    }
-    tutorialRevalidate(next);
+  function handleTutorialUnapply(_step: TutorialStep) {
+    const snap = tutorialSnapshotsRef.current.pop();
+    if (snap) tutorialSetState(snap);
   }
 
   function handleTutorialDismiss() {
