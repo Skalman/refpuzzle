@@ -18,6 +18,9 @@ import { confetti } from "../lib/confetti.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
+import { collectTutorialSteps } from "../engine/tutorial.ts";
+import type { TutorialStep } from "../engine/tutorial.ts";
+import { TutorialOverlay } from "./TutorialOverlay.tsx";
 import {
   IconUndo,
   IconRedo,
@@ -192,6 +195,8 @@ interface PuzzleViewProps {
   initialHash?: string | null;
   onNextPuzzle: () => void;
   onChanged: () => void;
+  onStartTutorial?: () => void;
+  autoStartTutorial?: boolean;
 }
 
 function HintStep({ step }: { step: ExplainStep }) {
@@ -218,6 +223,8 @@ export function PuzzleView({
   initialHash,
   onNextPuzzle,
   onChanged,
+  onStartTutorial,
+  autoStartTutorial,
 }: PuzzleViewProps) {
   const s = t();
   const debugMode =
@@ -264,6 +271,32 @@ export function PuzzleView({
   const [hintText, setHintText] = useState<ExplainStep | null>(null);
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
   const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
+
+  // Tutorial mode
+  const isIntro = (puzzle.optionCount ?? 5) < 5;
+  const [tutorialActive, setTutorialActive] = useState(autoStartTutorial ?? false);
+  const [tutorialWelcome, setTutorialWelcome] = useState(() => {
+    try {
+      return !localStorage.getItem("refpuzzle:tutorial-seen");
+    } catch {
+      return false;
+    }
+  });
+  const [tutorialSteps] = useState<TutorialStep[]>(() =>
+    isIntro ? collectTutorialSteps(puzzle, getFlatPuzzle(puzzle)) : [],
+  );
+  const [tutorialHighlight, setTutorialHighlight] = useState<{
+    qis: number[];
+    oi?: number;
+    muteOptions?: boolean;
+    noQuestionOutline?: boolean;
+  } | null>(null);
+  const preTutorialStateRef = useRef<{
+    questions: QuestionState[];
+    history: QuestionState[][];
+    historyIdx: number;
+  } | null>(null);
+  const [tutorialDone, setTutorialDone] = useState(false);
 
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
@@ -375,8 +408,25 @@ export function PuzzleView({
   );
 
   useEffect(() => {
-    if (questions.length > 0) revalidate(questions);
-  }, [questions, revalidate]);
+    if (questions.length > 0 && !tutorialActive) revalidate(questions);
+  }, [questions, revalidate, tutorialActive]);
+
+  useEffect(() => {
+    if (!tutorialWelcome || tutorialActive) return undefined;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setTutorialWelcome(false);
+        try {
+          localStorage.setItem("refpuzzle:tutorial-seen", "1");
+        } catch {
+          /* */
+        }
+        e.preventDefault();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tutorialWelcome, tutorialActive]);
 
   const completed = validity.length > 0 && validity.every((v) => v === "valid");
   const completedRef = useRef(completed);
@@ -478,6 +528,71 @@ export function PuzzleView({
       setHistoryVersion((v) => v + 1);
     } else {
       pushHistory(cloneStates(questionsRef.current));
+    }
+  }
+
+  function tutorialRevalidate(qs: QuestionState[]) {
+    setQuestions(qs);
+    const fp = getFlatPuzzle(puzzle);
+    const { answers: ans, eliminated: elim } = deriveState(
+      qs.map((q) => q.marks),
+      puzzle.optionCount,
+    );
+    setValidity(
+      ans.map((a, qi) => (a == null ? "neutral" : checkAnswerValidity(fp, ans, elim, qi))),
+    );
+  }
+
+  function handleTutorialApply(step: TutorialStep) {
+    if (step.kind !== "deduce") return;
+    const next = cloneStates(questionsRef.current);
+    if (step.isForce) {
+      for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
+        next[step.questionIndex].marks[oi] = oi === step.optionIndex ? "correct" : "incorrect";
+      }
+    } else {
+      next[step.questionIndex].marks[step.optionIndex] = "incorrect";
+    }
+    tutorialRevalidate(next);
+  }
+
+  function handleTutorialUnapply(step: TutorialStep) {
+    if (step.kind !== "deduce") return;
+    const next = cloneStates(questionsRef.current);
+    if (step.isForce) {
+      for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
+        next[step.questionIndex].marks[oi] = "unmarked";
+      }
+    } else {
+      next[step.questionIndex].marks[step.optionIndex] = "unmarked";
+    }
+    tutorialRevalidate(next);
+  }
+
+  function handleTutorialDismiss() {
+    setTutorialActive(false);
+    setTutorialHighlight(null);
+    // Pulse the Tutorial button briefly after dismiss
+    setTutorialDone(true);
+    setTimeout(() => setTutorialDone(false), 3000);
+    try {
+      localStorage.setItem("refpuzzle:tutorial-seen", "1");
+    } catch {
+      /* */
+    }
+    // Restore pre-tutorial state
+    const saved = preTutorialStateRef.current;
+    if (saved) {
+      setQuestions(saved.questions);
+      historyRef.current = saved.history;
+      historyIdxRef.current = saved.historyIdx;
+      setHistoryVersion((v) => v + 1);
+      revalidate(saved.questions);
+      preTutorialStateRef.current = null;
+    } else {
+      const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+      setQuestions(blank);
+      revalidate(blank);
     }
   }
 
@@ -690,7 +805,7 @@ export function PuzzleView({
   // Confetti + scroll to next puzzle on completion
   const wasCompleted = useRef(initState.completed);
   useEffect(() => {
-    if (!completed || wasCompleted.current) return undefined;
+    if (!completed || wasCompleted.current || tutorialActive) return undefined;
     wasCompleted.current = true;
     const m = metaRef.current;
     if (m.sessionStart != null) {
@@ -716,7 +831,7 @@ export function PuzzleView({
       btn.focus({ preventScroll: true });
     }, 1800);
     return () => clearTimeout(timer);
-  }, [completed, level, puzzle.id]);
+  }, [completed, level, puzzle.id, tutorialActive]);
 
   // Init roving tabindex on controls toolbar
   useEffect(() => {
@@ -935,214 +1050,318 @@ export function PuzzleView({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div class="puzzle-view">
-      {/* Questions */}
+    <>
+      {(tutorialActive || tutorialWelcome) && (
+        <div
+          class={`tutorial-scrim${tutorialWelcome && !tutorialActive ? " tutorial-scrim-welcome" : ""}`}
+        />
+      )}
       <div
-        ref={gridRef}
-        class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}`}
-        style={{
-          gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
-        }}
-        onKeyDown={handleGridKeyDown}
-        onFocusCapture={() => {
-          if (focusedQuestionRef.current == null) {
-            setFocusedQuestion(0);
-            setFocusedOption(0);
-          }
-        }}
+        class={`puzzle-view${tutorialActive ? " tutorial-active" : ""}${tutorialWelcome && !tutorialActive ? " tutorial-active" : ""}`}
       >
-        {puzzle.questions.map((qDef, qi) => (
-          <QuestionRow
-            key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
-            index={qi}
-            question={qDef}
-            marks={questions[qi]?.marks ?? FRESH_MARKS}
-            validity={validity[qi] ?? "neutral"}
-            disabled={completed}
-            focusedOption={focusedQuestion === qi ? focusedOption : null}
-            defaultFocus={focusedQuestion == null && qi === 0}
-            onOptionClick={(oi) => handleOptionClick(qi, oi)}
+        {tutorialActive && <div class="tutorial-heading">Tutorial</div>}
+        {tutorialWelcome && !tutorialActive && (
+          <div
+            class="tutorial-overlay"
+            onClick={() => {
+              setTutorialWelcome(false);
+              try {
+                localStorage.setItem("refpuzzle:tutorial-seen", "1");
+              } catch {
+                /* */
+              }
+            }}
+          >
+            <div
+              class="tutorial-bubble tutorial-welcome-bubble"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                class="tutorial-skip"
+                onClick={() => {
+                  setTutorialWelcome(false);
+                  try {
+                    localStorage.setItem("refpuzzle:tutorial-seen", "1");
+                  } catch {
+                    /* */
+                  }
+                }}
+                aria-label="Dismiss"
+              >
+                <IconX size="1.2em" />
+              </button>
+              <div class="tutorial-welcome-title">Welcome to Refpuzzle!</div>
+              <div class="tutorial-explain">
+                A self-referential logic puzzle. Let's walk through your first one together.
+              </div>
+              <button
+                class="tutorial-start-btn"
+                onClick={() => {
+                  setTutorialWelcome(false);
+                  if (isIntro) {
+                    setTutorialActive(true);
+                  } else if (onStartTutorial) {
+                    onStartTutorial();
+                  }
+                }}
+              >
+                Start tutorial
+              </button>
+            </div>
+          </div>
+        )}
+        {/* Questions */}
+        <div
+          ref={gridRef}
+          class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorialActive && !tutorialDone ? " tutorial-dimmed" : ""}`}
+          style={{
+            gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
+          }}
+          onKeyDown={handleGridKeyDown}
+          onFocusCapture={() => {
+            if (focusedQuestionRef.current == null) {
+              setFocusedQuestion(0);
+              setFocusedOption(0);
+            }
+          }}
+        >
+          {puzzle.questions.map((qDef, qi) => (
+            <QuestionRow
+              key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
+              index={qi}
+              question={qDef}
+              marks={questions[qi]?.marks ?? FRESH_MARKS}
+              validity={validity[qi] ?? "neutral"}
+              disabled={completed || tutorialActive}
+              focusedOption={focusedQuestion === qi ? focusedOption : null}
+              defaultFocus={focusedQuestion == null && qi === 0}
+              highlighted={
+                tutorialActive &&
+                !tutorialHighlight?.noQuestionOutline &&
+                (tutorialHighlight?.qis.includes(qi) ?? false)
+              }
+              highlightedOption={
+                tutorialActive && (tutorialHighlight?.qis.includes(qi) ?? false)
+                  ? tutorialHighlight?.oi
+                  : undefined
+              }
+              muteOtherOptions={
+                tutorialActive &&
+                tutorialHighlight?.muteOptions &&
+                (tutorialHighlight?.qis.includes(qi) ?? false)
+              }
+              onOptionClick={(oi) => handleOptionClick(qi, oi)}
+            />
+          ))}
+        </div>
+
+        {tutorialActive && (
+          <TutorialOverlay
+            steps={tutorialSteps}
+            onDismiss={handleTutorialDismiss}
+            onSetHighlight={setTutorialHighlight}
+            onApplyStep={handleTutorialApply}
+            onUnapplyStep={handleTutorialUnapply}
+            onDone={() => setTutorialHighlight(null)}
           />
-        ))}
-      </div>
+        )}
 
-      {/* Hint display */}
-      {!completed && debugMode && debugHints && (
-        <div class="puzzle-hint">
-          <ol>
-            {debugHints.map((step, i) => (
-              // oxlint-disable-next-line react/no-array-index-key
-              <li key={i}>
-                <HintStep step={step} />
-              </li>
-            ))}
-          </ol>
-        </div>
-      )}
-      {!completed && !debugMode && hintText && (
-        <div class="puzzle-hint">
-          <HintStep step={hintText} />
-          {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
-            <button class="hint-more" onClick={handleHint}>
-              {s.puzzle.more}
-            </button>
-          )}
-        </div>
-      )}
+        {/* Hint display */}
+        {!completed && debugMode && debugHints && (
+          <div class="puzzle-hint">
+            <ol>
+              {debugHints.map((step, i) => (
+                // oxlint-disable-next-line react/no-array-index-key
+                <li key={i}>
+                  <HintStep step={step} />
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
+        {!completed && !debugMode && hintText && (
+          <div class="puzzle-hint">
+            <HintStep step={hintText} />
+            {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
+              <button class="hint-more" onClick={handleHint}>
+                {s.puzzle.more}
+              </button>
+            )}
+          </div>
+        )}
 
-      {/* Completion banner */}
-      {completed && (
-        <div class="puzzle-complete">
-          <span>{s.puzzle.solved}</span>
-          {level < 5 ? (
-            <button
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-              ref={nextPuzzleRef as Ref<HTMLButtonElement>}
-              class="next-puzzle-btn"
-              onClick={onNextPuzzle}
-            >
-              {s.puzzle.nextPuzzle} &rarr;
-            </button>
-          ) : (
-            <a
-              // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-              ref={nextPuzzleRef as Ref<HTMLAnchorElement>}
-              href="/past"
-              class="next-puzzle-btn"
-            >
-              {s.daily.pastPuzzles} &rarr;
-            </a>
-          )}
-        </div>
-      )}
+        {/* Completion banner */}
+        {completed && !tutorialActive && (
+          <div class="puzzle-complete">
+            <span>{s.puzzle.solved}</span>
+            {level < 5 ? (
+              <button
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                ref={nextPuzzleRef as Ref<HTMLButtonElement>}
+                class="next-puzzle-btn"
+                onClick={onNextPuzzle}
+              >
+                {s.puzzle.nextPuzzle} &rarr;
+              </button>
+            ) : (
+              <a
+                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+                ref={nextPuzzleRef as Ref<HTMLAnchorElement>}
+                href="/past"
+                class="next-puzzle-btn"
+              >
+                {s.daily.pastPuzzles} &rarr;
+              </a>
+            )}
+          </div>
+        )}
 
-      {/* Controls */}
-      <div
-        ref={controlsRef}
-        class="puzzle-controls"
-        role="toolbar"
-        onKeyDown={arrowNavHandler("button:not(:disabled)")}
-      >
-        <button
-          class="toolbar-icon-btn"
-          onClick={handleUndo}
-          disabled={completed || !canUndo}
-          title={s.puzzle.undo}
+        {/* Controls */}
+        <div
+          ref={controlsRef}
+          class="puzzle-controls"
+          role="toolbar"
+          onKeyDown={arrowNavHandler("button:not(:disabled)")}
         >
-          <IconUndo />
-        </button>
-        <button
-          class="toolbar-icon-btn"
-          onClick={handleRedo}
-          disabled={completed || !canRedo}
-          title={s.puzzle.redo}
-        >
-          <IconRedo />
-        </button>
-        <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
-          <IconPin size="0.9em" /> {s.puzzle.checkpoint}
-        </button>
-        <button
-          class="toolbar-accent-btn"
-          onClick={handleHint}
-          onMouseEnter={getSolution}
-          onFocus={getSolution}
-          onTouchStart={getSolution}
-          disabled={completed}
-          title={s.puzzle.hint}
-        >
-          <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
-        </button>
-        <span class="controls-spacer"></span>
-        <span class="split-btn">
-          <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
-            <IconShare size="0.9em" /> {canShare ? s.puzzle.share : s.puzzle.copyLink}
+          <button
+            class="toolbar-icon-btn"
+            onClick={handleUndo}
+            disabled={completed || !canUndo}
+            title={s.puzzle.undo}
+          >
+            <IconUndo />
           </button>
-          <span class="split-btn-wrapper">
+          <button
+            class="toolbar-icon-btn"
+            onClick={handleRedo}
+            disabled={completed || !canRedo}
+            title={s.puzzle.redo}
+          >
+            <IconRedo />
+          </button>
+          <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
+            <IconPin size="0.9em" /> {s.puzzle.checkpoint}
+          </button>
+          <button
+            class="toolbar-accent-btn"
+            onClick={handleHint}
+            onMouseEnter={getSolution}
+            onFocus={getSolution}
+            onTouchStart={getSolution}
+            disabled={completed}
+            title={s.puzzle.hint}
+          >
+            <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
+          </button>
+          {isIntro && (
             <button
-              ref={shareDropRef}
-              class="toolbar-accent-btn split-btn-drop"
-              aria-haspopup="true"
-              aria-expanded={shareMenu}
-              onClick={(e) => {
-                e.stopPropagation();
-                setShareMenu((v) => {
-                  shareMenuRef.current = !v;
-                  return !v;
-                });
+              class={`toolbar-accent-btn${tutorialDone ? " tutorial-highlight-btn" : ""}`}
+              onClick={() => {
+                preTutorialStateRef.current = {
+                  questions: cloneStates(questionsRef.current),
+                  history: historyRef.current.map((h) => cloneStates(h)),
+                  historyIdx: historyIdxRef.current,
+                };
+                const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+                setQuestions(blank);
+                setTutorialActive(true);
               }}
-              onKeyDown={(e) => {
-                if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShareMenu(true);
-                  shareMenuRef.current = true;
-                  requestAnimationFrame(() => {
-                    const item = shareDropRef.current
-                      ?.closest(".split-btn-wrapper")
-                      ?.querySelector(".split-btn-menu button");
-                    if (item instanceof HTMLElement) item.focus();
-                  });
-                } else if (e.key === "Escape" && shareMenuRef.current) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setShareMenu(false);
-                  shareMenuRef.current = false;
-                }
-              }}
+              disabled={completed || (tutorialActive && !tutorialDone)}
             >
-              <IconChevronDown size="1em" />
+              Tutorial
             </button>
-            {shareMenu && (
-              <div class="split-btn-menu" onKeyDown={handleShareMenuKeyDown}>
-                <button
-                  role="menuitem"
-                  onClick={() => {
+          )}
+          <span class="controls-spacer"></span>
+          <span class="split-btn">
+            <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
+              <IconShare size="0.9em" /> {canShare ? s.puzzle.share : s.puzzle.copyLink}
+            </button>
+            <span class="split-btn-wrapper">
+              <button
+                ref={shareDropRef}
+                class="toolbar-accent-btn split-btn-drop"
+                aria-haspopup="true"
+                aria-expanded={shareMenu}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShareMenu((v) => {
+                    shareMenuRef.current = !v;
+                    return !v;
+                  });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setShareMenu(true);
+                    shareMenuRef.current = true;
+                    requestAnimationFrame(() => {
+                      const item = shareDropRef.current
+                        ?.closest(".split-btn-wrapper")
+                        ?.querySelector(".split-btn-menu button");
+                      if (item instanceof HTMLElement) item.focus();
+                    });
+                  } else if (e.key === "Escape" && shareMenuRef.current) {
+                    e.preventDefault();
+                    e.stopPropagation();
                     setShareMenu(false);
                     shareMenuRef.current = false;
-                    handleShareApp();
-                  }}
-                >
-                  {canShare ? s.puzzle.shareApp : s.puzzle.copyApp}
-                </button>
-                {hasProgress && (
+                  }
+                }}
+              >
+                <IconChevronDown size="1em" />
+              </button>
+              {shareMenu && (
+                <div class="split-btn-menu" onKeyDown={handleShareMenuKeyDown}>
                   <button
                     role="menuitem"
                     onClick={() => {
                       setShareMenu(false);
                       shareMenuRef.current = false;
-                      handleShareProgress();
+                      handleShareApp();
                     }}
                   >
-                    {canShare ? s.puzzle.shareWithProgress : s.puzzle.copyWithProgress}
+                    {canShare ? s.puzzle.shareApp : s.puzzle.copyApp}
                   </button>
-                )}
-              </div>
-            )}
-            {toastMessage && <span class="share-toast">{toastMessage}</span>}
+                  {hasProgress && (
+                    <button
+                      role="menuitem"
+                      onClick={() => {
+                        setShareMenu(false);
+                        shareMenuRef.current = false;
+                        handleShareProgress();
+                      }}
+                    >
+                      {canShare ? s.puzzle.shareWithProgress : s.puzzle.copyWithProgress}
+                    </button>
+                  )}
+                </div>
+              )}
+              {toastMessage && <span class="share-toast">{toastMessage}</span>}
+            </span>
           </span>
-        </span>
-        <button
-          class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
-          onClick={handleReset}
-          disabled={historyRef.current.length <= 1}
-        >
-          <IconReset size="0.9em" />
-          <span>{s.puzzle.reset}</span>
-          {resetPending && <span class="reset-overlay">{s.puzzle.resetConfirm}</span>}
-        </button>
-      </div>
+          <button
+            class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
+            onClick={handleReset}
+            disabled={historyRef.current.length <= 1}
+          >
+            <IconReset size="0.9em" />
+            <span>{s.puzzle.reset}</span>
+            {resetPending && <span class="reset-overlay">{s.puzzle.resetConfirm}</span>}
+          </button>
+        </div>
 
-      {historyRef.current.length > 1 && (
-        <HistoryStrip
-          history={historyRef.current}
-          currentIdx={historyIdxRef.current}
-          hints={hintMarkers.current}
-          completed={completed}
-          onJump={handleJumpTo}
-          containerRef={historyRef2}
-        />
-      )}
-    </div>
+        {historyRef.current.length > 1 && (
+          <HistoryStrip
+            history={historyRef.current}
+            currentIdx={historyIdxRef.current}
+            hints={hintMarkers.current}
+            completed={completed}
+            onJump={handleJumpTo}
+            containerRef={historyRef2}
+          />
+        )}
+      </div>
+    </>
   );
 }

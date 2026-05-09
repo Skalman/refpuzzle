@@ -50,6 +50,11 @@ function Q(i: number): string {
   return `#${i + 1}`;
 }
 
+function tryLooking(...qis: number[]): ExplainStep {
+  const unique = [...new Set(qis)];
+  return simple(`Try looking at ${unique.map(Q).join(" and ")}.`);
+}
+
 type Pred = (a: AnswerLetter) => boolean;
 
 function countPred(q: { t: number; answer: string | null }): Pred | null {
@@ -218,7 +223,7 @@ function explainForce(
   }
 
   if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null) {
-    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(q.questionIndex)}.`));
+    steps.push(tryLooking(qi, q.questionIndex));
     steps.push(
       simple(
         `${Q(qi)} asks for ${Q(q.questionIndex)}'s answer. ${Q(q.questionIndex)} is ${answers[q.questionIndex]}, so ${Q(qi)} must be ${letter}.`,
@@ -232,7 +237,7 @@ function explainForce(
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
     if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+      steps.push(tryLooking(qi, other));
       steps.push(
         simple(
           `${Q(other)} says it has the same answer as ${Q(qi)}. ${Q(other)} is ${otherAns}, so ${Q(qi)} must be ${otherAns}.`,
@@ -244,7 +249,7 @@ function explainForce(
       (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     ) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+      steps.push(tryLooking(qi, other));
       steps.push(
         simple(
           `${Q(other)} is ${otherAns}, pointing to ${Q(qi)} as having the same answer. So ${Q(qi)} must be ${otherAns}.`,
@@ -264,7 +269,7 @@ function explainForce(
       const refQ = otherR.questionIndex;
       if (targetQ != null && targetQ >= 0 && targetQ < n) {
         if (targetQ === qi && answers[refQ] != null) {
-          steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+          steps.push(tryLooking(qi, other));
           steps.push(
             simple(
               `${Q(other)} is ${otherAns}, pointing to ${Q(qi)} as having the same answer as ${Q(refQ)} (${answers[refQ]}). So ${Q(qi)} must be ${letter}.`,
@@ -273,7 +278,7 @@ function explainForce(
           return steps;
         }
         if (refQ === qi && answers[targetQ] != null) {
-          steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+          steps.push(tryLooking(qi, other));
           steps.push(
             simple(
               `${Q(other)} is ${otherAns}, pointing to ${Q(targetQ)} as having the same answer as ${Q(qi)}. ${Q(targetQ)} is ${answers[targetQ]}, so ${Q(qi)} must be ${letter}.`,
@@ -291,7 +296,7 @@ function explainForce(
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
     if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(other)}.`));
+      steps.push(tryLooking(qi, other));
       steps.push(
         simple(
           `${Q(other)} asks for ${Q(qi)}'s answer. ${Q(other)} is ${otherAns}, telling us ${Q(qi)} must be ${letter}.`,
@@ -303,7 +308,7 @@ function explainForce(
 
   // LetterDist: target answered, only one valid distance
   if (q.t === RT_LETTER_DIST && answers[q.questionIndex] != null) {
-    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(q.questionIndex)}.`));
+    steps.push(tryLooking(qi, q.questionIndex));
     steps.push(
       simple(
         `${Q(q.questionIndex)} is answered ${answers[q.questionIndex]}. Only option ${letter} gives the right letter distance.`,
@@ -320,7 +325,7 @@ function explainForce(
     const srcAns = answers[src];
     if (srcAns != null) {
       const dist = fp.optionValues[src][letterIdx(srcAns)];
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+      steps.push(tryLooking(qi, src));
       steps.push(
         simple(
           `${Q(src)} is answered ${srcAns} with letter distance ${dist}. Only ${letter} is at distance ${dist} from ${srcAns}, so ${Q(qi)} must be ${letter}.`,
@@ -353,7 +358,7 @@ function explainForce(
       const srcVal = fp.optionValues[src][srcAi]!;
       const [from, to] = countRange(srcR, n);
       const cr = countAnswers(answers, eliminated, countPred(srcR)!, from, to);
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+      steps.push(tryLooking(qi, src));
       steps.push(
         simple(
           `${Q(src)} says there are ${srcVal} ${countRuleLabel(srcR, srcVal)}. Only ${cr.count} found so far, and ${Q(qi)} is the only remaining question that could be ${letter} — so ${Q(qi)} must be ${letter}.`,
@@ -389,7 +394,7 @@ function explainForce(
       const p = srcV;
       if (p === qi || p + 1 === qi) {
         const partner = p === qi ? p + 1 : p;
-        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(tryLooking(qi, src));
         if (answers[partner] != null) {
           steps.push(
             simple(
@@ -417,7 +422,7 @@ function explainForce(
       if (!claim) continue;
       const cqt = claim.questionType;
       if (cqt.type === "AnswerOf" && cqt.questionIndex === qi) {
-        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(tryLooking(qi, src));
         steps.push(
           simple(
             `${Q(src)}'s true statement says ${Q(qi)}'s answer is ${letter}. So ${Q(qi)} must be ${letter}.`,
@@ -426,7 +431,7 @@ function explainForce(
         return steps;
       }
       if ((cqt.type === "FirstWith" || cqt.type === "LastWith") && claim.value === qi) {
-        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(tryLooking(qi, src));
         steps.push(
           simple(
             `${Q(src)}'s true statement says ${Q(qi)} has answer ${letter}. So ${Q(qi)} must be ${letter}.`,
@@ -483,7 +488,7 @@ function explainElimination(
   if (rule === "CountSaturated" || rule === "CountMustMatchElim") {
     const sat = explainCountSaturation(fp, answers, eliminated, qi, oi);
     if (sat) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(sat.srcQi)}.`));
+      steps.push(tryLooking(qi, sat.srcQi));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(simple(sat.text));
     } else {
@@ -496,7 +501,7 @@ function explainElimination(
   if (rule === "PositionalRangeAnswered" || rule === "PositionalRangeUnanswered") {
     const src = findPositionalRangeSource(fp, answers, eliminated, qi, oi);
     if (src != null) {
-      steps.push(simple(`Try looking at ${Q(src.srcQi)} and ${Q(qi)}.`));
+      steps.push(tryLooking(src.srcQi, qi));
       steps.push(simple(src.text));
     } else {
       steps.push(simple(`${Q(qi)} can't be ${letter}.`));
@@ -514,7 +519,7 @@ function explainElimination(
       claim.value < n &&
       answers[claim.value] != null
     ) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(claim.value)}.`));
+      steps.push(tryLooking(qi, claim.value));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(
@@ -530,7 +535,7 @@ function explainElimination(
       cqt.questionIndex < n &&
       answers[cqt.questionIndex] != null
     ) {
-      steps.push(simple(`Try looking at ${Q(qi)} and ${Q(cqt.questionIndex)}.`));
+      steps.push(tryLooking(qi, cqt.questionIndex));
       steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
       steps.push(
         simple(
@@ -583,7 +588,7 @@ function explainElimination(
       const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
       if (srcV != null) continue;
       if (answers[src] === letter) {
-        steps.push(simple(`Try looking at ${Q(qi)} and ${Q(src)}.`));
+        steps.push(tryLooking(qi, src));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
         steps.push(
           simple(
@@ -603,7 +608,7 @@ function explainElimination(
       const p = srcV;
       if (p === qi || p + 1 === qi) {
         const partner = p === qi ? p + 1 : p;
-        steps.push(simple(`Try looking at ${Q(qi)}, ${Q(partner)}, and ${Q(src)}.`));
+        steps.push(tryLooking(qi, partner, src));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
         steps.push(
           simple(
@@ -625,7 +630,7 @@ function explainElimination(
             ? qi + 1
             : null;
       if (neighbor != null) {
-        steps.push(simple(`Try looking at ${Q(qi)}, ${Q(neighbor)}, and ${Q(src)}.`));
+        steps.push(tryLooking(qi, neighbor, src));
         steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
         steps.push(
           simple(
@@ -654,7 +659,7 @@ function explainElimination(
 
   const detail = explainElimDetail(q, qi, oi, v, answers, eliminated, n);
   if (detail && detail.otherQi != null) {
-    steps.push(simple(`Try looking at ${Q(qi)} and ${Q(detail.otherQi)}.`));
+    steps.push(tryLooking(qi, detail.otherQi));
   }
   steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
   if (!detail)

@@ -10,6 +10,7 @@ interface Props {
   implied?: boolean;
   disabled?: boolean;
   focused?: boolean;
+  tutorialHighlight?: boolean;
   onClick: () => void;
 }
 
@@ -21,6 +22,7 @@ export function OptionButton({
   implied,
   disabled,
   focused,
+  tutorialHighlight,
   onClick,
 }: Props) {
   const letter = LETTERS[index];
@@ -31,7 +33,7 @@ export function OptionButton({
 
   return (
     <button
-      class={`option-btn ${mark} ${implied ? "implied" : ""}`}
+      class={`option-btn ${mark} ${implied ? "implied" : ""}${tutorialHighlight ? " tutorial-option-highlight" : ""}`}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       title={title}

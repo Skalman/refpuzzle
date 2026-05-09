@@ -12,6 +12,9 @@ interface Props {
   disabled?: boolean;
   focusedOption?: number | null;
   defaultFocus?: boolean;
+  highlighted?: boolean;
+  highlightedOption?: number;
+  muteOtherOptions?: boolean;
   onOptionClick: (optionIndex: number) => void;
 }
 
@@ -25,6 +28,9 @@ export function QuestionRow({
   disabled,
   focusedOption,
   defaultFocus,
+  highlighted,
+  highlightedOption,
+  muteOtherOptions,
   onOptionClick,
 }: Props) {
   const rule = question.questionType;
@@ -36,7 +42,10 @@ export function QuestionRow({
   const hasCorrect = marks.indexOf("correct") >= 0;
 
   return (
-    <div class="question-row" data-qi={index}>
+    <div
+      class={`question-row${highlighted ? " tutorial-highlight" : ""}${muteOtherOptions ? " tutorial-mute-options" : ""}`}
+      data-qi={index}
+    >
       <div class={`validity-bar ${validity}`} />
       <div class="question-header">
         <span class="question-num">{index + 1}.</span>
@@ -53,6 +62,7 @@ export function QuestionRow({
             implied={hasCorrect && marks[oi] === "unmarked"}
             disabled={disabled || (hasCorrect && marks[oi] !== "correct")}
             focused={focusedOption === oi || (defaultFocus && oi === 0)}
+            tutorialHighlight={highlightedOption === oi}
             onClick={() => onOptionClick(oi)}
           />
         ))}

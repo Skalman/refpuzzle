@@ -418,6 +418,8 @@ function DayView({ dateStr }: { dateStr: string }) {
   const showKeyboardHelpRef = useRef(false);
 
   const tabsRef = useRef<HTMLDivElement>(null);
+  const startTutorialRef = useRef(false);
+  const [highlightTab, setHighlightTab] = useState<number | null>(null);
 
   const selectLevel = useCallback(
     (level: number) => {
@@ -577,7 +579,7 @@ function DayView({ dateStr }: { dateStr: string }) {
               role="tab"
               aria-selected={activeLevel === level}
               tabIndex={activeLevel === level ? 0 : -1}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}`}
+              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}${highlightTab === level ? " tutorial-highlight-btn" : ""}`}
               onClick={() => selectLevel(level)}
             >
               {solved && (
@@ -613,6 +615,26 @@ function DayView({ dateStr }: { dateStr: string }) {
           initialHash={hashLevel === activeLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
           onChanged={handleChanged}
+          onStartTutorial={() => {
+            if (activeLevel === 0) {
+              startTutorialRef.current = true;
+              selectLevel(0);
+            } else {
+              setHighlightTab(0);
+              setTimeout(() => {
+                setHighlightTab(null);
+                startTutorialRef.current = true;
+                selectLevel(0);
+              }, 1200);
+            }
+          }}
+          autoStartTutorial={(() => {
+            if (startTutorialRef.current && activeLevel === 0) {
+              startTutorialRef.current = false;
+              return true;
+            }
+            return false;
+          })()}
         />
       )}
 

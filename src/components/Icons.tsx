@@ -99,8 +99,35 @@ export function IconX(p: Props) {
 }
 
 // Play (start)
-export function IconPlay(p: Props) {
-  return <I {...p} d="M6 3l14 9-14 9V3z" />;
+export function IconPlay({ size, class: cls }: Props) {
+  const s = size ?? defaults.size;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      class={cls}
+    >
+      <path d="M6 3l14 9-14 9V3z" />
+    </svg>
+  );
+}
+export function IconPause({ size, class: cls }: Props) {
+  const s = size ?? defaults.size;
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={s}
+      height={s}
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      class={cls}
+    >
+      <path d="M6 4h4v16H6zM14 4h4v16h-4z" />
+    </svg>
+  );
 }
 
 // Chevron down (dropdown)
