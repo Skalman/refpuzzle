@@ -108,6 +108,10 @@ export function PuzzleView({
   const historyIdxRef = useRef(initState.historyIdx);
   const forceHistoryUpdate = useForceUpdate();
 
+  const tabStateRef = useRef({
+    started: initState.history.length > 1,
+    completed: initState.completed,
+  });
   const historyBurstRef = useRef({ lastTime: 0 });
   const tutorialReachedEnd = useRef(false);
 
@@ -217,7 +221,14 @@ export function PuzzleView({
         hints: hintMarkers.current,
       });
       if (analytics.wasStarted.current) saveMeta(puzzle.id, analytics.meta.current);
-      onChanged();
+      const nowStarted = historyRef.current.length > 1;
+      if (
+        nowStarted !== tabStateRef.current.started ||
+        isCompleted !== tabStateRef.current.completed
+      ) {
+        tabStateRef.current = { started: nowStarted, completed: isCompleted };
+        onChanged();
+      }
     },
     [puzzle, onChanged, analytics.meta, analytics.wasStarted],
   );
@@ -241,10 +252,6 @@ export function PuzzleView({
     }
   }, [tutorial.active]);
 
-  useEffect(() => {
-    if (questions.length > 0 && !tutorial.active) revalidate(questions);
-  }, [questions, revalidate, tutorial.active]);
-
   const completed = validity.length > 0 && validity.every((v) => v === "valid");
   const completedRef = useRef(completed);
   completedRef.current = completed;
@@ -263,6 +270,7 @@ export function PuzzleView({
     analytics.markStarted();
     pushHistory(next);
     setQuestions(next);
+    revalidate(next);
     hints.clear();
   }
 
@@ -290,6 +298,13 @@ export function PuzzleView({
     setFocusedOption(optionIdx);
   }
 
+  const optionClickRef = useRef(handleOptionClick);
+  optionClickRef.current = handleOptionClick;
+  const stableOptionClick = useCallback(
+    (qi: number, oi: number) => optionClickRef.current(qi, oi),
+    [],
+  );
+
   function focusCurrentStep() {
     const idx = historyIdxRef.current;
     if (idx <= 0) return;
@@ -304,7 +319,9 @@ export function PuzzleView({
     if (historyIdxRef.current <= 0) return;
     trackHistoryBurst();
     historyIdxRef.current--;
-    setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+    const qs = cloneStates(historyRef.current[historyIdxRef.current]);
+    setQuestions(qs);
+    revalidate(qs);
     hints.clear();
     forceHistoryUpdate();
     focusCurrentStep();
@@ -314,7 +331,9 @@ export function PuzzleView({
     if (historyIdxRef.current >= historyRef.current.length - 1) return;
     trackHistoryBurst();
     historyIdxRef.current++;
-    setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
+    const qs = cloneStates(historyRef.current[historyIdxRef.current]);
+    setQuestions(qs);
+    revalidate(qs);
     hints.clear();
     forceHistoryUpdate();
     focusCurrentStep();
@@ -324,7 +343,9 @@ export function PuzzleView({
     if (idx < 0 || idx >= historyRef.current.length) return;
     trackHistoryBurst();
     historyIdxRef.current = idx;
-    setQuestions(cloneStates(historyRef.current[idx]));
+    const qs = cloneStates(historyRef.current[idx]);
+    setQuestions(qs);
+    revalidate(qs);
     hints.clear();
     forceHistoryUpdate();
   }
@@ -360,6 +381,7 @@ export function PuzzleView({
     historyRef.current = [cloneStates(fresh)];
     historyIdxRef.current = 0;
     setQuestions(fresh);
+    revalidate(fresh);
     hints.clear();
     analytics.wasCompleted.current = false;
   }
@@ -686,7 +708,7 @@ export function PuzzleView({
                 disabled={completed || tutorial.active}
                 focusedOption={focusedQuestion === qi ? focusedOption : null}
                 defaultFocus={focusedQuestion == null && qi === 0}
-                onOptionClick={(oi) => handleOptionClick(qi, oi)}
+                onOptionClick={stableOptionClick}
               />
             ))}
           </div>
