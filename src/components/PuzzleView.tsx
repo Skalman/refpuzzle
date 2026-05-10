@@ -10,8 +10,8 @@ import { explainDeduce, explainLookahead } from "../engine/explain.ts";
 import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
-import { loadState, saveState, loadMeta, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
-import type { QuestionState, PuzzleMeta } from "../lib/store.ts";
+import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
+import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { confetti } from "../lib/confetti.ts";
@@ -24,6 +24,7 @@ import { TutorialOverlay } from "./TutorialOverlay.tsx";
 import { TutorialWelcome } from "./TutorialWelcome.tsx";
 import { TutorialHighlightCtx } from "./TutorialHighlight.ts";
 import { useTutorial } from "./useTutorial.ts";
+import { useAnalytics } from "./useAnalytics.ts";
 import {
   IconUndo,
   IconRedo,
@@ -84,6 +85,13 @@ export function PuzzleView({
     };
   })();
 
+  const analytics = useAnalytics(puzzle.id, {
+    level,
+    initialHash,
+    initStarted: initState.history.length > 1,
+    initCompleted: initState.completed,
+  });
+
   const [questions, setQuestionsRaw] = useState<QuestionState[]>(initState.questions);
   const questionsRef = useRef<QuestionState[]>(initState.questions);
   function setQuestions(qs: QuestionState[]) {
@@ -112,8 +120,8 @@ export function PuzzleView({
   function trackHistoryBurst() {
     const now = Date.now();
     if (now - historyBurstRef.current.lastTime > 15_000) {
-      metaRef.current.historyBursts++;
-      saveMeta(puzzle.id, metaRef.current);
+      analytics.meta.current.historyBursts++;
+      saveMeta(puzzle.id, analytics.meta.current);
     }
     historyBurstRef.current.lastTime = now;
   }
@@ -195,8 +203,8 @@ export function PuzzleView({
 
   function pushHintMarker(hintLevel: number) {
     hintMarkers.current.set(historyIdxRef.current, hintLevel);
-    metaRef.current.hints++;
-    saveMeta(puzzle.id, metaRef.current);
+    analytics.meta.current.hints++;
+    saveMeta(puzzle.id, analytics.meta.current);
     setHistoryVersion((v) => v + 1);
   }
 
@@ -220,10 +228,10 @@ export function PuzzleView({
         historyIdx: historyIdxRef.current,
         hints: hintMarkers.current,
       });
-      if (wasStarted.current) saveMeta(puzzle.id, metaRef.current);
+      if (analytics.wasStarted.current) saveMeta(puzzle.id, analytics.meta.current);
       onChanged();
     },
-    [puzzle, onChanged],
+    [puzzle, onChanged, analytics.meta, analytics.wasStarted],
   );
 
   const forceHistoryUpdate = useCallback(() => setHistoryVersion((v) => v + 1), []);
@@ -258,18 +266,7 @@ export function PuzzleView({
   const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
   function applyChange(next: QuestionState[]) {
-    if (!wasStarted.current) {
-      wasStarted.current = true;
-      metaRef.current.sessions = 1;
-      metaRef.current.sessionStart = Date.now();
-      if (initialHash) metaRef.current.fromShared = true;
-      saveMeta(puzzle.id, metaRef.current);
-      track("puzzle_started", {
-        puzzleId: puzzle.id,
-        level,
-        ...getClientInfo(),
-      });
-    }
+    analytics.markStarted();
     pushHistory(next);
     setQuestions(next);
     setHintText(null);
@@ -353,8 +350,8 @@ export function PuzzleView({
       historyIdxRef.current--;
       setHistoryVersion((v) => v + 1);
     } else {
-      metaRef.current.checkpoints++;
-      saveMeta(puzzle.id, metaRef.current);
+      analytics.meta.current.checkpoints++;
+      saveMeta(puzzle.id, analytics.meta.current);
       pushHistory(cloneStates(questionsRef.current));
     }
   }
@@ -375,7 +372,7 @@ export function PuzzleView({
     setQuestions(fresh);
     setHintText(null);
     hintRef.current = null;
-    wasCompleted.current = false;
+    analytics.wasCompleted.current = false;
   }
 
   const solutionRef = useRef<(AnswerLetter | null)[] | null>(null);
@@ -522,55 +519,11 @@ export function PuzzleView({
     return () => clearTimeout(timer);
   }, [resetPending]);
 
-  // Track first move
-  const wasStarted = useRef(initState.history.length > 1);
-
-  const metaRef = useRef<PuzzleMeta & { sessionStart: number | null }>({
-    ...loadMeta(puzzle.id),
-    sessionStart: null,
-  });
-
-  function flushElapsed() {
-    const m = metaRef.current;
-    if (m.sessionStart != null) {
-      m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
-      m.sessionStart = null;
-      saveMeta(puzzle.id, m);
-    }
-  }
-
-  // Track visibility-based sessions
-  useEffect(() => {
-    if (wasStarted.current) {
-      metaRef.current.sessions++;
-      metaRef.current.sessionStart = Date.now();
-      saveMeta(puzzle.id, metaRef.current);
-    }
-
-    function onVisibility() {
-      if (document.hidden) {
-        flushElapsed();
-      } else if (wasStarted.current && !wasCompleted.current) {
-        metaRef.current.sessions++;
-        metaRef.current.sessionStart = Date.now();
-        saveMeta(puzzle.id, metaRef.current);
-      }
-    }
-
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => {
-      flushElapsed();
-      document.removeEventListener("visibilitychange", onVisibility);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Confetti + scroll to next puzzle on completion
-  const wasCompleted = useRef(initState.completed);
   useEffect(() => {
-    if (!completed || wasCompleted.current || tutorial.active) return undefined;
-    wasCompleted.current = true;
-    const m = metaRef.current;
+    if (!completed || analytics.wasCompleted.current || tutorial.active) return undefined;
+    analytics.wasCompleted.current = true;
+    const m = analytics.meta.current;
     if (m.sessionStart != null) {
       m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
       m.sessionStart = null;
@@ -595,7 +548,7 @@ export function PuzzleView({
       btn.focus({ preventScroll: true });
     }, 1800);
     return () => clearTimeout(timer);
-  }, [completed, level, puzzle.id, tutorial.active]);
+  }, [completed, level, puzzle.id, tutorial.active, analytics.meta, analytics.wasCompleted]);
 
   // Init roving tabindex on controls toolbar
   useEffect(() => {
