@@ -31,7 +31,7 @@ import {
   RT_SAME_AS_WHICH,
 } from "./types.ts";
 import { evaluateClaim } from "./evaluators.ts";
-import { V_VALID, V_INVALID, V_PENDING } from "./state.ts";
+import { V_NEUTRAL, V_VALID, V_INVALID, V_PENDING } from "./state.ts";
 import type { Validity } from "./state.ts";
 
 // ── Helpers ──
@@ -143,7 +143,7 @@ export function checkAnswerValidity(
   qi: number,
 ): Validity {
   const a = answers[qi];
-  if (a == null) return V_PENDING;
+  if (a == null) return V_NEUTRAL;
   const ai = letterIdx(a);
   const q = fp.questions[qi];
   const v = fp.optionValues[qi][ai];

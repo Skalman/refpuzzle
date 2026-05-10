@@ -261,9 +261,7 @@ export function PuzzleView({
       initState.questions.map((q) => q.marks),
       puzzle.optionCount,
     );
-    return answers.map((a, qi) =>
-      a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
-    );
+    return answers.map((_a, qi) => checkAnswerValidity(fp, answers, eliminated, qi));
   });
   const [hintText, setHintText] = useState<ExplainStep | null>(null);
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
@@ -374,8 +372,8 @@ export function PuzzleView({
         qs.map((q) => q.marks),
         puzzle.optionCount,
       );
-      const result: Validity[] = answers.map((a, qi) =>
-        a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
+      const result: Validity[] = answers.map((_a, qi) =>
+        checkAnswerValidity(fp, answers, eliminated, qi),
       );
       setValidity(result);
 

@@ -57,9 +57,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
       puzzle.optionCount,
     );
     optsRef.current.setValidity(
-      answers.map((a, qi) =>
-        a == null ? "neutral" : checkAnswerValidity(fp, answers, eliminated, qi),
-      ),
+      answers.map((_a, qi) => checkAnswerValidity(fp, answers, eliminated, qi)),
     );
   }
 
