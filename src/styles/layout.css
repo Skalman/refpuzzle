@@ -145,22 +145,22 @@
   transition: all 0.15s;
   white-space: nowrap;
   &:nth-child(1) {
-    --tab-color: #94a3b8;
+    --tab-color: var(--tab-intro);
   }
   &:nth-child(2) {
-    --tab-color: #22c55e;
+    --tab-color: var(--tab-beginner);
   }
   &:nth-child(3) {
-    --tab-color: #60a5fa;
+    --tab-color: var(--tab-easy);
   }
   &:nth-child(4) {
-    --tab-color: #eab308;
+    --tab-color: var(--tab-medium);
   }
   &:nth-child(5) {
-    --tab-color: #e85d04;
+    --tab-color: var(--tab-hard);
   }
   &:nth-child(6) {
-    --tab-color: #d42a4a;
+    --tab-color: var(--tab-expert);
   }
 
   border-bottom: 2px solid color-mix(in srgb, var(--tab-color) 75%, transparent);
@@ -227,6 +227,7 @@
     grid-auto-flow: row;
     max-width: min(50%, 400px);
     margin-inline: auto;
+    padding-block: 1rem;
 
     @media (max-width: 768px) {
       max-width: none;

@@ -96,7 +96,7 @@
   right: 0;
   margin-top: 4px;
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
   border-radius: 6px;
   box-shadow: var(--dropdown-shadow);
   z-index: 20;
@@ -163,7 +163,7 @@
   right: 0;
   margin-top: 4px;
   background: var(--bg-surface);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
   border-radius: 6px;
   padding: 0.25rem 0;
   font-size: 0.8rem;

@@ -19,6 +19,12 @@
   --neutral-bar: #d1d5db;
   --strikethrough: rgba(0, 0, 0, 0.25);
   --dropdown-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --tab-intro: #94a3b8;
+  --tab-beginner: #22c55e;
+  --tab-easy: #60a5fa;
+  --tab-medium: #eab308;
+  --tab-hard: #e85d04;
+  --tab-expert: #d42a4a;
 }
 
 [data-theme="dark"] {
@@ -39,6 +45,7 @@
   --neutral-bar: #4b5563;
   --strikethrough: rgba(255, 255, 255, 0.3);
   --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --tab-intro: #cbd5e1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -60,6 +67,7 @@
     --neutral-bar: #4b5563;
     --strikethrough: rgba(255, 255, 255, 0.3);
     --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --tab-intro: #cbd5e1;
   }
 }
 
