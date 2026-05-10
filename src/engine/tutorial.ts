@@ -72,75 +72,63 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
     introTotal,
   });
 
-  // Deduce steps
+  // Deduce steps — one action per iteration to avoid duplicates
   for (let iter = 0; iter < n * 30; iter++) {
-    if (answers.slice(0, n).every((a) => a != null)) break;
+    if (answers.every((a) => a != null)) break;
 
     const drs = deduce(fp, answers, eliminated);
     if (drs.length === 0) break;
 
-    const explains = drs.map((dr) => {
-      try {
-        return explainDeduce(puzzle, fp, answers, eliminated, dr);
-      } catch {
-        return [];
-      }
-    });
+    const dr = drs[0];
+    let explain: ExplainStep[];
+    try {
+      explain = explainDeduce(puzzle, fp, answers, eliminated, dr);
+    } catch {
+      explain = [];
+    }
 
-    for (let k = 0; k < drs.length; k++) {
-      const dr = drs[k];
-      const explain = explains[k];
-
-      if (dr.action.type === "eliminateMulti") {
-        for (let i = 0; i < n; i++) {
-          if ((dr.action.questionMask >> i) & 1) {
-            for (let b = 0; b < oc; b++) {
-              if ((dr.action.optionMask >> b) & 1 && !((eliminated[i] >> b) & 1)) {
-                steps.push({
-                  kind: "deduce",
-                  action: dr.action,
-                  explain,
-                  questionIndex: i,
-                  optionIndex: b,
-                  isForce: false,
-                });
-              }
+    if (dr.action.type === "eliminateMulti") {
+      for (let i = 0; i < n; i++) {
+        if ((dr.action.questionMask >> i) & 1) {
+          for (let b = 0; b < oc; b++) {
+            if ((dr.action.optionMask >> b) & 1 && !((eliminated[i] >> b) & 1)) {
+              steps.push({
+                kind: "deduce",
+                action: dr.action,
+                explain,
+                questionIndex: i,
+                optionIndex: b,
+                isForce: false,
+              });
             }
           }
         }
-      } else if (dr.action.type === "force") {
-        steps.push({
-          kind: "deduce",
-          action: dr.action,
-          explain,
-          questionIndex: dr.action.questionIndex,
-          optionIndex: letterIdx(dr.action.letter),
-          isForce: true,
-        });
-      } else if (dr.action.type === "eliminate") {
-        steps.push({
-          kind: "deduce",
-          action: dr.action,
-          explain,
-          questionIndex: dr.action.questionIndex,
-          optionIndex: dr.action.optionIndex,
-          isForce: false,
-        });
       }
-    }
-
-    for (const dr of drs) {
-      if (dr.action.type === "force") {
-        const fOi = letterIdx(dr.action.letter);
-        eliminated[dr.action.questionIndex] = 0b11111 ^ (1 << fOi);
-        answers[dr.action.questionIndex] = dr.action.letter;
-      } else if (dr.action.type === "eliminate") {
-        eliminated[dr.action.questionIndex] |= 1 << dr.action.optionIndex;
-      } else if (dr.action.type === "eliminateMulti") {
-        for (let i = 0; i < n; i++) {
-          if ((dr.action.questionMask >> i) & 1) eliminated[i] |= dr.action.optionMask;
-        }
+      for (let i = 0; i < n; i++) {
+        if ((dr.action.questionMask >> i) & 1) eliminated[i] |= dr.action.optionMask;
       }
+    } else if (dr.action.type === "force") {
+      steps.push({
+        kind: "deduce",
+        action: dr.action,
+        explain,
+        questionIndex: dr.action.questionIndex,
+        optionIndex: letterIdx(dr.action.letter),
+        isForce: true,
+      });
+      const fOi = letterIdx(dr.action.letter);
+      eliminated[dr.action.questionIndex] = 0b11111 ^ (1 << fOi);
+      answers[dr.action.questionIndex] = dr.action.letter;
+    } else if (dr.action.type === "eliminate") {
+      steps.push({
+        kind: "deduce",
+        action: dr.action,
+        explain,
+        questionIndex: dr.action.questionIndex,
+        optionIndex: dr.action.optionIndex,
+        isForce: false,
+      });
+      eliminated[dr.action.questionIndex] |= 1 << dr.action.optionIndex;
     }
   }
 
