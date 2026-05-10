@@ -392,6 +392,123 @@ function AppHeader({
   );
 }
 
+function downloadBackup(filename: string) {
+  const json = exportData();
+  const blob = new Blob([json], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function useBackupFlow(opts?: { onChanged?: () => void }) {
+  const s = t();
+  const [showBackup, setShowBackup] = useState(false);
+  const [showSync, setShowSync] = useState(false);
+  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+
+  function openBackup() {
+    setShowBackup(true);
+  }
+  function closeBackup() {
+    setShowBackup(false);
+  }
+
+  function handleImportFile(e: Event) {
+    setShowBackup(false);
+    const input = e.target;
+    if (!(input instanceof HTMLInputElement)) return;
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        if (typeof reader.result !== "string") return;
+        setImportPlan(planImport(reader.result));
+      } catch (err) {
+        alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+      }
+    };
+    reader.readAsText(file);
+    input.value = "";
+  }
+
+  function openSync() {
+    setShowBackup(false);
+    setShowSync(true);
+  }
+  function closeSync() {
+    setShowSync(false);
+  }
+
+  function handleSyncReceive(json: string) {
+    setShowSync(false);
+    try {
+      setImportPlan(planImport(json));
+    } catch (err) {
+      alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+    }
+  }
+
+  function confirmImport() {
+    if (!importPlan) return;
+    applyImport(importPlan);
+    setImportPlan(null);
+    opts?.onChanged?.();
+  }
+
+  function cancelImport() {
+    setImportPlan(null);
+  }
+
+  return {
+    showBackup,
+    openBackup,
+    closeBackup,
+    showSync,
+    closeSync,
+    importPlan,
+    handleImportFile,
+    openSync,
+    handleSyncReceive,
+    confirmImport,
+    cancelImport,
+  };
+}
+
+function BackupDialogs({
+  backup,
+  exportFilename,
+}: {
+  backup: ReturnType<typeof useBackupFlow>;
+  exportFilename: string;
+}) {
+  return (
+    <>
+      {backup.showBackup && (
+        <BackupDialog
+          onExport={() => downloadBackup(exportFilename)}
+          onImport={backup.handleImportFile}
+          onSync={backup.openSync}
+          onClose={backup.closeBackup}
+        />
+      )}
+      {backup.showSync && (
+        <SyncDialog onImport={backup.handleSyncReceive} onClose={backup.closeSync} />
+      )}
+      {backup.importPlan && (
+        <ImportPreview
+          plan={backup.importPlan}
+          onConfirm={backup.confirmImport}
+          onCancel={backup.cancelImport}
+        />
+      )}
+    </>
+  );
+}
+
 function DailyPage() {
   const dateStr = todayDateStr();
   return <DayView dateStr={dateStr} />;
@@ -404,9 +521,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
   const [_puzzleVersion, setPuzzleVersion] = useState(0);
-  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
-  const [showSync, setShowSync] = useState(false);
-  const [showBackup, setShowBackup] = useState(false);
+  const backup = useBackupFlow({ onChanged: () => setPuzzleVersion((v) => v + 1) });
 
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
@@ -507,42 +622,6 @@ function DayView({ dateStr }: { dateStr: string }) {
     if (activeLevel < 5) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
-  function handleExport() {
-    const json = exportData();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `refpuzzle-backup-${dateStr}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function handleImport(e: Event) {
-    const input = e.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        if (typeof reader.result !== "string") return;
-        setImportPlan(planImport(reader.result));
-      } catch (err) {
-        alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
-      }
-    };
-    reader.readAsText(file);
-    input.value = "";
-  }
-
-  function handleConfirmImport() {
-    if (!importPlan) return;
-    applyImport(importPlan);
-    setImportPlan(null);
-    setPuzzleVersion((v) => v + 1);
-  }
-
   const isToday = dateStr === todayDateStr();
 
   return (
@@ -553,7 +632,7 @@ function DayView({ dateStr }: { dateStr: string }) {
           setShowKeyboardHelp(true);
         }}
         onPrint={puzzles ? () => window.print() : undefined}
-        onBackup={() => setShowBackup(true)}
+        onBackup={backup.openBackup}
       />
       <div class="daily-header">
         {!isToday && (
@@ -687,42 +766,7 @@ function DayView({ dateStr }: { dateStr: string }) {
         </div>
       )}
 
-      {showBackup && (
-        <BackupDialog
-          onExport={handleExport}
-          onImport={(e) => {
-            setShowBackup(false);
-            handleImport(e);
-          }}
-          onSync={() => {
-            setShowBackup(false);
-            setShowSync(true);
-          }}
-          onClose={() => setShowBackup(false)}
-        />
-      )}
-
-      {showSync && (
-        <SyncDialog
-          onImport={(json) => {
-            setShowSync(false);
-            try {
-              setImportPlan(planImport(json));
-            } catch (err) {
-              alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
-            }
-          }}
-          onClose={() => setShowSync(false)}
-        />
-      )}
-
-      {importPlan && (
-        <ImportPreview
-          plan={importPlan}
-          onConfirm={handleConfirmImport}
-          onCancel={() => setImportPlan(null)}
-        />
-      )}
+      <BackupDialogs backup={backup} exportFilename={`refpuzzle-backup-${dateStr}.json`} />
     </>
   );
 }
@@ -1106,9 +1150,7 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
 
 function PastPuzzlesPage() {
   const s = t();
-  const [showBackup, setShowBackup] = useState(false);
-  const [showSync, setShowSync] = useState(false);
-  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
+  const backup = useBackupFlow();
   const today = todayDateStr();
   const currentMonth = today.slice(0, 7);
 
@@ -1146,7 +1188,7 @@ function PastPuzzlesPage() {
 
   return (
     <>
-      <AppHeader onBackup={() => setShowBackup(true)} />
+      <AppHeader onBackup={backup.openBackup} />
 
       <div class="history-page">
         <h2>{s.daily.pastPuzzles}</h2>
@@ -1170,69 +1212,7 @@ function PastPuzzlesPage() {
         })}
       </div>
 
-      {showBackup && (
-        <BackupDialog
-          onExport={() => {
-            setShowBackup(false);
-            const json = exportData();
-            const blob = new Blob([json], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = "refpuzzle-backup.json";
-            a.click();
-            URL.revokeObjectURL(url);
-          }}
-          onImport={(e) => {
-            setShowBackup(false);
-            const input = e.target;
-            if (!(input instanceof HTMLInputElement)) return;
-            const file = input.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-              try {
-                if (typeof reader.result !== "string") return;
-                setImportPlan(planImport(reader.result));
-              } catch (err) {
-                alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
-              }
-            };
-            reader.readAsText(file);
-            input.value = "";
-          }}
-          onSync={() => {
-            setShowBackup(false);
-            setShowSync(true);
-          }}
-          onClose={() => setShowBackup(false)}
-        />
-      )}
-
-      {showSync && (
-        <SyncDialog
-          onImport={(json) => {
-            setShowSync(false);
-            try {
-              setImportPlan(planImport(json));
-            } catch (err) {
-              alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
-            }
-          }}
-          onClose={() => setShowSync(false)}
-        />
-      )}
-
-      {importPlan && (
-        <ImportPreview
-          plan={importPlan}
-          onConfirm={() => {
-            applyImport(importPlan);
-            setImportPlan(null);
-          }}
-          onCancel={() => setImportPlan(null)}
-        />
-      )}
+      <BackupDialogs backup={backup} exportFilename="refpuzzle-backup.json" />
     </>
   );
 }
