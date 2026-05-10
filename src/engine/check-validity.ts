@@ -31,11 +31,8 @@ import {
   RT_SAME_AS_WHICH,
 } from "./types.ts";
 import { evaluateClaim } from "./evaluators.ts";
-
-export const V_VALID = "valid";
-export const V_INVALID = "invalid";
-export const V_PENDING = "pending";
-export type Validity = typeof V_VALID | typeof V_INVALID | typeof V_PENDING;
+import { V_VALID, V_INVALID, V_PENDING } from "./state.ts";
+import type { Validity } from "./state.ts";
 
 // ── Helpers ──
 

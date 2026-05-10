@@ -1,18 +1,14 @@
 import type { CompactPuzzle } from "../puzzles/daily.ts";
 import type { Marks } from "../engine/types.ts";
+import { FRESH_MARKS } from "../engine/types.ts";
 import type { QuestionState, SavedState } from "./store.ts";
-import { encodeHistory } from "./store.ts";
-
-const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
-const cloneMarks = (m: Marks): Marks => [...m] as Marks;
-const cloneStates = (qs: QuestionState[]): QuestionState[] =>
-  qs.map((q) => ({ marks: cloneMarks(q.marks) }));
+import { cloneStates, encodeHistory } from "./store.ts";
 
 // Build a SavedState whose history is the sequence of single-mark changes
 // that leads to `marks`. encodeHistory's diffAction only emits one mark per
 // step, so the history must be granular.
 export function savedStateFromMarks(marks: Marks[]): SavedState {
-  const current: QuestionState[] = marks.map(() => ({ marks: cloneMarks(FRESH_MARKS) }));
+  const current: QuestionState[] = marks.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
   const history: QuestionState[][] = [cloneStates(current)];
   for (let qi = 0; qi < marks.length; qi++) {
     for (let oi = 0; oi < 5; oi++) {

@@ -1,19 +1,14 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import type { Marks, Puzzle } from "../engine/types.ts";
-import { getFlatPuzzle } from "../engine/types.ts";
+import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
 import { checkAnswerValidity } from "../engine/check-validity.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { collectTutorialSteps } from "../engine/tutorial.ts";
 import type { TutorialStep } from "../engine/tutorial.ts";
+import { cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { HighlightInfo } from "./TutorialHighlight.ts";
-
-const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
-
-function cloneStates(qs: QuestionState[]): QuestionState[] {
-  return qs.map((q) => ({ marks: [...q.marks] as Marks }));
-}
 
 interface UseTutorialOpts {
   questionsRef: { current: QuestionState[] };

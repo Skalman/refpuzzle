@@ -4,6 +4,7 @@ export type OptionMark = "unmarked" | "incorrect" | "correct";
 export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
 
 export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
+export const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
 // Fast char-code based lookup: 'A'.charCodeAt(0)=65, so L2I_FAST[65]=0, etc.

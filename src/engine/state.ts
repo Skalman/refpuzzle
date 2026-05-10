@@ -1,7 +1,11 @@
 import type { AnswerLetter, Marks } from "./types.ts";
 import { LETTERS } from "./types.ts";
 
-export type Validity = "neutral" | "valid" | "invalid" | "pending";
+export const V_NEUTRAL = "neutral";
+export const V_VALID = "valid";
+export const V_INVALID = "invalid";
+export const V_PENDING = "pending";
+export type Validity = typeof V_NEUTRAL | typeof V_VALID | typeof V_INVALID | typeof V_PENDING;
 
 export function deriveState(
   markSets: Marks[],

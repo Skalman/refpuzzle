@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
 import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
-import { LETTERS, letterIdx, getFlatPuzzle } from "../engine/types.ts";
+import { LETTERS, FRESH_MARKS, letterIdx, getFlatPuzzle } from "../engine/types.ts";
 import { checkAnswerValidity } from "../engine/check-validity.ts";
 import { deduce } from "../engine/deduce.ts";
 import { lookaheadShortest } from "../engine/lookahead.ts";
@@ -10,7 +10,7 @@ import { explainDeduce, explainLookahead } from "../engine/explain.ts";
 import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
-import { loadState, saveState, loadMeta, saveMeta, clearMeta } from "../lib/store.ts";
+import { loadState, saveState, loadMeta, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState, PuzzleMeta } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
@@ -35,12 +35,6 @@ import {
   IconPlay,
 } from "./Icons.tsx";
 import type { Ref } from "preact";
-
-const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
-
-function cloneStates(qs: QuestionState[]): QuestionState[] {
-  return qs.map((q) => ({ marks: [...q.marks] as Marks }));
-}
 
 interface MoveInfo {
   text: string;

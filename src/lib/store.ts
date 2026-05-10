@@ -1,4 +1,5 @@
 import type { Marks } from "../engine/types.ts";
+import { FRESH_MARKS } from "../engine/types.ts";
 
 export interface QuestionState {
   marks: Marks;
@@ -13,7 +14,6 @@ export interface SavedState {
 }
 
 const PREFIX = "refpuzzle:puzzle:";
-const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 const LETTERS = ["A", "B", "C", "D", "E"];
 
 function diffAction(prev: QuestionState[], next: QuestionState[]): string {
@@ -50,7 +50,7 @@ function applyAction(action: string, qs: QuestionState[]) {
   }
 }
 
-function cloneStates(qs: QuestionState[]): QuestionState[] {
+export function cloneStates(qs: QuestionState[]): QuestionState[] {
   return qs.map((q) => ({ marks: [...q.marks] as Marks }));
 }
 
