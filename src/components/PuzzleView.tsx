@@ -18,9 +18,10 @@ import { confetti } from "../lib/confetti.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { collectTutorialSteps } from "../engine/tutorial.ts";
-import type { TutorialStep } from "../engine/tutorial.ts";
 import { TutorialOverlay } from "./TutorialOverlay.tsx";
+import { TutorialWelcome } from "./TutorialWelcome.tsx";
+import { TutorialHighlightCtx } from "./TutorialHighlight.ts";
+import { useTutorial } from "./useTutorial.ts";
 import {
   IconUndo,
   IconRedo,
@@ -274,32 +275,6 @@ export function PuzzleView({
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
   const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
 
-  // Tutorial mode
-  const isIntro = (puzzle.optionCount ?? 5) < 5;
-  const [tutorialActive, setTutorialActive] = useState(false);
-  const [tutorialWelcome, setTutorialWelcome] = useState(() => {
-    try {
-      return !localStorage.getItem("refpuzzle:tutorial-seen");
-    } catch {
-      return false;
-    }
-  });
-  const [tutorialSteps] = useState<TutorialStep[]>(() =>
-    isIntro ? collectTutorialSteps(puzzle, getFlatPuzzle(puzzle)) : [],
-  );
-  const [tutorialHighlight, setTutorialHighlight] = useState<{
-    qis: number[];
-    oi?: number;
-    muteOptions?: boolean;
-    noQuestionOutline?: boolean;
-  } | null>(null);
-  const preTutorialStateRef = useRef<{
-    questions: QuestionState[];
-    history: QuestionState[][];
-    historyIdx: number;
-  } | null>(null);
-  const [tutorialDone, setTutorialDone] = useState(false);
-
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
   const [_historyVersion, setHistoryVersion] = useState(0);
@@ -409,33 +384,24 @@ export function PuzzleView({
     [puzzle, onChanged],
   );
 
-  useEffect(() => {
-    if (questions.length > 0 && !tutorialActive) revalidate(questions);
-  }, [questions, revalidate, tutorialActive]);
+  const forceHistoryUpdate = useCallback(() => setHistoryVersion((v) => v + 1), []);
+
+  const tutorial = useTutorial(puzzle, {
+    questionsRef,
+    setQuestions,
+    setValidity,
+    historyRef,
+    historyIdxRef,
+    forceHistoryUpdate,
+    revalidate,
+    autoStartTutorial,
+    onTutorialConsumed,
+    onStartTutorial,
+  });
 
   useEffect(() => {
-    if (autoStartTutorial && !tutorialActive) {
-      setTutorialActive(true);
-      onTutorialConsumed?.();
-    }
-  }, [autoStartTutorial, tutorialActive, onTutorialConsumed]);
-
-  useEffect(() => {
-    if (!tutorialWelcome || tutorialActive) return undefined;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        setTutorialWelcome(false);
-        try {
-          localStorage.setItem("refpuzzle:tutorial-seen", "1");
-        } catch {
-          /* */
-        }
-        e.preventDefault();
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [tutorialWelcome, tutorialActive]);
+    if (questions.length > 0 && !tutorial.active) revalidate(questions);
+  }, [questions, revalidate, tutorial.active]);
 
   const completed = validity.length > 0 && validity.every((v) => v === "valid");
   const completedRef = useRef(completed);
@@ -537,66 +503,6 @@ export function PuzzleView({
       setHistoryVersion((v) => v + 1);
     } else {
       pushHistory(cloneStates(questionsRef.current));
-    }
-  }
-
-  const tutorialSnapshotsRef = useRef<QuestionState[][]>([]);
-
-  function tutorialSetState(qs: QuestionState[]) {
-    setQuestions(qs);
-    const fp = getFlatPuzzle(puzzle);
-    const { answers: ans, eliminated: elim } = deriveState(
-      qs.map((q) => q.marks),
-      puzzle.optionCount,
-    );
-    setValidity(
-      ans.map((a, qi) => (a == null ? "neutral" : checkAnswerValidity(fp, ans, elim, qi))),
-    );
-  }
-
-  function handleTutorialApply(step: TutorialStep) {
-    if (step.kind !== "deduce") return;
-    tutorialSnapshotsRef.current.push(cloneStates(questionsRef.current));
-    const next = cloneStates(questionsRef.current);
-    if (step.isForce) {
-      for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
-        next[step.questionIndex].marks[oi] = oi === step.optionIndex ? "correct" : "incorrect";
-      }
-    } else {
-      next[step.questionIndex].marks[step.optionIndex] = "incorrect";
-    }
-    tutorialSetState(next);
-  }
-
-  function handleTutorialUnapply(_step: TutorialStep) {
-    const snap = tutorialSnapshotsRef.current.pop();
-    if (snap) tutorialSetState(snap);
-  }
-
-  function handleTutorialDismiss() {
-    setTutorialActive(false);
-    setTutorialHighlight(null);
-    // Pulse the Tutorial button briefly after dismiss
-    setTutorialDone(true);
-    setTimeout(() => setTutorialDone(false), 3000);
-    try {
-      localStorage.setItem("refpuzzle:tutorial-seen", "1");
-    } catch {
-      /* */
-    }
-    // Restore pre-tutorial state
-    const saved = preTutorialStateRef.current;
-    if (saved) {
-      setQuestions(saved.questions);
-      historyRef.current = saved.history;
-      historyIdxRef.current = saved.historyIdx;
-      setHistoryVersion((v) => v + 1);
-      revalidate(saved.questions);
-      preTutorialStateRef.current = null;
-    } else {
-      const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
-      setQuestions(blank);
-      revalidate(blank);
     }
   }
 
@@ -809,7 +715,7 @@ export function PuzzleView({
   // Confetti + scroll to next puzzle on completion
   const wasCompleted = useRef(initState.completed);
   useEffect(() => {
-    if (!completed || wasCompleted.current || tutorialActive) return undefined;
+    if (!completed || wasCompleted.current || tutorial.active) return undefined;
     wasCompleted.current = true;
     const m = metaRef.current;
     if (m.sessionStart != null) {
@@ -835,7 +741,7 @@ export function PuzzleView({
       btn.focus({ preventScroll: true });
     }, 1800);
     return () => clearTimeout(timer);
-  }, [completed, level, puzzle.id, tutorialActive]);
+  }, [completed, level, puzzle.id, tutorial.active]);
 
   // Init roving tabindex on controls toolbar
   useEffect(() => {
@@ -1055,118 +961,59 @@ export function PuzzleView({
 
   return (
     <>
-      {(tutorialActive || tutorialWelcome) && (
+      {(tutorial.active || tutorial.welcome) && (
         <div
-          class={`tutorial-scrim${tutorialWelcome && !tutorialActive ? " tutorial-scrim-welcome" : ""}`}
+          class={`tutorial-scrim${tutorial.welcome && !tutorial.active ? " tutorial-scrim-welcome" : ""}`}
         />
       )}
-      <div
-        class={`puzzle-view${tutorialActive ? " tutorial-active" : ""}${tutorialWelcome && !tutorialActive ? " tutorial-active" : ""}`}
-      >
-        {tutorialActive && <div class="tutorial-heading">Tutorial</div>}
-        {tutorialWelcome && !tutorialActive && (
+      <div class={`puzzle-view${tutorial.active || tutorial.welcome ? " tutorial-active" : ""}`}>
+        {tutorial.active && <div class="tutorial-heading">Tutorial</div>}
+        {tutorial.welcome && !tutorial.active && (
+          <TutorialWelcome
+            onStart={tutorial.startFromWelcome}
+            onDismiss={tutorial.dismissWelcome}
+          />
+        )}
+        {/* Questions */}
+        <TutorialHighlightCtx.Provider value={tutorial.active ? tutorial.highlight : null}>
           <div
-            class="tutorial-overlay"
-            onClick={() => {
-              setTutorialWelcome(false);
-              try {
-                localStorage.setItem("refpuzzle:tutorial-seen", "1");
-              } catch {
-                /* */
+            ref={gridRef}
+            class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorial.active ? " tutorial-dimmed" : ""}`}
+            style={{
+              gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
+            }}
+            onKeyDown={handleGridKeyDown}
+            onFocusCapture={() => {
+              if (focusedQuestionRef.current == null) {
+                setFocusedQuestion(0);
+                setFocusedOption(0);
               }
             }}
           >
-            <div
-              class="tutorial-bubble tutorial-welcome-bubble"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                class="tutorial-skip"
-                onClick={() => {
-                  setTutorialWelcome(false);
-                  try {
-                    localStorage.setItem("refpuzzle:tutorial-seen", "1");
-                  } catch {
-                    /* */
-                  }
-                }}
-                aria-label="Dismiss"
-              >
-                <IconX size="1.2em" />
-              </button>
-              <div class="tutorial-welcome-title">Welcome to Refpuzzle!</div>
-              <div class="tutorial-explain">
-                A self-referential logic puzzle. Let's walk through your first one together.
-              </div>
-              <button
-                class="tutorial-start-btn"
-                onClick={() => {
-                  setTutorialWelcome(false);
-                  if (isIntro) {
-                    setTutorialActive(true);
-                  } else if (onStartTutorial) {
-                    onStartTutorial();
-                  }
-                }}
-              >
-                Start tutorial
-              </button>
-            </div>
+            {puzzle.questions.map((qDef, qi) => (
+              <QuestionRow
+                key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
+                index={qi}
+                question={qDef}
+                marks={questions[qi]?.marks ?? FRESH_MARKS}
+                validity={validity[qi] ?? "neutral"}
+                disabled={completed || tutorial.active}
+                focusedOption={focusedQuestion === qi ? focusedOption : null}
+                defaultFocus={focusedQuestion == null && qi === 0}
+                onOptionClick={(oi) => handleOptionClick(qi, oi)}
+              />
+            ))}
           </div>
-        )}
-        {/* Questions */}
-        <div
-          ref={gridRef}
-          class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorialActive && !tutorialDone ? " tutorial-dimmed" : ""}`}
-          style={{
-            gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
-          }}
-          onKeyDown={handleGridKeyDown}
-          onFocusCapture={() => {
-            if (focusedQuestionRef.current == null) {
-              setFocusedQuestion(0);
-              setFocusedOption(0);
-            }
-          }}
-        >
-          {puzzle.questions.map((qDef, qi) => (
-            <QuestionRow
-              key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
-              index={qi}
-              question={qDef}
-              marks={questions[qi]?.marks ?? FRESH_MARKS}
-              validity={validity[qi] ?? "neutral"}
-              disabled={completed || tutorialActive}
-              focusedOption={focusedQuestion === qi ? focusedOption : null}
-              defaultFocus={focusedQuestion == null && qi === 0}
-              highlighted={
-                tutorialActive &&
-                !tutorialHighlight?.noQuestionOutline &&
-                (tutorialHighlight?.qis.includes(qi) ?? false)
-              }
-              highlightedOption={
-                tutorialActive && (tutorialHighlight?.qis.includes(qi) ?? false)
-                  ? tutorialHighlight?.oi
-                  : undefined
-              }
-              muteOtherOptions={
-                tutorialActive &&
-                tutorialHighlight?.muteOptions &&
-                (tutorialHighlight?.qis.includes(qi) ?? false)
-              }
-              onOptionClick={(oi) => handleOptionClick(qi, oi)}
-            />
-          ))}
-        </div>
+        </TutorialHighlightCtx.Provider>
 
-        {tutorialActive && (
+        {tutorial.active && (
           <TutorialOverlay
-            steps={tutorialSteps}
-            onDismiss={handleTutorialDismiss}
-            onSetHighlight={setTutorialHighlight}
-            onApplyStep={handleTutorialApply}
-            onUnapplyStep={handleTutorialUnapply}
-            onDone={() => setTutorialHighlight(null)}
+            steps={tutorial.steps}
+            onDismiss={tutorial.dismiss}
+            onSetHighlight={tutorial.setHighlight}
+            onApplyStep={tutorial.applyStep}
+            onUnapplyStep={tutorial.unapplyStep}
+            onDone={() => tutorial.setHighlight(null)}
           />
         )}
 
@@ -1195,7 +1042,7 @@ export function PuzzleView({
         )}
 
         {/* Completion banner */}
-        {completed && !tutorialActive && (
+        {completed && !tutorial.active && (
           <div class="puzzle-complete">
             <span>{s.puzzle.solved}</span>
             {level < 5 ? (
@@ -1257,20 +1104,11 @@ export function PuzzleView({
           >
             <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
           </button>
-          {isIntro && (
+          {tutorial.isIntro && (
             <button
-              class={`toolbar-accent-btn${tutorialDone ? " tutorial-highlight-btn" : ""}`}
-              onClick={() => {
-                preTutorialStateRef.current = {
-                  questions: cloneStates(questionsRef.current),
-                  history: historyRef.current.map((h) => cloneStates(h)),
-                  historyIdx: historyIdxRef.current,
-                };
-                const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
-                setQuestions(blank);
-                setTutorialActive(true);
-              }}
-              disabled={completed || (tutorialActive && !tutorialDone)}
+              class={`toolbar-accent-btn${tutorial.done ? " tutorial-highlight-btn" : ""}`}
+              onClick={tutorial.startManual}
+              disabled={completed || tutorial.active}
             >
               Tutorial
             </button>

@@ -2,13 +2,7 @@ import { useState, useEffect, useRef } from "preact/hooks";
 import type { TutorialStep } from "../engine/tutorial.ts";
 import { LETTERS } from "../engine/types.ts";
 import { IconX, IconPlay, IconPause } from "./Icons.tsx";
-
-interface HighlightInfo {
-  qis: number[];
-  oi?: number;
-  muteOptions?: boolean;
-  noQuestionOutline?: boolean;
-}
+import type { HighlightInfo } from "./TutorialHighlight.ts";
 
 interface Props {
   steps: TutorialStep[];

@@ -2,6 +2,7 @@ import type { QuestionDef, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
 import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../engine/render.ts";
+import { useQuestionHighlight } from "./TutorialHighlight.ts";
 import { OptionButton } from "./OptionButton.tsx";
 
 interface Props {
@@ -12,9 +13,6 @@ interface Props {
   disabled?: boolean;
   focusedOption?: number | null;
   defaultFocus?: boolean;
-  highlighted?: boolean;
-  highlightedOption?: number;
-  muteOtherOptions?: boolean;
   onOptionClick: (optionIndex: number) => void;
 }
 
@@ -28,11 +26,9 @@ export function QuestionRow({
   disabled,
   focusedOption,
   defaultFocus,
-  highlighted,
-  highlightedOption,
-  muteOtherOptions,
   onOptionClick,
 }: Props) {
+  const { highlighted, mute } = useQuestionHighlight(index);
   const rule = question.questionType;
   const labels = question.options.map((opt, oi) => {
     if ("claim" in opt) return renderClaimLabel(opt.claim);
@@ -43,7 +39,7 @@ export function QuestionRow({
 
   return (
     <div
-      class={`question-row${highlighted ? " tutorial-highlight" : ""}${muteOtherOptions ? " tutorial-mute-options" : ""}`}
+      class={`question-row${highlighted ? " tutorial-highlight" : ""}${mute ? " tutorial-mute-options" : ""}`}
       data-qi={index}
     >
       <div class={`validity-bar ${validity}`} />
@@ -62,7 +58,6 @@ export function QuestionRow({
             implied={hasCorrect && marks[oi] === "unmarked"}
             disabled={disabled || (hasCorrect && marks[oi] !== "correct")}
             focused={focusedOption === oi || (defaultFocus && oi === 0)}
-            tutorialHighlight={highlightedOption === oi}
             onClick={() => onOptionClick(oi)}
           />
         ))}
