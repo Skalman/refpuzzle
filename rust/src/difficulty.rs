@@ -8,7 +8,7 @@ pub struct DifficultyProfile {
 }
 
 pub static PROFILES: [DifficultyProfile; 6] = [
-    // Level 0: Intro
+    // Level 1: Intro
     DifficultyProfile {
         question_count: 3,
         option_count: 3,
@@ -25,7 +25,7 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             Unique,
         ],
     },
-    // Level 1: Beginner
+    // Level 2: Beginner
     DifficultyProfile {
         question_count: 4,
         option_count: 5,

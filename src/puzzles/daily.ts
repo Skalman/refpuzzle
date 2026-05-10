@@ -41,7 +41,7 @@ export function parseCompactPuzzle(compact: CompactPuzzle): Puzzle {
       : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
     return { options, questionType };
   });
-  return { id: "playground", title: "", difficulty: "0", questions, optionCount };
+  return { id: "playground", title: "", difficulty: "1", questions, optionCount };
 }
 
 export function parseCompactYear(
@@ -190,5 +190,5 @@ export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle
 }
 
 export function puzzleId(dateStr: string, level: number): string {
-  return `daily-${dateStr}-L${level}`;
+  return `/${dateStr}/${level}`;
 }

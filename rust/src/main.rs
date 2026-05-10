@@ -46,7 +46,7 @@ fn main() {
             "--level" | "-l" => {
                 i += 1;
                 let l: u8 = args[i].parse().expect("invalid level");
-                assert!((0..=5).contains(&l), "level must be 0-5");
+                assert!((1..=6).contains(&l), "level must be 1-6");
                 level_filter = Some(l);
             }
             "--stats" => {
@@ -61,7 +61,7 @@ fn main() {
             }
             "--help" | "-h" => {
                 eprintln!(
-                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 0-5] [--attempts A] [--stats]"
+                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-6] [--attempts A] [--stats]"
                 );
                 eprintln!("       logiquiz-gen --check <file.json> [MMDD-level-N]");
                 eprintln!("  Generates a year of daily puzzles.");
@@ -105,7 +105,7 @@ fn main() {
     let start_time = Instant::now();
     let levels: Vec<u8> = match level_filter {
         Some(l) => vec![l],
-        None => vec![0, 1, 2, 3, 4, 5],
+        None => vec![1, 2, 3, 4, 5, 6],
     };
 
     // Generate all (day, level) pairs in parallel
@@ -143,7 +143,7 @@ fn main() {
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), seeds)| {
-            let profile = &PROFILES[level as usize];
+            let profile = &PROFILES[level as usize - 1];
             let mut result = None;
             let mut stats = gen_common::Stats::default();
             for &s in seeds {
@@ -155,7 +155,7 @@ fn main() {
                     break;
                 }
             }
-            done_by_level[level as usize].fetch_add(1, Ordering::Relaxed);
+            done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
             if let Ok(mut last) = last_report.try_lock()
                 && last.elapsed().as_secs() >= 15
             {
@@ -164,7 +164,7 @@ fn main() {
                     .collect();
                 let done_total: usize = counts.iter().sum();
                 eprintln!(
-                    "  {done_total}/{total}: L0={} L1={} L2={} L3={} L4={} L5={}",
+                    "  {done_total}/{total}: L1={} L2={} L3={} L4={} L5={} L6={}",
                     counts[0], counts[1], counts[2], counts[3], counts[4], counts[5],
                 );
                 *last = Instant::now();
@@ -369,8 +369,7 @@ fn check_json(path: &str, target: Option<&str>) {
                 let dd = &day[2..4];
                 let level = lvl;
                 let hash = steps.join(".");
-                let url =
-                    format!("http://localhost:5173/day/{year}-{mm}-{dd}?l={level}&debug#{hash}");
+                let url = format!("http://localhost:5173/{year}-{mm}-{dd}/{level}?debug#{hash}");
                 failures.push(format!("{key}: {answered}/{} — {url}", fp.n));
             }
             if target.is_some() {

@@ -218,3 +218,24 @@ export function clearMeta(puzzleId: string): void {
     }
   } catch {}
 }
+
+export function migrateLocalStorage(): void {
+  try {
+    const oldPattern = /^refpuzzle:puzzle:daily-(\d{4}-\d{2}-\d{2})-L(\d)$/;
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && oldPattern.test(k)) keys.push(k);
+    }
+    for (const oldKey of keys) {
+      const m = oldPattern.exec(oldKey)!;
+      const newKey = `${PREFIX}/${m[1]}/${Number(m[2]) + 1}`;
+      if (!localStorage.getItem(newKey)) {
+        localStorage.setItem(newKey, localStorage.getItem(oldKey)!);
+      }
+      localStorage.removeItem(oldKey);
+    }
+  } catch {
+    /* storage unavailable */
+  }
+}

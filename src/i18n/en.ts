@@ -14,12 +14,12 @@ export default {
     solvedCount: (solved: number, total: number) => `${solved}/${total}`,
   },
   difficulty: {
-    0: "Intro",
-    1: "Beginner",
-    2: "Easy",
-    3: "Medium",
-    4: "Hard",
-    5: "Expert",
+    1: "Intro",
+    2: "Beginner",
+    3: "Easy",
+    4: "Medium",
+    5: "Hard",
+    6: "Expert",
   } as Record<number, string>,
   puzzle: {
     undo: "Undo",

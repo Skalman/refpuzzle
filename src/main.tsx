@@ -2,7 +2,9 @@ import { render } from "preact";
 import "./index.css"; // oxlint-disable-line import/no-unassigned-import
 import { App } from "./App.tsx";
 import { setupErrorTracking } from "./lib/analytics.ts";
+import { migrateLocalStorage } from "./lib/store.ts";
 
+migrateLocalStorage();
 render(<App />, document.getElementById("app")!);
 
 if (import.meta.env.PROD) {

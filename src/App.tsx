@@ -213,19 +213,19 @@ function DailyPage() {
   return <DayView dateStr={dateStr} />;
 }
 
-function DayView({ dateStr }: { dateStr: string }) {
+function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: number }) {
   const s = t();
-  const { path, route } = useLocation();
+  const { route } = useLocation();
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
   const forcePuzzleUpdate = useForceUpdate();
   const backup = useBackupFlow({ onChanged: forcePuzzleUpdate });
 
-  const params = new URLSearchParams(window.location.search);
-  const hashLevel = Number(params.get("l")) || 0;
   const initialHash = window.location.hash.slice(1) || null;
-  const [activeLevel, setActiveLevel] = useState(hashLevel >= 0 && hashLevel <= 5 ? hashLevel : 1);
+  const [activeLevel, setActiveLevel] = useState(
+    initialLevel && initialLevel >= 1 && initialLevel <= 6 ? initialLevel : 1,
+  );
 
   const activeLevelRef = useRef(activeLevel);
   activeLevelRef.current = activeLevel;
@@ -238,17 +238,17 @@ function DayView({ dateStr }: { dateStr: string }) {
   const selectLevel = useCallback(
     (level: number) => {
       setActiveLevel(level);
-      route(`/day/${dateStr}?l=${level}`, path.startsWith("/day/"));
+      route(`/${dateStr}/${level}`, true);
       replayLogoAnimation();
     },
-    [dateStr, path, route],
+    [dateStr, route],
   );
 
   useEffect(() => {
     const container = tabsRef.current;
     if (!container) return;
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const tab = container.children[activeLevel] as HTMLElement | undefined;
+    const tab = container.children[activeLevel - 1] as HTMLElement | undefined;
     if (tab) tab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
   }, [activeLevel]);
 
@@ -257,10 +257,10 @@ function DayView({ dateStr }: { dateStr: string }) {
     const g = guarded;
     const unsubscribe = tinykeys(window, {
       "[": g(() => {
-        if (activeLevelRef.current > 0) selectLevel(activeLevelRef.current - 1);
+        if (activeLevelRef.current > 1) selectLevel(activeLevelRef.current - 1);
       }),
       "]": g(() => {
-        if (activeLevelRef.current < 5) selectLevel(activeLevelRef.current + 1);
+        if (activeLevelRef.current < 6) selectLevel(activeLevelRef.current + 1);
       }),
       Escape: (ev: KeyboardEvent) => {
         // Priority: dialog handled natively > menu > overlay > pending reset
@@ -316,7 +316,7 @@ function DayView({ dateStr }: { dateStr: string }) {
   const handleChanged = forcePuzzleUpdate;
 
   const handleNextLevel = useCallback(() => {
-    if (activeLevel < 5) selectLevel(activeLevel + 1);
+    if (activeLevel < 6) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
   const isToday = dateStr === todayDateStr();
@@ -346,7 +346,7 @@ function DayView({ dateStr }: { dateStr: string }) {
         role="tablist"
         onKeyDown={arrowNavHandler(".difficulty-tab")}
       >
-        {[0, 1, 2, 3, 4, 5].map((level) => {
+        {[1, 2, 3, 4, 5, 6].map((level) => {
           const state = hasState(puzzleId(dateStr, level));
           const { started, completed: solved } = state;
           return (
@@ -388,22 +388,22 @@ function DayView({ dateStr }: { dateStr: string }) {
           puzzle={currentPuzzle}
           dateStr={dateStr}
           level={activeLevel}
-          initialHash={hashLevel === activeLevel ? initialHash : null}
+          initialHash={activeLevel === initialLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
           onChanged={handleChanged}
           onStartTutorial={() => {
-            if (activeLevel === 0) {
+            if (activeLevel === 1) {
               setPendingTutorial(true);
             } else {
-              setHighlightTab(0);
+              setHighlightTab(1);
               setTimeout(() => {
                 setHighlightTab(null);
                 setPendingTutorial(true);
-                selectLevel(0);
+                selectLevel(1);
               }, 1200);
             }
           }}
-          autoStartTutorial={pendingTutorial && activeLevel === 0}
+          autoStartTutorial={pendingTutorial && activeLevel === 1}
           onTutorialConsumed={() => setPendingTutorial(false)}
         />
       )}
@@ -424,7 +424,7 @@ function DayView({ dateStr }: { dateStr: string }) {
           <h1>
             {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
           </h1>
-          {[0, 1, 2, 3, 4, 5].map((lvl) => {
+          {[1, 2, 3, 4, 5, 6].map((lvl) => {
             const p = puzzles[`${lvl}`];
             if (!p) return null;
             return (
@@ -470,14 +470,14 @@ function DayView({ dateStr }: { dateStr: string }) {
 
 function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
   const s = t();
-  const levels = [0, 1, 2, 3, 4, 5].map((l) => {
+  const levels = [1, 2, 3, 4, 5, 6].map((l) => {
     const { started, completed } = hasState(puzzleId(dateStr, l));
     return { level: l, started, completed };
   });
   const solved = levels.filter((l) => l.completed);
   const started = levels.filter((l) => l.started && !l.completed);
   return (
-    <a href={`/day/${dateStr}`} class={`history-item ${isToday ? "history-today" : ""}`}>
+    <a href={`/${dateStr}/1`} class={`history-item ${isToday ? "history-today" : ""}`}>
       <span class="history-date">
         {isToday ? s.daily.today : dateStr}
         <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
@@ -581,7 +581,9 @@ function PastPuzzlesPage() {
 function DayRoute() {
   const s = t();
   const loc = useLocation();
-  const dateStr = loc.path.replace("/day/", "");
+  const parts = loc.path.split("/").filter(Boolean);
+  const dateStr = parts[0] ?? "";
+  const level = Number(parts[1]) || undefined;
   if (!dateStr || !isValidDate(dateStr)) {
     return (
       <div class="not-found">
@@ -591,7 +593,7 @@ function DayRoute() {
       </div>
     );
   }
-  return <DayView dateStr={dateStr} />;
+  return <DayView dateStr={dateStr} initialLevel={level} />;
 }
 
 function SyncRoute() {
@@ -687,7 +689,7 @@ function PlaygroundRoute() {
       key={hash}
       puzzle={state.puzzle}
       dateStr="playground"
-      level={0}
+      level={1}
       initialHash={state.stateHash}
       onNextPuzzle={() => {}}
       onChanged={() => {}}
@@ -713,9 +715,9 @@ export function App() {
         <Router>
           <Route path="/" component={DailyPage} />
           <Route path="/past" component={PastPuzzlesPage} />
-          <Route path="/day/:date" component={DayRoute} />
           <Route path="/sync" component={SyncRoute} />
           <Route path="/playground" component={PlaygroundRoute} />
+          <Route path="/:date/:level" component={DayRoute} />
           <Route default component={NotFound} />
         </Router>
       </div>

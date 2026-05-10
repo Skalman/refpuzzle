@@ -234,6 +234,7 @@ export function PuzzleView({
   );
 
   const tutorial = useTutorial(puzzle, {
+    level,
     questionsRef,
     setQuestions,
     setValidity,
@@ -771,7 +772,7 @@ export function PuzzleView({
         {completed && !tutorial.active && (
           <div class="puzzle-complete">
             <span>{s.puzzle.solved}</span>
-            {level < 5 ? (
+            {level < 6 ? (
               <button
                 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                 ref={nextPuzzleRef as Ref<HTMLButtonElement>}

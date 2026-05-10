@@ -11,6 +11,7 @@ import type { QuestionState } from "../lib/store.ts";
 import type { HighlightInfo } from "./TutorialHighlight.ts";
 
 interface UseTutorialOpts {
+  level: number;
   questionsRef: { current: QuestionState[] };
   setQuestions: (qs: QuestionState[]) => void;
   setValidity: (v: Validity[]) => void;
@@ -24,7 +25,7 @@ interface UseTutorialOpts {
 }
 
 export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
-  const isIntro = (puzzle.optionCount ?? 5) < 5;
+  const isIntro = opts.level === 1;
   const [active, setActive] = useState(false);
   const [welcome, setWelcome] = useState(() => {
     try {
