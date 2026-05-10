@@ -28,7 +28,8 @@
   margin: auto;
   border-radius: 12px;
   padding: 0;
-  max-width: min(31.25rem, calc(100% - 1rem));
+  width: calc(100% - 1rem);
+  max-width: 20rem;
   max-height: 80vh;
   overflow-y: auto;
   color: var(--text);

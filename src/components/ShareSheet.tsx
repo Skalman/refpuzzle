@@ -73,7 +73,7 @@ export function ShareSheet({
             });
           }}
         />
-        <div class="share-sheet-url">{url.replace(/^https?:\/\//, "")}</div>
+        <div class="share-sheet-url">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</div>
         {installAction && (
           <button class="primary-btn share-sheet-btn" onClick={installAction}>
             {s.install.button}
