@@ -19,6 +19,7 @@ import { TutorialOverlay } from "./TutorialOverlay.tsx";
 import { TutorialWelcome } from "./TutorialWelcome.tsx";
 import { TutorialHighlightCtx } from "./TutorialHighlight.ts";
 import { useTutorial } from "./useTutorial.ts";
+import { useForceUpdate } from "../lib/hooks.ts";
 import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
 import {
@@ -104,7 +105,7 @@ export function PuzzleView({
   });
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
-  const [_historyVersion, setHistoryVersion] = useState(0);
+  const forceHistoryUpdate = useForceUpdate();
 
   const historyBurstRef = useRef({ lastTime: 0 });
   const tutorialReachedEnd = useRef(false);
@@ -181,14 +182,14 @@ export function PuzzleView({
         } else {
           historyRef.current[historyRef.current.length - 1] = cloned;
         }
-        setHistoryVersion((v) => v + 1);
+        forceHistoryUpdate();
         return;
       }
     }
 
     historyRef.current.push(cloned);
     historyIdxRef.current = historyRef.current.length - 1;
-    setHistoryVersion((v) => v + 1);
+    forceHistoryUpdate();
   }
 
   const hintMarkers = useRef<Map<number, number>>(initState.hints);
@@ -197,7 +198,7 @@ export function PuzzleView({
     hintMarkers.current.set(historyIdxRef.current, hintLevel);
     analytics.meta.current.hints++;
     saveMeta(puzzle.id, analytics.meta.current);
-    setHistoryVersion((v) => v + 1);
+    forceHistoryUpdate();
   }
 
   const revalidate = useCallback(
@@ -225,8 +226,6 @@ export function PuzzleView({
     },
     [puzzle, onChanged, analytics.meta, analytics.wasStarted],
   );
-
-  const forceHistoryUpdate = useCallback(() => setHistoryVersion((v) => v + 1), []);
 
   const tutorial = useTutorial(puzzle, {
     questionsRef,
@@ -312,7 +311,7 @@ export function PuzzleView({
     historyIdxRef.current--;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     hints.clear();
-    setHistoryVersion((v) => v + 1);
+    forceHistoryUpdate();
     focusCurrentStep();
   }
 
@@ -322,7 +321,7 @@ export function PuzzleView({
     historyIdxRef.current++;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     hints.clear();
-    setHistoryVersion((v) => v + 1);
+    forceHistoryUpdate();
     focusCurrentStep();
   }
 
@@ -332,7 +331,7 @@ export function PuzzleView({
     historyIdxRef.current = idx;
     setQuestions(cloneStates(historyRef.current[idx]));
     hints.clear();
-    setHistoryVersion((v) => v + 1);
+    forceHistoryUpdate();
   }
 
   function handleSave() {
@@ -344,7 +343,7 @@ export function PuzzleView({
       historyRef.current.splice(historyIdxRef.current, 1);
       hintMarkers.current.delete(historyIdxRef.current);
       historyIdxRef.current--;
-      setHistoryVersion((v) => v + 1);
+      forceHistoryUpdate();
     } else {
       analytics.meta.current.checkpoints++;
       saveMeta(puzzle.id, analytics.meta.current);

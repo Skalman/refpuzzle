@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useForceUpdate } from "./lib/hooks.ts";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
@@ -218,8 +219,8 @@ function DayView({ dateStr }: { dateStr: string }) {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
-  const [_puzzleVersion, setPuzzleVersion] = useState(0);
-  const backup = useBackupFlow({ onChanged: () => setPuzzleVersion((v) => v + 1) });
+  const forcePuzzleUpdate = useForceUpdate();
+  const backup = useBackupFlow({ onChanged: forcePuzzleUpdate });
 
   const params = new URLSearchParams(window.location.search);
   const hashLevel = Number(params.get("l")) || 0;
@@ -312,9 +313,7 @@ function DayView({ dateStr }: { dateStr: string }) {
     currentPuzzle.id = pid;
   }
 
-  const handleChanged = useCallback(() => {
-    setPuzzleVersion((v) => v + 1);
-  }, []);
+  const handleChanged = forcePuzzleUpdate;
 
   const handleNextLevel = useCallback(() => {
     if (activeLevel < 5) selectLevel(activeLevel + 1);
