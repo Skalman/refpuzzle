@@ -135,6 +135,13 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
   function startFromWelcome() {
     setWelcome(false);
     if (isIntro) {
+      preTutorialRef.current = {
+        questions: cloneStates(optsRef.current.questionsRef.current),
+        history: optsRef.current.historyRef.current.map((h) => cloneStates(h)),
+        historyIdx: optsRef.current.historyIdxRef.current,
+      };
+      const blank = puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] as Marks }));
+      optsRef.current.setQuestions(blank);
       setActive(true);
     } else {
       optsRef.current.onStartTutorial?.();
@@ -148,7 +155,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
       optsRef.current.onTutorialConsumed?.();
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, autoStartTutorial]);
+  }, [autoStartTutorial]);
 
   useEffect(() => {
     if (!welcome || active) return undefined;
