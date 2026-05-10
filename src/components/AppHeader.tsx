@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
 import { IconCalendar, IconMoon, IconSun, IconSunMoon } from "./Icons.tsx";
 import { Logo } from "./Logo.tsx";
+import { ShareSheet } from "./ShareSheet.tsx";
 import { t } from "../i18n/index.ts";
 import { arrowNavHandler } from "../lib/keyboard.ts";
 
@@ -268,38 +269,13 @@ export function AppHeader({
         </span>
       </div>
       {showInstallInfo && (
-        <>
-          <div class="install-backdrop" onClick={() => setShowInstallInfo(false)} />
-          <div
-            class="install-toast"
-            role="alertdialog"
-            onKeyDown={(e) => {
-              if (e.key === "Escape") setShowInstallInfo(false);
-            }}
-          >
-            {install?.type === "native" && (
-              <button
-                class="primary-btn install-btn"
-                ref={(el) => el?.focus()}
-                onClick={() => install.fire()}
-              >
-                {s.install.button}
-              </button>
-            )}
-            <p>{s.install.qrPrompt}</p>
-            <div
-              class="qr-image"
-              ref={(el) => {
-                if (!el) return;
-                import("./QrCode.tsx").then(({ default: renderQrSvg }) => {
-                  el.innerHTML = renderQrSvg(window.location.origin + "/");
-                });
-              }}
-            />
-            <p class="install-domain">{window.location.host}</p>
-            {install?.type === "instructions" && <p>{install.message}</p>}
-          </div>
-        </>
+        <ShareSheet
+          url={`${window.location.origin}/`}
+          title={isInstalled ? s.install.shareApp : s.install.button}
+          onClose={() => setShowInstallInfo(false)}
+          installAction={install?.type === "native" ? install.fire : undefined}
+          installMessage={install?.type === "instructions" ? install.message : undefined}
+        />
       )}
     </header>
   );

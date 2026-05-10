@@ -7,7 +7,7 @@ import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
-import { decodeShareHash, getShareUrl, getPuzzleUrl, sharePuzzleLink } from "../lib/share.ts";
+import { decodeShareHash, getShareUrl, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { confetti } from "../lib/confetti.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
@@ -22,6 +22,7 @@ import { useTutorial } from "./useTutorial.ts";
 import { useForceUpdate } from "../lib/hooks.ts";
 import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
+import { ShareSheet } from "./ShareSheet.tsx";
 import {
   IconUndo,
   IconRedo,
@@ -121,8 +122,10 @@ export function PuzzleView({
 
   const [resetPending, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
+  const [shareSheet, setShareSheet] = useState<{ url: string; title: string } | null>(null);
   const [shareMenu, setShareMenu] = useState(false);
   const shareMenuRef = useRef(false);
+  const shareDropRef = useRef<HTMLButtonElement>(null);
 
   const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(null);
   const [focusedOption, setFocusedOptionRaw] = useState<number | null>(null);
@@ -131,7 +134,6 @@ export function PuzzleView({
   const gridRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<HTMLElement>(null);
   const numberBuf = useRef({ digits: "", timer: 0 });
-  const shareDropRef = useRef<HTMLButtonElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const historyStripRef = useRef<HTMLDivElement>(null);
   const tutorialHeadingRef = useRef<HTMLDivElement>(null);
@@ -151,13 +153,6 @@ export function PuzzleView({
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
   }, [shareMenu]);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!toastMessage) return undefined;
-    const timer = setTimeout(() => setToastMessage(null), 2000);
-    return () => clearTimeout(timer);
-  }, [toastMessage]);
 
   function pushHistory(qs: QuestionState[]) {
     const h = historyRef.current;
@@ -369,31 +364,25 @@ export function PuzzleView({
     analytics.wasCompleted.current = false;
   }
 
-  const canShare = typeof navigator !== "undefined" && !!navigator.share;
   const hasProgress = historyRef.current.length > 1;
 
-  async function handleSharePuzzle() {
-    const url = getPuzzleUrl(dateStr, level);
-    const ok = await sharePuzzleLink(url, `Refpuzzle Day #${dateStr}`);
-    if (ok) setToastMessage(s.puzzle.linkCopied);
+  function openSharePuzzle() {
+    setShareSheet({ url: getPuzzleUrl(dateStr, level), title: s.puzzle.share });
   }
-
-  async function handleShareApp() {
-    const url = window.location.origin + "/";
-    const ok = await sharePuzzleLink(url, "Refpuzzle");
-    if (ok) setToastMessage(s.puzzle.linkCopied);
+  function openShareApp() {
+    setShareSheet({ url: `${window.location.origin}/`, title: s.puzzle.shareApp });
   }
-
-  async function handleShareProgress() {
-    const url = getShareUrl(dateStr, level, {
-      questions,
-      completed,
-      history: historyRef.current,
-      historyIdx: historyIdxRef.current,
-      hints: hintMarkers.current,
+  function openShareProgress() {
+    setShareSheet({
+      url: getShareUrl(dateStr, level, {
+        questions,
+        completed,
+        history: historyRef.current,
+        historyIdx: historyIdxRef.current,
+        hints: hintMarkers.current,
+      }),
+      title: s.puzzle.shareWithProgress,
     });
-    const ok = await sharePuzzleLink(url, `Refpuzzle Day #${dateStr}`);
-    if (ok) setToastMessage(s.puzzle.linkCopied);
   }
 
   // Clear reset pending after timeout
@@ -558,7 +547,6 @@ export function PuzzleView({
     }
   }
 
-  // Share menu keyboard navigation
   function handleShareMenuKeyDown(e: KeyboardEvent) {
     if (e.key === "Escape") {
       e.preventDefault();
@@ -831,8 +819,8 @@ export function PuzzleView({
           )}
           <span class="controls-spacer"></span>
           <span class="split-btn">
-            <button class="toolbar-accent-btn" onClick={handleSharePuzzle}>
-              <IconShare size="0.9em" /> {canShare ? s.puzzle.share : s.puzzle.copyLink}
+            <button class="toolbar-accent-btn" onClick={openSharePuzzle}>
+              <IconShare size="0.9em" /> {s.puzzle.share}
             </button>
             <span class="split-btn-wrapper">
               <button
@@ -876,10 +864,10 @@ export function PuzzleView({
                     onClick={() => {
                       setShareMenu(false);
                       shareMenuRef.current = false;
-                      handleShareApp();
+                      openShareApp();
                     }}
                   >
-                    {canShare ? s.puzzle.shareApp : s.puzzle.copyApp}
+                    {s.puzzle.shareApp}
                   </button>
                   {hasProgress && (
                     <button
@@ -887,15 +875,14 @@ export function PuzzleView({
                       onClick={() => {
                         setShareMenu(false);
                         shareMenuRef.current = false;
-                        handleShareProgress();
+                        openShareProgress();
                       }}
                     >
-                      {canShare ? s.puzzle.shareWithProgress : s.puzzle.copyWithProgress}
+                      {s.puzzle.shareWithProgress}
                     </button>
                   )}
                 </div>
               )}
-              {toastMessage && <span class="share-toast">{toastMessage}</span>}
             </span>
           </span>
           <button
@@ -920,6 +907,13 @@ export function PuzzleView({
           />
         )}
       </div>
+      {shareSheet && (
+        <ShareSheet
+          url={shareSheet.url}
+          title={shareSheet.title}
+          onClose={() => setShareSheet(null)}
+        />
+      )}
     </>
   );
 }

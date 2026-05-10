@@ -14,25 +14,3 @@ export function decodeShareHash(hash: string, n: number): SavedState | null {
 export function getPuzzleUrl(dateStr: string, level: number): string {
   return `${window.location.origin}/day/${dateStr}?l=${level}`;
 }
-
-export async function sharePuzzleLink(url: string, title: string): Promise<boolean> {
-  if (typeof navigator !== "undefined" && navigator.share) {
-    try {
-      await navigator.share({ title, url });
-      return true;
-    } catch {
-      // User cancelled or API failed
-    }
-  }
-
-  if (typeof navigator !== "undefined" && navigator.clipboard) {
-    try {
-      await navigator.clipboard.writeText(url);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
-}

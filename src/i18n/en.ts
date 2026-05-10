@@ -78,6 +78,11 @@ export default {
   header: {
     theme: "Theme",
   },
+  share: {
+    share: "Share",
+    copyLink: "Copy link",
+    copied: "Copied!",
+  },
   install: {
     button: "Install app",
     shareApp: "Share app",

@@ -410,11 +410,46 @@ kbd {
 }
 
 .qr-image {
-  align-self: center;
+  margin-inline: auto;
   width: 7.5rem;
   height: 7.5rem;
   border-radius: 0.25rem;
   background: white;
+}
+
+/* ── Share sheet ── */
+.share-sheet .help-panel-inner {
+  text-align: center;
+}
+.share-sheet-qr {
+  margin: 0.75rem auto;
+  width: 8rem;
+  height: 8rem;
+  border-radius: 0.25rem;
+  background: white;
+}
+.share-sheet-url {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  word-break: break-all;
+  margin-bottom: 0.75rem;
+}
+.share-sheet-actions {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+}
+.share-sheet-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  padding: 0.5rem 1.25rem;
+}
+.share-sheet-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin: 0 0 0.5rem;
 }
 
 /* ── History page ── */
