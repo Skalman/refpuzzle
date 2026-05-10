@@ -220,7 +220,8 @@ export function PuzzleView({
         historyIdx: historyIdxRef.current,
         hints: hintMarkers.current,
       });
-      if (analytics.wasStarted.current) saveMeta(puzzle.id, analytics.meta.current);
+      if (analytics.wasStarted.current && !analytics.wasCompleted.current)
+        saveMeta(puzzle.id, analytics.meta.current);
       const nowStarted = historyRef.current.length > 1;
       if (
         nowStarted !== tabStateRef.current.started ||
@@ -230,7 +231,7 @@ export function PuzzleView({
         onChanged();
       }
     },
-    [puzzle, onChanged, analytics.meta, analytics.wasStarted],
+    [puzzle, onChanged, analytics.meta, analytics.wasStarted, analytics.wasCompleted],
   );
 
   const tutorial = useTutorial(puzzle, {

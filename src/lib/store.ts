@@ -221,6 +221,7 @@ export function clearMeta(puzzleId: string): void {
 
 export function migrateLocalStorage(): void {
   try {
+    // Migrate old key format to new
     const oldPattern = /^refpuzzle:puzzle:daily-(\d{4}-\d{2}-\d{2})-L(\d)$/;
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
@@ -234,6 +235,18 @@ export function migrateLocalStorage(): void {
         localStorage.setItem(newKey, localStorage.getItem(oldKey)!);
       }
       localStorage.removeItem(oldKey);
+    }
+
+    // Strip metadata from completed puzzles
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(PREFIX)) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const history = stripMeta(raw);
+      if ((history.endsWith(".x") || history === "x") && raw.includes(META_SEP)) {
+        localStorage.setItem(k, history);
+      }
     }
   } catch {
     /* storage unavailable */

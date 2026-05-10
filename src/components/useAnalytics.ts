@@ -39,6 +39,7 @@ export function useAnalytics(
 
   const flushElapsed = useCallback(
     function flushElapsed() {
+      if (wasCompleted.current) return;
       const m = meta.current;
       if (m.sessionStart != null) {
         m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
@@ -46,11 +47,11 @@ export function useAnalytics(
         saveMeta(puzzleId, m);
       }
     },
-    [meta, puzzleId],
+    [meta, puzzleId, wasCompleted],
   );
 
   useEffect(() => {
-    if (wasStarted.current) {
+    if (wasStarted.current && !wasCompleted.current) {
       meta.current.sessions++;
       meta.current.sessionStart = Date.now();
       saveMeta(puzzleId, meta.current);
