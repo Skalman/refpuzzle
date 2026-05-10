@@ -279,6 +279,18 @@ export function PuzzleView({
   const historyIdxRef = useRef(initState.historyIdx);
   const [_historyVersion, setHistoryVersion] = useState(0);
 
+  const historyBurstRef = useRef({ lastTime: 0 });
+  const tutorialReachedEnd = useRef(false);
+
+  function trackHistoryBurst() {
+    const now = Date.now();
+    if (now - historyBurstRef.current.lastTime > 15_000) {
+      metaRef.current.historyBursts++;
+      saveMeta(puzzle.id, metaRef.current);
+    }
+    historyBurstRef.current.lastTime = now;
+  }
+
   const [resetPending, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
   const [shareMenu, setShareMenu] = useState(false);
@@ -356,6 +368,8 @@ export function PuzzleView({
 
   function pushHintMarker(hintLevel: number) {
     hintMarkers.current.set(historyIdxRef.current, hintLevel);
+    metaRef.current.hints++;
+    saveMeta(puzzle.id, metaRef.current);
     setHistoryVersion((v) => v + 1);
   }
 
@@ -471,6 +485,7 @@ export function PuzzleView({
 
   function handleUndo() {
     if (historyIdxRef.current <= 0) return;
+    trackHistoryBurst();
     historyIdxRef.current--;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
@@ -481,6 +496,7 @@ export function PuzzleView({
 
   function handleRedo() {
     if (historyIdxRef.current >= historyRef.current.length - 1) return;
+    trackHistoryBurst();
     historyIdxRef.current++;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
     setHintText(null);
@@ -491,6 +507,7 @@ export function PuzzleView({
 
   function handleJumpTo(idx: number) {
     if (idx < 0 || idx >= historyRef.current.length) return;
+    trackHistoryBurst();
     historyIdxRef.current = idx;
     setQuestions(cloneStates(historyRef.current[idx]));
     setHintText(null);
@@ -509,6 +526,8 @@ export function PuzzleView({
       historyIdxRef.current--;
       setHistoryVersion((v) => v + 1);
     } else {
+      metaRef.current.checkpoints++;
+      saveMeta(puzzle.id, metaRef.current);
       pushHistory(cloneStates(questionsRef.current));
     }
   }
@@ -729,13 +748,14 @@ export function PuzzleView({
       m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
       m.sessionStart = null;
     }
-    const hints = hintMarkers.current.size;
     track("puzzle_completed", {
       puzzleId: puzzle.id,
       level,
       elapsedS: m.elapsedS,
       sessions: m.sessions,
-      ...(hints > 0 && { hints }),
+      ...(m.hints > 0 && { hints: m.hints }),
+      ...(m.checkpoints > 0 && { checkpoints: m.checkpoints }),
+      ...(m.historyBursts > 0 && { historyBursts: m.historyBursts }),
       ...(m.fromShared && { fromShared: true }),
       ...getClientInfo(),
     });
@@ -1020,11 +1040,29 @@ export function PuzzleView({
         {tutorial.active && (
           <TutorialOverlay
             steps={tutorial.steps}
-            onDismiss={tutorial.dismiss}
+            onDismiss={() => {
+              if (!tutorialReachedEnd.current) {
+                track("tutorial_dismissed", {
+                  puzzleId: puzzle.id,
+                  level,
+                  ...getClientInfo(),
+                });
+              }
+              tutorialReachedEnd.current = false;
+              tutorial.dismiss();
+            }}
             onSetHighlight={tutorial.setHighlight}
             onApplyStep={tutorial.applyStep}
             onUnapplyStep={tutorial.unapplyStep}
-            onDone={() => tutorial.setHighlight(null)}
+            onDone={() => {
+              tutorial.setHighlight(null);
+              tutorialReachedEnd.current = true;
+              track("tutorial_completed", {
+                puzzleId: puzzle.id,
+                level,
+                ...getClientInfo(),
+              });
+            }}
           />
         )}
 

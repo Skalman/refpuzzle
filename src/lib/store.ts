@@ -120,6 +120,9 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
 export interface PuzzleMeta {
   sessions: number;
   elapsedS: number;
+  historyBursts: number;
+  hints: number;
+  checkpoints: number;
   fromShared?: boolean;
 }
 
@@ -131,15 +134,21 @@ function stripMeta(raw: string): string {
 }
 
 function encodeMeta(meta: PuzzleMeta): string {
-  return `s${meta.sessions}e${meta.elapsedS}${meta.fromShared ? "f" : ""}`;
+  return `s${meta.sessions}e${meta.elapsedS}${meta.historyBursts ? `n${meta.historyBursts}` : ""}${meta.hints ? `h${meta.hints}` : ""}${meta.checkpoints ? `c${meta.checkpoints}` : ""}${meta.fromShared ? "f" : ""}`;
 }
 
 function parseMeta(s: string): PuzzleMeta {
   const sm = /s(\d+)/.exec(s);
   const em = /e(\d+)/.exec(s);
+  const nm = /n(\d+)/.exec(s);
+  const hm = /h(\d+)/.exec(s);
+  const cm = /c(\d+)/.exec(s);
   return {
     sessions: sm ? Number(sm[1]) : 0,
     elapsedS: em ? Number(em[1]) : 0,
+    historyBursts: nm ? Number(nm[1]) : 0,
+    hints: hm ? Number(hm[1]) : 0,
+    checkpoints: cm ? Number(cm[1]) : 0,
     fromShared: s.includes("f"),
   };
 }
@@ -183,11 +192,13 @@ export function saveState(puzzleId: string, state: SavedState) {
 export function loadMeta(puzzleId: string): PuzzleMeta {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
-    if (!raw) return { sessions: 0, elapsedS: 0 };
+    if (!raw) return { sessions: 0, elapsedS: 0, historyBursts: 0, hints: 0, checkpoints: 0 };
     const i = raw.indexOf(META_SEP);
-    return i >= 0 ? parseMeta(raw.slice(i + 1)) : { sessions: 0, elapsedS: 0 };
+    return i >= 0
+      ? parseMeta(raw.slice(i + 1))
+      : { sessions: 0, elapsedS: 0, historyBursts: 0, hints: 0, checkpoints: 0 };
   } catch {
-    return { sessions: 0, elapsedS: 0 };
+    return { sessions: 0, elapsedS: 0, historyBursts: 0, hints: 0, checkpoints: 0 };
   }
 }
 
