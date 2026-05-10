@@ -48,7 +48,7 @@ impl<'de> Deserialize<'de> for Answer {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(u8)]
 pub enum QuestionTypeKind {
     CountAnswer,

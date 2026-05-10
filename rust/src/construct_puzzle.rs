@@ -8,6 +8,18 @@ use crate::gen_common::{
 use crate::rng::Rng;
 use crate::types::*;
 
+fn sort_dedup<T: Ord, const N: usize>(v: &mut ArrayVec<T, N>) {
+    v.sort();
+    let mut i = 1;
+    while i < v.len() {
+        if v[i] == v[i - 1] {
+            v.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+}
+
 pub fn generate(
     profile: &DifficultyProfile,
     rng: &mut Rng,
@@ -130,7 +142,13 @@ impl PlacementState {
         {
             return false;
         }
-        if !solution_fits_type(kind, self.slots[self.assigned_count] as usize, solution, n) {
+        if !solution_fits_type(
+            kind,
+            self.slots[self.assigned_count] as usize,
+            solution,
+            n,
+            oc,
+        ) {
             return false;
         }
 
@@ -212,18 +230,20 @@ fn try_construct(
     let av_positional = filter_allowed(POSITIONAL_TYPES, profile);
     let av_fill = filter_allowed(FILL_TYPES, profile);
 
-    // Phase 1: Counting entry point
-    if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng) {
-        return None;
+    // Phase 1: Counting entry point (skip 50% of the time for small puzzles)
+    let skip_counting = n <= 3 && rng.int(0, 1) == 0;
+    if !skip_counting {
+        if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng)
+        {
+            return None;
+        }
     }
 
     // Phase 2: answer_of backbone
     let chain_count = if extra_chain {
         3
-    } else if n <= 3 && rng.int(0, 1) == 0 {
-        0
     } else if n <= 3 {
-        1
+        if rng.int(0, 1) == 0 { 1 } else { 0 }
     } else if n <= 5 && rng.int(0, 1) == 0 {
         1
     } else {
@@ -249,7 +269,7 @@ fn try_construct(
         }
     }
 
-    // Phase 4: Positional types (skip for tiny puzzles — let the fill pool decide)
+    // Phase 4: Positional types (skip for tiny puzzles)
     let pos_count = if av_positional.is_empty() || n <= 3 {
         0
     } else {
@@ -294,6 +314,7 @@ fn try_construct(
     fill_pool.try_extend_from_slice(&av_positional).ok();
     fill_pool.try_extend_from_slice(&av_fill).ok();
     fill_pool.retain(|k| *k != QuestionTypeKind::AnswerOf);
+    sort_dedup(&mut fill_pool);
 
     while state.assigned_count < fill_target {
         let mut placed = false;
@@ -321,7 +342,7 @@ fn try_construct(
         let mut fitting: ArrayVec<QuestionTypeKind, 32> = av_constrained
             .iter()
             .copied()
-            .filter(|&k| solution_fits_type(k, qi, &solution, n))
+            .filter(|&k| solution_fits_type(k, qi, &solution, n, oc))
             .collect();
         rng.shuffle(&mut fitting);
         let mut placed = false;
@@ -461,17 +482,23 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
 }
 
 /// Checks whether the solution has the properties needed for this type at this position.
-fn solution_fits_type(kind: QuestionTypeKind, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
+fn solution_fits_type(
+    kind: QuestionTypeKind,
+    qi: usize,
+    sol: &[Answer; MAX_N],
+    n: usize,
+    oc: usize,
+) -> bool {
     match kind {
         QuestionTypeKind::LeastCommon => {
             let counts = letter_counts(sol, n);
-            let min = *counts.iter().min().unwrap_or(&0);
-            counts.iter().filter(|&&c| c == min).count() == 1
+            let min = *counts[..oc].iter().min().unwrap_or(&0);
+            counts[..oc].iter().filter(|&&c| c == min).count() == 1
         }
         QuestionTypeKind::MostCommon => {
             let counts = letter_counts(sol, n);
-            let max = *counts.iter().max().unwrap_or(&0);
-            counts.iter().filter(|&&c| c == max).count() == 1
+            let max = *counts[..oc].iter().max().unwrap_or(&0);
+            counts[..oc].iter().filter(|&&c| c == max).count() == 1
         }
         QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
         QuestionTypeKind::SameAsWhich => true,

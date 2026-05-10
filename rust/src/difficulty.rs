@@ -15,12 +15,14 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         allowed_types: &[
             CountAnswer,
             AnswerOf,
-            AnswerIsSelf,
             FirstWith,
             LastWith,
             SameAs,
             PrevSame,
             NextSame,
+            MostCommon,
+            LeastCommon,
+            Unique,
         ],
     },
     // Level 1: Beginner

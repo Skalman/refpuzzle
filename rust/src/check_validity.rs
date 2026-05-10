@@ -243,6 +243,7 @@ pub fn check_value_validity(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
+    oc: usize,
 ) -> Validity {
     let si = self_letter.idx();
 
@@ -663,7 +664,7 @@ pub fn check_value_validity(
 
         // ── Global: need all answers ──
         QuestionType::LeastCommon | QuestionType::MostCommon => {
-            if !(0..=4).contains(&value) {
+            if !(0..oc as i16).contains(&value) {
                 return Validity::Invalid;
             }
             if !all_answered(answers, n) {
@@ -672,16 +673,20 @@ pub fn check_value_validity(
             let c = fill_counts(answers, n);
             match *qt {
                 QuestionType::LeastCommon => {
-                    let min = c.iter().copied().min().unwrap_or(0);
-                    if c[value as usize] == min && c.iter().filter(|&&x| x == min).count() == 1 {
+                    let min = c[..oc].iter().copied().min().unwrap_or(0);
+                    if c[value as usize] == min
+                        && c[..oc].iter().filter(|&&x| x == min).count() == 1
+                    {
                         Validity::Valid
                     } else {
                         Validity::Invalid
                     }
                 }
                 QuestionType::MostCommon => {
-                    let max = c.iter().copied().max().unwrap_or(0);
-                    if c[value as usize] == max && c.iter().filter(|&&x| x == max).count() == 1 {
+                    let max = c[..oc].iter().copied().max().unwrap_or(0);
+                    if c[value as usize] == max
+                        && c[..oc].iter().filter(|&&x| x == max).count() == 1
+                    {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -738,6 +743,7 @@ pub fn check_answer_validity(
     }
 
     let on = fp.option_nums[qi][ai];
+    let oc = fp.option_count;
     match *t {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => {
             check_value_validity(
@@ -748,16 +754,17 @@ pub fn check_answer_validity(
                 answers,
                 eliminated,
                 n,
+                oc,
             )
         }
         QuestionType::Unique | QuestionType::AnswerIsSelf => {
-            check_value_validity(t, ai as i16, a, qi, answers, eliminated, n)
+            check_value_validity(t, ai as i16, a, qi, answers, eliminated, n, oc)
         }
         _ => {
             if on == NAN_VAL {
                 return Validity::Pending;
             }
-            check_value_validity(t, on, a, qi, answers, eliminated, n)
+            check_value_validity(t, on, a, qi, answers, eliminated, n, oc)
         }
     }
 }

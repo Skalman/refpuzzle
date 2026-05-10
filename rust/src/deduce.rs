@@ -1938,6 +1938,7 @@ fn deduce_impl(
                     answers,
                     eliminated,
                     n,
+                    fp.option_count,
                 );
                 if v == crate::check_validity::Validity::Invalid {
                     push(

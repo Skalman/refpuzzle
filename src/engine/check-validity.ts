@@ -427,17 +427,18 @@ export function checkAnswerValidity(
   if (q.t === RT_LEAST_COMMON || q.t === RT_MOST_COMMON) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return V_PENDING;
-    if (v == null || v < 0 || v >= 5) return V_INVALID;
+    if (v == null || v < 0 || v >= fp.optionCount) return V_INVALID;
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
+    const active = counts.slice(0, fp.optionCount);
     if (q.t === RT_LEAST_COMMON) {
-      const min = Math.min(...counts);
-      return counts[v] === min && counts.filter((c) => c === min).length === 1
+      const min = Math.min(...active);
+      return counts[v] === min && active.filter((c) => c === min).length === 1
         ? V_VALID
         : V_INVALID;
     } else {
-      const max = Math.max(...counts);
-      return counts[v] === max && counts.filter((c) => c === max).length === 1
+      const max = Math.max(...active);
+      return counts[v] === max && active.filter((c) => c === max).length === 1
         ? V_VALID
         : V_INVALID;
     }
