@@ -44,6 +44,11 @@
   color: var(--accent);
 }
 
+.dev-badge {
+  color: #e53e3e;
+  font-weight: 700;
+}
+
 .app-logo {
   display: inline-block;
   width: 1.4em;

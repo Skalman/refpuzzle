@@ -4,6 +4,8 @@ import { Logo } from "./Logo.tsx";
 import { t } from "../i18n/index.ts";
 import { arrowNavHandler } from "../lib/keyboard.ts";
 
+if (import.meta.env.DEV) document.title = `(dev) ${document.title}`;
+
 function updateThemeColor(dark: boolean) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fa");
@@ -159,6 +161,7 @@ export function AppHeader({
         <a href="/" class="app-title-link">
           <span class="app-title">
             <span class="app-title-ref">Ref</span>puzzle
+            {import.meta.env.DEV && <span class="dev-badge"> (dev)</span>}
           </span>
           <span class="app-tagline hide-mobile">{s.puzzleList.subtitle}</span>
         </a>
