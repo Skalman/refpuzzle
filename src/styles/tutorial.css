@@ -125,6 +125,7 @@
   font-weight: 700;
   color: var(--accent);
   margin-bottom: 0.75rem;
+  scroll-margin-top: 0.5rem;
 }
 
 /* Welcome phase: header/logo stays above scrim */

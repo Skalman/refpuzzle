@@ -294,6 +294,7 @@ export function PuzzleView({
   const shareDropRef = useRef<HTMLButtonElement>(null);
   const controlsRef = useRef<HTMLDivElement>(null);
   const historyRef2 = useRef<HTMLDivElement>(null);
+  const tutorialHeadingRef = useRef<HTMLDivElement>(null);
 
   function setFocusedQuestion(v: number | null) {
     focusedQuestionRef.current = v;
@@ -398,6 +399,12 @@ export function PuzzleView({
     onTutorialConsumed,
     onStartTutorial,
   });
+
+  useEffect(() => {
+    if (tutorial.active) {
+      tutorialHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [tutorial.active]);
 
   useEffect(() => {
     if (questions.length > 0 && !tutorial.active) revalidate(questions);
@@ -967,7 +974,11 @@ export function PuzzleView({
         />
       )}
       <div class={`puzzle-view${tutorial.active || tutorial.welcome ? " tutorial-active" : ""}`}>
-        {tutorial.active && <div class="tutorial-heading">Tutorial</div>}
+        {tutorial.active && (
+          <div ref={tutorialHeadingRef} class="tutorial-heading">
+            Tutorial
+          </div>
+        )}
         {tutorial.welcome && !tutorial.active && (
           <TutorialWelcome
             onStart={tutorial.startFromWelcome}

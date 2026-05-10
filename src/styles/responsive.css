@@ -27,7 +27,7 @@
     }
   }
   .difficulty-tab {
-    flex: none;
+    flex: 1 0 auto;
     padding: 0.4rem 0.7rem;
   }
 
