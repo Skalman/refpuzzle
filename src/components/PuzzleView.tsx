@@ -1,13 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
-import type { AnswerLetter, Marks, Puzzle } from "../engine/types.ts";
-import { FRESH_MARKS, letterIdx, getFlatPuzzle } from "../engine/types.ts";
+import type { Marks, Puzzle } from "../engine/types.ts";
+import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
 import { checkAnswerValidity } from "../engine/check-validity.ts";
-import { deduce } from "../engine/deduce.ts";
-import { lookaheadShortest } from "../engine/lookahead.ts";
-import { solvePuzzle } from "../engine/solve.ts";
-import { explainDeduce, explainLookahead } from "../engine/explain.ts";
-import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
@@ -25,6 +20,7 @@ import { TutorialWelcome } from "./TutorialWelcome.tsx";
 import { TutorialHighlightCtx } from "./TutorialHighlight.ts";
 import { useTutorial } from "./useTutorial.ts";
 import { useAnalytics } from "./useAnalytics.ts";
+import { useHintEngine } from "./useHintEngine.ts";
 import {
   IconUndo,
   IconRedo,
@@ -106,10 +102,6 @@ export function PuzzleView({
     );
     return answers.map((_a, qi) => checkAnswerValidity(fp, answers, eliminated, qi));
   });
-  const [hintText, setHintText] = useState<ExplainStep | null>(null);
-  const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
-  const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
-
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
   const [_historyVersion, setHistoryVersion] = useState(0);
@@ -265,12 +257,19 @@ export function PuzzleView({
   const canUndo = historyIdxRef.current > 0;
   const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
+  const hints = useHintEngine(puzzle, {
+    questionsRef,
+    debugMode,
+    pushHintMarker,
+    completed,
+    questions,
+  });
+
   function applyChange(next: QuestionState[]) {
     analytics.markStarted();
     pushHistory(next);
     setQuestions(next);
-    setHintText(null);
-    hintRef.current = null;
+    hints.clear();
   }
 
   function handleOptionClick(questionIdx: number, optionIdx: number) {
@@ -312,8 +311,7 @@ export function PuzzleView({
     trackHistoryBurst();
     historyIdxRef.current--;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
-    setHintText(null);
-    hintRef.current = null;
+    hints.clear();
     setHistoryVersion((v) => v + 1);
     focusCurrentStep();
   }
@@ -323,8 +321,7 @@ export function PuzzleView({
     trackHistoryBurst();
     historyIdxRef.current++;
     setQuestions(cloneStates(historyRef.current[historyIdxRef.current]));
-    setHintText(null);
-    hintRef.current = null;
+    hints.clear();
     setHistoryVersion((v) => v + 1);
     focusCurrentStep();
   }
@@ -334,8 +331,7 @@ export function PuzzleView({
     trackHistoryBurst();
     historyIdxRef.current = idx;
     setQuestions(cloneStates(historyRef.current[idx]));
-    setHintText(null);
-    hintRef.current = null;
+    hints.clear();
     setHistoryVersion((v) => v + 1);
   }
 
@@ -370,116 +366,8 @@ export function PuzzleView({
     historyRef.current = [cloneStates(fresh)];
     historyIdxRef.current = 0;
     setQuestions(fresh);
-    setHintText(null);
-    hintRef.current = null;
+    hints.clear();
     analytics.wasCompleted.current = false;
-  }
-
-  const solutionRef = useRef<(AnswerLetter | null)[] | null>(null);
-  function getSolution(): (AnswerLetter | null)[] {
-    if (!solutionRef.current) {
-      const t0 = performance.now();
-      solutionRef.current = solvePuzzle(getFlatPuzzle(puzzle));
-      console.log(`solve: ${(performance.now() - t0).toFixed(1)}ms`);
-    }
-    return solutionRef.current;
-  }
-
-  function findError(answers: (AnswerLetter | null)[], eliminated: number[]): ExplainStep[] | null {
-    const solution = getSolution();
-    const n = puzzle.questions.length;
-    for (let qi = 0; qi < n; qi++) {
-      const correct = solution[qi];
-      if (correct == null) continue;
-      const correctOi = letterIdx(correct);
-      if (answers[qi] != null && answers[qi] !== correct) {
-        return [
-          { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in #${qi + 1}.` },
-          {
-            type: "simple",
-            text: `#${qi + 1} is not ${answers[qi]} — try a different answer.`,
-          },
-        ];
-      }
-      if ((eliminated[qi] >> correctOi) & 1) {
-        return [
-          { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in #${qi + 1}.` },
-          {
-            type: "simple",
-            text: `You incorrectly eliminated #${qi + 1} option ${correct}.`,
-          },
-        ];
-      }
-    }
-    return null;
-  }
-
-  function computeHint(): { steps: ExplainStep[] } | null {
-    const fp = getFlatPuzzle(puzzle);
-    const markSets = questionsRef.current.map((q) => q.marks);
-    const { answers, eliminated } = deriveState(markSets, puzzle.optionCount);
-
-    const errorSteps = findError(answers, eliminated);
-    if (errorSteps) return { steps: errorSteps };
-
-    const drs = deduce(fp, answers, eliminated);
-    if (drs.length > 0) return { steps: explainDeduce(puzzle, fp, answers, eliminated, drs[0]) };
-
-    const t0 = performance.now();
-    const lr = lookaheadShortest(fp, answers, eliminated);
-    console.log(
-      `lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`,
-    );
-    if (lr) {
-      return { steps: explainLookahead(puzzle, fp, answers, eliminated, lr) };
-    }
-
-    return null;
-  }
-
-  // Auto-refresh all hint steps in debug mode on every move
-  useEffect(() => {
-    if (!debugMode || debugHints === null || completed) return;
-    try {
-      const result = computeHint();
-      setDebugHints(result?.steps ?? null);
-    } catch (e) {
-      console.error("Hint error:", e);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [questions]);
-
-  function handleHint() {
-    if (!debugMode && hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1) {
-      hintRef.current.step++;
-      setHintText(hintRef.current.steps[hintRef.current.step]);
-      pushHintMarker(hintRef.current.step + 1);
-      return;
-    }
-
-    let result: { steps: ExplainStep[] };
-    try {
-      result = computeHint() ?? {
-        steps: [
-          {
-            type: "simple",
-            text: "No obvious next step. Try making an assumption.",
-          },
-        ],
-      };
-    } catch (e) {
-      console.error("Hint error:", e);
-      return;
-    }
-    if (debugMode) {
-      setDebugHints(result.steps);
-    } else {
-      hintRef.current = { steps: result.steps, step: 0 };
-      setHintText(result.steps[0]);
-      pushHintMarker(1);
-    }
   }
 
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
@@ -751,7 +639,7 @@ export function PuzzleView({
         if (!completedRef.current) handleRedo();
       }),
       h: g(() => {
-        if (!completedRef.current) handleHint();
+        if (!completedRef.current) hints.handleHint();
       }),
       p: g(() => {
         if (!completedRef.current) handleSave();
@@ -847,10 +735,10 @@ export function PuzzleView({
         )}
 
         {/* Hint display */}
-        {!completed && debugMode && debugHints && (
+        {!completed && debugMode && hints.debugHints && (
           <div class="puzzle-hint">
             <ol>
-              {debugHints.map((step, i) => (
+              {hints.debugHints.map((step, i) => (
                 // oxlint-disable-next-line react/no-array-index-key
                 <li key={i}>
                   <HintStep step={step} />
@@ -859,11 +747,11 @@ export function PuzzleView({
             </ol>
           </div>
         )}
-        {!completed && !debugMode && hintText && (
+        {!completed && !debugMode && hints.hintText && (
           <div class="puzzle-hint">
-            <HintStep step={hintText} />
-            {hintRef.current && hintRef.current.step < hintRef.current.steps.length - 1 && (
-              <button class="hint-more" onClick={handleHint}>
+            <HintStep step={hints.hintText} />
+            {hints.hasMore && (
+              <button class="hint-more" onClick={hints.handleHint}>
                 {s.puzzle.more}
               </button>
             )}
@@ -924,10 +812,10 @@ export function PuzzleView({
           </button>
           <button
             class="toolbar-accent-btn"
-            onClick={handleHint}
-            onMouseEnter={getSolution}
-            onFocus={getSolution}
-            onTouchStart={getSolution}
+            onClick={hints.handleHint}
+            onMouseEnter={hints.getSolution}
+            onFocus={hints.getSolution}
+            onTouchStart={hints.getSolution}
             disabled={completed}
             title={s.puzzle.hint}
           >
