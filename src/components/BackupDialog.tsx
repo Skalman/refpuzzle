@@ -35,6 +35,9 @@ export function BackupDialog({
           </button>
         </div>
         <div class="backup-actions">
+          <button class="primary-btn backup-action-btn" onClick={onSync}>
+            {s.sync.title}
+          </button>
           <button
             class="primary-btn backup-action-btn"
             onClick={() => {
@@ -42,15 +45,12 @@ export function BackupDialog({
               onExport();
             }}
           >
-            {s.backup.exportBackup}
+            {s.backup.downloadBackup}
           </button>
           <label class="primary-btn backup-action-btn">
-            {s.backup.importBackup}
+            {s.backup.uploadBackup}
             <input type="file" accept=".json" class="file-input" onChange={(e) => onImport(e)} />
           </label>
-          <button class="primary-btn backup-action-btn" onClick={onSync}>
-            {s.sync.title}
-          </button>
         </div>
       </div>
     </dialog>

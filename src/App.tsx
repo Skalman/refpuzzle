@@ -115,7 +115,7 @@ function useBackupFlow(opts?: { onChanged?: () => void }) {
     setShowBackup(false);
   }
 
-  function handleImportFile(e: Event) {
+  function handleUploadFile(e: Event) {
     setShowBackup(false);
     const input = e.target;
     if (!(input instanceof HTMLInputElement)) return;
@@ -127,7 +127,7 @@ function useBackupFlow(opts?: { onChanged?: () => void }) {
         if (typeof reader.result !== "string") return;
         setImportPlan(planImport(reader.result));
       } catch (err) {
-        alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+        alert(s.backup.uploadFailed(err instanceof Error ? err.message : "unknown error"));
       }
     };
     reader.readAsText(file);
@@ -147,18 +147,18 @@ function useBackupFlow(opts?: { onChanged?: () => void }) {
     try {
       setImportPlan(planImport(json));
     } catch (err) {
-      alert(s.backup.importFailed(err instanceof Error ? err.message : "unknown error"));
+      alert(s.backup.uploadFailed(err instanceof Error ? err.message : "unknown error"));
     }
   }
 
-  function confirmImport() {
+  function confirmUpload() {
     if (!importPlan) return;
     applyImport(importPlan);
     setImportPlan(null);
     opts?.onChanged?.();
   }
 
-  function cancelImport() {
+  function cancelUpload() {
     setImportPlan(null);
   }
 
@@ -169,11 +169,11 @@ function useBackupFlow(opts?: { onChanged?: () => void }) {
     showSync,
     closeSync,
     importPlan,
-    handleImportFile,
+    handleUploadFile,
     openSync,
     handleSyncReceive,
-    confirmImport,
-    cancelImport,
+    confirmUpload,
+    cancelUpload,
   };
 }
 
@@ -189,7 +189,7 @@ function BackupDialogs({
       {backup.showBackup && (
         <BackupDialog
           onExport={() => downloadBackup(exportFilename)}
-          onImport={backup.handleImportFile}
+          onImport={backup.handleUploadFile}
           onSync={backup.openSync}
           onClose={backup.closeBackup}
         />
@@ -200,8 +200,8 @@ function BackupDialogs({
       {backup.importPlan && (
         <ImportPreview
           plan={backup.importPlan}
-          onConfirm={backup.confirmImport}
-          onCancel={backup.cancelImport}
+          onConfirm={backup.confirmUpload}
+          onCancel={backup.cancelUpload}
         />
       )}
     </>

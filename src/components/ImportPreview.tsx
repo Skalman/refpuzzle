@@ -48,7 +48,7 @@ export function ImportPreview({
     >
       <div class="help-panel-inner">
         <div class="help-panel-header">
-          <h3>{s.backup.importPreview}</h3>
+          <h3>{s.backup.uploadPreview}</h3>
           <button class="help-close" onClick={onCancel} aria-label={s.aria.close}>
             &times;
           </button>
@@ -74,7 +74,7 @@ export function ImportPreview({
           {hasChanges ? (
             <>
               <button class="primary-btn" onClick={onConfirm}>
-                {s.backup.confirmImport}
+                {s.backup.confirmUpload}
               </button>
               <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>
                 {s.backup.cancel}
