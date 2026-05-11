@@ -232,6 +232,79 @@ fn try_solve_from(
     (false, answers, eliminated)
 }
 
+fn validate_option_values(fp: &FlatPuzzle) {
+    let n = fp.n;
+    let oc = fp.option_count;
+    for qi in 0..n {
+        let qt = &fp.question_types[qi];
+        for oi in 0..oc {
+            if let Some(ref claim) = fp.option_claims[qi][oi] {
+                if claim.value != NONE_VAL {
+                    assert!(
+                        value_in_range(&claim.question_type, claim.value, n),
+                        "Q{} option {}: claim {:?} value {} out of range (n={})",
+                        qi + 1,
+                        LETTERS[oi].as_char(),
+                        claim.question_type,
+                        claim.value,
+                        n
+                    );
+                }
+                continue;
+            }
+            let v = fp.option_nums[qi][oi];
+            if v == NAN_VAL || v == NONE_VAL {
+                continue;
+            }
+            assert!(
+                value_in_range(qt, v, n),
+                "Q{} option {}: type {:?} value {} out of range (n={})",
+                qi + 1,
+                LETTERS[oi].as_char(),
+                qt,
+                v,
+                n
+            );
+        }
+    }
+}
+
+fn value_in_range(qt: &QuestionType, v: i16, n: usize) -> bool {
+    let n = n as i16;
+    match *qt {
+        // Counting: 0..=n (or subrange)
+        QuestionType::CountAnswer { .. }
+        | QuestionType::CountVowel
+        | QuestionType::CountConsonant
+        | QuestionType::MostCommonCount => v >= 0 && v <= n,
+        QuestionType::CountAnswerBefore { before_index, .. } => v >= 0 && v <= before_index as i16,
+        QuestionType::CountAnswerAfter { after_index, .. } => {
+            v >= 0 && v <= n - 1 - after_index as i16
+        }
+        // Letter-valued: 0..oc
+        QuestionType::AnswerOf { .. }
+        | QuestionType::LeastCommon
+        | QuestionType::MostCommon
+        | QuestionType::Unique
+        | QuestionType::LetterDist { .. }
+        | QuestionType::EqualCount { .. } => v >= 0 && v < 5,
+        // Positional: 0..n (specific ranges for some)
+        QuestionType::FirstWith { .. }
+        | QuestionType::LastWith { .. }
+        | QuestionType::SameAs
+        | QuestionType::OnlySame
+        | QuestionType::SameAsWhich { .. } => v >= 0 && v < n,
+        QuestionType::ClosestAfter { after_index, .. } => v > after_index as i16 && v < n,
+        QuestionType::ClosestBefore { before_index, .. } => v >= 0 && v < before_index as i16,
+        QuestionType::PrevSame | QuestionType::NextSame => v >= 0 && v < n,
+        QuestionType::OnlyOdd { .. } => v >= 0 && v < n && v % 2 == 0,
+        QuestionType::OnlyEven { .. } => v >= 0 && v < n && v % 2 == 1,
+        QuestionType::ConsecIdent => v >= 0 && v < n - 1,
+        // TrueStmt has no option_nums
+        QuestionType::TrueStmt | QuestionType::AnswerIsSelf => true,
+    }
+}
+
 pub fn validate_and_repair(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
@@ -255,6 +328,8 @@ pub fn validate_and_repair(
             );
         }
     }
+
+    validate_option_values(fp);
 
     // Step 1: Can the engine solve it? (fast, rejects most bad puzzles)
     let t0 = std::time::Instant::now();
@@ -326,6 +401,8 @@ pub fn validate_and_repair(
     if !repaired {
         return false;
     }
+
+    validate_option_values(fp);
 
     // Step 4: After repair, verify uniqueness
     let t0 = std::time::Instant::now();
