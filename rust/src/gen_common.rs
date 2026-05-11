@@ -21,6 +21,7 @@ pub struct Stats {
     pub repair_fail_changed: u32,
     pub solve_us: u64,
     pub hint_us: u64,
+    pub repair_us: u64,
     pub deduce_calls: u32,
     pub deduce_results: u32,
     pub lookahead_calls: u32,
@@ -40,6 +41,7 @@ impl Stats {
         self.repair_fail_changed += other.repair_fail_changed;
         self.solve_us += other.solve_us;
         self.hint_us += other.hint_us;
+        self.repair_us += other.repair_us;
         self.deduce_calls += other.deduce_calls;
         self.deduce_results += other.deduce_results;
         self.lookahead_calls += other.lookahead_calls;
@@ -49,7 +51,7 @@ impl Stats {
     pub fn print(&self) {
         let ok = self.attempts - self.fail_unique - self.fail_solve;
         eprintln!(
-            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {}ms\n  repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
+            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {}ms\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
             self.attempts,
             ok,
             self.fail_unique,
@@ -63,6 +65,7 @@ impl Stats {
             self.deduce_results,
             self.lookahead_calls,
             self.lookahead_us / 1000,
+            self.repair_us / 1000,
             self.repair_fail_no_candidates,
             self.repair_fail_no_change,
             self.repair_fail_changed,
@@ -386,6 +389,7 @@ pub fn validate_and_repair(
     }
 
     // Step 3: Repair — tweak distractors and retry
+    let repair_t0 = std::time::Instant::now();
     let solved_before = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
     stats.fail_solve += 1;
     if solved_before == 0 {
@@ -403,8 +407,17 @@ pub fn validate_and_repair(
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
         if fp.option_nums[qi] != before {
             any_changed = true;
+        } else {
+            continue;
         }
 
+        // Quick check: does a single deduce round find anything new?
+        let probe = deduce(fp, &stuck_answers, &stuck_elim);
+        if probe.is_empty() {
+            continue;
+        }
+
+        // The tweak unblocked something — do a full solve
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
             try_solve(fp, stats)
@@ -436,6 +449,8 @@ pub fn validate_and_repair(
         repaired = ok;
     }
 
+    stats.repair_us += us(repair_t0);
+
     if !repaired {
         return false;
     }
@@ -447,6 +462,7 @@ pub fn validate_and_repair(
     let t0 = std::time::Instant::now();
     let solutions = solve(fp, None, 2);
     stats.solve_us += us(t0);
+    stats.repair_us += us(t0);
     if solutions.len() == 1 {
         stats.repair_ok += 1;
         return true;
