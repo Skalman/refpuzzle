@@ -232,6 +232,11 @@ fn try_solve_from(
     (false, answers, eliminated)
 }
 
+fn abs_diff(a: i16, b: i16) -> u16 {
+    (a as i32 - b as i32).unsigned_abs() as u16
+}
+
+#[cfg(debug_assertions)]
 fn validate_option_values(fp: &FlatPuzzle) {
     let n = fp.n;
     let oc = fp.option_count;
@@ -361,6 +366,7 @@ pub fn validate_and_repair(
         }
     }
 
+    #[cfg(debug_assertions)]
     validate_option_values(fp);
 
     // Step 1: Can the engine solve it? (fast, rejects most bad puzzles)
@@ -434,6 +440,7 @@ pub fn validate_and_repair(
         return false;
     }
 
+    #[cfg(debug_assertions)]
     validate_option_values(fp);
 
     // Step 4: After repair, verify uniqueness
@@ -528,14 +535,17 @@ pub fn repair_one_question(
                 }
             }
         }
-        QuestionType::LetterDist { .. } => {
+        QuestionType::LetterDist { .. }
+        | QuestionType::LeastCommon
+        | QuestionType::MostCommon
+        | QuestionType::Unique => {
             let correct_val = fp.option_nums[qi][correct_oi];
             // Find closest non-eliminated wrong option, replace with furthest value
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..5 {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -555,7 +565,7 @@ pub fn repair_one_question(
                             }
                         }
                         if !in_use {
-                            let d = (v - correct_val).unsigned_abs();
+                            let d = abs_diff(v, correct_val);
                             if d > best_new_dist {
                                 best_new_dist = d;
                                 best_new = v;
@@ -576,7 +586,7 @@ pub fn repair_one_question(
             let mut best_dist = u16::MAX;
             for oi in 0..5 {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -597,7 +607,7 @@ pub fn repair_one_question(
                             }
                         }
                         if !in_use {
-                            let d = (v - correct_val).unsigned_abs();
+                            let d = abs_diff(v, correct_val);
                             if d > best_new_dist {
                                 best_new_dist = d;
                                 best_new = v;
@@ -615,7 +625,7 @@ pub fn repair_one_question(
             let mut best_dist = u16::MAX;
             for oi in 0..5 {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = (fp.option_nums[qi][oi] - correct_val).unsigned_abs();
+                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -643,7 +653,7 @@ pub fn repair_one_question(
                     if in_use {
                         continue;
                     }
-                    let d = (j - correct_val).unsigned_abs();
+                    let d = abs_diff(j, correct_val);
                     if d > best_new_dist {
                         best_new_dist = d;
                         best_new = j;
@@ -664,7 +674,7 @@ pub fn repair_one_question(
                     let dist = if v == NONE_VAL || correct_val == NONE_VAL {
                         1 // treat None as close (hard to distinguish)
                     } else {
-                        (v - correct_val).unsigned_abs()
+                        abs_diff(v, correct_val)
                     };
                     if dist < best_dist {
                         best_dist = dist;
@@ -728,7 +738,7 @@ pub fn repair_one_question(
                     let d = if v == NONE_VAL || correct_val == NONE_VAL {
                         max_val.unsigned_abs() + 1 // treat None as far
                     } else {
-                        (v - correct_val).unsigned_abs()
+                        abs_diff(v, correct_val)
                     };
                     if d > best_new_dist {
                         best_new_dist = d;
@@ -778,6 +788,7 @@ pub fn build_flat_puzzle(
         }
 
         let correct_val = correct_option_value(qt, qi, solution, n);
+        let val_pool = valid_values(qt, n);
         let letters = &LETTERS[..option_count];
 
         match *qt {
@@ -848,32 +859,17 @@ pub fn build_flat_puzzle(
                 rng.shuffle(&mut pool[..plen]);
                 place_distractors(&pool, &mut option_nums[qi], correct_oi);
             }
-            QuestionType::ConsecIdent => {
+            QuestionType::ConsecIdent
+            | QuestionType::LetterDist { .. }
+            | QuestionType::OnlyOdd { .. }
+            | QuestionType::OnlyEven { .. } => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = pair_distractors(correct_val, n, rng);
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::LetterDist { .. } => {
-                option_nums[qi][correct_oi] = correct_val;
-                let mut pool = [0i16; 4];
-                let mut plen = 0;
-                for v in 0..5i16 {
-                    if v != correct_val {
-                        pool[plen] = v;
-                        plen += 1;
-                    }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                place_distractors(&pool, &mut option_nums[qi], correct_oi);
             }
             _ if is_counting_type(qt) => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::OnlyOdd { .. } | QuestionType::OnlyEven { .. } => {
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::SameAsWhich { question_index } => {
@@ -894,7 +890,7 @@ pub fn build_flat_puzzle(
             }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
         }
@@ -1065,40 +1061,20 @@ fn is_counting_type(qt: &QuestionType) -> bool {
     )
 }
 
-fn positional_distractors(
+fn pick_distractors(
+    vals: &ArrayVec<i16, 20>,
     correct: i16,
     qi: usize,
-    n: usize,
     qt: &QuestionType,
     rng: &mut Rng,
 ) -> [i16; 4] {
-    let vals = valid_values(qt, n);
     let mut pool = [0i16; 20];
     let mut plen = 0;
-    for &v in &vals {
+    for &v in vals {
         if v != correct
             && !matches!(*qt, QuestionType::OnlySame | QuestionType::SameAs if v as usize == qi)
         {
             pool[plen] = v;
-            plen += 1;
-        }
-    }
-    if correct != NONE_VAL {
-        pool[plen] = NONE_VAL;
-        plen += 1;
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-    result
-}
-
-fn pair_distractors(correct: i16, n: usize, rng: &mut Rng) -> [i16; 4] {
-    let mut pool = [0i16; 16];
-    let mut plen = 0;
-    for i in 0..n.saturating_sub(1) as i16 {
-        if i != correct {
-            pool[plen] = i;
             plen += 1;
         }
     }
