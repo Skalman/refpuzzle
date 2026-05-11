@@ -435,8 +435,10 @@ function testHints() {
   for (const puzzle of allPuzzles.slice(0, 3)) {
     const n = puzzle.questions.length;
     const fp = flattenPuzzle(puzzle);
+    const oc = puzzle.optionCount ?? 5;
+    const phantomMask = 0b11111 & ~((1 << oc) - 1);
     const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
-    const eliminated: number[] = new Array(n).fill(0);
+    const eliminated: number[] = new Array(n).fill(phantomMask);
     let steps = 0;
     let stuck = false;
 

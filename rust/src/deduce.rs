@@ -49,6 +49,7 @@ deduce_rules! {
     LetterDistReverseForce,
     LetterDistReverseElim,
     CountAllAnswered,
+    MostCommonCountElim,
     PositionalRangeAnswered,
     PositionalRangeUnanswered,
     VowelCrossElim,
@@ -247,7 +248,15 @@ pub fn deduce(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
 ) -> DeduceResults {
-    deduce_impl(fp, answers, eliminated, None, None)
+    deduce_impl(fp, answers, eliminated, None, None, false)
+}
+
+pub fn deduce_fast(
+    fp: &FlatPuzzle,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+) -> DeduceResults {
+    deduce_impl(fp, answers, eliminated, None, None, true)
 }
 
 #[cfg(test)]
@@ -257,7 +266,7 @@ pub fn deduce_with_rule(
     eliminated: &[u8; MAX_N],
     rule: DeduceRule,
 ) -> DeduceResults {
-    deduce_impl(fp, answers, eliminated, Some(rule), None)
+    deduce_impl(fp, answers, eliminated, Some(rule), None, false)
 }
 
 #[cfg(test)]
@@ -273,7 +282,7 @@ pub fn deduce_with_rule_exclude(
     } else {
         Some(rule)
     };
-    deduce_impl(fp, answers, eliminated, rule_filter, exclude)
+    deduce_impl(fp, answers, eliminated, rule_filter, exclude, false)
 }
 
 fn deduce_impl(
@@ -282,6 +291,7 @@ fn deduce_impl(
     eliminated: &[u8; MAX_N],
     rule: Option<DeduceRule>,
     exclude: Option<DeduceRule>,
+    fast: bool,
 ) -> DeduceResults {
     let n = fp.n;
     let run = |r: DeduceRule| (rule.is_none() || rule == Some(r)) && exclude != Some(r);
@@ -557,13 +567,14 @@ fn deduce_impl(
             }
         }
 
-        if run(DeduceRule::CountAllAnswered)
+        if !fast
+            && run(DeduceRule::CountAllAnswered)
             && let Some(pred) = count_pred(t)
         {
             let (from, to) = count_range(t, n);
             let cr = count_matching(answers, eliminated, pred, from, to);
             if cr.possible == 0 {
-                for oi in 0..5usize {
+                for oi in 0..fp.option_count {
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
@@ -719,7 +730,7 @@ fn deduce_impl(
     }
 
     // ── OnlyOdd/OnlyEven range elimination ──
-    if run(DeduceRule::OnlyOddEvenRangeElim) {
+    if !fast && run(DeduceRule::OnlyOddEvenRangeElim) {
         for src in 0..n {
             if answers[src].is_some() {
                 continue;
@@ -773,7 +784,7 @@ fn deduce_impl(
     }
 
     // ── Vowel/consonant cross-elimination ──
-    {
+    if !fast {
         let mut vowel_qi = None;
         let mut consonant_qi = None;
         for i in 0..n {
@@ -885,6 +896,28 @@ fn deduce_impl(
                         push(
                             DeduceAction::Eliminate { qi, oi },
                             DeduceRule::CountImpossible,
+                        );
+                    }
+                }
+                QuestionType::MostCommonCount
+                    if on != NAN_VAL && run(DeduceRule::MostCommonCountElim) =>
+                {
+                    let mut max_known: i16 = 0;
+                    let mut max_possible: i16 = 0;
+                    for &letter in &LETTERS[..fp.option_count] {
+                        let cr =
+                            count_matching(answers, eliminated, CountPred::IsAnswer(letter), 0, n);
+                        if cr.min() > max_known {
+                            max_known = cr.min();
+                        }
+                        if cr.max() > max_possible {
+                            max_possible = cr.max();
+                        }
+                    }
+                    if on < max_known || on > max_possible {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::MostCommonCountElim,
                         );
                     }
                 }
@@ -1472,167 +1505,173 @@ fn deduce_impl(
     }
 
     // ── LeastCommon ──
-    for qi in 0..n {
-        if answers[qi].is_some() {
-            continue;
-        }
-        if !matches!(fp.question_types[qi], QuestionType::LeastCommon) {
-            continue;
-        }
-
-        let mut min_count = [0i16; 5];
-        let mut max_count = [0i16; 5];
-        for j in 0..n {
-            if j == qi {
+    if !fast {
+        for qi in 0..n {
+            if answers[qi].is_some() {
                 continue;
             }
-            if let Some(a) = answers[j] {
-                min_count[a.idx()] += 1;
-                max_count[a.idx()] += 1;
-            } else {
-                for li in 0..5usize {
-                    if !is_elim(eliminated, j, li) {
-                        max_count[li] += 1;
+            if !matches!(fp.question_types[qi], QuestionType::LeastCommon) {
+                continue;
+            }
+
+            let mut min_count = [0i16; 5];
+            let mut max_count = [0i16; 5];
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if let Some(a) = answers[j] {
+                    min_count[a.idx()] += 1;
+                    max_count[a.idx()] += 1;
+                } else {
+                    for li in 0..5usize {
+                        if !is_elim(eliminated, j, li) {
+                            max_count[li] += 1;
+                        }
                     }
                 }
             }
-        }
 
-        let mut can_be_least_opt = [false; 5];
-        let mut must_be_least_opt = [false; 5];
+            let mut can_be_least_opt = [false; 5];
+            let mut must_be_least_opt = [false; 5];
 
-        for oi in 0..5usize {
-            if is_elim(eliminated, qi, oi) {
-                continue;
-            }
-            let v = fp.option_answers[qi][oi];
-            if v >= 5 {
-                continue;
-            }
-            let claimed = v as usize;
-            let self_letter = oi;
-
-            let mut adj_min = min_count;
-            let mut adj_max = max_count;
-            adj_min[self_letter] += 1;
-            adj_max[self_letter] += 1;
-
-            let can_be_least = (0..5).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
-            let must_be_least = (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
-
-            can_be_least_opt[oi] = can_be_least;
-            must_be_least_opt[oi] = must_be_least;
-
-            if run(DeduceRule::LeastCommonElim) && !can_be_least {
-                push(
-                    DeduceAction::Eliminate { qi, oi },
-                    DeduceRule::LeastCommonElim,
-                );
-            }
-        }
-
-        if run(DeduceRule::LeastCommonForce) {
             for oi in 0..5usize {
-                if !must_be_least_opt[oi] {
+                if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                let only_viable = (0..5usize)
-                    .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_least_opt[oj]);
-                if only_viable {
+                let v = fp.option_answers[qi][oi];
+                if v >= 5 {
+                    continue;
+                }
+                let claimed = v as usize;
+                let self_letter = oi;
+
+                let mut adj_min = min_count;
+                let mut adj_max = max_count;
+                adj_min[self_letter] += 1;
+                adj_max[self_letter] += 1;
+
+                let can_be_least =
+                    (0..5).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
+                let must_be_least =
+                    (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
+
+                can_be_least_opt[oi] = can_be_least;
+                must_be_least_opt[oi] = must_be_least;
+
+                if run(DeduceRule::LeastCommonElim) && !can_be_least {
                     push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::LeastCommonForce,
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::LeastCommonElim,
                     );
+                }
+            }
+
+            if run(DeduceRule::LeastCommonForce) {
+                for oi in 0..5usize {
+                    if !must_be_least_opt[oi] {
+                        continue;
+                    }
+                    let only_viable = (0..5usize)
+                        .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_least_opt[oj]);
+                    if only_viable {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[oi],
+                            },
+                            DeduceRule::LeastCommonForce,
+                        );
+                    }
                 }
             }
         }
     }
 
     // ── MostCommon ──
-    for qi in 0..n {
-        if answers[qi].is_some() {
-            continue;
-        }
-        if !matches!(fp.question_types[qi], QuestionType::MostCommon) {
-            continue;
-        }
-
-        let mut min_count = [0i16; 5];
-        let mut max_count = [0i16; 5];
-        for j in 0..n {
-            if j == qi {
+    if !fast {
+        for qi in 0..n {
+            if answers[qi].is_some() {
                 continue;
             }
-            if let Some(a) = answers[j] {
-                min_count[a.idx()] += 1;
-                max_count[a.idx()] += 1;
-            } else {
-                for li in 0..5usize {
-                    if !is_elim(eliminated, j, li) {
-                        max_count[li] += 1;
+            if !matches!(fp.question_types[qi], QuestionType::MostCommon) {
+                continue;
+            }
+
+            let mut min_count = [0i16; 5];
+            let mut max_count = [0i16; 5];
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if let Some(a) = answers[j] {
+                    min_count[a.idx()] += 1;
+                    max_count[a.idx()] += 1;
+                } else {
+                    for li in 0..5usize {
+                        if !is_elim(eliminated, j, li) {
+                            max_count[li] += 1;
+                        }
                     }
                 }
             }
-        }
 
-        let mut can_be_most_opt = [false; 5];
-        let mut must_be_most_opt = [false; 5];
+            let mut can_be_most_opt = [false; 5];
+            let mut must_be_most_opt = [false; 5];
 
-        for oi in 0..5usize {
-            if is_elim(eliminated, qi, oi) {
-                continue;
-            }
-            let v = fp.option_answers[qi][oi];
-            if v >= 5 {
-                continue;
-            }
-            let claimed = v as usize;
-            let self_letter = oi;
-
-            let mut adj_min = min_count;
-            let mut adj_max = max_count;
-            adj_min[self_letter] += 1;
-            adj_max[self_letter] += 1;
-
-            let can_be_most = (0..5).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
-            let must_be_most = (0..5).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
-
-            can_be_most_opt[oi] = can_be_most;
-            must_be_most_opt[oi] = must_be_most;
-
-            if run(DeduceRule::MostCommonElim) && !can_be_most {
-                push(
-                    DeduceAction::Eliminate { qi, oi },
-                    DeduceRule::MostCommonElim,
-                );
-            }
-        }
-
-        if run(DeduceRule::MostCommonForce) {
             for oi in 0..5usize {
-                if !must_be_most_opt[oi] {
+                if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                let only_viable = (0..5usize)
-                    .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_most_opt[oj]);
-                if only_viable {
+                let v = fp.option_answers[qi][oi];
+                if v >= 5 {
+                    continue;
+                }
+                let claimed = v as usize;
+                let self_letter = oi;
+
+                let mut adj_min = min_count;
+                let mut adj_max = max_count;
+                adj_min[self_letter] += 1;
+                adj_max[self_letter] += 1;
+
+                let can_be_most = (0..5).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
+                let must_be_most = (0..5).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
+
+                can_be_most_opt[oi] = can_be_most;
+                must_be_most_opt[oi] = must_be_most;
+
+                if run(DeduceRule::MostCommonElim) && !can_be_most {
                     push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::MostCommonForce,
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::MostCommonElim,
                     );
+                }
+            }
+
+            if run(DeduceRule::MostCommonForce) {
+                for oi in 0..5usize {
+                    if !must_be_most_opt[oi] {
+                        continue;
+                    }
+                    let only_viable = (0..5usize)
+                        .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_most_opt[oj]);
+                    if only_viable {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[oi],
+                            },
+                            DeduceRule::MostCommonForce,
+                        );
+                    }
                 }
             }
         }
     }
 
     // ── TrueStatement forward ──
-    if run(DeduceRule::TrueStatementForward) {
+    if !fast && run(DeduceRule::TrueStatementForward) {
         for qi in 0..n {
             let Some(a) = answers[qi] else { continue };
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
@@ -1678,8 +1717,8 @@ fn deduce_impl(
         }
     }
 
-    // ── OnlySame None forward: answered None means no other question can have this letter ──
-    if run(DeduceRule::OnlySameNoneForward) {
+    // ── OnlySame None forward ──
+    if !fast && run(DeduceRule::OnlySameNoneForward) {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::OnlySame) {
                 continue;
@@ -1703,95 +1742,99 @@ fn deduce_impl(
         }
     }
 
-    // ── ConsecIdent forward: answered ConsecIdent constrains the pair ──
-    for qi in 0..n {
-        if !matches!(fp.question_types[qi], QuestionType::ConsecIdent) {
-            continue;
-        }
-        let Some(a) = answers[qi] else { continue };
-        let v = fp.option_nums[qi][a.idx()];
-        if v == NONE_VAL || v < 0 || (v as usize) + 1 >= n {
-            continue;
-        }
-        let p = v as usize;
-        let poss_a = !eliminated[p] & 0b11111u8;
-        let poss_b = !eliminated[p + 1] & 0b11111u8;
+    // ── ConsecIdent forward ──
+    if !fast {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::ConsecIdent) {
+                continue;
+            }
+            let Some(a) = answers[qi] else { continue };
+            let v = fp.option_nums[qi][a.idx()];
+            if v == NONE_VAL || v < 0 || (v as usize) + 1 >= n {
+                continue;
+            }
+            let p = v as usize;
+            let poss_a = !eliminated[p] & 0b11111u8;
+            let poss_b = !eliminated[p + 1] & 0b11111u8;
 
-        if run(DeduceRule::ConsecIdentForwardForce) {
-            if answers[p].is_some() && answers[p + 1].is_none() {
-                let letter = answers[p].unwrap();
-                if !is_elim(eliminated, p + 1, letter.idx()) {
-                    push(
-                        DeduceAction::Force {
-                            qi: p + 1,
-                            answer: letter,
-                        },
-                        DeduceRule::ConsecIdentForwardForce,
-                    );
+            if run(DeduceRule::ConsecIdentForwardForce) {
+                if answers[p].is_some() && answers[p + 1].is_none() {
+                    let letter = answers[p].unwrap();
+                    if !is_elim(eliminated, p + 1, letter.idx()) {
+                        push(
+                            DeduceAction::Force {
+                                qi: p + 1,
+                                answer: letter,
+                            },
+                            DeduceRule::ConsecIdentForwardForce,
+                        );
+                    }
+                }
+                if answers[p + 1].is_some() && answers[p].is_none() {
+                    let letter = answers[p + 1].unwrap();
+                    if !is_elim(eliminated, p, letter.idx()) {
+                        push(
+                            DeduceAction::Force {
+                                qi: p,
+                                answer: letter,
+                            },
+                            DeduceRule::ConsecIdentForwardForce,
+                        );
+                    }
                 }
             }
-            if answers[p + 1].is_some() && answers[p].is_none() {
-                let letter = answers[p + 1].unwrap();
-                if !is_elim(eliminated, p, letter.idx()) {
+
+            if run(DeduceRule::ConsecIdentForwardElim) {
+                for oi in 0..5usize {
+                    if answers[p].is_none()
+                        && !is_elim(eliminated, p, oi)
+                        && (poss_b & (1 << oi)) == 0
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi: p, oi },
+                            DeduceRule::ConsecIdentForwardElim,
+                        );
+                    }
+                    if answers[p + 1].is_none()
+                        && !is_elim(eliminated, p + 1, oi)
+                        && (poss_a & (1 << oi)) == 0
+                    {
+                        push(
+                            DeduceAction::Eliminate { qi: p + 1, oi },
+                            DeduceRule::ConsecIdentForwardElim,
+                        );
+                    }
+                }
+            }
+
+            if run(DeduceRule::ConsecIdentForwardBothForce)
+                && answers[p].is_none()
+                && answers[p + 1].is_none()
+            {
+                let common = poss_a & poss_b;
+                if common.count_ones() == 1 {
+                    let oi = common.trailing_zeros() as usize;
                     push(
                         DeduceAction::Force {
                             qi: p,
-                            answer: letter,
+                            answer: LETTERS[oi],
                         },
-                        DeduceRule::ConsecIdentForwardForce,
+                        DeduceRule::ConsecIdentForwardBothForce,
                     );
-                }
-            }
-        }
-
-        if run(DeduceRule::ConsecIdentForwardElim) {
-            for oi in 0..5usize {
-                if answers[p].is_none() && !is_elim(eliminated, p, oi) && (poss_b & (1 << oi)) == 0
-                {
                     push(
-                        DeduceAction::Eliminate { qi: p, oi },
-                        DeduceRule::ConsecIdentForwardElim,
+                        DeduceAction::Force {
+                            qi: p + 1,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::ConsecIdentForwardBothForce,
                     );
                 }
-                if answers[p + 1].is_none()
-                    && !is_elim(eliminated, p + 1, oi)
-                    && (poss_a & (1 << oi)) == 0
-                {
-                    push(
-                        DeduceAction::Eliminate { qi: p + 1, oi },
-                        DeduceRule::ConsecIdentForwardElim,
-                    );
-                }
-            }
-        }
-
-        if run(DeduceRule::ConsecIdentForwardBothForce)
-            && answers[p].is_none()
-            && answers[p + 1].is_none()
-        {
-            let common = poss_a & poss_b;
-            if common.count_ones() == 1 {
-                let oi = common.trailing_zeros() as usize;
-                push(
-                    DeduceAction::Force {
-                        qi: p,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::ConsecIdentForwardBothForce,
-                );
-                push(
-                    DeduceAction::Force {
-                        qi: p + 1,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::ConsecIdentForwardBothForce,
-                );
             }
         }
     }
 
-    // ── SameAsWhich reverse: when answered, propagate to option target and ref question ──
-    if run(DeduceRule::SameAsWhichReverse) {
+    // ── SameAsWhich reverse ──
+    if !fast && run(DeduceRule::SameAsWhichReverse) {
         for src in 0..n {
             let Some(src_ans) = answers[src] else {
                 continue;
@@ -1882,8 +1925,8 @@ fn deduce_impl(
         }
     }
 
-    // ── TrueStatement self-reference: claim contradicts the option's own letter ──
-    if run(DeduceRule::TrueStatementSelfRef) {
+    // ── TrueStatement self-reference ──
+    if !fast && run(DeduceRule::TrueStatementSelfRef) {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
                 continue;
@@ -1917,8 +1960,8 @@ fn deduce_impl(
         }
     }
 
-    // ── TrueStatement claim invalid: claim contradicts known answers ──
-    if run(DeduceRule::TrueStatementClaimInvalid) {
+    // ── TrueStatement claim invalid ──
+    if !fast && run(DeduceRule::TrueStatementClaimInvalid) {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
                 continue;

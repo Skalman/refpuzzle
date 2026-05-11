@@ -3,6 +3,7 @@ use crate::types::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Validity {
+    Neutral,
     Valid,
     Invalid,
     Pending,
@@ -712,7 +713,7 @@ pub fn check_answer_validity(
 ) -> Validity {
     let a = match answers[qi] {
         Some(a) => a,
-        None => return Validity::Pending,
+        None => return Validity::Neutral,
     };
     let ai = a.idx();
     let t = &fp.question_types[qi];
@@ -831,6 +832,7 @@ mod tests {
 
             let got = check_answer_validity(&fp, &answers, &eliminated, qi);
             let got_str = match got {
+                Validity::Neutral => "neutral",
                 Validity::Valid => "valid",
                 Validity::Invalid => "invalid",
                 Validity::Pending => "pending",

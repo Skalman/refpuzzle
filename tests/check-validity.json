@@ -1449,7 +1449,7 @@
     },
     { "section": "=== unanswered question ===" },
     {
-      "name": "unanswered question → pending",
+      "name": "unanswered question → neutral",
       "qi": 0,
       "puzzle": {
         "q": [
@@ -1459,7 +1459,7 @@
         ]
       },
       "state": ["", "A", "B"],
-      "expect": "pending"
+      "expect": "neutral"
     }
   ]
 }

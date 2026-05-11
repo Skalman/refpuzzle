@@ -869,6 +869,33 @@ function explainElimDetail(
     }
   }
 
+  if (q.t === RT_MOST_COMMON_COUNT && v != null) {
+    const counts = LETTERS.map((l) => {
+      let c = 0;
+      for (let i = 0; i < n; i++) if (answers[i] === l) c++;
+      return c;
+    });
+    const maxKnown = Math.max(...counts);
+    if (v < maxKnown)
+      return d(
+        `${Q(qi)} option ${letter} claims the most common answer appears ${v} time${v === 1 ? "" : "s"}, but one already appears ${maxKnown} times.`,
+      );
+    let maxPossible = 0;
+    for (const l of LETTERS) {
+      let c = 0;
+      let r = 0;
+      for (let i = 0; i < n; i++) {
+        if (answers[i] === l) c++;
+        else if (answers[i] == null && !isElim(eliminated, i, letterIdx(l))) r++;
+      }
+      if (c + r > maxPossible) maxPossible = c + r;
+    }
+    if (v > maxPossible)
+      return d(
+        `${Q(qi)} option ${letter} claims the most common answer appears ${v} times, but at most ${maxPossible} are possible.`,
+      );
+  }
+
   if (q.t === RT_ANSWER_OF) {
     if (v != null && v >= 0 && v < 5 && isElim(eliminated, q.questionIndex, v))
       return d(

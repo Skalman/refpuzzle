@@ -769,7 +769,7 @@ fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
             }
             continue;
         }
-        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX) {
+        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX, false) {
             action_log.push(CheckAction::LookaheadEliminate {
                 trace: LookaheadTrace {
                     eliminate_qi: lr.eliminate_qi,

@@ -167,6 +167,34 @@
       "state": ["", "A", "B", "B"],
       "expect": "1a"
     },
+    {
+      "name": "MostCommonCount: value below current max → eliminate",
+      "rule": "MostCommonCountElim",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "MostCommonCount" }, "o": [1, 2, 3, 4, 0] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "A", "A", "B"],
+      "expect": "1a"
+    },
+    {
+      "name": "MostCommonCount: value above max possible → eliminate",
+      "rule": "MostCommonCountElim",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "MostCommonCount" }, "o": [4, 3, 2, 1, 0] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "A", "B", "C"],
+      "expect": "1a"
+    },
     { "section": "=== Eliminations: reference ===" },
     {
       "name": "AnswerOf: target answered differently → eliminate",

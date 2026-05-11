@@ -25,6 +25,7 @@ pub struct Stats {
     pub deduce_calls: u32,
     pub deduce_results: u32,
     pub lookahead_calls: u32,
+    pub lookahead_hits: u32,
     pub lookahead_us: u64,
 }
 
@@ -45,13 +46,14 @@ impl Stats {
         self.deduce_calls += other.deduce_calls;
         self.deduce_results += other.deduce_results;
         self.lookahead_calls += other.lookahead_calls;
+        self.lookahead_hits += other.lookahead_hits;
         self.lookahead_us += other.lookahead_us;
     }
 
     pub fn print(&self) {
         let ok = self.attempts - self.fail_unique - self.fail_solve;
         eprintln!(
-            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {}ms\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
+            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {} hits, {}ms\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
             self.attempts,
             ok,
             self.fail_unique,
@@ -64,6 +66,7 @@ impl Stats {
             self.deduce_calls,
             self.deduce_results,
             self.lookahead_calls,
+            self.lookahead_hits,
             self.lookahead_us / 1000,
             self.repair_us / 1000,
             self.repair_fail_no_candidates,
@@ -223,9 +226,10 @@ fn try_solve_from(
 
         stats.lookahead_calls += 1;
         let t_la = std::time::Instant::now();
-        let lr = lookahead(fp, &answers, &eliminated, 6);
+        let lr = lookahead(fp, &answers, &eliminated, 6, true);
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
+            stats.lookahead_hits += 1;
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }
@@ -1196,7 +1200,7 @@ fn build_claims(
 }
 
 fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) -> Option<Claim> {
-    match rng.int(0, 18) {
+    match rng.int(0, 17) {
         0 => {
             let a = rng.pick(&LETTERS);
             Some(Claim {
@@ -1320,17 +1324,6 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
             })
         }
         13 => {
-            let counts = letter_counts(sol, n);
-            if counts.iter().filter(|&&c| c == 1).count() != 1 {
-                return None;
-            }
-            let idx = counts.iter().position(|&c| c == 1).unwrap();
-            Some(Claim {
-                question_type: QuestionType::Unique,
-                value: idx as i16,
-            })
-        }
-        14 => {
             let ref_ans = rng.pick(&LETTERS);
             let ref_count = count_letter(sol, ref_ans, n);
             let mut candidates = ArrayVec::<Answer, 5>::new();
@@ -1348,7 +1341,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: target.idx() as i16,
             })
         }
-        15 => {
+        14 => {
             let mut pair_idx: i16 = NONE_VAL;
             let mut pair_count = 0;
             for i in 0..n.saturating_sub(1) {
@@ -1367,7 +1360,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: pair_idx,
             })
         }
-        16 => {
+        15 => {
             let a = rng.pick(&LETTERS);
             let mut found: i16 = NONE_VAL;
             let mut count = 0;
@@ -1385,7 +1378,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: found,
             })
         }
-        17 => {
+        16 => {
             let a = rng.pick(&LETTERS);
             let mut found: i16 = NONE_VAL;
             let mut count = 0;

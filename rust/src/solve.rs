@@ -27,7 +27,7 @@ pub fn check_solvable(fp: &FlatPuzzle) -> SolveOutcome {
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &answers, &eliminated, usize::MAX) {
+        if let Some(lr) = lookahead(fp, &answers, &eliminated, usize::MAX, false) {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }

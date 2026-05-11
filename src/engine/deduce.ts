@@ -24,6 +24,7 @@ import {
   RT_ANSWER_OF,
   RT_LEAST_COMMON,
   RT_MOST_COMMON,
+  RT_MOST_COMMON_COUNT,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
   RT_SAME_AS_WHICH,
@@ -48,6 +49,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "ConsonantCrossElim",
   "CountExceeded",
   "CountImpossible",
+  "MostCommonCountElim",
   "AnswerOfTargetRuledOut",
   "LetterDistImpossible",
   "LetterDistWrong",
@@ -724,7 +726,7 @@ export function deduceWithRule(
       const v = fp.optionValues[qi][oi];
 
       const cp = countPred(q);
-      if (cp && q.t !== 5 /* RT_MOST_COMMON_COUNT */) {
+      if (cp && q.t !== RT_MOST_COMMON_COUNT) {
         const [from, to] = countRange(q, n);
         const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
         if (run("CountExceeded")) {
@@ -740,6 +742,28 @@ export function deduceWithRule(
               res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "CountImpossible"),
             );
           }
+        }
+      }
+
+      if (q.t === RT_MOST_COMMON_COUNT && v != null && run("MostCommonCountElim")) {
+        let maxKnown = 0;
+        let maxPossible = 0;
+        for (const letter of LETTERS.slice(0, fp.optionCount)) {
+          const cr = countMatching(
+            answers,
+            eliminated,
+            (a) => a === letter,
+            1 << letterIdx(letter),
+            0,
+            n,
+          );
+          if (crMin(cr) > maxKnown) maxKnown = crMin(cr);
+          if (crMax(cr) > maxPossible) maxPossible = crMax(cr);
+        }
+        if (v < maxKnown || v > maxPossible) {
+          results.push(
+            res({ type: "eliminate", questionIndex: qi, optionIndex: oi }, "MostCommonCountElim"),
+          );
         }
       }
 

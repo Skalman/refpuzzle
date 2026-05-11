@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 
 use crate::check_validity::{Validity, check_answer_validity};
-use crate::deduce::{DeduceAction, DeduceResult, deduce};
+use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_fast};
 use crate::types::*;
 
 pub struct LookaheadResult {
@@ -22,6 +22,7 @@ pub fn lookahead(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     stop_deducing_after_n_results: usize,
+    fast: bool,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
     for qi in 0..n {
@@ -41,7 +42,11 @@ pub fn lookahead(
             let mut chain = ArrayVec::new();
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
-                let drs = deduce(fp, &hyp_answers, &hyp_eliminated);
+                let drs = if fast {
+                    deduce_fast(fp, &hyp_answers, &hyp_eliminated)
+                } else {
+                    deduce(fp, &hyp_answers, &hyp_eliminated)
+                };
                 if drs.is_empty() {
                     break;
                 }
@@ -199,7 +204,7 @@ mod tests {
                 }
             }
 
-            let result = lookahead(&fp, &answers, &eliminated, usize::MAX);
+            let result = lookahead(&fp, &answers, &eliminated, usize::MAX, false);
             let got = match result {
                 Some(r) => format!(
                     "{}{}",
