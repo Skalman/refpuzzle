@@ -240,14 +240,15 @@ fn validate_option_values(fp: &FlatPuzzle) {
         for oi in 0..oc {
             if let Some(ref claim) = fp.option_claims[qi][oi] {
                 if claim.value != NONE_VAL {
+                    let pool = valid_values(&claim.question_type, n);
                     assert!(
-                        value_in_range(&claim.question_type, claim.value, n),
-                        "Q{} option {}: claim {:?} value {} out of range (n={})",
+                        pool.contains(&claim.value),
+                        "Q{} option {}: claim {:?} value {} not in {:?}",
                         qi + 1,
                         LETTERS[oi].as_char(),
                         claim.question_type,
                         claim.value,
-                        n
+                        &*pool
                     );
                 }
                 continue;
@@ -256,53 +257,84 @@ fn validate_option_values(fp: &FlatPuzzle) {
             if v == NAN_VAL || v == NONE_VAL {
                 continue;
             }
+            let pool = valid_values(qt, n);
             assert!(
-                value_in_range(qt, v, n),
-                "Q{} option {}: type {:?} value {} out of range (n={})",
+                pool.contains(&v),
+                "Q{} option {}: type {:?} value {} not in {:?}",
                 qi + 1,
                 LETTERS[oi].as_char(),
                 qt,
                 v,
-                n
+                &*pool
             );
         }
     }
 }
 
-fn value_in_range(qt: &QuestionType, v: i16, n: usize) -> bool {
-    let n = n as i16;
+fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
+    let mut out = ArrayVec::new();
     match *qt {
-        // Counting: 0..=n (or subrange)
         QuestionType::CountAnswer { .. }
         | QuestionType::CountVowel
         | QuestionType::CountConsonant
-        | QuestionType::MostCommonCount => v >= 0 && v <= n,
-        QuestionType::CountAnswerBefore { before_index, .. } => v >= 0 && v <= before_index as i16,
-        QuestionType::CountAnswerAfter { after_index, .. } => {
-            v >= 0 && v <= n - 1 - after_index as i16
+        | QuestionType::MostCommonCount => {
+            for v in 0..=n as i16 {
+                out.push(v);
+            }
         }
-        // Letter-valued: 0..oc
+        QuestionType::CountAnswerBefore { before_index, .. } => {
+            for v in 0..=before_index as i16 {
+                out.push(v);
+            }
+        }
+        QuestionType::CountAnswerAfter { after_index, .. } => {
+            for v in 0..=(n as i16 - 1 - after_index as i16) {
+                out.push(v);
+            }
+        }
         QuestionType::AnswerOf { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
         | QuestionType::Unique
         | QuestionType::LetterDist { .. }
-        | QuestionType::EqualCount { .. } => v >= 0 && v < 5,
-        // Positional: 0..n (specific ranges for some)
-        QuestionType::FirstWith { .. }
-        | QuestionType::LastWith { .. }
-        | QuestionType::SameAs
-        | QuestionType::OnlySame
-        | QuestionType::SameAsWhich { .. } => v >= 0 && v < n,
-        QuestionType::ClosestAfter { after_index, .. } => v > after_index as i16 && v < n,
-        QuestionType::ClosestBefore { before_index, .. } => v >= 0 && v < before_index as i16,
-        QuestionType::PrevSame | QuestionType::NextSame => v >= 0 && v < n,
-        QuestionType::OnlyOdd { .. } => v >= 0 && v < n && v % 2 == 0,
-        QuestionType::OnlyEven { .. } => v >= 0 && v < n && v % 2 == 1,
-        QuestionType::ConsecIdent => v >= 0 && v < n - 1,
-        // TrueStmt has no option_nums
-        QuestionType::TrueStmt | QuestionType::AnswerIsSelf => true,
+        | QuestionType::EqualCount { .. } => {
+            for v in 0..5i16 {
+                out.push(v);
+            }
+        }
+        QuestionType::ClosestAfter { after_index, .. } => {
+            for v in (after_index as i16 + 1)..n as i16 {
+                out.push(v);
+            }
+        }
+        QuestionType::ClosestBefore { before_index, .. } => {
+            for v in 0..before_index as i16 {
+                out.push(v);
+            }
+        }
+        QuestionType::OnlyOdd { .. } => {
+            for v in (0..n as i16).step_by(2) {
+                out.push(v);
+            }
+        }
+        QuestionType::OnlyEven { .. } => {
+            for v in (1..n as i16).step_by(2) {
+                out.push(v);
+            }
+        }
+        QuestionType::ConsecIdent => {
+            for v in 0..n as i16 - 1 {
+                out.push(v);
+            }
+        }
+        QuestionType::TrueStmt | QuestionType::AnswerIsSelf => {}
+        _ => {
+            for v in 0..n as i16 {
+                out.push(v);
+            }
+        }
     }
+    out
 }
 
 pub fn validate_and_repair(
@@ -536,7 +568,8 @@ pub fn repair_one_question(
         }
         _ if is_counting_type(&qt) => {
             let correct_val = fp.option_nums[qi][correct_oi];
-            let max = count_max(&qt, n) as i16;
+            let vals = valid_values(&qt, n);
+            let max = vals.last().copied().unwrap_or(0);
             // Find the non-eliminated wrong option closest to correct — that's
             // the one the hint engine can't distinguish. Replace just that one.
             let mut best_oi = None;
@@ -835,22 +868,12 @@ pub fn build_flat_puzzle(
             }
             _ if is_counting_type(qt) => {
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = count_distractors(
-                    correct_val as i32,
-                    count_max(qt, n) as i32,
-                    option_count - 1,
-                    rng,
-                );
+                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::OnlyOdd { .. } | QuestionType::OnlyEven { .. } => {
-                let start = if matches!(qt, QuestionType::OnlyOdd { .. }) {
-                    0
-                } else {
-                    1
-                };
                 option_nums[qi][correct_oi] = correct_val;
-                let distractors = parity_position_distractors(correct_val, n, start, rng);
+                let distractors = positional_distractors(correct_val, qi, n, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::SameAsWhich { question_index } => {
@@ -1042,34 +1065,6 @@ fn is_counting_type(qt: &QuestionType) -> bool {
     )
 }
 
-fn count_max(qt: &QuestionType, n: usize) -> usize {
-    match *qt {
-        QuestionType::CountAnswerBefore { before_index, .. } => before_index as usize,
-        QuestionType::CountAnswerAfter { after_index, .. } => n - after_index as usize - 1,
-        _ => n,
-    }
-}
-
-fn count_distractors(correct: i32, max: i32, need: usize, rng: &mut Rng) -> [i16; 4] {
-    let upper = if max >= need as i32 {
-        max
-    } else {
-        max.max(need as i32)
-    };
-    let mut pool = [0i16; 32];
-    let mut plen = 0;
-    for i in 0..=upper {
-        if i != correct {
-            pool[plen] = i as i16;
-            plen += 1;
-        }
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-    result
-}
-
 fn positional_distractors(
     correct: i16,
     qi: usize,
@@ -1077,56 +1072,13 @@ fn positional_distractors(
     qt: &QuestionType,
     rng: &mut Rng,
 ) -> [i16; 4] {
-    let mut min_pos: i16 = 0;
-    let mut max_pos = n as i16 - 1;
-
-    match *qt {
-        QuestionType::ClosestAfter { after_index, .. }
-        | QuestionType::CountAnswerAfter { after_index, .. } => {
-            min_pos = after_index as i16 + 1;
-        }
-        QuestionType::ClosestBefore { before_index, .. }
-        | QuestionType::CountAnswerBefore { before_index, .. } => {
-            max_pos = before_index as i16 - 1;
-        }
-        QuestionType::PrevSame => {
-            max_pos = qi as i16 - 1;
-        }
-        QuestionType::NextSame => {
-            min_pos = qi as i16 + 1;
-        }
-        QuestionType::ConsecIdent => {
-            max_pos = n as i16 - 2;
-        }
-        _ => {}
-    }
-
+    let vals = valid_values(qt, n);
     let mut pool = [0i16; 20];
     let mut plen = 0;
-    for i in min_pos..=max_pos {
-        if i != correct
-            && !matches!(*qt, QuestionType::OnlySame | QuestionType::SameAs if i as usize == qi)
+    for &v in &vals {
+        if v != correct
+            && !matches!(*qt, QuestionType::OnlySame | QuestionType::SameAs if v as usize == qi)
         {
-            pool[plen] = i;
-            plen += 1;
-        }
-    }
-    if correct != NONE_VAL {
-        pool[plen] = NONE_VAL;
-        plen += 1;
-    }
-    rng.shuffle(&mut pool[..plen]);
-    let mut result = [0i16; 4];
-    result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-    result
-}
-
-fn parity_position_distractors(correct: i16, n: usize, start: usize, rng: &mut Rng) -> [i16; 4] {
-    let mut pool = [0i16; 16];
-    let mut plen = 0;
-    for i in (start..n).step_by(2) {
-        let v = i as i16;
-        if v != correct {
             pool[plen] = v;
             plen += 1;
         }
@@ -1519,75 +1471,16 @@ fn make_false_claim(
 }
 
 fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
-    match claim.question_type {
-        QuestionType::CountAnswer { .. }
-        | QuestionType::CountConsonant
-        | QuestionType::CountVowel
-        | QuestionType::CountAnswerAfter { .. }
-        | QuestionType::CountAnswerBefore { .. }
-        | QuestionType::MostCommonCount => {
-            let max_count = match claim.question_type {
-                QuestionType::CountAnswerBefore { before_index, .. } => before_index as i32,
-                QuestionType::CountAnswerAfter { after_index, .. } => {
-                    n as i32 - 1 - after_index as i32
-                }
-                _ => n as i32,
-            };
-            let offset = rng.pick(&[-2i8, -1, 1, 2]);
-            let new_val = claim.value as i32 + offset as i32;
-            if !(0..=max_count).contains(&new_val) {
-                return None;
-            }
-            Some(Claim {
-                value: new_val as i16,
-                ..claim
-            })
-        }
-        QuestionType::AnswerOf { .. }
-        | QuestionType::MostCommon
-        | QuestionType::LeastCommon
-        | QuestionType::Unique
-        | QuestionType::EqualCount { .. } => {
-            let wrong = rng.pick(&LETTERS);
-            Some(Claim {
-                value: wrong.idx() as i16,
-                ..claim
-            })
-        }
-        QuestionType::FirstWith { .. }
-        | QuestionType::LastWith { .. }
-        | QuestionType::ClosestAfter { .. }
-        | QuestionType::ClosestBefore { .. }
-        | QuestionType::ConsecIdent
-        | QuestionType::OnlyOdd { .. }
-        | QuestionType::OnlyEven { .. }
-        | QuestionType::SameAsWhich { .. } => {
-            let (min, max) = match claim.question_type {
-                QuestionType::ClosestAfter { after_index, .. } => {
-                    (after_index as i32 + 1, n as i32 - 1)
-                }
-                QuestionType::ClosestBefore { before_index, .. } => (0, before_index as i32 - 1),
-                QuestionType::ConsecIdent => (0, n as i32 - 2),
-                QuestionType::OnlyOdd { .. } => (0, n as i32 - 1),
-                QuestionType::OnlyEven { .. } => (0, n as i32 - 1),
-                _ => (0, n as i32 - 1),
-            };
-            if min > max {
-                return None;
-            }
-            let wrong = rng.int(min, max) as i16;
-            match claim.question_type {
-                // OnlyOdd: valid indices are 0, 2, 4... (odd 1-indexed positions)
-                QuestionType::OnlyOdd { .. } if wrong % 2 != 0 => return None,
-                // OnlyEven: valid indices are 1, 3, 5... (even 1-indexed positions)
-                QuestionType::OnlyEven { .. } if wrong % 2 != 1 => return None,
-                _ => {}
-            }
-            Some(Claim {
-                value: wrong,
-                ..claim
-            })
-        }
-        _ => None,
+    let pool = valid_values(&claim.question_type, n);
+    if pool.is_empty() {
+        return None;
     }
+    let wrong = rng.pick(&pool);
+    if wrong == claim.value {
+        return None;
+    }
+    Some(Claim {
+        value: wrong,
+        ..claim
+    })
 }
