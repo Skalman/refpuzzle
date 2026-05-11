@@ -1449,9 +1449,16 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         | QuestionType::CountAnswerAfter { .. }
         | QuestionType::CountAnswerBefore { .. }
         | QuestionType::MostCommonCount => {
+            let max_count = match claim.question_type {
+                QuestionType::CountAnswerBefore { before_index, .. } => before_index as i32,
+                QuestionType::CountAnswerAfter { after_index, .. } => {
+                    n as i32 - 1 - after_index as i32
+                }
+                _ => n as i32,
+            };
             let offset = rng.pick(&[-2i8, -1, 1, 2]);
             let new_val = claim.value as i32 + offset as i32;
-            if !(0..=n as i32).contains(&new_val) {
+            if !(0..=max_count).contains(&new_val) {
                 return None;
             }
             Some(Claim {
@@ -1478,7 +1485,27 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         | QuestionType::OnlyOdd { .. }
         | QuestionType::OnlyEven { .. }
         | QuestionType::SameAsWhich { .. } => {
-            let wrong = rng.int(0, n as i32 - 1) as i16;
+            let (min, max) = match claim.question_type {
+                QuestionType::ClosestAfter { after_index, .. } => {
+                    (after_index as i32 + 1, n as i32 - 1)
+                }
+                QuestionType::ClosestBefore { before_index, .. } => (0, before_index as i32 - 1),
+                QuestionType::ConsecIdent => (0, n as i32 - 2),
+                QuestionType::OnlyOdd { .. } => (0, n as i32 - 1),
+                QuestionType::OnlyEven { .. } => (0, n as i32 - 1),
+                _ => (0, n as i32 - 1),
+            };
+            if min > max {
+                return None;
+            }
+            let wrong = rng.int(min, max) as i16;
+            match claim.question_type {
+                // OnlyOdd: valid indices are 0, 2, 4... (odd 1-indexed positions)
+                QuestionType::OnlyOdd { .. } if wrong % 2 != 0 => return None,
+                // OnlyEven: valid indices are 1, 3, 5... (even 1-indexed positions)
+                QuestionType::OnlyEven { .. } if wrong % 2 != 1 => return None,
+                _ => {}
+            }
             Some(Claim {
                 value: wrong,
                 ..claim
