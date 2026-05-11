@@ -1,6 +1,7 @@
 import { useRef, useState, useEffect } from "preact/hooks";
 import { t } from "../i18n/index.ts";
 import { startSync, pollSync, joinSync } from "../lib/sync.ts";
+import { IconScan } from "./Icons.tsx";
 
 export function SyncDialog({
   onImport,
@@ -140,7 +141,7 @@ export function SyncDialog({
             </div>
 
             <button class="sync-scan-btn" onClick={() => setScanning(true)}>
-              {s.sync.scanQr}
+              <IconScan size="1em" /> {s.sync.scanQr}
             </button>
           </>
         )}

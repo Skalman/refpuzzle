@@ -241,6 +241,20 @@ export function IconShare(p: Props) {
   );
 }
 
+export function IconScan(p: Props) {
+  return (
+    <IM
+      {...p}
+      paths={[
+        "M3 7V5a2 2 0 0 1 2-2h2",
+        "M17 3h2a2 2 0 0 1 2 2v2",
+        "M21 17v2a2 2 0 0 1-2 2h-2",
+        "M7 21H5a2 2 0 0 1-2-2v-2",
+      ]}
+    />
+  );
+}
+
 export function IconDot({ size, class: cls }: Props) {
   const s = size ?? defaults.size;
   return (
