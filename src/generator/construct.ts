@@ -23,7 +23,7 @@ import { evaluateClaim } from "../engine/evaluators.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";
-import { solve } from "./solver.ts";
+import { solve } from "./solve-brute.ts";
 import { RNG } from "./rng.ts";
 import type { DifficultyProfile } from "./difficulty.ts";
 

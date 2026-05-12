@@ -6,9 +6,9 @@ import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.t
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
-import { solve } from "../src/generator/solver.ts";
-import { checkSolvable } from "../src/engine/solve.ts";
-import type { SolveOutcome } from "../src/engine/solve.ts";
+import { solve } from "../src/generator/solve-brute.ts";
+import { checkSolvable } from "../src/engine/solve-deduce.ts";
+import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";

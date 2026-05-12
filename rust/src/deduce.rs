@@ -2199,7 +2199,7 @@ mod tests {
     fn test_deduce_soundness_fuzz() {
         use crate::gen_common::build_flat_puzzle;
         use crate::rng::Rng;
-        use crate::solver::solve;
+        use crate::solve_brute::solve;
 
         fn random_question_type(rng: &mut Rng, qi: usize, n: usize) -> QuestionType {
             match rng.int(0, 24) {

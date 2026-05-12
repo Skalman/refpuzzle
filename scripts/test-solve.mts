@@ -4,8 +4,8 @@ import { parseCompactYear } from "../src/puzzles/daily.ts";
 import type { CompactPuzzle } from "../src/puzzles/daily.ts";
 import type { FlatPuzzle, Puzzle } from "../src/engine/types.ts";
 import { flattenPuzzle } from "../src/engine/types.ts";
-import { checkSolvable } from "../src/engine/solve.ts";
-import type { SolveOutcome } from "../src/engine/solve.ts";
+import { checkSolvable } from "../src/engine/solve-deduce.ts";
+import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 
 interface TestCase {
   name: string;

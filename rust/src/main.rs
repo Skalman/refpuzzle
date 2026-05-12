@@ -8,9 +8,9 @@ mod evaluate;
 mod gen_common;
 mod lookahead;
 mod rng;
+mod solve_brute;
 #[allow(dead_code)]
-mod solve;
-mod solver;
+mod solve_deduce;
 mod types;
 
 use difficulty::PROFILES;
@@ -465,7 +465,7 @@ fn check_json(path: &str, target: Option<&str>) {
                     let hash = steps.join(".");
                     eprintln!("  http://localhost:5173/day/{year}-{mm}-{dd}?l={lvl}&debug#{hash}");
                 }
-                let solutions = solver::solve(&fp, None, 10);
+                let solutions = solve_brute::solve(&fp, None, 10);
                 eprintln!("Brute-force: {} solution(s)", solutions.len());
                 for (i, sol) in solutions.iter().enumerate() {
                     let s: String = sol.iter().take(fp.n).map(|a| a.as_char()).collect();
@@ -665,7 +665,7 @@ fn report_first_incorrect_if_needed(
     }
     *conflict_reported = true;
 
-    let solutions = brute_solutions.get_or_insert_with(|| solver::solve(fp, None, 2));
+    let solutions = brute_solutions.get_or_insert_with(|| solve_brute::solve(fp, None, 2));
     match solutions.len() {
         0 => {
             eprintln!(
@@ -1025,7 +1025,7 @@ mod tests {
         let mut failures: Vec<String> = Vec::new();
 
         for (key, fp) in &puzzles {
-            let solutions = solver::solve(fp, None, 2);
+            let solutions = solve_brute::solve(fp, None, 2);
             if solutions.len() != 1 {
                 failures.push(format!("{key}: found {} solutions", solutions.len()));
                 continue;

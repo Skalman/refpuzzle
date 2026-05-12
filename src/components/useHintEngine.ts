@@ -3,7 +3,7 @@ import type { Answer, Puzzle } from "../engine/types.ts";
 import { letterIdx, getFlatPuzzle } from "../engine/types.ts";
 import { deduce } from "../engine/deduce.ts";
 import { lookaheadShortest } from "../engine/lookahead.ts";
-import { solvePuzzle } from "../engine/solve.ts";
+import { solvePuzzle } from "../engine/solve-deduce.ts";
 import { explainDeduce, explainLookahead } from "../engine/explain.ts";
 import type { ExplainStep } from "../engine/explain.ts";
 import { deriveState } from "../engine/state.ts";

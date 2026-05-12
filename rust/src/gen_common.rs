@@ -5,7 +5,7 @@ use crate::deduce::{DeduceAction, deduce};
 use crate::evaluate::evaluate_claim;
 use crate::lookahead::lookahead;
 use crate::rng::Rng;
-use crate::solver::solve;
+use crate::solve_brute::solve;
 use crate::types::*;
 
 #[derive(Default)]
