@@ -1,10 +1,10 @@
-import type { QuestionTypeDef } from "../engine/types.ts";
+import type { QuestionType } from "../engine/types.ts";
 
 export interface DifficultyProfile {
   level: 1 | 2 | 3 | 4 | 5;
   name: string;
   questionCount: number;
-  allowedTypes: QuestionTypeDef["type"][];
+  allowedTypes: QuestionType["type"][];
 }
 
 export const profiles: DifficultyProfile[] = [

@@ -1,7 +1,7 @@
-import type { QuestionTypeDef, Claim } from "./types.ts";
+import type { QuestionType, Claim } from "./types.ts";
 import { LETTERS } from "./types.ts";
 
-export function renderQuestionText(qt: QuestionTypeDef): string {
+export function renderQuestionText(qt: QuestionType): string {
   switch (qt.type) {
     case "CountAnswer":
       return `How many questions have answer ${qt.answer}?`;
@@ -74,7 +74,7 @@ const POSITIONAL_RULES = new Set([
   "ConsecIdent",
 ]);
 
-export function renderOptionLabel(qt: QuestionTypeDef, value: number | null, _qi: number): string {
+export function renderOptionLabel(qt: QuestionType, value: number | null, _qi: number): string {
   if (qt.type === "TrueStmt") return "";
 
   if (isLetterRule(qt.type)) return value != null ? LETTERS[value] : "?";

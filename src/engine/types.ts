@@ -28,7 +28,7 @@ export interface Puzzle {
 
 export interface QuestionDef {
   options: OptionDef[];
-  questionType: QuestionTypeDef;
+  questionType: QuestionType;
 }
 
 export type OptionDef = SimpleOption | StatementOption;
@@ -43,11 +43,11 @@ export interface StatementOption {
 }
 
 export interface Claim {
-  questionType: QuestionTypeDef;
+  questionType: QuestionType;
   value: number;
 }
 
-export type QuestionTypeDef =
+export type QuestionType =
   // ── Counting ──
   | { type: "CountAnswer"; answer: Answer }
   | { type: "CountAnswerBefore"; answer: Answer; beforeIndex: number }
@@ -156,7 +156,7 @@ export interface FlatQuestion {
   beforeIndex: number;
 }
 
-function flattenQuestion(t: QuestionTypeDef): FlatQuestion {
+function flattenQuestion(t: QuestionType): FlatQuestion {
   return {
     t: RT_MAP[t.type],
     answer: "answer" in t ? t.answer : null,

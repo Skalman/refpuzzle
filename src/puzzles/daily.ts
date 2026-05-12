@@ -1,7 +1,7 @@
 import type {
   Puzzle,
   QuestionDef,
-  QuestionTypeDef,
+  QuestionType,
   OptionDef,
   Claim,
   Answer,
@@ -12,7 +12,7 @@ const START_DATE = "2026-04-19";
 const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
-interface CompactQuestionTypeDef {
+interface CompactQuestionType {
   t: string;
   a?: number;
   q?: number;
@@ -25,7 +25,7 @@ interface CompactClaim {
 }
 interface CompactQuestion {
   o?: (number | null)[];
-  t: CompactQuestionTypeDef;
+  t: CompactQuestionType;
   c?: (CompactClaim | null)[];
 }
 export interface CompactPuzzle {
@@ -75,9 +75,9 @@ function L(i: number | undefined): Answer {
   return LETTERS[i ?? 0];
 }
 
-function expandQuestion(q: CompactQuestionTypeDef): QuestionTypeDef {
+function expandQuestion(q: CompactQuestionType): QuestionType {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-  const type = q.t as QuestionTypeDef["type"];
+  const type = q.t as QuestionType["type"];
   switch (type) {
     case "CountVowel":
     case "CountConsonant":

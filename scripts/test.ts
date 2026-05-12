@@ -596,7 +596,7 @@ function testSharedCheckValidity() {
       const a = typeof r.a === "number" ? LETTERS[r.a as number] : undefined;
       const qIdx = r.q as number | undefined;
 
-      let questionType: import("../src/engine/types.ts").QuestionTypeDef;
+      let questionType: import("../src/engine/types.ts").QuestionType;
       switch (type) {
         case "CountAnswer":
           questionType = { type, answer: a! };
@@ -612,7 +612,7 @@ function testSharedCheckValidity() {
         case "MostCommonCount":
           questionType = {
             type,
-          } as import("../src/engine/types.ts").QuestionTypeDef;
+          } as import("../src/engine/types.ts").QuestionType;
           break;
         case "ClosestAfter":
           questionType = { type, afterIndex: qIdx!, answer: a! };
@@ -629,7 +629,7 @@ function testSharedCheckValidity() {
           questionType = {
             type,
             answer: a!,
-          } as import("../src/engine/types.ts").QuestionTypeDef;
+          } as import("../src/engine/types.ts").QuestionType;
           break;
         case "AnswerOf":
           questionType = { type, questionIndex: qIdx! };
@@ -646,7 +646,7 @@ function testSharedCheckValidity() {
         default:
           questionType = {
             type,
-          } as import("../src/engine/types.ts").QuestionTypeDef;
+          } as import("../src/engine/types.ts").QuestionType;
           break;
       }
 
@@ -665,7 +665,7 @@ function testSharedCheckValidity() {
             const ct = c.t as string;
             const ca = typeof c.a === "number" ? LETTERS[c.a as number] : undefined;
             const cv = c.v as number;
-            let qt: import("../src/engine/types.ts").QuestionTypeDef;
+            let qt: import("../src/engine/types.ts").QuestionType;
             switch (ct) {
               case "CountAnswer":
                 qt = { type: ct, answer: ca! };

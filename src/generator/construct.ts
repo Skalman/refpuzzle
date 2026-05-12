@@ -13,7 +13,7 @@ import type {
   Puzzle,
   QuestionDef,
   OptionDef,
-  QuestionTypeDef,
+  QuestionType,
   Claim,
   StatementOption,
 } from "../engine/types.ts";
@@ -47,7 +47,7 @@ export function generateConstructive(
 const CONSTRAINED_TYPES = new Set<string>(["Unique", "AnswerIsSelf"]);
 
 // Rule types by category
-const ENTRY_TYPES: QuestionTypeDef["type"][] = [
+const ENTRY_TYPES: QuestionType["type"][] = [
   "CountAnswer",
   "CountAnswerBefore",
   "CountAnswerAfter",
@@ -55,14 +55,14 @@ const ENTRY_TYPES: QuestionTypeDef["type"][] = [
   "CountConsonant",
 ];
 
-const POSITIONAL_TYPES: QuestionTypeDef["type"][] = [
+const POSITIONAL_TYPES: QuestionType["type"][] = [
   "FirstWith",
   "LastWith",
   "ClosestAfter",
   "ClosestBefore",
 ];
 
-const VARIETY_TYPES: QuestionTypeDef["type"][] = [
+const VARIETY_TYPES: QuestionType["type"][] = [
   "LetterDist",
   "ConsecIdent",
   "MostCommonCount",
@@ -80,7 +80,7 @@ const VARIETY_TYPES: QuestionTypeDef["type"][] = [
   "TrueStmt",
 ];
 
-const STRUCTURAL_TYPES = new Set<QuestionTypeDef["type"]>([
+const STRUCTURAL_TYPES = new Set<QuestionType["type"]>([
   "ConsecIdent",
   "Unique",
   "OnlySame",
@@ -88,13 +88,13 @@ const STRUCTURAL_TYPES = new Set<QuestionTypeDef["type"]>([
   "OnlyEven",
 ]);
 
-function typeCap(type: QuestionTypeDef["type"]): number {
+function typeCap(type: QuestionType["type"]): number {
   if (type === "LetterDist") return 1;
   if (type === "AnswerOf") return 2;
   return 3;
 }
 
-function symmetricGroup(type: QuestionTypeDef["type"]): string | null {
+function symmetricGroup(type: QuestionType["type"]): string | null {
   switch (type) {
     case "FirstWith":
     case "LastWith":
@@ -120,9 +120,9 @@ function symmetricGroup(type: QuestionTypeDef["type"]): string | null {
 }
 
 function allowed(
-  types: QuestionTypeDef["type"][],
+  types: QuestionType["type"][],
   profile: DifficultyProfile,
-): QuestionTypeDef["type"][] {
+): QuestionType["type"][] {
   return types.filter((t) => profile.allowedTypes.includes(t));
 }
 
@@ -159,7 +159,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const slots = Array.from({ length: n }, (_, i) => i);
   rng.shuffle(slots);
 
-  const rules: (QuestionTypeDef | null)[] = new Array(n).fill(null);
+  const rules: (QuestionType | null)[] = new Array(n).fill(null);
   const assigned = new Set<number>(); // questions with rules assigned
   const usedRuleKeys = new Set<string>(); // for dedup (no duplicate question text)
 
@@ -195,7 +195,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     capsOverride["LetterDist"] = 0;
   }
 
-  function placeRule(type: QuestionTypeDef["type"], slotIdx: number): boolean {
+  function placeRule(type: QuestionType["type"], slotIdx: number): boolean {
     const cap = capsOverride[type] ?? typeCap(type);
     if ((kindCounts[type] ?? 0) >= cap) return false;
     const group = symmetricGroup(type);
@@ -226,7 +226,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     return false;
   }
 
-  function placeFrom(types: QuestionTypeDef["type"][]): boolean {
+  function placeFrom(types: QuestionType["type"][]): boolean {
     if (types.length === 0 || assigned.size >= n) return false;
     return placeRule(rng.pick(types), assigned.size);
   }
@@ -246,7 +246,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   // Phase 2b: occasionally place prev/next_same (need specific slot positions)
   if (rng.int(0, 1) === 0 && assigned.size < n) {
-    const candidates: [QuestionTypeDef["type"], number][] = [
+    const candidates: [QuestionType["type"], number][] = [
       ["PrevSame", n - 1],
       ["NextSame", 0],
     ];
@@ -268,7 +268,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   for (let p = 0; p < posCount; p++) placeFrom(avPositional);
 
   // Phase 4: Guaranteed exotic types for variety
-  const exoticSlots: QuestionTypeDef["type"][] = [];
+  const exoticSlots: QuestionType["type"][] = [];
   if (allowed(["LetterDist"], profile).length > 0) exoticSlots.push("LetterDist");
   if (allowed(["TrueStmt"], profile).length > 0) exoticSlots.push("TrueStmt");
   if (allowed(["ConsecIdent"], profile).length > 0) exoticSlots.push("ConsecIdent");
@@ -282,7 +282,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const structuralReserve = Math.min(avStructural.length > 0 ? 1 : 0, n - assigned.size);
   const fillTarget = n - structuralReserve;
 
-  const fillPool: QuestionTypeDef["type"][] = [...avEntry, ...avPositional, ...avVariety].filter(
+  const fillPool: QuestionType["type"][] = [...avEntry, ...avPositional, ...avVariety].filter(
     (t) => profile.allowedTypes.includes(t) && t !== "AnswerOf",
   );
 
@@ -329,7 +329,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   }
 
   // 3. Build and validate puzzle
-  const finalRules: QuestionTypeDef[] = rules.filter((t): t is QuestionTypeDef => t !== null);
+  const finalRules: QuestionType[] = rules.filter((t): t is QuestionType => t !== null);
   const questions = finalRules.map<QuestionDef>((questionType, i) => ({
     options: engineerOptions(questionType, i, solution, n, rng),
     questionType,
@@ -483,7 +483,7 @@ function isCountingType(type: string): boolean {
 }
 
 function repairCountingDistractors(
-  rule: QuestionTypeDef,
+  rule: QuestionType,
   correctVal: number | null,
   answers: (Answer | null)[],
   n: number,
@@ -543,7 +543,7 @@ function repairPairDistractors(
 }
 
 function repairPositionalDistractors(
-  rule: QuestionTypeDef,
+  rule: QuestionType,
   correctVal: number | null,
   qi: number,
   answers: (Answer | null)[],
@@ -599,13 +599,13 @@ function applyDeduceAction(action: DeduceAction, answers: (Answer | null)[], eli
 // ── Rule factory ──
 
 function makeRule(
-  type: QuestionTypeDef["type"],
+  type: QuestionType["type"],
   qi: number,
   n: number,
   solution: Answer[],
   assigned: Set<number>,
   rng: RNG,
-): QuestionTypeDef | null {
+): QuestionType | null {
   switch (type) {
     case "CountAnswer":
       return { type, answer: rng.pick(LETTERS) };
@@ -693,7 +693,7 @@ function makeRule(
 
 // ── Structural checks ──
 
-function checkStructural(rule: QuestionTypeDef, qi: number, sol: Answer[]): boolean {
+function checkStructural(rule: QuestionType, qi: number, sol: Answer[]): boolean {
   switch (rule.type) {
     case "OnlySame": {
       let m = 0;
@@ -721,7 +721,7 @@ function checkStructural(rule: QuestionTypeDef, qi: number, sol: Answer[]): bool
 }
 
 function solutionHasStructural(
-  type: QuestionTypeDef["type"],
+  type: QuestionType["type"],
   qi: number,
   solution: Answer[],
   n: number,
@@ -754,7 +754,7 @@ function solutionHasStructural(
 }
 
 function solutionCompatible(
-  type: QuestionTypeDef["type"],
+  type: QuestionType["type"],
   qi: number,
   solution: Answer[],
   n: number,
@@ -788,7 +788,7 @@ function letterCounts(sol: Answer[]): number[] {
 }
 
 function engineerOptions(
-  rule: QuestionTypeDef,
+  rule: QuestionType,
   qi: number,
   solution: Answer[],
   n: number,
@@ -819,7 +819,7 @@ function engineerOptions(
   return opts;
 }
 
-function computeValue(rule: QuestionTypeDef, qi: number, sol: Answer[]): number | null {
+function computeValue(rule: QuestionType, qi: number, sol: Answer[]): number | null {
   switch (rule.type) {
     case "AnswerOf":
       return L2I[sol[rule.questionIndex]];
@@ -883,7 +883,7 @@ function computeValue(rule: QuestionTypeDef, qi: number, sol: Answer[]): number 
 }
 
 function makeDistractors(
-  rule: QuestionTypeDef,
+  rule: QuestionType,
   correct: number | null,
   qi: number,
   n: number,
