@@ -110,7 +110,7 @@ export const RT_LEAST_COMMON = rtCounter++;
 export const RT_MOST_COMMON = rtCounter++;
 export const RT_UNIQUE = rtCounter++;
 export const RT_EQUAL_COUNT = rtCounter++;
-export const RT_SELF = rtCounter++;
+export const RT_ANSWER_IS_SELF = rtCounter++;
 export const RT_LETTER_DIST = rtCounter++;
 export const RT_TRUE_STMT = rtCounter++;
 export const RT_SAME_AS_WHICH = rtCounter++;
@@ -141,7 +141,7 @@ const RT_MAP: Record<string, QuestionTypeId> = {
   MostCommon: RT_MOST_COMMON,
   Unique: RT_UNIQUE,
   EqualCount: RT_EQUAL_COUNT,
-  AnswerIsSelf: RT_SELF,
+  AnswerIsSelf: RT_ANSWER_IS_SELF,
   LetterDist: RT_LETTER_DIST,
   TrueStmt: RT_TRUE_STMT,
   SameAsWhich: RT_SAME_AS_WHICH,

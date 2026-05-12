@@ -26,7 +26,7 @@ import {
   RT_MOST_COMMON,
   RT_UNIQUE,
   RT_EQUAL_COUNT,
-  RT_SELF,
+  RT_ANSWER_IS_SELF,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
 } from "./types.ts";
@@ -220,7 +220,7 @@ export function checkQuestionAgainstSolution(
       return claimed !== q.answer && countAnswer(answers, claimed) === refCount;
     }
 
-    case RT_SELF:
+    case RT_ANSWER_IS_SELF:
       return true;
 
     case RT_LETTER_DIST: {

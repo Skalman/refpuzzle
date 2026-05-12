@@ -25,7 +25,7 @@ import {
   RT_MOST_COMMON,
   RT_UNIQUE,
   RT_EQUAL_COUNT,
-  RT_SELF,
+  RT_ANSWER_IS_SELF,
   RT_LETTER_DIST,
   RT_TRUE_STMT,
   RT_SAME_AS_WHICH,
@@ -393,7 +393,7 @@ export function checkAnswerValidity(
   }
 
   // ── Always valid ──
-  if (q.t === RT_SELF) return V_VALID;
+  if (q.t === RT_ANSWER_IS_SELF) return V_VALID;
 
   // ── Equal count ──
   if (q.t === RT_EQUAL_COUNT) {
