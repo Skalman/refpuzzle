@@ -1,6 +1,7 @@
 import type { AnswerLetter, FlatPuzzle } from "./types.ts";
 import { letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
+import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
 import { checkAnswerValidity } from "./check-validity.ts";
 
@@ -74,34 +75,19 @@ export function checkPuzzleSolved(
 }
 
 function applyAction(
-  action: {
-    type: string;
-    questionIndex?: number;
-    questionMask?: number;
-    letter?: AnswerLetter;
-    optionIndex?: number;
-    optionMask?: number;
-  },
+  action: DeduceAction,
   answers: (AnswerLetter | null)[],
   eliminated: number[],
 ): void {
-  if (action.type === "force" && action.letter && action.questionIndex != null) {
-    const oi = letterIdx(action.letter);
-    eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
-    answers[action.questionIndex] = action.letter;
-  } else if (
-    action.type === "eliminateMulti" &&
-    action.questionMask != null &&
-    action.optionMask != null
-  ) {
+  if (action.type === "force") {
+    const oi = letterIdx(action.answer);
+    eliminated[action.qi] = 0b11111 ^ (1 << oi);
+    answers[action.qi] = action.answer;
+  } else if (action.type === "eliminateMulti") {
     for (let i = 0; i < eliminated.length; i++) {
       if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
     }
-  } else if (
-    action.type === "eliminate" &&
-    action.questionIndex != null &&
-    action.optionIndex != null
-  ) {
-    eliminated[action.questionIndex] |= 1 << action.optionIndex;
+  } else if (action.type === "eliminate") {
+    eliminated[action.qi] |= 1 << action.oi;
   }
 }

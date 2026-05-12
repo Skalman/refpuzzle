@@ -4,11 +4,7 @@ import { parseCompactYear } from "../src/puzzles/daily.ts";
 import type { AnswerLetter, FlatPuzzle, Marks, Puzzle } from "../src/engine/types.ts";
 import { L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { encodePlaygroundHash, savedStateFromMarks } from "../src/lib/playground.ts";
-import {
-  deduce,
-  deduceWithRule,
-  ALL_DEDUCE_RULES,
-} from "../src/engine/deduce.ts";
+import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
 import type { ExplainStep } from "../src/engine/explain.ts";
@@ -33,9 +29,7 @@ interface TestSuite {
   tests: (TestCase | SectionHeader)[];
 }
 
-function isSectionHeader(
-  entry: TestCase | SectionHeader,
-): entry is SectionHeader {
+function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
   return "section" in entry;
 }
 
@@ -95,13 +89,12 @@ function stateToMarks(n: number, state: string[]): Marks[] {
   return result;
 }
 
-const PLAYGROUND_BASE =
-  process.env.PLAYGROUND_BASE_URL ?? "http://localhost:5173";
+const PLAYGROUND_BASE = process.env.PLAYGROUND_BASE_URL ?? "http://localhost:5173";
 
 async function playgroundLink(t: TestCase, n: number): Promise<string> {
   const state = savedStateFromMarks(stateToMarks(n, t.state));
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const hash = await encodePlaygroundHash(
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     t.puzzle as Parameters<typeof encodePlaygroundHash>[0],
     state,
   );
@@ -113,9 +106,9 @@ function formatAction(result: DeduceResult | null): string | null {
   const a = result.action;
   switch (a.type) {
     case "force":
-      return `${a.questionIndex + 1}${a.letter}`;
+      return `${a.qi + 1}${a.answer}`;
     case "eliminate":
-      return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
+      return `${a.qi + 1}${"abcde"[a.oi]}`;
     case "eliminateMulti":
       return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
     default:
@@ -128,6 +121,7 @@ const VALID_RULES = new Set<string>(ALL_DEDUCE_RULES);
 function parseRule(rule: string | undefined): DeduceRule | "All" | null {
   if (rule == null) return null;
   if (rule === "All") return "All";
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   if (VALID_RULES.has(rule)) return rule as DeduceRule;
   return null;
 }
@@ -140,8 +134,7 @@ function hasGenericFallback(steps: ExplainStep[]): boolean {
   for (const step of steps) {
     if (step.type === "simple") {
       if (/^#\d+ can't be [A-E]\.$/.test(step.text)) return true;
-      if (/^#\d+ options? [A-E, ]+ can be ruled out\.$/.test(step.text))
-        return true;
+      if (/^#\d+ options? [A-E, ]+ can be ruled out\.$/.test(step.text)) return true;
     }
   }
   return false;
@@ -229,6 +222,5 @@ if (uncoveredRules.length > 0) {
 console.log(`\n${passed}/${passed + failed} passed`);
 if (explainFailed > 0) console.log(`${explainFailed} explain fallback(s)`);
 if (dryFailed > 0) console.log(`${dryFailed} DRY violation(s)`);
-if (uncoveredRules.length > 0)
-  console.log(`${uncoveredRules.length} rule(s) without tests`);
+if (uncoveredRules.length > 0) console.log(`${uncoveredRules.length} rule(s) without tests`);
 if (failed > 0 || uncoveredRules.length > 0 || dryFailed > 0) process.exit(1);

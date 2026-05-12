@@ -112,23 +112,23 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
         kind: "deduce",
         action: dr.action,
         explain,
-        questionIndex: dr.action.questionIndex,
-        optionIndex: letterIdx(dr.action.letter),
+        questionIndex: dr.action.qi,
+        optionIndex: letterIdx(dr.action.answer),
         isForce: true,
       });
-      const fOi = letterIdx(dr.action.letter);
-      eliminated[dr.action.questionIndex] = 0b11111 ^ (1 << fOi);
-      answers[dr.action.questionIndex] = dr.action.letter;
+      const fOi = letterIdx(dr.action.answer);
+      eliminated[dr.action.qi] = 0b11111 ^ (1 << fOi);
+      answers[dr.action.qi] = dr.action.answer;
     } else if (dr.action.type === "eliminate") {
       steps.push({
         kind: "deduce",
         action: dr.action,
         explain,
-        questionIndex: dr.action.questionIndex,
-        optionIndex: dr.action.optionIndex,
+        questionIndex: dr.action.qi,
+        optionIndex: dr.action.oi,
         isForce: false,
       });
-      eliminated[dr.action.questionIndex] |= 1 << dr.action.optionIndex;
+      eliminated[dr.action.qi] |= 1 << dr.action.oi;
     }
   }
 

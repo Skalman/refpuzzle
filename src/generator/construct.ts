@@ -21,6 +21,7 @@ import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
 import { evaluateClaim } from "../engine/evaluators.ts";
 import { deduce } from "../engine/deduce.ts";
+import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";
 import { solve } from "./solver.ts";
 import { RNG } from "./rng.ts";
@@ -585,35 +586,20 @@ function repairPositionalDistractors(
 }
 
 function applyDeduceAction(
-  action: {
-    type: string;
-    questionIndex?: number;
-    questionMask?: number;
-    letter?: AnswerLetter;
-    optionIndex?: number;
-    optionMask?: number;
-  },
+  action: DeduceAction,
   answers: (AnswerLetter | null)[],
   eliminated: number[],
 ) {
-  if (action.type === "force" && action.letter && action.questionIndex != null) {
-    const oi = L2I[action.letter];
-    eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
-    answers[action.questionIndex] = action.letter;
-  } else if (
-    action.type === "eliminateMulti" &&
-    action.questionMask != null &&
-    action.optionMask != null
-  ) {
+  if (action.type === "force") {
+    const oi = L2I[action.answer];
+    eliminated[action.qi] = 0b11111 ^ (1 << oi);
+    answers[action.qi] = action.answer;
+  } else if (action.type === "eliminateMulti") {
     for (let i = 0; i < eliminated.length; i++) {
       if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
     }
-  } else if (
-    action.type === "eliminate" &&
-    action.questionIndex != null &&
-    action.optionIndex != null
-  ) {
-    eliminated[action.questionIndex] |= 1 << action.optionIndex;
+  } else if (action.type === "eliminate") {
+    eliminated[action.qi] |= 1 << action.oi;
   }
 }
 

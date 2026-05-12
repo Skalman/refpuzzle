@@ -15,10 +15,10 @@ export interface LookaheadResult {
 
 function hasContradiction(action: DeduceAction, answers: (AnswerLetter | null)[]): boolean {
   if (action.type === "force") {
-    return answers[action.questionIndex] != null && answers[action.questionIndex] !== action.letter;
+    return answers[action.qi] != null && answers[action.qi] !== action.answer;
   }
   if (action.type === "eliminate") {
-    return answers[action.questionIndex] === LETTERS[action.optionIndex];
+    return answers[action.qi] === LETTERS[action.oi];
   }
   if (action.type === "eliminateMulti") {
     for (let i = 0; i < answers.length; i++) {
@@ -150,14 +150,14 @@ function applyAction(
 ): void {
   const a = dr.action;
   if (a.type === "force") {
-    const oi = letterIdx(a.letter);
-    eliminated[a.questionIndex] = 0b11111 ^ (1 << oi);
-    answers[a.questionIndex] = a.letter;
+    const oi = letterIdx(a.answer);
+    eliminated[a.qi] = 0b11111 ^ (1 << oi);
+    answers[a.qi] = a.answer;
   } else if (a.type === "eliminateMulti") {
     for (let i = 0; i < eliminated.length; i++) {
       if ((a.questionMask >> i) & 1) eliminated[i] |= a.optionMask;
     }
   } else {
-    eliminated[a.questionIndex] |= 1 << a.optionIndex;
+    eliminated[a.qi] |= 1 << a.oi;
   }
 }

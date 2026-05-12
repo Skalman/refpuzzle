@@ -151,7 +151,7 @@ export function explainDeduce(
 ): ExplainStep[] {
   const a = result.action;
   if (a.type === "force") {
-    return explainForce(puzzle, fp, answers, eliminated, a.questionIndex, a.letter, result.rule);
+    return explainForce(puzzle, fp, answers, eliminated, a.qi, a.answer, result.rule);
   }
   if (a.type === "eliminateMulti") {
     const qis: number[] = [];
@@ -193,15 +193,7 @@ export function explainDeduce(
     steps.push(simple(`${qList} can't be ${optStr}: ${reason.text}`));
     return steps;
   }
-  return explainElimination(
-    puzzle,
-    fp,
-    answers,
-    eliminated,
-    a.questionIndex,
-    a.optionIndex,
-    result.rule,
-  );
+  return explainElimination(puzzle, fp, answers, eliminated, a.qi, a.oi, result.rule);
 }
 
 function explainForce(
@@ -1325,15 +1317,13 @@ export function explainLookahead(
   for (const dr of result.chain) {
     const a = dr.action;
     if (a.type === "force") {
-      involvedQis.add(a.questionIndex);
-      const reason = briefForceReason(fp, hypAnswers, hypEliminated, a.questionIndex, a.letter);
+      involvedQis.add(a.qi);
+      const reason = briefForceReason(fp, hypAnswers, hypEliminated, a.qi, a.answer);
       lines.push(
-        reason
-          ? `${Q(a.questionIndex)} must be ${a.letter} (${reason}).`
-          : `${Q(a.questionIndex)} must be ${a.letter}.`,
+        reason ? `${Q(a.qi)} must be ${a.answer} (${reason}).` : `${Q(a.qi)} must be ${a.answer}.`,
       );
-      hypEliminated[a.questionIndex] = 0b11111 ^ (1 << letterIdx(a.letter));
-      hypAnswers[a.questionIndex] = a.letter;
+      hypEliminated[a.qi] = 0b11111 ^ (1 << letterIdx(a.answer));
+      hypAnswers[a.qi] = a.answer;
     } else if (a.type === "eliminateMulti") {
       const qis: number[] = [];
       for (let i = 0; i < n; i++) {
@@ -1349,26 +1339,24 @@ export function explainLookahead(
       lines.push(`Eliminate ${optLetters.join(", ")} from ${qis.map(Q).join(", ")}.`);
       for (const q of qis) hypEliminated[q] |= a.optionMask;
     } else {
-      involvedQis.add(a.questionIndex);
+      involvedQis.add(a.qi);
       const elimDetail = explainElimDetail(
-        fp.questions[a.questionIndex],
-        a.questionIndex,
-        a.optionIndex,
-        fp.optionValues[a.questionIndex][a.optionIndex],
+        fp.questions[a.qi],
+        a.qi,
+        a.oi,
+        fp.optionValues[a.qi][a.oi],
         hypAnswers,
         hypEliminated,
         n,
       );
       if (elimDetail) {
-        lines.push(
-          `Eliminate ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]}: ${elimDetail.text}`,
-        );
+        lines.push(`Eliminate ${Q(a.qi)} option ${LETTERS[a.oi]}: ${elimDetail.text}`);
       } else {
         throw new Error(
-          `No explain for: ELIM ${Q(a.questionIndex)} option ${LETTERS[a.optionIndex]} (rule: ${dr.rule})`,
+          `No explain for: ELIM ${Q(a.qi)} option ${LETTERS[a.oi]} (rule: ${dr.rule})`,
         );
       }
-      hypEliminated[a.questionIndex] |= 1 << a.optionIndex;
+      hypEliminated[a.qi] |= 1 << a.oi;
     }
   }
 

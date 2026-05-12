@@ -64,7 +64,7 @@ function testSharedEvaluators() {
     const fp = flattenPuzzle(puzzle);
     const qi: number = test.qi;
     const answers: (AnswerLetter | null)[] = test.answers;
-    const selected = answers[qi] as AnswerLetter;
+    const selected = answers[qi]!;
     const got = evaluate(fp.questions[qi], qi, selected, answers, fp);
     assert(got === test.expect, `${test.name}: expected ${test.expect}, got ${got}`);
   }
@@ -258,11 +258,11 @@ function applyAction(
   eliminated: number[],
 ) {
   if (action.type === "force") {
-    const oi = L2I[action.letter];
-    eliminated[action.questionIndex] = 0b11111 ^ (1 << oi);
-    answers[action.questionIndex] = action.letter;
+    const oi = L2I[action.answer];
+    eliminated[action.qi] = 0b11111 ^ (1 << oi);
+    answers[action.qi] = action.answer;
   } else if (action.type === "eliminate") {
-    eliminated[action.questionIndex] |= 1 << action.optionIndex;
+    eliminated[action.qi] |= 1 << action.oi;
   } else if (action.type === "eliminateMulti") {
     for (let qi = 0; qi < answers.length; qi++) {
       if (action.questionMask & (1 << qi)) {
@@ -310,7 +310,7 @@ function testHints() {
       `forced hint: action type is force (got ${dr[0].action.type})`,
     );
     assert(
-      dr[0].action.type === "force" && dr[0].action.letter === "C",
+      dr[0].action.type === "force" && dr[0].action.answer === "C",
       "forced hint: forces letter C",
     );
   }
@@ -327,7 +327,7 @@ function testHints() {
     const dr = deduce(fp, answers, eliminated);
     assert(dr.length > 0, "forced-by-elim: deduce returns a result");
     assert(
-      dr[0].action.type === "force" && dr[0].action.letter === "E",
+      dr[0].action.type === "force" && dr[0].action.answer === "E",
       "forced-by-elim: forces letter E",
     );
   }
@@ -745,7 +745,9 @@ function testSharedCheckValidity() {
 // ════════════════════════════════════════════════
 
 function testSharedLookahead() {
-  const suiteJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/lookahead.json"), "utf8"));
+  const suiteJson = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/lookahead.json"), "utf8"),
+  );
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -796,7 +798,9 @@ function testSharedLookahead() {
 // ════════════════════════════════════════════════
 
 function testSharedSolve() {
-  const suiteJson = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/solve.json"), "utf8"));
+  const suiteJson = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/solve.json"), "utf8"),
+  );
   const tests = suiteJson.tests as (
     | { section: string }
     | {
@@ -826,14 +830,16 @@ function testSharedSolve() {
 // ════════════════════════════════════════════════
 
 function testSharedDeduce() {
-  const suite = JSON.parse(readFileSync(resolve(import.meta.dirname, "../tests/deduce.json"), "utf8"));
+  const suite = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/deduce.json"), "utf8"),
+  );
   const coveredRules = new Set<string>();
 
   function formatAction(dr: DeduceResult | undefined): string {
     if (!dr) return "null";
     const a = dr.action;
-    if (a.type === "force") return `${a.questionIndex + 1}${a.letter}`;
-    if (a.type === "eliminate") return `${a.questionIndex + 1}${"abcde"[a.optionIndex]}`;
+    if (a.type === "force") return `${a.qi + 1}${a.answer}`;
+    if (a.type === "eliminate") return `${a.qi + 1}${"abcde"[a.oi]}`;
     if (a.type === "eliminateMulti")
       return `qm${a.questionMask.toString(2)}o${a.optionMask.toString(2).padStart(5, "0")}`;
     return "null";
