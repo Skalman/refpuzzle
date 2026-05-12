@@ -24,9 +24,12 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     let mut year: Option<u32> = None;
     let mut start_date: Option<String> = None;
+    let mut end_date: Option<String> = None;
     let mut max_attempts: usize = 100;
     let mut level_filter: Option<u8> = None;
     let mut show_stats = false;
+    let mut output_path: Option<String> = None;
+    let mut merge = false;
 
     let mut i = 1;
     while i < args.len() {
@@ -49,6 +52,17 @@ fn main() {
                 assert!((1..=6).contains(&l), "level must be 1-6");
                 level_filter = Some(l);
             }
+            "--end" => {
+                i += 1;
+                end_date = Some(args[i].clone());
+            }
+            "--output" | "-o" => {
+                i += 1;
+                output_path = Some(args[i].clone());
+            }
+            "--merge" | "-m" => {
+                merge = true;
+            }
             "--stats" => {
                 show_stats = true;
             }
@@ -61,15 +75,18 @@ fn main() {
             }
             "--help" | "-h" => {
                 eprintln!(
-                    "Usage: logiquiz-gen --year YYYY [--start YYYY-MM-DD] [--level 1-6] [--attempts A] [--stats]"
+                    "Usage: logiquiz-gen --year YYYY -o FILE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--level 1-6] [-m] [--stats]"
                 );
                 eprintln!("       logiquiz-gen --check <file.json> [MMDD-level-N]");
                 eprintln!("  Generates a year of daily puzzles.");
                 eprintln!(
                     "  Seeds are derived from the date, so the same date always produces the same puzzle."
                 );
+                eprintln!("  -o FILE  output file (required, use - for stdout)");
+                eprintln!("  -m       merge into existing file (only overwrite generated puzzles)");
                 eprintln!("  --level  generate only this level (default: all 6)");
-                eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026).");
+                eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026)");
+                eprintln!("  --end    defaults to YYYY-12-31");
                 eprintln!("  --stats  show generation statistics");
                 eprintln!("  --check  verify solvability of puzzles in a JSON file");
                 return;
@@ -91,15 +108,23 @@ fn main() {
         }
     });
 
+    let end = end_date.unwrap_or_else(|| format!("{year}-12-31"));
     let start_mm: u32 = start[5..7].parse().unwrap();
     let start_dd: u32 = start[8..10].parse().unwrap();
+    let end_mm: u32 = end[5..7].parse().unwrap();
+    let end_dd: u32 = end[8..10].parse().unwrap();
 
-    let days = dates_in_year(year, start_mm, start_dd);
+    let output_path = output_path.unwrap_or_else(|| {
+        eprintln!("Error: -o/--output is required (use -o - for stdout)");
+        std::process::exit(1);
+    });
+
+    let days = dates_in_year(year, start_mm, start_dd, end_mm, end_dd);
     let day_count = days.len();
 
     eprintln!(
-        "Generating {} days for year {} (start={})...",
-        day_count, year, start,
+        "Generating {} days for year {} ({}..{})...",
+        day_count, year, start, end,
     );
 
     let start_time = Instant::now();
@@ -209,8 +234,6 @@ fn main() {
     }
 
     let elapsed = start_time.elapsed();
-    let json_out = serde_json::to_string(&Value::Object(year_map)).unwrap();
-    let raw_kb = json_out.len() / 1024;
 
     eprintln!();
     eprintln!("=== Summary ===");
@@ -226,12 +249,39 @@ fn main() {
         elapsed.as_secs_f64(),
         elapsed.as_secs_f64() * 1000.0 / day_count as f64
     );
-    eprintln!("  Output:  {raw_kb}KB JSON");
+    eprintln!("  Output:  {}", output_path);
     if show_stats {
         stats.print();
     }
 
-    println!("{json_out}");
+    if merge {
+        assert!(
+            output_path != "-",
+            "--merge requires -o FILE (cannot merge to stdout)"
+        );
+        let existing = std::fs::read_to_string(&output_path).unwrap_or_else(|_| "{}".into());
+        let mut existing: serde_json::Map<String, Value> =
+            serde_json::from_str(&existing).expect("invalid JSON in output file");
+        for (date, levels) in year_map {
+            let entry = existing
+                .entry(date)
+                .or_insert_with(|| Value::Object(serde_json::Map::new()));
+            if let (Value::Object(existing_day), Value::Object(new_levels)) = (entry, levels) {
+                for (lvl, puzzle) in new_levels {
+                    existing_day.insert(lvl, puzzle);
+                }
+            }
+        }
+        let out = serde_json::to_string(&Value::Object(existing)).unwrap();
+        std::fs::write(&output_path, out).expect("failed to write output file");
+    } else {
+        let out = serde_json::to_string(&Value::Object(year_map)).unwrap();
+        if output_path == "-" {
+            println!("{out}");
+        } else {
+            std::fs::write(&output_path, out).expect("failed to write output file");
+        }
+    }
 }
 
 fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
@@ -283,7 +333,13 @@ fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
     json!({ "q": questions })
 }
 
-fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
+fn dates_in_year(
+    year: u32,
+    start_mm: u32,
+    start_dd: u32,
+    end_mm: u32,
+    end_dd: u32,
+) -> Vec<(u32, u32)> {
     let days_in_month = |m: u32| -> u32 {
         match m {
             1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
@@ -304,6 +360,9 @@ fn dates_in_year(year: u32, start_mm: u32, start_dd: u32) -> Vec<(u32, u32)> {
     let mut dd = start_dd;
     while mm <= 12 {
         while dd <= days_in_month(mm) {
+            if mm > end_mm || (mm == end_mm && dd > end_dd) {
+                return result;
+            }
             result.push((mm, dd));
             dd += 1;
         }
