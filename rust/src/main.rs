@@ -1,7 +1,7 @@
 #![allow(clippy::needless_range_loop)]
 
 mod check_validity;
-mod construct_puzzle;
+mod construct;
 mod deduce;
 mod difficulty;
 mod evaluate;
@@ -173,9 +173,7 @@ fn main() {
             let mut stats = gen_common::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) =
-                    construct_puzzle::generate(profile, &mut rng, max_attempts, &mut stats)
-                {
+                if let Some(r) = construct::generate(profile, &mut rng, max_attempts, &mut stats) {
                     result = Some(r);
                     break;
                 }
