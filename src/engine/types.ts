@@ -88,63 +88,63 @@ export type QuestionType =
 
 // Numeric question type IDs — top-level constants for V8 inlining
 let rtCounter = 0;
-export const RT_COUNT_ANSWER = rtCounter++;
-export const RT_COUNT_ANSWER_BEFORE = rtCounter++;
-export const RT_COUNT_ANSWER_AFTER = rtCounter++;
-export const RT_COUNT_VOWEL = rtCounter++;
-export const RT_COUNT_CONSONANT = rtCounter++;
-export const RT_MOST_COMMON_COUNT = rtCounter++;
-export const RT_CLOSEST_AFTER = rtCounter++;
-export const RT_CLOSEST_BEFORE = rtCounter++;
-export const RT_FIRST_WITH = rtCounter++;
-export const RT_LAST_WITH = rtCounter++;
-export const RT_PREV_SAME = rtCounter++;
-export const RT_NEXT_SAME = rtCounter++;
-export const RT_ONLY_SAME = rtCounter++;
-export const RT_SAME_AS = rtCounter++;
-export const RT_ONLY_ODD = rtCounter++;
-export const RT_ONLY_EVEN = rtCounter++;
-export const RT_CONSEC_IDENT = rtCounter++;
-export const RT_ANSWER_OF = rtCounter++;
-export const RT_LEAST_COMMON = rtCounter++;
-export const RT_MOST_COMMON = rtCounter++;
-export const RT_UNIQUE = rtCounter++;
-export const RT_EQUAL_COUNT = rtCounter++;
-export const RT_ANSWER_IS_SELF = rtCounter++;
-export const RT_LETTER_DIST = rtCounter++;
-export const RT_TRUE_STMT = rtCounter++;
-export const RT_SAME_AS_WHICH = rtCounter++;
+export const QT_COUNT_ANSWER = rtCounter++;
+export const QT_COUNT_ANSWER_BEFORE = rtCounter++;
+export const QT_COUNT_ANSWER_AFTER = rtCounter++;
+export const QT_COUNT_VOWEL = rtCounter++;
+export const QT_COUNT_CONSONANT = rtCounter++;
+export const QT_MOST_COMMON_COUNT = rtCounter++;
+export const QT_CLOSEST_AFTER = rtCounter++;
+export const QT_CLOSEST_BEFORE = rtCounter++;
+export const QT_FIRST_WITH = rtCounter++;
+export const QT_LAST_WITH = rtCounter++;
+export const QT_PREV_SAME = rtCounter++;
+export const QT_NEXT_SAME = rtCounter++;
+export const QT_ONLY_SAME = rtCounter++;
+export const QT_SAME_AS = rtCounter++;
+export const QT_ONLY_ODD = rtCounter++;
+export const QT_ONLY_EVEN = rtCounter++;
+export const QT_CONSEC_IDENT = rtCounter++;
+export const QT_ANSWER_OF = rtCounter++;
+export const QT_LEAST_COMMON = rtCounter++;
+export const QT_MOST_COMMON = rtCounter++;
+export const QT_UNIQUE = rtCounter++;
+export const QT_EQUAL_COUNT = rtCounter++;
+export const QT_ANSWER_IS_SELF = rtCounter++;
+export const QT_LETTER_DIST = rtCounter++;
+export const QT_TRUE_STMT = rtCounter++;
+export const QT_SAME_AS_WHICH = rtCounter++;
 
 export type QuestionTypeId = number;
 
 // Mapping from string type names to numeric IDs (used in flattenRule)
-const RT_MAP: Record<string, QuestionTypeId> = {
-  CountAnswer: RT_COUNT_ANSWER,
-  CountAnswerBefore: RT_COUNT_ANSWER_BEFORE,
-  CountAnswerAfter: RT_COUNT_ANSWER_AFTER,
-  CountVowel: RT_COUNT_VOWEL,
-  CountConsonant: RT_COUNT_CONSONANT,
-  MostCommonCount: RT_MOST_COMMON_COUNT,
-  ClosestAfter: RT_CLOSEST_AFTER,
-  ClosestBefore: RT_CLOSEST_BEFORE,
-  FirstWith: RT_FIRST_WITH,
-  LastWith: RT_LAST_WITH,
-  PrevSame: RT_PREV_SAME,
-  NextSame: RT_NEXT_SAME,
-  OnlySame: RT_ONLY_SAME,
-  SameAs: RT_SAME_AS,
-  OnlyOdd: RT_ONLY_ODD,
-  OnlyEven: RT_ONLY_EVEN,
-  ConsecIdent: RT_CONSEC_IDENT,
-  AnswerOf: RT_ANSWER_OF,
-  LeastCommon: RT_LEAST_COMMON,
-  MostCommon: RT_MOST_COMMON,
-  Unique: RT_UNIQUE,
-  EqualCount: RT_EQUAL_COUNT,
-  AnswerIsSelf: RT_ANSWER_IS_SELF,
-  LetterDist: RT_LETTER_DIST,
-  TrueStmt: RT_TRUE_STMT,
-  SameAsWhich: RT_SAME_AS_WHICH,
+const QT_MAP: Record<string, QuestionTypeId> = {
+  CountAnswer: QT_COUNT_ANSWER,
+  CountAnswerBefore: QT_COUNT_ANSWER_BEFORE,
+  CountAnswerAfter: QT_COUNT_ANSWER_AFTER,
+  CountVowel: QT_COUNT_VOWEL,
+  CountConsonant: QT_COUNT_CONSONANT,
+  MostCommonCount: QT_MOST_COMMON_COUNT,
+  ClosestAfter: QT_CLOSEST_AFTER,
+  ClosestBefore: QT_CLOSEST_BEFORE,
+  FirstWith: QT_FIRST_WITH,
+  LastWith: QT_LAST_WITH,
+  PrevSame: QT_PREV_SAME,
+  NextSame: QT_NEXT_SAME,
+  OnlySame: QT_ONLY_SAME,
+  SameAs: QT_SAME_AS,
+  OnlyOdd: QT_ONLY_ODD,
+  OnlyEven: QT_ONLY_EVEN,
+  ConsecIdent: QT_CONSEC_IDENT,
+  AnswerOf: QT_ANSWER_OF,
+  LeastCommon: QT_LEAST_COMMON,
+  MostCommon: QT_MOST_COMMON,
+  Unique: QT_UNIQUE,
+  EqualCount: QT_EQUAL_COUNT,
+  AnswerIsSelf: QT_ANSWER_IS_SELF,
+  LetterDist: QT_LETTER_DIST,
+  TrueStmt: QT_TRUE_STMT,
+  SameAsWhich: QT_SAME_AS_WHICH,
 };
 
 // Flat representation for hot-path performance (single V8 hidden class)
@@ -158,7 +158,7 @@ export interface FlatQuestion {
 
 function flattenQuestion(t: QuestionType): FlatQuestion {
   return {
-    t: RT_MAP[t.type],
+    t: QT_MAP[t.type],
     answer: "answer" in t ? t.answer : null,
     questionIndex: "questionIndex" in t ? t.questionIndex : -1,
     afterIndex: "afterIndex" in t ? t.afterIndex : -1,
@@ -178,23 +178,23 @@ export interface FlatPuzzle {
 }
 
 const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
-  RT_COUNT_ANSWER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_MOST_COMMON_COUNT,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_TRUE_STMT,
-  RT_ONLY_SAME,
-  RT_CONSEC_IDENT,
-  RT_ONLY_ODD,
-  RT_ONLY_EVEN,
-  RT_FIRST_WITH,
-  RT_LAST_WITH,
-  RT_SAME_AS,
-  RT_SAME_AS_WHICH,
+  QT_COUNT_ANSWER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_MOST_COMMON_COUNT,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_TRUE_STMT,
+  QT_ONLY_SAME,
+  QT_CONSEC_IDENT,
+  QT_ONLY_ODD,
+  QT_ONLY_EVEN,
+  QT_FIRST_WITH,
+  QT_LAST_WITH,
+  QT_SAME_AS,
+  QT_SAME_AS_WHICH,
 ]);
 
 let fpCache: { puzzle: Puzzle; fp: FlatPuzzle } | null = null;
@@ -218,17 +218,17 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
     const q = questions[i];
     if (GLOBAL_RULE_IDS.has(q.t)) {
       globalIndices.push(i);
-    } else if (q.t === RT_ANSWER_OF) {
+    } else if (q.t === QT_ANSWER_OF) {
       affectedBy[q.questionIndex].push(i);
-    } else if (q.t === RT_LETTER_DIST) {
+    } else if (q.t === QT_LETTER_DIST) {
       affectedBy[q.questionIndex].push(i);
-    } else if (q.t === RT_CLOSEST_AFTER || q.t === RT_COUNT_ANSWER_AFTER) {
+    } else if (q.t === QT_CLOSEST_AFTER || q.t === QT_COUNT_ANSWER_AFTER) {
       for (let j = q.afterIndex + 1; j < n; j++) affectedBy[j].push(i);
-    } else if (q.t === RT_CLOSEST_BEFORE || q.t === RT_COUNT_ANSWER_BEFORE) {
+    } else if (q.t === QT_CLOSEST_BEFORE || q.t === QT_COUNT_ANSWER_BEFORE) {
       for (let j = 0; j < q.beforeIndex; j++) affectedBy[j].push(i);
-    } else if (q.t === RT_PREV_SAME) {
+    } else if (q.t === QT_PREV_SAME) {
       for (let j = 0; j < i; j++) affectedBy[j].push(i);
-    } else if (q.t === RT_NEXT_SAME) {
+    } else if (q.t === QT_NEXT_SAME) {
       for (let j = i + 1; j < n; j++) affectedBy[j].push(i);
     } else {
       // answer_is_self or unknown — self only, no external deps

@@ -4,31 +4,31 @@ import {
   L2I,
   VOWELS,
   letterIdx,
-  RT_COUNT_ANSWER,
-  RT_COUNT_ANSWER_BEFORE,
-  RT_COUNT_ANSWER_AFTER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_MOST_COMMON_COUNT,
-  RT_CLOSEST_AFTER,
-  RT_CLOSEST_BEFORE,
-  RT_FIRST_WITH,
-  RT_LAST_WITH,
-  RT_PREV_SAME,
-  RT_NEXT_SAME,
-  RT_ONLY_SAME,
-  RT_SAME_AS,
-  RT_ONLY_ODD,
-  RT_ONLY_EVEN,
-  RT_CONSEC_IDENT,
-  RT_ANSWER_OF,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_ANSWER_IS_SELF,
-  RT_LETTER_DIST,
-  RT_TRUE_STMT,
+  QT_COUNT_ANSWER,
+  QT_COUNT_ANSWER_BEFORE,
+  QT_COUNT_ANSWER_AFTER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_MOST_COMMON_COUNT,
+  QT_CLOSEST_AFTER,
+  QT_CLOSEST_BEFORE,
+  QT_FIRST_WITH,
+  QT_LAST_WITH,
+  QT_PREV_SAME,
+  QT_NEXT_SAME,
+  QT_ONLY_SAME,
+  QT_SAME_AS,
+  QT_ONLY_ODD,
+  QT_ONLY_EVEN,
+  QT_CONSEC_IDENT,
+  QT_ANSWER_OF,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_ANSWER_IS_SELF,
+  QT_LETTER_DIST,
+  QT_TRUE_STMT,
 } from "./types.ts";
 
 // Reusable scratch for letter frequency counts (avoids allocation in hot path)
@@ -90,71 +90,71 @@ export function checkQuestionAgainstSolution(
   const n = fp.n;
 
   switch (q.t) {
-    case RT_COUNT_ANSWER:
+    case QT_COUNT_ANSWER:
       return countAnswer(answers, q.answer!) === v;
 
-    case RT_COUNT_ANSWER_BEFORE:
+    case QT_COUNT_ANSWER_BEFORE:
       return countAnswerInRange(answers, q.answer!, 0, q.beforeIndex) === v;
 
-    case RT_COUNT_ANSWER_AFTER:
+    case QT_COUNT_ANSWER_AFTER:
       return countAnswerInRange(answers, q.answer!, q.afterIndex + 1, n) === v;
 
-    case RT_COUNT_VOWEL:
+    case QT_COUNT_VOWEL:
       return countVowels(answers) === v;
 
-    case RT_COUNT_CONSONANT:
+    case QT_COUNT_CONSONANT:
       return countConsonants(answers) === v;
 
-    case RT_MOST_COMMON_COUNT: {
+    case QT_MOST_COMMON_COUNT: {
       const c = fillCounts(answers);
       let max = c[0];
       for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
       return max === v;
     }
 
-    case RT_CLOSEST_AFTER: {
+    case QT_CLOSEST_AFTER: {
       for (let i = q.afterIndex + 1; i < n; i++) {
         if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
-    case RT_CLOSEST_BEFORE: {
+    case QT_CLOSEST_BEFORE: {
       for (let i = q.beforeIndex - 1; i >= 0; i--) {
         if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
-    case RT_FIRST_WITH: {
+    case QT_FIRST_WITH: {
       for (let i = 0; i < n; i++) {
         if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
-    case RT_LAST_WITH: {
+    case QT_LAST_WITH: {
       for (let i = n - 1; i >= 0; i--) {
         if (answers[i] === q.answer) return i === v;
       }
       return v == null;
     }
 
-    case RT_PREV_SAME: {
+    case QT_PREV_SAME: {
       for (let i = questionIdx - 1; i >= 0; i--) {
         if (answers[i] === selectedAnswer) return i === v;
       }
       return v == null;
     }
 
-    case RT_NEXT_SAME: {
+    case QT_NEXT_SAME: {
       for (let i = questionIdx + 1; i < n; i++) {
         if (answers[i] === selectedAnswer) return i === v;
       }
       return v == null;
     }
 
-    case RT_ONLY_SAME: {
+    case QT_ONLY_SAME: {
       const matches: number[] = [];
       for (let i = 0; i < n; i++) {
         if (i !== questionIdx && answers[i] === selectedAnswer) matches.push(i);
@@ -163,14 +163,14 @@ export function checkQuestionAgainstSolution(
       return matches.length === 1 && matches[0] === v;
     }
 
-    case RT_SAME_AS: {
+    case QT_SAME_AS: {
       if (v == null || v < 0 || v >= n || answers[v] == null) return false;
       return answers[v] === selectedAnswer;
     }
 
-    case RT_ONLY_ODD:
-    case RT_ONLY_EVEN: {
-      const parity = q.t === RT_ONLY_ODD ? 1 : 0;
+    case QT_ONLY_ODD:
+    case QT_ONLY_EVEN: {
+      const parity = q.t === QT_ONLY_ODD ? 1 : 0;
       const matches: number[] = [];
       for (let i = 0; i < n; i++) {
         if ((i + 1) % 2 === parity && answers[i] === q.answer) matches.push(i);
@@ -179,7 +179,7 @@ export function checkQuestionAgainstSolution(
       return matches.length === 1 && matches[0] === v;
     }
 
-    case RT_CONSEC_IDENT: {
+    case QT_CONSEC_IDENT: {
       const pairs: number[] = [];
       for (let i = 0; i < n - 1; i++) {
         if (answers[i] != null && answers[i] === answers[i + 1]) pairs.push(i);
@@ -188,12 +188,12 @@ export function checkQuestionAgainstSolution(
       return pairs.length === 1 && pairs[0] === v;
     }
 
-    case RT_ANSWER_OF: {
+    case QT_ANSWER_OF: {
       const other = answers[q.questionIndex];
       return other != null && letterIdx(other) === v;
     }
 
-    case RT_LEAST_COMMON: {
+    case QT_LEAST_COMMON: {
       if (v == null) return false;
       const c = fillCounts(answers);
       let min = c[0];
@@ -201,7 +201,7 @@ export function checkQuestionAgainstSolution(
       return c[v] === min && c.filter((x) => x === min).length === 1;
     }
 
-    case RT_MOST_COMMON: {
+    case QT_MOST_COMMON: {
       if (v == null) return false;
       const c = fillCounts(answers);
       let max = c[0];
@@ -209,10 +209,10 @@ export function checkQuestionAgainstSolution(
       return c[v] === max && c.filter((x) => x === max).length === 1;
     }
 
-    case RT_UNIQUE:
+    case QT_UNIQUE:
       return countAnswer(answers, selectedAnswer) === 1;
 
-    case RT_EQUAL_COUNT: {
+    case QT_EQUAL_COUNT: {
       const refCount = countAnswer(answers, q.answer!);
       if (v == null)
         return !LETTERS.some((l) => l !== q.answer && countAnswer(answers, l) === refCount);
@@ -220,17 +220,17 @@ export function checkQuestionAgainstSolution(
       return claimed !== q.answer && countAnswer(answers, claimed) === refCount;
     }
 
-    case RT_ANSWER_IS_SELF:
+    case QT_ANSWER_IS_SELF:
       return true;
 
-    case RT_LETTER_DIST: {
+    case QT_LETTER_DIST: {
       const other = answers[q.questionIndex];
       if (other == null) return false;
       const dist = Math.abs(si - letterIdx(other));
       return dist === v;
     }
 
-    case RT_TRUE_STMT: {
+    case QT_TRUE_STMT: {
       const claims = fp.optionClaims[questionIdx];
       let trueCount = 0;
       let selectedIsTrue = false;

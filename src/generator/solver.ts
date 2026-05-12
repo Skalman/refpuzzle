@@ -3,27 +3,27 @@ import {
   LETTERS,
   letterIdx,
   flattenPuzzle,
-  RT_COUNT_ANSWER,
-  RT_COUNT_ANSWER_BEFORE,
-  RT_COUNT_ANSWER_AFTER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_MOST_COMMON_COUNT,
-  RT_CLOSEST_AFTER,
-  RT_CLOSEST_BEFORE,
-  RT_PREV_SAME,
-  RT_NEXT_SAME,
-  RT_ONLY_SAME,
-  RT_CONSEC_IDENT,
-  RT_ONLY_ODD,
-  RT_ANSWER_OF,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_SELF,
-  RT_LETTER_DIST,
-  RT_TRUE_STMT,
+  QT_COUNT_ANSWER,
+  QT_COUNT_ANSWER_BEFORE,
+  QT_COUNT_ANSWER_AFTER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_MOST_COMMON_COUNT,
+  QT_CLOSEST_AFTER,
+  QT_CLOSEST_BEFORE,
+  QT_PREV_SAME,
+  QT_NEXT_SAME,
+  QT_ONLY_SAME,
+  QT_CONSEC_IDENT,
+  QT_ONLY_ODD,
+  QT_ANSWER_OF,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_ANSWER_IS_SELF,
+  QT_LETTER_DIST,
+  QT_TRUE_STMT,
 } from "../engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
 
@@ -36,18 +36,18 @@ export function solve(
 }
 
 const SOLVER_GLOBAL_IDS: Set<QuestionTypeId> = new Set([
-  RT_COUNT_ANSWER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_MOST_COMMON_COUNT,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_TRUE_STMT,
-  RT_ONLY_SAME,
-  RT_CONSEC_IDENT,
-  RT_ONLY_ODD,
+  QT_COUNT_ANSWER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_MOST_COMMON_COUNT,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_TRUE_STMT,
+  QT_ONLY_SAME,
+  QT_CONSEC_IDENT,
+  QT_ONLY_ODD,
 ]);
 
 function computeSearchOrder(fp: FlatPuzzle): number[] {
@@ -56,7 +56,7 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
   // Count how many answer_of_question rules point to each question
   const refCount = new Array<number>(n).fill(0);
   for (const q of fp.questions) {
-    if (q.t === RT_ANSWER_OF && q.questionIndex >= 0) {
+    if (q.t === QT_ANSWER_OF && q.questionIndex >= 0) {
       refCount[q.questionIndex]++;
     }
   }
@@ -88,19 +88,19 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
   const rangeMasks: number[] = new Array(n);
   for (let i = 0; i < n; i++) {
     const q = fp.questions[i];
-    if (q.t === RT_NEXT_SAME) {
+    if (q.t === QT_NEXT_SAME) {
       let m = 0;
       for (let j = i + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (q.t === RT_CLOSEST_AFTER) {
+    } else if (q.t === QT_CLOSEST_AFTER) {
       let m = 0;
       for (let j = q.afterIndex + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (q.t === RT_CLOSEST_BEFORE || q.t === RT_COUNT_ANSWER_BEFORE) {
+    } else if (q.t === QT_CLOSEST_BEFORE || q.t === QT_COUNT_ANSWER_BEFORE) {
       let m = 0;
       for (let j = 0; j < q.beforeIndex; j++) m |= 1 << j;
       rangeMasks[i] = m;
-    } else if (q.t === RT_COUNT_ANSWER_AFTER) {
+    } else if (q.t === QT_COUNT_ANSWER_AFTER) {
       let m = 0;
       for (let j = q.afterIndex + 1; j < n; j++) m |= 1 << j;
       rangeMasks[i] = m;
@@ -217,17 +217,17 @@ function checkRule(
   }
 
   // Forward checking for counting rules
-  if (q.t === RT_COUNT_ANSWER || q.t === RT_COUNT_ANSWER_BEFORE || q.t === RT_COUNT_ANSWER_AFTER) {
+  if (q.t === QT_COUNT_ANSWER || q.t === QT_COUNT_ANSWER_BEFORE || q.t === QT_COUNT_ANSWER_AFTER) {
     const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
     if (optVal == null) return false;
 
     let rangeStart: number;
     let rangeEnd: number;
 
-    if (q.t === RT_COUNT_ANSWER) {
+    if (q.t === QT_COUNT_ANSWER) {
       rangeStart = 0;
       rangeEnd = n;
-    } else if (q.t === RT_COUNT_ANSWER_BEFORE) {
+    } else if (q.t === QT_COUNT_ANSWER_BEFORE) {
       rangeStart = 0;
       rangeEnd = q.beforeIndex;
     } else {
@@ -244,10 +244,10 @@ function checkRule(
     if (count > optVal || count + remaining < optVal) return true;
   }
 
-  if (q.t === RT_COUNT_VOWEL || q.t === RT_COUNT_CONSONANT) {
+  if (q.t === QT_COUNT_VOWEL || q.t === QT_COUNT_CONSONANT) {
     const optVal = fp.optionValues[i][letterIdx(answers[i]!)];
     if (optVal == null) return false;
-    const isVowel = q.t === RT_COUNT_VOWEL;
+    const isVowel = q.t === QT_COUNT_VOWEL;
     let count = 0;
     let remaining = 0;
     for (let j = 0; j < n; j++) {
@@ -276,22 +276,22 @@ function canFullyEvaluateLocal(
   questionIdx: number,
 ): boolean {
   switch (q.t) {
-    case RT_SELF:
+    case QT_ANSWER_IS_SELF:
       return true;
-    case RT_PREV_SAME: {
+    case QT_PREV_SAME: {
       let mask = 0;
       for (let j = 0; j < questionIdx; j++) mask |= 1 << j;
       return (assigned & mask) === mask;
     }
-    case RT_ANSWER_OF:
+    case QT_ANSWER_OF:
       return (assigned & (1 << q.questionIndex)) !== 0;
-    case RT_LETTER_DIST:
+    case QT_LETTER_DIST:
       return (assigned & (1 << q.questionIndex)) !== 0;
-    case RT_NEXT_SAME:
-    case RT_CLOSEST_AFTER:
-    case RT_CLOSEST_BEFORE:
-    case RT_COUNT_ANSWER_BEFORE:
-    case RT_COUNT_ANSWER_AFTER: {
+    case QT_NEXT_SAME:
+    case QT_CLOSEST_AFTER:
+    case QT_CLOSEST_BEFORE:
+    case QT_COUNT_ANSWER_BEFORE:
+    case QT_COUNT_ANSWER_AFTER: {
       const mask = rangeMasks[questionIdx];
       return (assigned & mask) === mask;
     }

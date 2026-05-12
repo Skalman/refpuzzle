@@ -4,30 +4,30 @@ import {
   VOWELS,
   letterIdx,
   L2I,
-  RT_COUNT_ANSWER,
-  RT_COUNT_ANSWER_BEFORE,
-  RT_COUNT_ANSWER_AFTER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_CLOSEST_AFTER,
-  RT_CLOSEST_BEFORE,
-  RT_FIRST_WITH,
-  RT_LAST_WITH,
-  RT_PREV_SAME,
-  RT_NEXT_SAME,
-  RT_ONLY_SAME,
-  RT_SAME_AS,
-  RT_ONLY_ODD,
-  RT_ONLY_EVEN,
-  RT_CONSEC_IDENT,
-  RT_EQUAL_COUNT,
-  RT_ANSWER_OF,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_MOST_COMMON_COUNT,
-  RT_LETTER_DIST,
-  RT_TRUE_STMT,
-  RT_SAME_AS_WHICH,
+  QT_COUNT_ANSWER,
+  QT_COUNT_ANSWER_BEFORE,
+  QT_COUNT_ANSWER_AFTER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_CLOSEST_AFTER,
+  QT_CLOSEST_BEFORE,
+  QT_FIRST_WITH,
+  QT_LAST_WITH,
+  QT_PREV_SAME,
+  QT_NEXT_SAME,
+  QT_ONLY_SAME,
+  QT_SAME_AS,
+  QT_ONLY_ODD,
+  QT_ONLY_EVEN,
+  QT_CONSEC_IDENT,
+  QT_EQUAL_COUNT,
+  QT_ANSWER_OF,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_MOST_COMMON_COUNT,
+  QT_LETTER_DIST,
+  QT_TRUE_STMT,
+  QT_SAME_AS_WHICH,
 } from "./types.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
@@ -176,15 +176,15 @@ function countMatching(
 
 function countPred(q: { t: number; answer: string | null }): { pred: Pred; mask: number } | null {
   switch (q.t) {
-    case RT_COUNT_ANSWER:
-    case RT_COUNT_ANSWER_BEFORE:
-    case RT_COUNT_ANSWER_AFTER: {
+    case QT_COUNT_ANSWER:
+    case QT_COUNT_ANSWER_BEFORE:
+    case QT_COUNT_ANSWER_AFTER: {
       const answer = q.answer!;
       return { pred: (a) => a === answer, mask: 1 << letterIdx(answer) };
     }
-    case RT_COUNT_VOWEL:
+    case QT_COUNT_VOWEL:
       return { pred: (a) => VOWELS.has(a), mask: 0b10001 };
-    case RT_COUNT_CONSONANT:
+    case QT_COUNT_CONSONANT:
       return { pred: (a) => !VOWELS.has(a), mask: 0b01110 };
     default:
       return null;
@@ -195,8 +195,8 @@ function countRange(
   q: { t: number; afterIndex: number; beforeIndex: number },
   n: number,
 ): [number, number] {
-  if (q.t === RT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
-  if (q.t === RT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
+  if (q.t === QT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
+  if (q.t === QT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
   return [0, n];
 }
 
@@ -310,7 +310,7 @@ export function deduceWithRule(
     }
 
     if (run("AnswerOfForward")) {
-      if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null) {
+      if (q.t === QT_ANSWER_OF && answers[q.questionIndex] != null) {
         const target = answers[q.questionIndex]!;
         const targetIdx = letterIdx(target);
         for (let oi = 0; oi < 5; oi++) {
@@ -327,7 +327,7 @@ export function deduceWithRule(
       const otherR = fp.questions[other];
 
       if (run("AnswerOfReverse")) {
-        if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
+        if (otherR.t === QT_ANSWER_OF && otherR.questionIndex === qi) {
           const impliedIdx = fp.optionValues[other][letterIdx(otherAns)];
           if (impliedIdx != null && impliedIdx >= 0 && impliedIdx < 5) {
             results.push(
@@ -345,7 +345,7 @@ export function deduceWithRule(
       }
 
       if (run("SameAsReverse")) {
-        if (otherR.t === RT_SAME_AS) {
+        if (otherR.t === QT_SAME_AS) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
             results.push(res({ type: "force", qi, answer: otherAns }, "SameAsReverse"));
@@ -354,7 +354,7 @@ export function deduceWithRule(
       }
 
       if (run("PrevNextOnlySameReverse")) {
-        if (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) {
+        if (otherR.t === QT_PREV_SAME || otherR.t === QT_NEXT_SAME || otherR.t === QT_ONLY_SAME) {
           const targetQ = fp.optionValues[other][letterIdx(otherAns)];
           if (targetQ != null && targetQ >= 0 && targetQ === qi) {
             results.push(res({ type: "force", qi, answer: otherAns }, "PrevNextOnlySameReverse"));
@@ -364,7 +364,7 @@ export function deduceWithRule(
     }
 
     if (run("LetterDistForward")) {
-      if (q.t === RT_LETTER_DIST) {
+      if (q.t === QT_LETTER_DIST) {
         const otherAns = answers[q.questionIndex];
         if (otherAns != null) {
           const otherIdx = letterIdx(otherAns);
@@ -389,7 +389,7 @@ export function deduceWithRule(
     for (let src = 0; src < n; src++) {
       if (src === qi) continue;
       const srcR = fp.questions[src];
-      if (srcR.t !== RT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+      if (srcR.t !== QT_LETTER_DIST || srcR.questionIndex !== qi) continue;
       let elimMask = 0;
       const srcAns = answers[src];
       if (srcAns != null) {
@@ -488,19 +488,19 @@ export function deduceWithRule(
       let rangeStart: number;
       let rangeEnd: number;
 
-      if (srcR.t === RT_FIRST_WITH || srcR.t === RT_CLOSEST_AFTER) {
+      if (srcR.t === QT_FIRST_WITH || srcR.t === QT_CLOSEST_AFTER) {
         letterOi = letterIdx(srcR.answer!);
-        rangeStart = srcR.t === RT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
+        rangeStart = srcR.t === QT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
         rangeEnd = v;
-      } else if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
+      } else if (srcR.t === QT_LAST_WITH || srcR.t === QT_CLOSEST_BEFORE) {
         letterOi = letterIdx(srcR.answer!);
         rangeStart = v + 1;
-        rangeEnd = srcR.t === RT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
-      } else if (srcR.t === RT_NEXT_SAME) {
+        rangeEnd = srcR.t === QT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
+      } else if (srcR.t === QT_NEXT_SAME) {
         letterOi = letterIdx(srcAns);
         rangeStart = src + 1;
         rangeEnd = v;
-      } else if (srcR.t === RT_PREV_SAME) {
+      } else if (srcR.t === QT_PREV_SAME) {
         letterOi = letterIdx(srcAns);
         rangeStart = v + 1;
         rangeEnd = src;
@@ -533,9 +533,9 @@ export function deduceWithRule(
       if (answers[src] != null) continue;
       const srcR = fp.questions[src];
 
-      if (srcR.t === RT_FIRST_WITH || srcR.t === RT_CLOSEST_AFTER) {
+      if (srcR.t === QT_FIRST_WITH || srcR.t === QT_CLOSEST_AFTER) {
         const letterOi = letterIdx(srcR.answer!);
-        const scanStart = srcR.t === RT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
+        const scanStart = srcR.t === QT_CLOSEST_AFTER ? srcR.afterIndex + 1 : 0;
         let minPos = n;
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(eliminated, src, oi)) continue;
@@ -559,9 +559,9 @@ export function deduceWithRule(
             ),
           );
         }
-      } else if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
+      } else if (srcR.t === QT_LAST_WITH || srcR.t === QT_CLOSEST_BEFORE) {
         const letterOi = letterIdx(srcR.answer!);
-        const scanEnd = srcR.t === RT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
+        const scanEnd = srcR.t === QT_CLOSEST_BEFORE ? srcR.beforeIndex : n;
         let maxPos = -1;
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(eliminated, src, oi)) continue;
@@ -594,8 +594,8 @@ export function deduceWithRule(
     for (let src = 0; src < n; src++) {
       if (answers[src] != null) continue;
       const srcR = fp.questions[src];
-      if (srcR.t !== RT_ONLY_ODD && srcR.t !== RT_ONLY_EVEN) continue;
-      const parity = srcR.t === RT_ONLY_ODD ? 1 : 0;
+      if (srcR.t !== QT_ONLY_ODD && srcR.t !== QT_ONLY_EVEN) continue;
+      const parity = srcR.t === QT_ONLY_ODD ? 1 : 0;
       const answerOi = letterIdx(srcR.answer!);
 
       // Collect all positions claimed by remaining options
@@ -636,8 +636,8 @@ export function deduceWithRule(
     let consonantQi = -1;
     for (let i = 0; i < n; i++) {
       if (answers[i] != null) continue;
-      if (fp.questions[i].t === RT_COUNT_VOWEL) vowelQi = i;
-      if (fp.questions[i].t === RT_COUNT_CONSONANT) consonantQi = i;
+      if (fp.questions[i].t === QT_COUNT_VOWEL) vowelQi = i;
+      if (fp.questions[i].t === QT_COUNT_CONSONANT) consonantQi = i;
     }
     if (vowelQi >= 0 && consonantQi >= 0) {
       if (run("VowelCrossElim")) {
@@ -698,7 +698,7 @@ export function deduceWithRule(
       const v = fp.optionValues[qi][oi];
 
       const cp = countPred(q);
-      if (cp && q.t !== RT_MOST_COMMON_COUNT) {
+      if (cp && q.t !== QT_MOST_COMMON_COUNT) {
         const [from, to] = countRange(q, n);
         const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
         if (run("CountExceeded")) {
@@ -713,7 +713,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_MOST_COMMON_COUNT && v != null && run("MostCommonCountElim")) {
+      if (q.t === QT_MOST_COMMON_COUNT && v != null && run("MostCommonCountElim")) {
         let maxKnown = 0;
         let maxPossible = 0;
         for (const letter of LETTERS.slice(0, fp.optionCount)) {
@@ -733,7 +733,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_ANSWER_OF) {
+      if (q.t === QT_ANSWER_OF) {
         if (run("AnswerOfTargetRuledOut")) {
           const target = answers[q.questionIndex];
           if (target != null && v != null && letterIdx(target) !== v) {
@@ -747,7 +747,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_SAME_AS_WHICH) {
+      if (q.t === QT_SAME_AS_WHICH) {
         if (run("SameAsWhichForward")) {
           const refAns = answers[q.questionIndex];
           if (refAns != null && v != null && v >= 0 && v < n && v !== qi && v !== q.questionIndex) {
@@ -761,7 +761,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_LETTER_DIST) {
+      if (q.t === QT_LETTER_DIST) {
         if (run("LetterDistImpossible")) {
           if (v != null && v > Math.max(oi, 4 - oi)) {
             results.push(res({ type: "eliminate", qi, oi }, "LetterDistImpossible"));
@@ -790,8 +790,8 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
-        const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
+      if (q.t === QT_CLOSEST_AFTER || q.t === QT_FIRST_WITH) {
+        const scanStart = q.t === QT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
         if (v != null) {
           if (run("FirstClosestAfterOutOfRange")) {
             if (v < scanStart || v >= n) {
@@ -833,8 +833,8 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
-        const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
+      if (q.t === QT_CLOSEST_BEFORE || q.t === QT_LAST_WITH) {
+        const beforeIdx = q.t === QT_CLOSEST_BEFORE ? q.beforeIndex : n;
         if (v != null) {
           if (run("LastClosestBeforeOutOfRange")) {
             if (v < 0 || v >= beforeIdx) {
@@ -876,8 +876,8 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
-        const parity = q.t === RT_ONLY_ODD ? 1 : 0;
+      if (q.t === QT_ONLY_ODD || q.t === QT_ONLY_EVEN) {
+        const parity = q.t === QT_ONLY_ODD ? 1 : 0;
         if (v != null) {
           if (run("OnlyOddEvenWrongParity")) {
             if ((v + 1) % 2 !== parity) {
@@ -907,7 +907,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_CONSEC_IDENT) {
+      if (q.t === QT_CONSEC_IDENT) {
         if (v != null) {
           if (run("ConsecIdentOutOfRange")) {
             if (v < 0 || v + 1 >= n) {
@@ -953,7 +953,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_EQUAL_COUNT) {
+      if (q.t === QT_EQUAL_COUNT) {
         if (run("EqualCountSelfRef")) {
           if (v != null && LETTERS[v] === q.answer) {
             results.push(res({ type: "eliminate", qi, oi }, "EqualCountSelfRef"));
@@ -984,7 +984,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_PREV_SAME && v == null) {
+      if (q.t === QT_PREV_SAME && v == null) {
         if (run("PrevSameNoneMatch")) {
           for (let j = 0; j < qi; j++) {
             if (answers[j] === LETTERS[oi]) {
@@ -994,7 +994,7 @@ export function deduceWithRule(
           }
         }
       }
-      if (q.t === RT_PREV_SAME && v != null) {
+      if (q.t === QT_PREV_SAME && v != null) {
         if (run("PrevSameNotBefore")) {
           if (v >= qi) {
             results.push(res({ type: "eliminate", qi, oi }, "PrevSameNotBefore"));
@@ -1016,7 +1016,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_NEXT_SAME && v == null) {
+      if (q.t === QT_NEXT_SAME && v == null) {
         if (run("NextSameNoneMatch")) {
           for (let j = qi + 1; j < n; j++) {
             if (answers[j] === LETTERS[oi]) {
@@ -1026,7 +1026,7 @@ export function deduceWithRule(
           }
         }
       }
-      if (q.t === RT_NEXT_SAME && v != null) {
+      if (q.t === QT_NEXT_SAME && v != null) {
         if (run("NextSameNotAfter")) {
           if (v <= qi || v >= n) {
             results.push(res({ type: "eliminate", qi, oi }, "NextSameNotAfter"));
@@ -1048,7 +1048,7 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === RT_ONLY_SAME && v == null) {
+      if (q.t === QT_ONLY_SAME && v == null) {
         if (run("OnlySameNoneMatch")) {
           for (let j = 0; j < n; j++) {
             if (j !== qi && answers[j] === LETTERS[oi]) {
@@ -1058,7 +1058,7 @@ export function deduceWithRule(
           }
         }
       }
-      if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
+      if ((q.t === QT_ONLY_SAME || q.t === QT_SAME_AS) && v != null) {
         if (run("OnlySameSelfRef")) {
           if (v === qi) {
             results.push(res({ type: "eliminate", qi, oi }, "OnlySameSelfRef"));
@@ -1069,7 +1069,7 @@ export function deduceWithRule(
             results.push(res({ type: "eliminate", qi, oi }, "OnlySameRuledOut"));
           }
         }
-        if (run("OnlySameOtherMatch") && q.t === RT_ONLY_SAME) {
+        if (run("OnlySameOtherMatch") && q.t === QT_ONLY_SAME) {
           if (v >= 0 && v < n && v !== qi) {
             const letter = LETTERS[oi];
             for (let j = 0; j < n; j++) {
@@ -1088,7 +1088,7 @@ export function deduceWithRule(
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
     const q = fp.questions[qi];
-    if (q.t !== RT_LEAST_COMMON) continue;
+    if (q.t !== QT_LEAST_COMMON) continue;
 
     // Compute min/max possible count for each letter
     const minCount = [0, 0, 0, 0, 0];
@@ -1153,7 +1153,7 @@ export function deduceWithRule(
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
     const q = fp.questions[qi];
-    if (q.t !== RT_MOST_COMMON) continue;
+    if (q.t !== QT_MOST_COMMON) continue;
 
     const minCount = [0, 0, 0, 0, 0];
     const maxCount = [0, 0, 0, 0, 0];
@@ -1225,7 +1225,7 @@ export function deduceWithRule(
       const a = answers[qi];
       if (a == null) continue;
       const q = fp.questions[qi];
-      if (q.t !== RT_TRUE_STMT) continue;
+      if (q.t !== QT_TRUE_STMT) continue;
       const claim = fp.optionClaims[qi][letterIdx(a)];
       if (!claim) continue;
 
@@ -1279,7 +1279,7 @@ export function deduceWithRule(
   // OnlySame None forward: answered None means no other question can have this letter
   if (run("OnlySameNoneForward")) {
     for (let qi = 0; qi < n; qi++) {
-      if (fp.questions[qi].t !== RT_ONLY_SAME) continue;
+      if (fp.questions[qi].t !== QT_ONLY_SAME) continue;
       if (answers[qi] == null) continue;
       const ai = letterIdx(answers[qi]!);
       const v = fp.optionValues[qi][ai];
@@ -1295,7 +1295,7 @@ export function deduceWithRule(
 
   // ConsecIdent forward: answered ConsecIdent constrains the pair
   for (let qi = 0; qi < n; qi++) {
-    if (fp.questions[qi].t !== RT_CONSEC_IDENT) continue;
+    if (fp.questions[qi].t !== QT_CONSEC_IDENT) continue;
     if (answers[qi] == null) continue;
     const v = fp.optionValues[qi][letterIdx(answers[qi]!)];
     if (v == null || v < 0 || v + 1 >= n) continue;
@@ -1351,7 +1351,7 @@ export function deduceWithRule(
       const srcAns = answers[src];
       if (srcAns == null) continue;
       const srcR = fp.questions[src];
-      if (srcR.t !== RT_SAME_AS_WHICH) continue;
+      if (srcR.t !== QT_SAME_AS_WHICH) continue;
       const on = fp.optionValues[src][letterIdx(srcAns)];
       if (on == null || on < 0 || on >= n) continue;
       const j = on;
@@ -1371,7 +1371,7 @@ export function deduceWithRule(
   // ConsecIdent reverse: eliminate matching neighbors for impossible pairs
   if (run("ConsecIdentReverse")) {
     for (let qi = 0; qi < n; qi++) {
-      if (fp.questions[qi].t !== RT_CONSEC_IDENT) continue;
+      if (fp.questions[qi].t !== QT_CONSEC_IDENT) continue;
       let possiblePairs = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
@@ -1398,7 +1398,7 @@ export function deduceWithRule(
   // TrueStatement self-reference: claim contradicts the option's own letter
   if (run("TrueStatementSelfRef")) {
     for (let qi = 0; qi < n; qi++) {
-      if (fp.questions[qi].t !== RT_TRUE_STMT) continue;
+      if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
@@ -1435,7 +1435,7 @@ export function deduceWithRule(
   // TrueStatement claim invalid: claim contradicts known answers
   if (run("TrueStatementClaimInvalid")) {
     for (let qi = 0; qi < n; qi++) {
-      if (fp.questions[qi].t !== RT_TRUE_STMT) continue;
+      if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];

@@ -15,31 +15,31 @@ import {
   VOWELS,
   letterIdx,
   L2I,
-  RT_COUNT_ANSWER,
-  RT_COUNT_ANSWER_BEFORE,
-  RT_COUNT_ANSWER_AFTER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_MOST_COMMON_COUNT,
-  RT_CLOSEST_AFTER,
-  RT_CLOSEST_BEFORE,
-  RT_FIRST_WITH,
-  RT_LAST_WITH,
-  RT_PREV_SAME,
-  RT_NEXT_SAME,
-  RT_ONLY_SAME,
-  RT_SAME_AS,
-  RT_ONLY_ODD,
-  RT_ONLY_EVEN,
-  RT_CONSEC_IDENT,
-  RT_ANSWER_OF,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_LETTER_DIST,
-  RT_TRUE_STMT,
-  RT_SAME_AS_WHICH,
+  QT_COUNT_ANSWER,
+  QT_COUNT_ANSWER_BEFORE,
+  QT_COUNT_ANSWER_AFTER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_MOST_COMMON_COUNT,
+  QT_CLOSEST_AFTER,
+  QT_CLOSEST_BEFORE,
+  QT_FIRST_WITH,
+  QT_LAST_WITH,
+  QT_PREV_SAME,
+  QT_NEXT_SAME,
+  QT_ONLY_SAME,
+  QT_SAME_AS,
+  QT_ONLY_ODD,
+  QT_ONLY_EVEN,
+  QT_CONSEC_IDENT,
+  QT_ANSWER_OF,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_LETTER_DIST,
+  QT_TRUE_STMT,
+  QT_SAME_AS_WHICH,
 } from "./types.ts";
 import type { DeduceResult } from "./deduce.ts";
 import type { LookaheadResult } from "./lookahead.ts";
@@ -59,13 +59,13 @@ type Pred = (a: Answer) => boolean;
 
 function countPred(q: { t: number; answer: string | null }): Pred | null {
   switch (q.t) {
-    case RT_COUNT_ANSWER:
-    case RT_COUNT_ANSWER_BEFORE:
-    case RT_COUNT_ANSWER_AFTER:
+    case QT_COUNT_ANSWER:
+    case QT_COUNT_ANSWER_BEFORE:
+    case QT_COUNT_ANSWER_AFTER:
       return (a) => a === q.answer;
-    case RT_COUNT_VOWEL:
+    case QT_COUNT_VOWEL:
       return (a) => VOWELS.has(a);
-    case RT_COUNT_CONSONANT:
+    case QT_COUNT_CONSONANT:
       return (a) => !VOWELS.has(a);
     default:
       return null;
@@ -76,8 +76,8 @@ function countRange(
   q: { t: number; afterIndex: number; beforeIndex: number },
   n: number,
 ): [number, number] {
-  if (q.t === RT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
-  if (q.t === RT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
+  if (q.t === QT_COUNT_ANSWER_BEFORE) return [0, q.beforeIndex];
+  if (q.t === QT_COUNT_ANSWER_AFTER) return [q.afterIndex + 1, n];
   return [0, n];
 }
 
@@ -115,15 +115,15 @@ function countRuleLabel(
 ): string {
   const qs = count === 1 ? "question" : "questions";
   switch (q.t) {
-    case RT_COUNT_ANSWER:
+    case QT_COUNT_ANSWER:
       return `${qs} with answer ${q.answer}`;
-    case RT_COUNT_ANSWER_BEFORE:
+    case QT_COUNT_ANSWER_BEFORE:
       return `${qs} before #${q.beforeIndex + 1} with answer ${q.answer}`;
-    case RT_COUNT_ANSWER_AFTER:
+    case QT_COUNT_ANSWER_AFTER:
       return `${qs} after #${q.afterIndex + 1} with answer ${q.answer}`;
-    case RT_COUNT_VOWEL:
+    case QT_COUNT_VOWEL:
       return `${qs} with a vowel answer`;
-    case RT_COUNT_CONSONANT:
+    case QT_COUNT_CONSONANT:
       return `${qs} with a consonant answer`;
     default:
       return `matching ${qs}`;
@@ -214,7 +214,7 @@ function explainForce(
     return steps;
   }
 
-  if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null) {
+  if (q.t === QT_ANSWER_OF && answers[q.questionIndex] != null) {
     steps.push(tryLooking(qi, q.questionIndex));
     steps.push(
       simple(
@@ -228,7 +228,7 @@ function explainForce(
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi) {
+    if (otherR.t === QT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi) {
       steps.push(tryLooking(qi, other));
       steps.push(
         simple(
@@ -238,7 +238,7 @@ function explainForce(
       return steps;
     }
     if (
-      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
+      (otherR.t === QT_PREV_SAME || otherR.t === QT_NEXT_SAME || otherR.t === QT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     ) {
       steps.push(tryLooking(qi, other));
@@ -256,7 +256,7 @@ function explainForce(
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (otherR.t === RT_SAME_AS_WHICH) {
+    if (otherR.t === QT_SAME_AS_WHICH) {
       const targetQ = fp.optionValues[other][letterIdx(otherAns)];
       const refQ = otherR.questionIndex;
       if (targetQ != null && targetQ >= 0 && targetQ < n) {
@@ -287,7 +287,7 @@ function explainForce(
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi) {
+    if (otherR.t === QT_ANSWER_OF && otherR.questionIndex === qi) {
       steps.push(tryLooking(qi, other));
       steps.push(
         simple(
@@ -299,7 +299,7 @@ function explainForce(
   }
 
   // LetterDist: target answered, only one valid distance
-  if (q.t === RT_LETTER_DIST && answers[q.questionIndex] != null) {
+  if (q.t === QT_LETTER_DIST && answers[q.questionIndex] != null) {
     steps.push(tryLooking(qi, q.questionIndex));
     steps.push(
       simple(
@@ -313,7 +313,7 @@ function explainForce(
   for (let src = 0; src < n; src++) {
     if (src === qi) continue;
     const srcR = fp.questions[src];
-    if (srcR.t !== RT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+    if (srcR.t !== QT_LETTER_DIST || srcR.questionIndex !== qi) continue;
     const srcAns = answers[src];
     if (srcAns != null) {
       const dist = fp.optionValues[src][letterIdx(srcAns)];
@@ -360,7 +360,7 @@ function explainForce(
     }
   }
 
-  if (rule === "LeastCommonForce" && q.t === RT_LEAST_COMMON) {
+  if (rule === "LeastCommonForce" && q.t === QT_LEAST_COMMON) {
     steps.push(
       simple(
         `Only one answer can make its claimed letter the least common — ${Q(qi)} must be ${letter}.`,
@@ -369,7 +369,7 @@ function explainForce(
     return steps;
   }
 
-  if (rule === "MostCommonForce" && q.t === RT_MOST_COMMON) {
+  if (rule === "MostCommonForce" && q.t === QT_MOST_COMMON) {
     steps.push(
       simple(
         `Only one answer can make its claimed letter the most common — ${Q(qi)} must be ${letter}.`,
@@ -380,7 +380,7 @@ function explainForce(
 
   if (rule === "ConsecIdentForwardForce" || rule === "ConsecIdentForwardBothForce") {
     for (let src = 0; src < n; src++) {
-      if (fp.questions[src].t !== RT_CONSEC_IDENT || answers[src] == null) continue;
+      if (fp.questions[src].t !== QT_CONSEC_IDENT || answers[src] == null) continue;
       const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
       if (srcV == null) continue;
       const p = srcV;
@@ -409,7 +409,7 @@ function explainForce(
     for (let src = 0; src < n; src++) {
       const srcAns = answers[src];
       if (srcAns == null) continue;
-      if (fp.questions[src].t !== RT_TRUE_STMT) continue;
+      if (fp.questions[src].t !== QT_TRUE_STMT) continue;
       const claim = fp.optionClaims[src][letterIdx(srcAns)];
       if (!claim) continue;
       const cqt = claim.questionType;
@@ -576,7 +576,7 @@ function explainElimination(
 
   if (rule === "OnlySameNoneForward") {
     for (let src = 0; src < n; src++) {
-      if (fp.questions[src].t !== RT_ONLY_SAME || answers[src] == null) continue;
+      if (fp.questions[src].t !== QT_ONLY_SAME || answers[src] == null) continue;
       const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
       if (srcV != null) continue;
       if (answers[src] === letter) {
@@ -594,7 +594,7 @@ function explainElimination(
 
   if (rule === "ConsecIdentForwardElim") {
     for (let src = 0; src < n; src++) {
-      if (fp.questions[src].t !== RT_CONSEC_IDENT || answers[src] == null) continue;
+      if (fp.questions[src].t !== QT_CONSEC_IDENT || answers[src] == null) continue;
       const srcV = fp.optionValues[src][letterIdx(answers[src]!)];
       if (srcV == null) continue;
       const p = srcV;
@@ -614,7 +614,7 @@ function explainElimination(
 
   if (rule === "ConsecIdentReverse") {
     for (let src = 0; src < n; src++) {
-      if (fp.questions[src].t !== RT_CONSEC_IDENT) continue;
+      if (fp.questions[src].t !== QT_CONSEC_IDENT) continue;
       const neighbor =
         qi > 0 && answers[qi - 1] === letter
           ? qi - 1
@@ -674,9 +674,9 @@ function findPositionalRangeSource(
     const srcR = fp.questions[src];
     const srcAns = answers[src];
 
-    if (srcR.t === RT_FIRST_WITH || srcR.t === RT_CLOSEST_AFTER) {
+    if (srcR.t === QT_FIRST_WITH || srcR.t === QT_CLOSEST_AFTER) {
       if (srcR.answer !== letter) continue;
-      const label = srcR.t === RT_FIRST_WITH ? "first" : "closest";
+      const label = srcR.t === QT_FIRST_WITH ? "first" : "closest";
       if (srcAns != null) {
         const v = fp.optionValues[src][letterIdx(srcAns)];
         if (v != null && qi < v) {
@@ -699,9 +699,9 @@ function findPositionalRangeSource(
       }
     }
 
-    if (srcR.t === RT_LAST_WITH || srcR.t === RT_CLOSEST_BEFORE) {
+    if (srcR.t === QT_LAST_WITH || srcR.t === QT_CLOSEST_BEFORE) {
       if (srcR.answer !== letter) continue;
-      const label = srcR.t === RT_LAST_WITH ? "last" : "closest";
+      const label = srcR.t === QT_LAST_WITH ? "last" : "closest";
       if (srcAns != null) {
         const v = fp.optionValues[src][letterIdx(srcAns)];
         if (v != null && qi > v) {
@@ -724,7 +724,7 @@ function findPositionalRangeSource(
       }
     }
 
-    if (srcR.t === RT_NEXT_SAME && srcAns != null && srcAns === letter) {
+    if (srcR.t === QT_NEXT_SAME && srcAns != null && srcAns === letter) {
       const v = fp.optionValues[src][letterIdx(srcAns)];
       if (v != null && qi > src && qi < v) {
         return {
@@ -734,7 +734,7 @@ function findPositionalRangeSource(
       }
     }
 
-    if (srcR.t === RT_PREV_SAME && srcAns != null && srcAns === letter) {
+    if (srcR.t === QT_PREV_SAME && srcAns != null && srcAns === letter) {
       const v = fp.optionValues[src][letterIdx(srcAns)];
       if (v != null && qi > v && qi < src) {
         return {
@@ -792,7 +792,7 @@ function explainMultiElim(
   for (let src = 0; src < n; src++) {
     if (src === qi) continue;
     const srcR = fp.questions[src];
-    if (srcR.t !== RT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+    if (srcR.t !== QT_LETTER_DIST || srcR.questionIndex !== qi) continue;
     const srcAns = answers[src];
     if (srcAns != null) {
       const dist = fp.optionValues[src][letterIdx(srcAns)];
@@ -809,8 +809,8 @@ function explainMultiElim(
   for (let src = 0; src < n; src++) {
     if (src === qi) continue;
     const srcR = fp.questions[src];
-    if ((srcR.t === RT_ONLY_ODD || srcR.t === RT_ONLY_EVEN) && srcR.answer != null) {
-      const parity = srcR.t === RT_ONLY_ODD ? "odd" : "even";
+    if ((srcR.t === QT_ONLY_ODD || srcR.t === QT_ONLY_EVEN) && srcR.answer != null) {
+      const parity = srcR.t === QT_ONLY_ODD ? "odd" : "even";
       return {
         text: `${Q(src)} asks for the only ${parity}-numbered question with answer ${srcR.answer}, limiting which ${parity} questions can have that answer.`,
         otherQi: src,
@@ -846,7 +846,7 @@ function explainElimDetail(
 ): ElimDetail | null {
   const letter = LETTERS[oi];
   const pred = countPred(q);
-  if (pred && q.t !== RT_MOST_COMMON_COUNT) {
+  if (pred && q.t !== QT_MOST_COMMON_COUNT) {
     const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (v != null) {
@@ -861,7 +861,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_MOST_COMMON_COUNT && v != null) {
+  if (q.t === QT_MOST_COMMON_COUNT && v != null) {
     const counts = LETTERS.map((l) => {
       let c = 0;
       for (let i = 0; i < n; i++) if (answers[i] === l) c++;
@@ -888,7 +888,7 @@ function explainElimDetail(
       );
   }
 
-  if (q.t === RT_ANSWER_OF) {
+  if (q.t === QT_ANSWER_OF) {
     if (v != null && v >= 0 && v < 5 && isElim(eliminated, q.questionIndex, v))
       return d(
         `${Q(qi)} option ${letter} claims ${Q(q.questionIndex)}'s answer is ${LETTERS[v]}, but ${LETTERS[v]} is ruled out for ${Q(q.questionIndex)}.`,
@@ -896,7 +896,7 @@ function explainElimDetail(
       );
   }
 
-  if (q.t === RT_SAME_AS_WHICH) {
+  if (q.t === QT_SAME_AS_WHICH) {
     const refAns = answers[q.questionIndex];
     if (refAns != null && v != null && v >= 0 && v < n) {
       const targetAns = answers[v];
@@ -913,7 +913,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_LETTER_DIST) {
+  if (q.t === QT_LETTER_DIST) {
     const maxDist = Math.max(oi, 4 - oi);
     if (v != null && v > maxDist)
       return d(
@@ -941,9 +941,9 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
-    const label = q.t === RT_FIRST_WITH ? "first" : "closest";
-    const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
+  if (q.t === QT_CLOSEST_AFTER || q.t === QT_FIRST_WITH) {
+    const label = q.t === QT_FIRST_WITH ? "first" : "closest";
+    const scanStart = q.t === QT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
     if (v != null) {
       if (v < scanStart || v >= n)
         return d(
@@ -981,9 +981,9 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
-    const label = q.t === RT_LAST_WITH ? "last" : "closest";
-    const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
+  if (q.t === QT_CLOSEST_BEFORE || q.t === QT_LAST_WITH) {
+    const label = q.t === QT_LAST_WITH ? "last" : "closest";
+    const beforeIdx = q.t === QT_CLOSEST_BEFORE ? q.beforeIndex : n;
     if (v != null) {
       if (v < 0 || v >= beforeIdx)
         return d(
@@ -1021,9 +1021,9 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
-    const parity = q.t === RT_ONLY_ODD ? 1 : 0;
-    const parityName = q.t === RT_ONLY_ODD ? "even" : "odd";
+  if (q.t === QT_ONLY_ODD || q.t === QT_ONLY_EVEN) {
+    const parity = q.t === QT_ONLY_ODD ? 1 : 0;
+    const parityName = q.t === QT_ONLY_ODD ? "even" : "odd";
     if (v != null) {
       if ((v + 1) % 2 !== parity)
         return d(
@@ -1050,7 +1050,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_CONSEC_IDENT) {
+  if (q.t === QT_CONSEC_IDENT) {
     if (v != null && v + 1 >= n)
       return d(
         `${Q(qi)} option ${letter} claims ${Q(v)} and ${Q(v + 1)}, but that's out of range.`,
@@ -1082,7 +1082,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_PREV_SAME && v == null) {
+  if (q.t === QT_PREV_SAME && v == null) {
     for (let j = 0; j < qi; j++) {
       if (answers[j] === letter)
         return d(
@@ -1092,7 +1092,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_PREV_SAME && v != null) {
+  if (q.t === QT_PREV_SAME && v != null) {
     if (v >= qi)
       return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not before ${Q(qi)}.`);
     if (isElim(eliminated, v, oi))
@@ -1109,7 +1109,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_NEXT_SAME && v == null) {
+  if (q.t === QT_NEXT_SAME && v == null) {
     for (let j = qi + 1; j < n; j++) {
       if (answers[j] === letter)
         return d(
@@ -1119,7 +1119,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_NEXT_SAME && v != null) {
+  if (q.t === QT_NEXT_SAME && v != null) {
     if (v <= qi || v >= n)
       return d(`${Q(qi)} option ${letter} claims ${Q(v)}, but ${Q(v)} is not after ${Q(qi)}.`);
     if (isElim(eliminated, v, oi))
@@ -1136,7 +1136,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_ONLY_SAME && v == null) {
+  if (q.t === QT_ONLY_SAME && v == null) {
     for (let j = 0; j < n; j++) {
       if (j !== qi && answers[j] === letter)
         return d(
@@ -1146,7 +1146,7 @@ function explainElimDetail(
     }
   }
 
-  if ((q.t === RT_ONLY_SAME || q.t === RT_SAME_AS) && v != null) {
+  if ((q.t === QT_ONLY_SAME || q.t === QT_SAME_AS) && v != null) {
     if (v === qi)
       return d(
         `${Q(qi)} option ${letter} points to ${Q(qi)} itself, but a question can't share an answer with itself.`,
@@ -1156,7 +1156,7 @@ function explainElimDetail(
         `${Q(qi)} option ${letter} claims ${Q(v)} has the same answer, but ${letter} is ruled out for ${Q(v)}.`,
         v,
       );
-    if (q.t === RT_ONLY_SAME && v >= 0 && v < n && v !== qi) {
+    if (q.t === QT_ONLY_SAME && v >= 0 && v < n && v !== qi) {
       for (let j = 0; j < n; j++) {
         if (j !== qi && j !== v && answers[j] === letter)
           return d(
@@ -1167,7 +1167,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_UNIQUE) {
+  if (q.t === QT_UNIQUE) {
     for (let i = 0; i < n; i++) {
       if (answers[i] === letter)
         return d(
@@ -1177,7 +1177,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_EQUAL_COUNT) {
+  if (q.t === QT_EQUAL_COUNT) {
     if (v != null && LETTERS[v] === q.answer)
       return d(
         `${Q(qi)} option ${letter} claims ${LETTERS[v]}, but the question asks for a different letter with the same count as ${q.answer}.`,
@@ -1210,7 +1210,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === RT_LEAST_COMMON && v != null && v < 5) {
+  if (q.t === QT_LEAST_COMMON && v != null && v < 5) {
     const counts = [0, 0, 0, 0, 0];
     for (let j = 0; j < n; j++) {
       if (answers[j] != null) counts[letterIdx(answers[j]!)]++;
@@ -1233,7 +1233,7 @@ function explainElimDetail(
     );
   }
 
-  if (q.t === RT_MOST_COMMON && v != null && v < 5) {
+  if (q.t === QT_MOST_COMMON && v != null && v < 5) {
     const counts = [0, 0, 0, 0, 0];
     for (let j = 0; j < n; j++) {
       if (answers[j] != null) counts[letterIdx(answers[j]!)]++;
@@ -1271,19 +1271,19 @@ function briefForceReason(
   const q = fp.questions[qi];
   const n = fp.n;
 
-  if (q.t === RT_ANSWER_OF && answers[q.questionIndex] != null)
+  if (q.t === QT_ANSWER_OF && answers[q.questionIndex] != null)
     return `${Q(q.questionIndex)} is ${answers[q.questionIndex]}`;
 
   for (let other = 0; other < n; other++) {
     const otherAns = answers[other];
     if (otherAns == null) continue;
     const otherR = fp.questions[other];
-    if (otherR.t === RT_ANSWER_OF && otherR.questionIndex === qi)
+    if (otherR.t === QT_ANSWER_OF && otherR.questionIndex === qi)
       return `${Q(other)} is ${otherAns}, which implies ${letter}`;
-    if (otherR.t === RT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi)
+    if (otherR.t === QT_SAME_AS && fp.optionValues[other][letterIdx(otherAns)] === qi)
       return `same answer as ${Q(other)}`;
     if (
-      (otherR.t === RT_PREV_SAME || otherR.t === RT_NEXT_SAME || otherR.t === RT_ONLY_SAME) &&
+      (otherR.t === QT_PREV_SAME || otherR.t === QT_NEXT_SAME || otherR.t === QT_ONLY_SAME) &&
       fp.optionValues[other][letterIdx(otherAns)] === qi
     )
       return `${Q(other)} is ${otherAns}, same answer as ${Q(qi)}`;
@@ -1412,7 +1412,7 @@ function explainInvalidDetail(
   const n = fp.n;
 
   const pred = countPred(q);
-  if (pred && q.t !== RT_MOST_COMMON_COUNT) {
+  if (pred && q.t !== QT_MOST_COMMON_COUNT) {
     const [from, to] = countRange(q, n);
     const cr = countAnswers(answers, eliminated, pred, from, to);
     if (v != null) {
@@ -1423,13 +1423,13 @@ function explainInvalidDetail(
     }
   }
 
-  if (q.t === RT_ANSWER_OF) {
+  if (q.t === QT_ANSWER_OF) {
     const target = answers[q.questionIndex];
     if (target != null && v != null && letterIdx(target) !== v)
       return `${Q(qi)} claims ${Q(q.questionIndex)}'s answer is ${LETTERS[v]}, but ${Q(q.questionIndex)} is answered ${target}`;
   }
 
-  if (q.t === RT_LETTER_DIST) {
+  if (q.t === QT_LETTER_DIST) {
     const other = answers[q.questionIndex];
     if (other != null && v != null) {
       const dist = Math.abs(ai - letterIdx(other));
@@ -1438,16 +1438,16 @@ function explainInvalidDetail(
     }
   }
 
-  if (q.t === RT_UNIQUE) {
+  if (q.t === QT_UNIQUE) {
     for (let i = 0; i < n; i++) {
       if (i !== qi && answers[i] === a)
         return `${Q(qi)} claims ${a} is unique, but ${Q(i)} already has answer ${a}`;
     }
   }
 
-  if (q.t === RT_CLOSEST_AFTER || q.t === RT_FIRST_WITH) {
-    const label = q.t === RT_FIRST_WITH ? "first" : "closest";
-    const scanStart = q.t === RT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
+  if (q.t === QT_CLOSEST_AFTER || q.t === QT_FIRST_WITH) {
+    const label = q.t === QT_FIRST_WITH ? "first" : "closest";
+    const scanStart = q.t === QT_CLOSEST_AFTER ? q.afterIndex + 1 : 0;
     if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== q.answer)
       return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
@@ -1464,9 +1464,9 @@ function explainInvalidDetail(
     }
   }
 
-  if (q.t === RT_CLOSEST_BEFORE || q.t === RT_LAST_WITH) {
-    const label = q.t === RT_LAST_WITH ? "last" : "closest";
-    const beforeIdx = q.t === RT_CLOSEST_BEFORE ? q.beforeIndex : n;
+  if (q.t === QT_CLOSEST_BEFORE || q.t === QT_LAST_WITH) {
+    const label = q.t === QT_LAST_WITH ? "last" : "closest";
+    const beforeIdx = q.t === QT_CLOSEST_BEFORE ? q.beforeIndex : n;
     if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== q.answer)
       return `${Q(qi)} claims ${label} ${q.answer} is ${Q(v)}, but ${Q(v)} is answered ${answers[v]}`;
     if (v != null) {
@@ -1483,7 +1483,7 @@ function explainInvalidDetail(
     }
   }
 
-  if (q.t === RT_SAME_AS) {
+  if (q.t === QT_SAME_AS) {
     if (v != null && v >= 0 && v < n && answers[v] != null && answers[v] !== a)
       return `${Q(qi)} claims same answer as ${Q(v)}, but ${Q(v)} is ${answers[v]} and ${Q(qi)} is ${a}`;
   }

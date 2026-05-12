@@ -3,32 +3,32 @@ import {
   LETTERS,
   VOWELS,
   letterIdx,
-  RT_COUNT_ANSWER,
-  RT_COUNT_ANSWER_BEFORE,
-  RT_COUNT_ANSWER_AFTER,
-  RT_COUNT_VOWEL,
-  RT_COUNT_CONSONANT,
-  RT_MOST_COMMON_COUNT,
-  RT_CLOSEST_AFTER,
-  RT_CLOSEST_BEFORE,
-  RT_FIRST_WITH,
-  RT_LAST_WITH,
-  RT_PREV_SAME,
-  RT_NEXT_SAME,
-  RT_ONLY_SAME,
-  RT_SAME_AS,
-  RT_ONLY_ODD,
-  RT_ONLY_EVEN,
-  RT_CONSEC_IDENT,
-  RT_ANSWER_OF,
-  RT_LEAST_COMMON,
-  RT_MOST_COMMON,
-  RT_UNIQUE,
-  RT_EQUAL_COUNT,
-  RT_ANSWER_IS_SELF,
-  RT_LETTER_DIST,
-  RT_TRUE_STMT,
-  RT_SAME_AS_WHICH,
+  QT_COUNT_ANSWER,
+  QT_COUNT_ANSWER_BEFORE,
+  QT_COUNT_ANSWER_AFTER,
+  QT_COUNT_VOWEL,
+  QT_COUNT_CONSONANT,
+  QT_MOST_COMMON_COUNT,
+  QT_CLOSEST_AFTER,
+  QT_CLOSEST_BEFORE,
+  QT_FIRST_WITH,
+  QT_LAST_WITH,
+  QT_PREV_SAME,
+  QT_NEXT_SAME,
+  QT_ONLY_SAME,
+  QT_SAME_AS,
+  QT_ONLY_ODD,
+  QT_ONLY_EVEN,
+  QT_CONSEC_IDENT,
+  QT_ANSWER_OF,
+  QT_LEAST_COMMON,
+  QT_MOST_COMMON,
+  QT_UNIQUE,
+  QT_EQUAL_COUNT,
+  QT_ANSWER_IS_SELF,
+  QT_LETTER_DIST,
+  QT_TRUE_STMT,
+  QT_SAME_AS_WHICH,
 } from "./types.ts";
 import { evaluateClaim } from "./evaluators.ts";
 import { V_NEUTRAL, V_VALID, V_INVALID, V_PENDING } from "./state.ts";
@@ -69,8 +69,8 @@ function countRange(
   r: { t: number; afterIndex: number; beforeIndex: number },
   n: number,
 ): [number, number] {
-  if (r.t === RT_COUNT_ANSWER_BEFORE) return [0, r.beforeIndex];
-  if (r.t === RT_COUNT_ANSWER_AFTER) return [r.afterIndex + 1, n];
+  if (r.t === QT_COUNT_ANSWER_BEFORE) return [0, r.beforeIndex];
+  if (r.t === QT_COUNT_ANSWER_AFTER) return [r.afterIndex + 1, n];
   return [0, n];
 }
 
@@ -150,7 +150,7 @@ export function checkAnswerValidity(
   const n = fp.n;
 
   // ── Counting ──
-  if (q.t === RT_COUNT_ANSWER || q.t === RT_COUNT_ANSWER_BEFORE || q.t === RT_COUNT_ANSWER_AFTER) {
+  if (q.t === QT_COUNT_ANSWER || q.t === QT_COUNT_ANSWER_BEFORE || q.t === QT_COUNT_ANSWER_AFTER) {
     if (v == null) return V_PENDING;
     const answer = q.answer!;
     const [from, to] = countRange(q, n);
@@ -159,19 +159,19 @@ export function checkAnswerValidity(
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (q.t === RT_COUNT_VOWEL) {
+  if (q.t === QT_COUNT_VOWEL) {
     if (v == null) return V_PENDING;
     const cr = countMatching(answers, eliminated, (x) => VOWELS.has(x), 0b10001, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (q.t === RT_COUNT_CONSONANT) {
+  if (q.t === QT_COUNT_CONSONANT) {
     if (v == null) return V_PENDING;
     const cr = countMatching(answers, eliminated, (x) => !VOWELS.has(x), 0b01110, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
-  if (q.t === RT_MOST_COMMON_COUNT) {
+  if (q.t === QT_MOST_COMMON_COUNT) {
     if (v == null) return V_PENDING;
     const counts = [0, 0, 0, 0, 0];
     let allKnown = true;
@@ -189,36 +189,36 @@ export function checkAnswerValidity(
   }
 
   // ── Positional ──
-  if (q.t === RT_FIRST_WITH) return firstInRange(answers, eliminated, q.answer!, 0, n, v);
-  if (q.t === RT_CLOSEST_AFTER)
+  if (q.t === QT_FIRST_WITH) return firstInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === QT_CLOSEST_AFTER)
     return firstInRange(answers, eliminated, q.answer!, q.afterIndex + 1, n, v);
-  if (q.t === RT_LAST_WITH) return lastInRange(answers, eliminated, q.answer!, 0, n, v);
-  if (q.t === RT_CLOSEST_BEFORE)
+  if (q.t === QT_LAST_WITH) return lastInRange(answers, eliminated, q.answer!, 0, n, v);
+  if (q.t === QT_CLOSEST_BEFORE)
     return lastInRange(answers, eliminated, q.answer!, 0, q.beforeIndex, v);
 
   // ── Reference ──
-  if (q.t === RT_ANSWER_OF) {
+  if (q.t === QT_ANSWER_OF) {
     if (v == null) return V_PENDING;
     const target = answers[q.questionIndex];
     if (target == null) return V_PENDING;
     return letterIdx(target) === v ? V_VALID : V_INVALID;
   }
 
-  if (q.t === RT_LETTER_DIST) {
+  if (q.t === QT_LETTER_DIST) {
     const other = answers[q.questionIndex];
     if (other == null) return V_PENDING;
     const dist = Math.abs(ai - letterIdx(other));
     return dist === v ? V_VALID : V_INVALID;
   }
 
-  if (q.t === RT_SAME_AS) {
+  if (q.t === QT_SAME_AS) {
     if (v == null || v < 0 || v >= n || v === qi) return V_INVALID;
     const ta = answers[v];
     if (ta == null) return V_PENDING;
     return ta === a ? V_VALID : V_INVALID;
   }
 
-  if (q.t === RT_SAME_AS_WHICH) {
+  if (q.t === QT_SAME_AS_WHICH) {
     if (v == null || v < 0 || v >= n || v === qi || v === q.questionIndex) return V_INVALID;
     const refAns = answers[q.questionIndex];
     if (refAns == null) return V_PENDING;
@@ -228,7 +228,7 @@ export function checkAnswerValidity(
   }
 
   // ── Unique ──
-  if (q.t === RT_UNIQUE) {
+  if (q.t === QT_UNIQUE) {
     const amask = 1 << ai;
     let others = 0;
     let couldMatch = 0;
@@ -243,18 +243,18 @@ export function checkAnswerValidity(
   }
 
   // ── Previous/Next same ──
-  if (q.t === RT_PREV_SAME) {
+  if (q.t === QT_PREV_SAME) {
     if (v != null && (v < 0 || v >= qi)) return V_INVALID;
     return lastInRange(answers, eliminated, a, 0, qi, v);
   }
 
-  if (q.t === RT_NEXT_SAME) {
+  if (q.t === QT_NEXT_SAME) {
     if (v != null && (v <= qi || v >= n)) return V_INVALID;
     return firstInRange(answers, eliminated, a, qi + 1, n, v);
   }
 
   // ── Only same ──
-  if (q.t === RT_ONLY_SAME) {
+  if (q.t === QT_ONLY_SAME) {
     const amask = 1 << ai;
 
     if (v == null) {
@@ -289,7 +289,7 @@ export function checkAnswerValidity(
   }
 
   // ── Consecutive identical ──
-  if (q.t === RT_CONSEC_IDENT) {
+  if (q.t === QT_CONSEC_IDENT) {
     if (v != null) {
       if (v < 0 || v + 1 >= n) return V_INVALID;
 
@@ -341,8 +341,8 @@ export function checkAnswerValidity(
   }
 
   // ── Only odd / only even ──
-  if (q.t === RT_ONLY_ODD || q.t === RT_ONLY_EVEN) {
-    const parity = q.t === RT_ONLY_ODD ? 1 : 0;
+  if (q.t === QT_ONLY_ODD || q.t === QT_ONLY_EVEN) {
+    const parity = q.t === QT_ONLY_ODD ? 1 : 0;
     const answer = q.answer!;
     const amask = 1 << letterIdx(answer);
 
@@ -376,7 +376,7 @@ export function checkAnswerValidity(
   }
 
   // ── True statement ──
-  if (q.t === RT_TRUE_STMT) {
+  if (q.t === QT_TRUE_STMT) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return V_PENDING;
     const claims = fp.optionClaims[qi];
@@ -393,10 +393,10 @@ export function checkAnswerValidity(
   }
 
   // ── Always valid ──
-  if (q.t === RT_ANSWER_IS_SELF) return V_VALID;
+  if (q.t === QT_ANSWER_IS_SELF) return V_VALID;
 
   // ── Equal count ──
-  if (q.t === RT_EQUAL_COUNT) {
+  if (q.t === QT_EQUAL_COUNT) {
     if (v != null) {
       const claimed = LETTERS[v];
       if (claimed === q.answer) return V_INVALID;
@@ -424,14 +424,14 @@ export function checkAnswerValidity(
   }
 
   // ── Global: need all answers ──
-  if (q.t === RT_LEAST_COMMON || q.t === RT_MOST_COMMON) {
+  if (q.t === QT_LEAST_COMMON || q.t === QT_MOST_COMMON) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return V_PENDING;
     if (v == null || v < 0 || v >= fp.optionCount) return V_INVALID;
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
     const active = counts.slice(0, fp.optionCount);
-    if (q.t === RT_LEAST_COMMON) {
+    if (q.t === QT_LEAST_COMMON) {
       const min = Math.min(...active);
       return counts[v] === min && active.filter((c) => c === min).length === 1
         ? V_VALID
