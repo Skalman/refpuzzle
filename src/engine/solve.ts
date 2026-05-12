@@ -1,14 +1,14 @@
-import type { AnswerLetter, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle } from "./types.ts";
 import { letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
 import { checkAnswerValidity } from "./check-validity.ts";
 
-export function solvePuzzle(fp: FlatPuzzle): (AnswerLetter | null)[] {
+export function solvePuzzle(fp: FlatPuzzle): (Answer | null)[] {
   const n = fp.n;
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
 
   for (let iter = 0; iter < n * 30; iter++) {
@@ -37,7 +37,7 @@ export type SolveOutcome = "solved" | "stuck";
 export function checkSolvable(fp: FlatPuzzle): SolveOutcome {
   const n = fp.n;
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
 
   for (let iter = 0; iter < n * 30; iter++) {
@@ -63,7 +63,7 @@ export function checkSolvable(fp: FlatPuzzle): SolveOutcome {
 
 export function checkPuzzleSolved(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
 ): boolean {
   const n = fp.n;
@@ -74,11 +74,7 @@ export function checkPuzzleSolved(
   return true;
 }
 
-function applyAction(
-  action: DeduceAction,
-  answers: (AnswerLetter | null)[],
-  eliminated: number[],
-): void {
+function applyAction(action: DeduceAction, answers: (Answer | null)[], eliminated: number[]): void {
   if (action.type === "force") {
     const oi = letterIdx(action.answer);
     eliminated[action.qi] = 0b11111 ^ (1 << oi);

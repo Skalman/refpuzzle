@@ -1,4 +1,4 @@
-import type { AnswerLetter, Puzzle, Marks } from "../src/engine/types.ts";
+import type { Answer, Puzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluators.ts";
 import { checkAnswerValidity } from "../src/engine/check-validity.ts";
@@ -63,7 +63,7 @@ function testSharedEvaluators() {
     const puzzle = parsed["0101"]["1"];
     const fp = flattenPuzzle(puzzle);
     const qi: number = test.qi;
-    const answers: (AnswerLetter | null)[] = test.answers;
+    const answers: (Answer | null)[] = test.answers;
     const selected = answers[qi]!;
     const got = evaluate(fp.questions[qi], qi, selected, answers, fp);
     assert(got === test.expect, `${test.name}: expected ${test.expect}, got ${got}`);
@@ -74,12 +74,12 @@ function testSharedEvaluators() {
 // Naive brute-force solver (no pruning, for cross-validation)
 // ════════════════════════════════════════════════
 
-function bruteForce(puzzle: Puzzle, maxN = 8): AnswerLetter[][] {
+function bruteForce(puzzle: Puzzle, maxN = 8): Answer[][] {
   const n = puzzle.questions.length;
   if (n > maxN) return []; // too large for brute force
   const fp = flattenPuzzle(puzzle);
-  const solutions: AnswerLetter[][] = [];
-  const current: AnswerLetter[] = new Array(n).fill("A");
+  const solutions: Answer[][] = [];
+  const current: Answer[] = new Array(n).fill("A");
 
   function recurse(depth: number) {
     if (depth === n) {
@@ -231,30 +231,25 @@ function testSolverEdgeCases() {
 // ════════════════════════════════════════════════
 
 function blankState(n: number): {
-  answers: (AnswerLetter | null)[];
+  answers: (Answer | null)[];
   eliminated: number[];
 } {
   return { answers: new Array(n).fill(null), eliminated: new Array(n).fill(0) };
 }
 
-function setCorrect(
-  answers: (AnswerLetter | null)[],
-  eliminated: number[],
-  qi: number,
-  letter: AnswerLetter,
-) {
+function setCorrect(answers: (Answer | null)[], eliminated: number[], qi: number, letter: Answer) {
   const oi = L2I[letter];
   eliminated[qi] = 0b11111 ^ (1 << oi);
   answers[qi] = letter;
 }
 
-function setEliminated(eliminated: number[], qi: number, letter: AnswerLetter) {
+function setEliminated(eliminated: number[], qi: number, letter: Answer) {
   eliminated[qi] |= 1 << L2I[letter];
 }
 
 function applyAction(
   action: import("../src/engine/deduce.ts").DeduceAction,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
 ) {
   if (action.type === "force") {
@@ -437,7 +432,7 @@ function testHints() {
     const fp = flattenPuzzle(puzzle);
     const oc = puzzle.optionCount ?? 5;
     const phantomMask = 0b11111 & ~((1 << oc) - 1);
-    const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+    const answers: (Answer | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(phantomMask);
     let steps = 0;
     let stuck = false;
@@ -717,9 +712,7 @@ function testSharedCheckValidity() {
     };
     const fp = flattenPuzzle(puzzle);
 
-    const answers: (import("../src/engine/types.ts").AnswerLetter | null)[] = new Array(n).fill(
-      null,
-    );
+    const answers: (import("../src/engine/types.ts").Answer | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       const s = state[i];
@@ -769,7 +762,7 @@ function testSharedLookahead() {
     const fp = flattenPuzzle(puzzle);
     const n = puzzle.questions.length;
 
-    const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+    const answers: (Answer | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       const s = state[i] || "";
@@ -855,14 +848,14 @@ function testSharedDeduce() {
   function applyState(
     n: number,
     state: string[],
-  ): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
-    const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  ): { answers: (Answer | null)[]; eliminated: number[] } {
+    const answers: (Answer | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(0);
     for (let qi = 0; qi < n; qi++) {
       const s = state[qi] || "";
       for (const ch of s) {
         if (ch >= "A" && ch <= "E") {
-          answers[qi] = ch as AnswerLetter;
+          answers[qi] = ch as Answer;
           eliminated[qi] = 0b11111 ^ (1 << L2I[ch]);
         } else if (ch >= "a" && ch <= "e") {
           eliminated[qi] |= 1 << L2I[ch.toUpperCase()];

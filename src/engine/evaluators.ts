@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle, FlatQuestion, Claim } from "./types.ts";
+import type { Answer, FlatPuzzle, FlatQuestion, Claim } from "./types.ts";
 import {
   LETTERS,
   L2I,
@@ -33,7 +33,7 @@ import {
 
 // Reusable scratch for letter frequency counts (avoids allocation in hot path)
 const reusableCounts = [0, 0, 0, 0, 0];
-function fillCounts(answers: (AnswerLetter | null)[]): number[] {
+function fillCounts(answers: (Answer | null)[]): number[] {
   reusableCounts[0] =
     reusableCounts[1] =
     reusableCounts[2] =
@@ -46,14 +46,14 @@ function fillCounts(answers: (AnswerLetter | null)[]): number[] {
   return reusableCounts;
 }
 
-function countAnswer(answers: (AnswerLetter | null)[], target: string): number {
+function countAnswer(answers: (Answer | null)[], target: string): number {
   let c = 0;
   for (const a of answers) if (a === target) c++;
   return c;
 }
 
 function countAnswerInRange(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   target: string,
   from: number,
   to: number,
@@ -65,13 +65,13 @@ function countAnswerInRange(
   return c;
 }
 
-function countVowels(answers: (AnswerLetter | null)[]): number {
+function countVowels(answers: (Answer | null)[]): number {
   let c = 0;
   for (const a of answers) if (a != null && VOWELS.has(a)) c++;
   return c;
 }
 
-function countConsonants(answers: (AnswerLetter | null)[]): number {
+function countConsonants(answers: (Answer | null)[]): number {
   let c = 0;
   for (const a of answers) if (a != null && !VOWELS.has(a)) c++;
   return c;
@@ -80,8 +80,8 @@ function countConsonants(answers: (AnswerLetter | null)[]): number {
 export function checkQuestionAgainstSolution(
   question: FlatQuestion,
   questionIdx: number,
-  selectedAnswer: AnswerLetter,
-  answers: (AnswerLetter | null)[],
+  selectedAnswer: Answer,
+  answers: (Answer | null)[],
   fp: FlatPuzzle,
 ): boolean {
   const si = letterIdx(selectedAnswer);
@@ -249,7 +249,7 @@ export function checkQuestionAgainstSolution(
   return false;
 }
 
-export function evaluateClaim(claim: Claim, qi: number, answers: (AnswerLetter | null)[]): boolean {
+export function evaluateClaim(claim: Claim, qi: number, answers: (Answer | null)[]): boolean {
   const qt = claim.questionType;
   const value = claim.value;
   const n = answers.length;

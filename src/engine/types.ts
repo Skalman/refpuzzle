@@ -1,9 +1,9 @@
-export type AnswerLetter = "A" | "B" | "C" | "D" | "E";
-export const VOWELS: ReadonlySet<AnswerLetter> = new Set<AnswerLetter>(["A", "E"]);
+export type Answer = "A" | "B" | "C" | "D" | "E";
+export const VOWELS: ReadonlySet<Answer> = new Set<Answer>(["A", "E"]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
 export type Marks = [OptionMark, OptionMark, OptionMark, OptionMark, OptionMark];
 
-export const LETTERS: readonly AnswerLetter[] = ["A", "B", "C", "D", "E"];
+export const LETTERS: readonly Answer[] = ["A", "B", "C", "D", "E"];
 export const FRESH_MARKS: Marks = ["unmarked", "unmarked", "unmarked", "unmarked", "unmarked"];
 export const L2I: Record<string, number> = { A: 0, B: 1, C: 2, D: 3, E: 4 };
 
@@ -49,24 +49,24 @@ export interface Claim {
 
 export type QuestionTypeDef =
   // ── Counting ──
-  | { type: "CountAnswer"; answer: AnswerLetter }
-  | { type: "CountAnswerBefore"; answer: AnswerLetter; beforeIndex: number }
-  | { type: "CountAnswerAfter"; answer: AnswerLetter; afterIndex: number }
+  | { type: "CountAnswer"; answer: Answer }
+  | { type: "CountAnswerBefore"; answer: Answer; beforeIndex: number }
+  | { type: "CountAnswerAfter"; answer: Answer; afterIndex: number }
   | { type: "CountVowel" }
   | { type: "CountConsonant" }
   | { type: "MostCommonCount" }
 
   // ── Positional ──
-  | { type: "ClosestAfter"; afterIndex: number; answer: AnswerLetter }
-  | { type: "ClosestBefore"; beforeIndex: number; answer: AnswerLetter }
-  | { type: "FirstWith"; answer: AnswerLetter }
-  | { type: "LastWith"; answer: AnswerLetter }
+  | { type: "ClosestAfter"; afterIndex: number; answer: Answer }
+  | { type: "ClosestBefore"; beforeIndex: number; answer: Answer }
+  | { type: "FirstWith"; answer: Answer }
+  | { type: "LastWith"; answer: Answer }
   | { type: "PrevSame" }
   | { type: "NextSame" }
   | { type: "OnlySame" }
   | { type: "SameAs" }
-  | { type: "OnlyOdd"; answer: AnswerLetter }
-  | { type: "OnlyEven"; answer: AnswerLetter }
+  | { type: "OnlyOdd"; answer: Answer }
+  | { type: "OnlyEven"; answer: Answer }
   | { type: "ConsecIdent" }
 
   // ── Constrained (options always A-E, answer determined by solution) ──
@@ -74,7 +74,7 @@ export type QuestionTypeDef =
   | { type: "LeastCommon" }
   | { type: "MostCommon" }
   | { type: "Unique" }
-  | { type: "EqualCount"; answer: AnswerLetter }
+  | { type: "EqualCount"; answer: Answer }
   | { type: "AnswerIsSelf" }
 
   // ── Relationship ──

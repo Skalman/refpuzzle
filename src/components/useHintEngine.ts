@@ -1,5 +1,5 @@
 import { useRef, useState, useEffect } from "preact/hooks";
-import type { AnswerLetter, Puzzle } from "../engine/types.ts";
+import type { Answer, Puzzle } from "../engine/types.ts";
 import { letterIdx, getFlatPuzzle } from "../engine/types.ts";
 import { deduce } from "../engine/deduce.ts";
 import { lookaheadShortest } from "../engine/lookahead.ts";
@@ -22,12 +22,12 @@ export function useHintEngine(
   const [hintText, setHintText] = useState<ExplainStep | null>(null);
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
   const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
-  const solutionRef = useRef<(AnswerLetter | null)[] | null>(null);
+  const solutionRef = useRef<(Answer | null)[] | null>(null);
 
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
-  function getSolution(): (AnswerLetter | null)[] {
+  function getSolution(): (Answer | null)[] {
     if (!solutionRef.current) {
       const t0 = performance.now();
       solutionRef.current = solvePuzzle(getFlatPuzzle(puzzle));
@@ -36,7 +36,7 @@ export function useHintEngine(
     return solutionRef.current;
   }
 
-  function findError(answers: (AnswerLetter | null)[], eliminated: number[]): ExplainStep[] | null {
+  function findError(answers: (Answer | null)[], eliminated: number[]): ExplainStep[] | null {
     const solution = getSolution();
     const n = puzzle.questions.length;
     for (let qi = 0; qi < n; qi++) {

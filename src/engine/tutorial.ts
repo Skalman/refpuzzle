@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle, Puzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceResult } from "./deduce.ts";
@@ -31,7 +31,7 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
   const n = fp.n;
   const oc = fp.optionCount;
   const phantomMask = 0b11111 & ~((1 << oc) - 1);
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
   const steps: TutorialStep[] = [];
 

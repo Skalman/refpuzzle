@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle, Puzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
 
 export type ExplainStep =
   | { type: "simple"; text: string }
@@ -55,7 +55,7 @@ function tryLooking(...qis: number[]): ExplainStep {
   return simple(`Try looking at ${unique.map(Q).join(" and ")}.`);
 }
 
-type Pred = (a: AnswerLetter) => boolean;
+type Pred = (a: Answer) => boolean;
 
 function countPred(q: { t: number; answer: string | null }): Pred | null {
   switch (q.t) {
@@ -82,7 +82,7 @@ function countRange(
 }
 
 function countAnswers(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   pred: Pred,
   from: number,
@@ -145,7 +145,7 @@ function remainingCount(eliminated: number): number {
 export function explainDeduce(
   puzzle: Puzzle,
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   result: DeduceResult,
 ): ExplainStep[] {
@@ -199,10 +199,10 @@ export function explainDeduce(
 function explainForce(
   _puzzle: Puzzle,
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
-  letter: AnswerLetter,
+  letter: Answer,
   rule: string,
 ): ExplainStep[] {
   const steps: ExplainStep[] = [simple(`Try looking at ${Q(qi)}.`)];
@@ -439,10 +439,10 @@ function explainForce(
 
 function findCountSatSource(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   _targetQi: number,
-  targetLetter: AnswerLetter,
+  targetLetter: Answer,
 ): number | null {
   const n = fp.n;
   for (let src = 0; src < n; src++) {
@@ -465,7 +465,7 @@ function findCountSatSource(
 function explainElimination(
   _puzzle: Puzzle,
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
   oi: number,
@@ -662,7 +662,7 @@ function explainElimination(
 
 function findPositionalRangeSource(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
   oi: number,
@@ -749,7 +749,7 @@ function findPositionalRangeSource(
 
 function explainCountSaturation(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
   oi: number,
@@ -783,7 +783,7 @@ function explainCountSaturation(
 
 function explainMultiElim(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   _eliminated: number[],
   qi: number,
   _optionMask: number,
@@ -840,7 +840,7 @@ function explainElimDetail(
   qi: number,
   oi: number,
   v: number | null,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   n: number,
 ): ElimDetail | null {
@@ -1263,10 +1263,10 @@ function explainElimDetail(
 
 function briefForceReason(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
-  letter: AnswerLetter,
+  letter: Answer,
 ): string {
   const q = fp.questions[qi];
   const n = fp.n;
@@ -1297,7 +1297,7 @@ function briefForceReason(
 export function explainLookahead(
   puzzle: Puzzle,
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   _eliminated: number[],
   result: LookaheadResult,
 ): ExplainStep[] {
@@ -1389,7 +1389,7 @@ export function explainLookahead(
 export function explainInvalid(
   fp: FlatPuzzle,
   puzzle: Puzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   _eliminated: number[],
   qi: number,
 ): string | null {
@@ -1400,7 +1400,7 @@ export function explainInvalid(
 function explainInvalidDetail(
   fp: FlatPuzzle,
   _puzzle: Puzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
 ): string | null {

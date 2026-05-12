@@ -2,7 +2,7 @@
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import type { CompactPuzzle } from "../src/puzzles/daily.ts";
-import type { AnswerLetter, FlatPuzzle, Puzzle } from "../src/engine/types.ts";
+import type { Answer, FlatPuzzle, Puzzle } from "../src/engine/types.ts";
 import { L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 
@@ -22,15 +22,11 @@ interface TestSuite {
   tests: (TestCase | SectionHeader)[];
 }
 
-function isSectionHeader(
-  entry: TestCase | SectionHeader,
-): entry is SectionHeader {
+function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeader {
   return "section" in entry;
 }
 
-const suite: TestSuite = JSON.parse(
-  readFileSync("tests/lookahead.json", "utf8"),
-);
+const suite: TestSuite = JSON.parse(readFileSync("tests/lookahead.json", "utf8"));
 
 function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {
@@ -40,7 +36,7 @@ function parsePuzzle(compact: CompactPuzzle): Puzzle {
   return parsed["0101"]["level-1"];
 }
 
-function isUpperAnswer(ch: string): ch is AnswerLetter {
+function isUpperAnswer(ch: string): ch is Answer {
   return ch >= "A" && ch <= "E";
 }
 
@@ -51,8 +47,8 @@ function isLowerAnswer(ch: string): boolean {
 function applyState(
   n: number,
   state: string[],
-): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+): { answers: (Answer | null)[]; eliminated: number[] } {
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(0);
 
   for (let qi = 0; qi < n; qi++) {
@@ -83,9 +79,7 @@ for (const test of suite.tests) {
   const { answers, eliminated } = applyState(n, t.state);
 
   const result = lookahead(fp, answers, eliminated);
-  const got = result
-    ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}`
-    : null;
+  const got = result ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}` : null;
 
   if (got === t.expect) {
     passed++;

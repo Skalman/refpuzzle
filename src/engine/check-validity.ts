@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
@@ -36,10 +36,10 @@ import type { Validity } from "./state.ts";
 
 // ── Helpers ──
 
-type Pred = (a: AnswerLetter) => boolean;
+type Pred = (a: Answer) => boolean;
 
 function countMatching(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   pred: Pred,
   matchMask: number,
@@ -75,7 +75,7 @@ function countRange(
 }
 
 function firstInRange(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   answer: string,
   start: number,
@@ -105,7 +105,7 @@ function firstInRange(
 }
 
 function lastInRange(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   answer: string,
   start: number,
@@ -138,7 +138,7 @@ function lastInRange(
 
 export function checkAnswerValidity(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
 ): Validity {
@@ -450,8 +450,8 @@ export function checkAnswerValidity(
 export function checkQuestionAgainstSolution(
   fp: FlatPuzzle,
   qi: number,
-  _selected: AnswerLetter,
-  answers: (AnswerLetter | null)[],
+  _selected: Answer,
+  answers: (Answer | null)[],
 ): boolean {
   const empty = new Array(fp.n).fill(0);
   return checkAnswerValidity(fp, answers, empty, qi) === V_VALID;

@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceAction, DeduceResult } from "./deduce.ts";
@@ -8,12 +8,12 @@ export interface LookaheadResult {
   eliminateQi: number;
   eliminateOi: number;
   assumptionQi: number;
-  assumptionAnswer: AnswerLetter;
+  assumptionAnswer: Answer;
   chain: DeduceResult[];
   contradictionQi: number;
 }
 
-function hasContradiction(action: DeduceAction, answers: (AnswerLetter | null)[]): boolean {
+function hasContradiction(action: DeduceAction, answers: (Answer | null)[]): boolean {
   if (action.type === "force") {
     return answers[action.qi] != null && answers[action.qi] !== action.answer;
   }
@@ -33,14 +33,14 @@ function hasContradiction(action: DeduceAction, answers: (AnswerLetter | null)[]
 
 function tryAssumption(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   qi: number,
   oi: number,
   stopDeducingAfterNResults: number,
 ): LookaheadResult | null {
   const n = fp.n;
-  const hypAnswers: (AnswerLetter | null)[] = answers.slice(0, n);
+  const hypAnswers: (Answer | null)[] = answers.slice(0, n);
   const hypEliminated: number[] = eliminated.slice(0, n);
   hypAnswers[qi] = LETTERS[oi];
   hypEliminated[qi] = 0b11111 ^ (1 << oi);
@@ -105,7 +105,7 @@ function tryAssumption(
 
 export function lookahead(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   stopDeducingAfterNResults = Infinity,
 ): LookaheadResult | null {
@@ -123,7 +123,7 @@ export function lookahead(
 
 export function lookaheadShortest(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   stopDeducingAfterNResults = Infinity,
 ): LookaheadResult | null {
@@ -143,11 +143,7 @@ export function lookaheadShortest(
   return best;
 }
 
-function applyAction(
-  dr: DeduceResult,
-  answers: (AnswerLetter | null)[],
-  eliminated: number[],
-): void {
+function applyAction(dr: DeduceResult, answers: (Answer | null)[], eliminated: number[]): void {
   const a = dr.action;
   if (a.type === "force") {
     const oi = letterIdx(a.answer);

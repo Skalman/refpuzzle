@@ -9,7 +9,7 @@
  * 5. Check structural constraints + uniqueness (skip expensive solvability check)
  */
 import type {
-  AnswerLetter,
+  Answer,
   Puzzle,
   QuestionDef,
   OptionDef,
@@ -29,7 +29,7 @@ import type { DifficultyProfile } from "./difficulty.ts";
 
 interface GenerateResult {
   puzzle: Puzzle;
-  solution: AnswerLetter[];
+  solution: Answer[];
 }
 
 export function generateConstructive(
@@ -130,7 +130,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   const n = profile.questionCount;
 
   // 1. Random solution
-  const solution: AnswerLetter[] = Array.from({ length: n }, () => rng.pick(LETTERS));
+  const solution: Answer[] = Array.from({ length: n }, () => rng.pick(LETTERS));
 
   // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
   if (profile.allowedTypes.includes("ConsecIdent") && rng.int(0, 1) === 0) {
@@ -378,12 +378,9 @@ function checkSolvable(puzzle: Puzzle, n: number): boolean {
   return runHintEngine(puzzle, n).solved;
 }
 
-function runHintEngine(
-  puzzle: Puzzle,
-  n: number,
-): { solved: boolean; answers: (AnswerLetter | null)[] } {
+function runHintEngine(puzzle: Puzzle, n: number): { solved: boolean; answers: (Answer | null)[] } {
   const fp = flattenPuzzle(puzzle);
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(0);
   for (let step = 0; step < n * 15; step++) {
     if (answers.every((a) => a != null)) return { solved: true, answers };
@@ -404,8 +401,8 @@ function runHintEngine(
 
 function repairDistractors(
   puzzle: Puzzle,
-  solution: AnswerLetter[],
-  stuckAnswers: (AnswerLetter | null)[],
+  solution: Answer[],
+  stuckAnswers: (Answer | null)[],
   n: number,
   rng: RNG,
 ): void {
@@ -488,7 +485,7 @@ function isCountingType(type: string): boolean {
 function repairCountingDistractors(
   rule: QuestionTypeDef,
   correctVal: number | null,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   n: number,
   rng: RNG,
 ): (number | null)[] {
@@ -528,7 +525,7 @@ function repairCountingDistractors(
 
 function repairPairDistractors(
   correctVal: number | null,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   n: number,
   rng: RNG,
 ): (number | null)[] {
@@ -549,7 +546,7 @@ function repairPositionalDistractors(
   rule: QuestionTypeDef,
   correctVal: number | null,
   qi: number,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   n: number,
   rng: RNG,
 ): (number | null)[] {
@@ -585,11 +582,7 @@ function repairPositionalDistractors(
   return rng.shuffle(pool).slice(0, 4);
 }
 
-function applyDeduceAction(
-  action: DeduceAction,
-  answers: (AnswerLetter | null)[],
-  eliminated: number[],
-) {
+function applyDeduceAction(action: DeduceAction, answers: (Answer | null)[], eliminated: number[]) {
   if (action.type === "force") {
     const oi = L2I[action.answer];
     eliminated[action.qi] = 0b11111 ^ (1 << oi);
@@ -609,7 +602,7 @@ function makeRule(
   type: QuestionTypeDef["type"],
   qi: number,
   n: number,
-  solution: AnswerLetter[],
+  solution: Answer[],
   assigned: Set<number>,
   rng: RNG,
 ): QuestionTypeDef | null {
@@ -700,7 +693,7 @@ function makeRule(
 
 // ── Structural checks ──
 
-function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): boolean {
+function checkStructural(rule: QuestionTypeDef, qi: number, sol: Answer[]): boolean {
   switch (rule.type) {
     case "OnlySame": {
       let m = 0;
@@ -730,7 +723,7 @@ function checkStructural(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[])
 function solutionHasStructural(
   type: QuestionTypeDef["type"],
   qi: number,
-  solution: AnswerLetter[],
+  solution: Answer[],
   n: number,
 ): boolean {
   switch (type) {
@@ -763,7 +756,7 @@ function solutionHasStructural(
 function solutionCompatible(
   type: QuestionTypeDef["type"],
   qi: number,
-  solution: AnswerLetter[],
+  solution: Answer[],
   n: number,
 ): boolean {
   switch (type) {
@@ -788,7 +781,7 @@ function solutionCompatible(
 
 // ── Options, text, distractors ──
 
-function letterCounts(sol: AnswerLetter[]): number[] {
+function letterCounts(sol: Answer[]): number[] {
   const c = [0, 0, 0, 0, 0];
   for (const a of sol) c[L2I[a]]++;
   return c;
@@ -797,7 +790,7 @@ function letterCounts(sol: AnswerLetter[]): number[] {
 function engineerOptions(
   rule: QuestionTypeDef,
   qi: number,
-  solution: AnswerLetter[],
+  solution: Answer[],
   n: number,
   rng: RNG,
 ): OptionDef[] {
@@ -826,7 +819,7 @@ function engineerOptions(
   return opts;
 }
 
-function computeValue(rule: QuestionTypeDef, qi: number, sol: AnswerLetter[]): number | null {
+function computeValue(rule: QuestionTypeDef, qi: number, sol: Answer[]): number | null {
   switch (rule.type) {
     case "AnswerOf":
       return L2I[sol[rule.questionIndex]];
@@ -958,7 +951,7 @@ function makeDistractors(
   return rng.shuffle(pool).slice(0, 4);
 }
 
-function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG): StatementOption[] {
+function buildClaims(qi: number, solution: Answer[], n: number, rng: RNG): StatementOption[] {
   const targetIdx = L2I[solution[qi]];
   const options: StatementOption[] = new Array(5);
   const trueClaim = makeTrueClaim(solution, qi, n, rng);
@@ -982,7 +975,7 @@ function buildClaims(qi: number, solution: AnswerLetter[], n: number, rng: RNG):
   }
   return options;
 }
-type ClaimGen = (sol: AnswerLetter[], qi: number, n: number, rng: RNG) => Claim | null;
+type ClaimGen = (sol: Answer[], qi: number, n: number, rng: RNG) => Claim | null;
 
 const CLAIM_GENS: ClaimGen[] = [
   (sol, _qi, _n, rng) => {
@@ -1161,7 +1154,7 @@ const CLAIM_GENS: ClaimGen[] = [
   },
 ];
 
-function makeTrueClaim(sol: AnswerLetter[], qi: number, n: number, rng: RNG): Claim {
+function makeTrueClaim(sol: Answer[], qi: number, n: number, rng: RNG): Claim {
   for (let attempt = 0; attempt < 20; attempt++) {
     const gen = rng.pick(CLAIM_GENS);
     const claim = gen(sol, qi, n, rng);
@@ -1208,7 +1201,7 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
   }
 }
 
-function makeFalseClaim(sol: AnswerLetter[], qi: number, n: number, rng: RNG): Claim {
+function makeFalseClaim(sol: Answer[], qi: number, n: number, rng: RNG): Claim {
   for (let i = 0; i < 30; i++) {
     const base = makeTrueClaim(sol, qi, n, rng);
     const fc = perturbClaim(base, n, rng);

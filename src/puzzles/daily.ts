@@ -4,7 +4,7 @@ import type {
   QuestionTypeDef,
   OptionDef,
   Claim,
-  AnswerLetter,
+  Answer,
 } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 
@@ -71,7 +71,7 @@ export function parseCompactYear(
   return result;
 }
 
-function L(i: number | undefined): AnswerLetter {
+function L(i: number | undefined): Answer {
   return LETTERS[i ?? 0];
 }
 

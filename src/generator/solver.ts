@@ -1,10 +1,4 @@
-import type {
-  AnswerLetter,
-  Puzzle,
-  FlatPuzzle,
-  FlatQuestion,
-  QuestionTypeId,
-} from "../engine/types.ts";
+import type { Answer, Puzzle, FlatPuzzle, FlatQuestion, QuestionTypeId } from "../engine/types.ts";
 import {
   LETTERS,
   letterIdx,
@@ -35,9 +29,9 @@ import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validi
 
 export function solve(
   puzzle: Puzzle,
-  fixedAnswers?: (AnswerLetter | null)[],
+  fixedAnswers?: (Answer | null)[],
   maxSolutions = 2,
-): AnswerLetter[][] {
+): Answer[][] {
   return solveFp(flattenPuzzle(puzzle), fixedAnswers, maxSolutions);
 }
 
@@ -81,15 +75,11 @@ function computeSearchOrder(fp: FlatPuzzle): number[] {
   return indices;
 }
 
-function solveFp(
-  fp: FlatPuzzle,
-  fixedAnswers?: (AnswerLetter | null)[],
-  maxSolutions = 2,
-): AnswerLetter[][] {
+function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions = 2): Answer[][] {
   const n = fp.n;
-  const fixed = fixedAnswers ?? new Array<AnswerLetter | null>(n).fill(null);
-  const solutions: AnswerLetter[][] = [];
-  const current = new Array<AnswerLetter | null>(n).fill(null);
+  const fixed = fixedAnswers ?? new Array<Answer | null>(n).fill(null);
+  const solutions: Answer[][] = [];
+  const current = new Array<Answer | null>(n).fill(null);
   const order = computeSearchOrder(fp);
   const allBits = (1 << n) - 1;
   let assignedBits = 0;
@@ -131,7 +121,7 @@ function solveFp(
         }
       }
       if (valid) {
-        const copy: AnswerLetter[] = [];
+        const copy: Answer[] = [];
         for (let i = 0; i < n; i++) copy.push(current[i]!);
         solutions.push(copy);
       }
@@ -174,7 +164,7 @@ function solveFp(
 
 function hasContradiction(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   n: number,
   justAssigned: number,
   assigned: number,
@@ -213,7 +203,7 @@ function hasContradiction(
 
 function checkRule(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   n: number,
   i: number,
   allAnswered: boolean,
@@ -280,7 +270,7 @@ function checkRule(
 // Lightweight canFullyEvaluate for non-global rules only
 function canFullyEvaluateLocal(
   q: FlatQuestion,
-  _answers: (AnswerLetter | null)[],
+  _answers: (Answer | null)[],
   assigned: number,
   rangeMasks: number[],
   questionIdx: number,

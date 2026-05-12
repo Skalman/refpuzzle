@@ -1,4 +1,4 @@
-import type { AnswerLetter, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
@@ -109,7 +109,7 @@ export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] = ALL_DEDUCE_RULES_INTERNAL;
 
 export type DeduceAction =
-  | { type: "force"; qi: number; answer: AnswerLetter }
+  | { type: "force"; qi: number; answer: Answer }
   | { type: "eliminate"; qi: number; oi: number }
   | { type: "eliminateMulti"; questionMask: number; optionMask: number };
 
@@ -120,7 +120,7 @@ export interface DeduceResult {
 
 // ── Helpers ──
 
-type Pred = (a: AnswerLetter) => boolean;
+type Pred = (a: Answer) => boolean;
 
 function isElim(eliminated: number[], qi: number, oi: number): boolean {
   return ((eliminated[qi] >> oi) & 1) === 1;
@@ -148,7 +148,7 @@ function crMax(cr: CountResult): number {
 }
 
 function countMatching(
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   pred: Pred,
   matchMask: number,
@@ -215,7 +215,7 @@ function res(action: DeduceAction, rule: DeduceRule): DeduceResult {
 
 export function deduce(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
 ): DeduceResult[] {
   return deduceWithRule(fp, answers, eliminated, null);
@@ -223,7 +223,7 @@ export function deduce(
 
 export function deduceWithRule(
   fp: FlatPuzzle,
-  answers: (AnswerLetter | null)[],
+  answers: (Answer | null)[],
   eliminated: number[],
   rule: DeduceRule | null,
   exclude: DeduceRule | null = null,
@@ -369,7 +369,7 @@ export function deduceWithRule(
         if (otherAns != null) {
           const otherIdx = letterIdx(otherAns);
           let validCount = 0;
-          let validLetter: AnswerLetter = "A";
+          let validLetter: Answer = "A";
           for (let oi = 0; oi < 5; oi++) {
             if (isElim(eliminated, qi, oi)) continue;
             const dist = Math.abs(oi - otherIdx);

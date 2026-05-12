@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { generateConstructive as generate } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
-import type { AnswerLetter, Puzzle } from "../src/engine/types.ts";
+import type { Answer, Puzzle } from "../src/engine/types.ts";
 
 const outputDir = resolve(import.meta.dirname, "../src/puzzles/generated");
 
@@ -39,7 +39,7 @@ for (const profile of levels) {
     `Level ${profile.level} (${profile.name}, ${profile.questionCount}Q, ${count} puzzles) ...`,
   );
 
-  const puzzles: { puzzle: Puzzle; solution: AnswerLetter[] }[] = [];
+  const puzzles: { puzzle: Puzzle; solution: Answer[] }[] = [];
   let seedOffset = 0;
   const maxOuter = profile.level <= 3 ? 20 : 100;
 
@@ -107,10 +107,7 @@ ${qs},
 }`;
 }
 
-function formatFile(
-  results: { puzzle: Puzzle; solution: AnswerLetter[] }[],
-  level: number,
-): string {
+function formatFile(results: { puzzle: Puzzle; solution: Answer[] }[], level: number): string {
   const puzzleStrs = results.map((r) => formatPuzzle(r.puzzle)).join(",\n");
   const solutionStrs = results.map((r) => JSON.stringify(r.solution)).join(",\n\t");
 

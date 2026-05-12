@@ -1,7 +1,7 @@
 #!/usr/bin/env node --experimental-transform-types
 import { readFileSync } from "fs";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import type { AnswerLetter, FlatPuzzle, Marks, Puzzle } from "../src/engine/types.ts";
+import type { Answer, FlatPuzzle, Marks, Puzzle } from "../src/engine/types.ts";
 import { L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { encodePlaygroundHash, savedStateFromMarks } from "../src/lib/playground.ts";
 import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
@@ -44,7 +44,7 @@ function parsePuzzle(compact: CompactPuzzle): Puzzle {
   return parsed["0101"]["1"];
 }
 
-function isUpperAnswer(ch: string): ch is AnswerLetter {
+function isUpperAnswer(ch: string): ch is Answer {
   return ch >= "A" && ch <= "E";
 }
 
@@ -55,8 +55,8 @@ function isLowerAnswer(ch: string): boolean {
 function applyState(
   n: number,
   state: string[],
-): { answers: (AnswerLetter | null)[]; eliminated: number[] } {
-  const answers: (AnswerLetter | null)[] = new Array(n).fill(null);
+): { answers: (Answer | null)[]; eliminated: number[] } {
+  const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(0);
 
   for (let qi = 0; qi < n; qi++) {
