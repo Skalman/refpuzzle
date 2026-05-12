@@ -574,11 +574,20 @@ fn deduce_impl(
             let (from, to) = count_range(t, n);
             let cr = count_matching(answers, eliminated, pred, from, to);
             if cr.possible == 0 {
+                let target = cr.min();
+                let mut match_oi = None;
+                let mut match_count = 0;
                 for oi in 0..fp.option_count {
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
-                    if fp.option_nums[qi][oi] == cr.min() {
+                    if fp.option_nums[qi][oi] == target {
+                        match_oi = Some(oi);
+                        match_count += 1;
+                    }
+                }
+                if match_count == 1 {
+                    if let Some(oi) = match_oi {
                         push(
                             DeduceAction::Force {
                                 qi,
