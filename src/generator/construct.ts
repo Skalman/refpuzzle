@@ -19,7 +19,7 @@ import type {
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
-import { evaluateClaim } from "../engine/evaluators.ts";
+import { evaluateClaim } from "../engine/evaluate.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";

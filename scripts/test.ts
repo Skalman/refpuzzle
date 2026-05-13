@@ -1,6 +1,6 @@
 import type { Answer, Puzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
-import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluators.ts";
+import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluate.ts";
 import { checkAnswerValidity } from "../src/engine/check-validity.ts";
 import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";

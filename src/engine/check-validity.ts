@@ -30,7 +30,7 @@ import {
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
 } from "./types.ts";
-import { evaluateClaim } from "./evaluators.ts";
+import { evaluateClaim } from "./evaluate.ts";
 import { V_NEUTRAL, V_VALID, V_INVALID, V_PENDING } from "./state.ts";
 import type { Validity } from "./state.ts";
 
