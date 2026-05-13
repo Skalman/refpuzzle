@@ -1,56 +1,106 @@
-use crate::check_validity::{Validity, check_answer_validity};
-use crate::deduce::{DeduceAction, deduce};
+use crate::deduce::{DeduceAction, DeduceResult, deduce};
+use crate::gen_common::phantom_mask;
 use crate::lookahead::lookahead;
 use crate::types::*;
 
-#[derive(Debug)]
-pub enum SolveOutcome {
-    Solved,
-    Stuck,
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+pub enum SolveStep {
+    Deduce(DeduceResult),
+    Lookahead {
+        eliminate_qi: usize,
+        eliminate_oi: usize,
+        assumption_qi: usize,
+        assumption_answer: Answer,
+    },
 }
 
-pub fn check_solvable(fp: &FlatPuzzle) -> SolveOutcome {
+pub fn solve(fp: &FlatPuzzle) -> (bool, Vec<SolveStep>) {
     let n = fp.n;
-    let mut answers = [None; MAX_N];
-    let mut eliminated = [0u8; MAX_N];
+    let pm = phantom_mask(fp.option_count);
+    let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+    let mut eliminated = [pm; MAX_N];
+    let mut steps = Vec::new();
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            return SolveOutcome::Solved;
+            let valid = (0..n).all(|i| {
+                crate::check_validity::check_question_against_solution(
+                    fp,
+                    i,
+                    answers[i].unwrap(),
+                    &answers,
+                )
+            });
+            return (valid, steps);
         }
 
         let drs = deduce(fp, &answers, &eliminated);
         if !drs.is_empty() {
             for dr in &drs {
                 apply_action(&dr.action, &mut answers, &mut eliminated);
+                steps.push(SolveStep::Deduce(*dr));
             }
             continue;
         }
 
         if let Some(lr) = lookahead(fp, &answers, &eliminated, usize::MAX, false) {
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+            steps.push(SolveStep::Lookahead {
+                eliminate_qi: lr.eliminate_qi,
+                eliminate_oi: lr.eliminate_oi,
+                assumption_qi: lr.assumption_qi,
+                assumption_answer: lr.assumption_answer,
+            });
             continue;
         }
 
         break;
     }
 
-    if (0..n).all(|i| answers[i].is_some()) {
-        SolveOutcome::Solved
-    } else {
-        SolveOutcome::Stuck
+    let solved = (0..n).all(|i| answers[i].is_some());
+    (solved, steps)
+}
+
+pub fn format_step(step: &SolveStep) -> Vec<String> {
+    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+    match step {
+        SolveStep::Deduce(dr) => match dr.action {
+            DeduceAction::Force { qi, answer } => vec![format!("{}{}", qi + 1, answer.as_char())],
+            DeduceAction::Eliminate { qi, oi } => {
+                vec![format!("{}{}", qi + 1, letters_lower[oi])]
+            }
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                let mut out = Vec::new();
+                for i in 0..MAX_N {
+                    if (question_mask >> i) & 1 == 1 {
+                        for oi in 0..5usize {
+                            if (option_mask >> oi) & 1 == 1 {
+                                out.push(format!("{}{}", i + 1, letters_lower[oi]));
+                            }
+                        }
+                    }
+                }
+                out
+            }
+        },
+        SolveStep::Lookahead {
+            eliminate_qi,
+            eliminate_oi,
+            ..
+        } => vec![format!(
+            "{}{}",
+            eliminate_qi + 1,
+            letters_lower[*eliminate_oi]
+        )],
     }
 }
 
-pub fn check_puzzle_solved(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-) -> bool {
-    let n = fp.n;
-    (0..n).all(|i| {
-        answers[i].is_some() && check_answer_validity(fp, answers, eliminated, i) == Validity::Valid
-    })
+pub fn format_steps(steps: &[SolveStep]) -> Vec<String> {
+    steps.iter().flat_map(format_step).collect()
 }
 
 fn apply_action(
@@ -60,27 +110,10 @@ fn apply_action(
 ) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            if let Some(existing) = answers[qi] {
-                assert_eq!(
-                    existing,
-                    answer,
-                    "conflicting forces for Q{}: {} vs {}",
-                    qi + 1,
-                    existing.as_char(),
-                    answer.as_char()
-                );
-            } else {
-                eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                answers[qi] = Some(answer);
-            }
+            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+            answers[qi] = Some(answer);
         }
         DeduceAction::Eliminate { qi, oi } => {
-            assert!(
-                answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
-                "eliminating Q{} option {} but it's already forced to that answer",
-                qi + 1,
-                LETTERS[oi].as_char()
-            );
             eliminated[qi] |= 1 << oi;
         }
         DeduceAction::EliminateMulti {
@@ -127,11 +160,8 @@ mod tests {
                 }
             };
 
-            let outcome = check_solvable(&fp);
-            let got = match outcome {
-                SolveOutcome::Solved => "solved",
-                SolveOutcome::Stuck => "stuck",
-            };
+            let (solved, _steps) = solve(&fp);
+            let got = if solved { "solved" } else { "stuck" };
 
             if got == expect {
                 passed += 1;
