@@ -29,6 +29,7 @@ import {
   QT_ANSWER_IS_SELF,
   QT_LETTER_DIST,
   QT_TRUE_STMT,
+  QT_SAME_AS_WHICH,
 } from "./types.ts";
 
 // Reusable scratch for letter frequency counts (avoids allocation in hot path)
@@ -168,6 +169,13 @@ export function checkQuestionAgainstSolution(
       return answers[v] === selectedAnswer;
     }
 
+    case QT_SAME_AS_WHICH: {
+      if (v == null || v < 0 || v >= n || v === questionIdx || v === q.questionIndex) return false;
+      const refAns = answers[q.questionIndex];
+      if (refAns == null) return false;
+      return answers[v] === refAns;
+    }
+
     case QT_ONLY_ODD:
     case QT_ONLY_EVEN: {
       const parity = q.t === QT_ONLY_ODD ? 1 : 0;
@@ -246,7 +254,7 @@ export function checkQuestionAgainstSolution(
       return selectedIsTrue && trueCount === 1;
     }
   }
-  return false;
+  throw new Error(`unhandled question type: ${q.t}`);
 }
 
 export function evaluateClaim(claim: Claim, qi: number, answers: (Answer | null)[]): boolean {

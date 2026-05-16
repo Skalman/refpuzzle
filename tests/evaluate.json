@@ -223,6 +223,35 @@
       "answers": ["A", "E", "B"],
       "qi": 1,
       "expect": true
+    },
+    { "section": "=== SameAsWhich ===" },
+    {
+      "name": "same_as_which: Q4 has same answer as Q2 → true",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 1 }, "o": [2, 0, 3, 0, 1] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "answers": ["C", "A", "B", "A"],
+      "qi": 0,
+      "expect": true
+    },
+    {
+      "name": "same_as_which: Q3 does not have same answer as Q2 → false",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAsWhich", "q": 1 }, "o": [2, 0, 3, 0, 1] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "answers": ["A", "A", "B", "A"],
+      "qi": 0,
+      "expect": false
     }
   ]
 }
