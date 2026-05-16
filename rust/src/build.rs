@@ -1199,24 +1199,46 @@ fn build_claims(
     }
 }
 
-fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) -> Option<Claim> {
-    match rng.int(0, 17) {
-        0 => {
+const CLAIM_TYPES: &[QuestionTypeKind] = &[
+    QuestionTypeKind::CountAnswer,
+    QuestionTypeKind::CountConsonant,
+    QuestionTypeKind::CountVowel,
+    QuestionTypeKind::CountAnswerAfter,
+    QuestionTypeKind::CountAnswerBefore,
+    QuestionTypeKind::AnswerOf,
+    QuestionTypeKind::FirstWith,
+    QuestionTypeKind::LastWith,
+    QuestionTypeKind::MostCommon,
+    QuestionTypeKind::ClosestAfter,
+    QuestionTypeKind::ClosestBefore,
+    QuestionTypeKind::MostCommonCount,
+    QuestionTypeKind::LeastCommon,
+    QuestionTypeKind::EqualCount,
+    QuestionTypeKind::ConsecIdent,
+    QuestionTypeKind::OnlyOdd,
+    QuestionTypeKind::OnlyEven,
+    QuestionTypeKind::SameAsWhich,
+];
+
+fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> Option<Claim> {
+    let kind = rng.pick(CLAIM_TYPES);
+    match kind {
+        QuestionTypeKind::CountAnswer => {
             let a = rng.pick(&LETTERS);
             Some(Claim {
                 question_type: QuestionType::CountAnswer { answer: a },
                 value: count_letter(sol, a, n) as i16,
             })
         }
-        1 => Some(Claim {
+        QuestionTypeKind::CountConsonant => Some(Claim {
             question_type: QuestionType::CountConsonant,
             value: (0..n).filter(|&i| !sol[i].is_vowel()).count() as i16,
         }),
-        2 => Some(Claim {
+        QuestionTypeKind::CountVowel => Some(Claim {
             question_type: QuestionType::CountVowel,
             value: (0..n).filter(|&i| sol[i].is_vowel()).count() as i16,
         }),
-        3 => {
+        QuestionTypeKind::CountAnswerAfter => {
             let a = rng.pick(&LETTERS);
             let ai = rng.int(0, (n as i32 - 5).max(0)) as u8;
             Some(Claim {
@@ -1227,7 +1249,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as i16,
             })
         }
-        4 => {
+        QuestionTypeKind::CountAnswerBefore => {
             let a = rng.pick(&LETTERS);
             let bi = rng.int(4, n as i32 - 1) as u8;
             Some(Claim {
@@ -1238,7 +1260,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: (0..bi as usize).filter(|&i| sol[i] == a).count() as i16,
             })
         }
-        5 => {
+        QuestionTypeKind::AnswerOf => {
             let target = rng.int(0, n as i32 - 1) as u8;
             Some(Claim {
                 question_type: QuestionType::AnswerOf {
@@ -1247,7 +1269,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: sol[target as usize].idx() as i16,
             })
         }
-        6 => {
+        QuestionTypeKind::FirstWith => {
             let a = rng.pick(&LETTERS);
             let first = (0..n).find(|&i| sol[i] == a)?;
             Some(Claim {
@@ -1255,7 +1277,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: first as i16,
             })
         }
-        7 => {
+        QuestionTypeKind::LastWith => {
             let a = rng.pick(&LETTERS);
             let last = (0..n).rev().find(|&i| sol[i] == a)?;
             Some(Claim {
@@ -1263,7 +1285,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: last as i16,
             })
         }
-        8 => {
+        QuestionTypeKind::MostCommon => {
             let counts = letter_counts(sol, n);
             let max = *counts.iter().max().unwrap_or(&0);
             let most: ArrayVec<Answer, 5> = LETTERS
@@ -1279,7 +1301,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: most[0].idx() as i16,
             })
         }
-        9 => {
+        QuestionTypeKind::ClosestAfter => {
             let a = rng.pick(&LETTERS);
             let ai = rng.int(0, (n as i32 - 2).max(0)) as u8;
             let target = ((ai as usize + 1)..n).find(|&i| sol[i] == a)?;
@@ -1291,7 +1313,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: target as i16,
             })
         }
-        10 => {
+        QuestionTypeKind::ClosestBefore => {
             let a = rng.pick(&LETTERS);
             let bi = rng.int(2, n as i32 - 1) as u8;
             let target = (0..bi as usize).rev().find(|&i| sol[i] == a)?;
@@ -1303,7 +1325,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: target as i16,
             })
         }
-        11 => {
+        QuestionTypeKind::MostCommonCount => {
             let counts = letter_counts(sol, n);
             let max = *counts.iter().max().unwrap_or(&0);
             Some(Claim {
@@ -1311,7 +1333,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: max as i16,
             })
         }
-        12 => {
+        QuestionTypeKind::LeastCommon => {
             let counts = letter_counts(sol, n);
             let min = *counts.iter().min().unwrap_or(&0);
             if counts.iter().filter(|&&c| c == min).count() != 1 {
@@ -1323,7 +1345,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: idx as i16,
             })
         }
-        13 => {
+        QuestionTypeKind::EqualCount => {
             let ref_ans = rng.pick(&LETTERS);
             let ref_count = count_letter(sol, ref_ans, n);
             let mut candidates = ArrayVec::<Answer, 5>::new();
@@ -1341,7 +1363,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: target.idx() as i16,
             })
         }
-        14 => {
+        QuestionTypeKind::ConsecIdent => {
             let mut pair_idx: i16 = NONE_VAL;
             let mut pair_count = 0;
             for i in 0..n.saturating_sub(1) {
@@ -1360,7 +1382,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: pair_idx,
             })
         }
-        15 => {
+        QuestionTypeKind::OnlyOdd => {
             let a = rng.pick(&LETTERS);
             let mut found: i16 = NONE_VAL;
             let mut count = 0;
@@ -1378,7 +1400,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: found,
             })
         }
-        16 => {
+        QuestionTypeKind::OnlyEven => {
             let a = rng.pick(&LETTERS);
             let mut found: i16 = NONE_VAL;
             let mut count = 0;
@@ -1396,12 +1418,12 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: found,
             })
         }
-        _ => {
+        QuestionTypeKind::SameAsWhich => {
             let ref_qi = rng.int(0, n as i32 - 1) as u8;
             let ref_ans = sol[ref_qi as usize];
             let mut matches = ArrayVec::<usize, MAX_N>::new();
             for i in 0..n {
-                if i != ref_qi as usize && i != _qi && sol[i] == ref_ans {
+                if i != ref_qi as usize && i != qi && sol[i] == ref_ans {
                     matches.push(i);
                 }
             }
@@ -1416,6 +1438,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], _qi: usize, n: usize, rng: &mut Rng) ->
                 value: target as i16,
             })
         }
+        _ => None,
     }
 }
 
