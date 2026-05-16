@@ -227,14 +227,18 @@
 @keyframes tutorial-btn-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+    transform: scale(1);
   }
   50% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 40%, transparent);
+    background: var(--accent);
+    color: white;
+    transform: scale(1.05);
   }
 }
 .tutorial-highlight-btn {
-  animation: tutorial-btn-pulse 1.5s ease infinite;
+  animation: tutorial-btn-pulse 1.5s ease-in-out infinite;
   position: relative;
   z-index: 51;
 }
