@@ -30,7 +30,7 @@ export function useHintEngine(
   function getSolution(): (Answer | null)[] {
     if (!solutionRef.current) {
       const t0 = performance.now();
-      solutionRef.current = solvePuzzle(getFlatPuzzle(puzzle));
+      solutionRef.current = solvePuzzle(getFlatPuzzle(puzzle)).answers;
       console.log(`solve: ${(performance.now() - t0).toFixed(1)}ms`);
     }
     return solutionRef.current;

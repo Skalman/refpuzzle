@@ -1,64 +1,52 @@
 import type { Answer, FlatPuzzle } from "./types.ts";
-import { letterIdx } from "./types.ts";
+import { LETTERS, letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
 import { checkAnswerValidity } from "./check-validity.ts";
 
-export function solvePuzzle(fp: FlatPuzzle): (Answer | null)[] {
+export interface SolveResult {
+  answers: (Answer | null)[];
+  steps: string[];
+}
+
+export function solvePuzzle(fp: FlatPuzzle): SolveResult {
   const n = fp.n;
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
   const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
+  const steps: string[] = [];
 
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.slice(0, n).every((a) => a != null)) break;
 
     const drs = deduce(fp, answers, eliminated);
     if (drs.length > 0) {
-      for (const dr of drs) applyAction(dr.action, answers, eliminated);
+      for (const dr of drs) {
+        collectSteps(dr.action, n, steps);
+        applyAction(dr.action, answers, eliminated);
+      }
       continue;
     }
 
     const lr = lookahead(fp, answers, eliminated);
     if (lr) {
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
+      steps.push(`${lr.eliminateQi + 1}${LETTERS[lr.eliminateOi].toLowerCase()}`);
       continue;
     }
 
     break;
   }
 
-  return answers;
+  return { answers, steps };
 }
 
 export type SolveOutcome = "solved" | "stuck";
 
 export function checkSolvable(fp: FlatPuzzle): SolveOutcome {
-  const n = fp.n;
-  const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
-  const answers: (Answer | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(phantomMask);
-
-  for (let iter = 0; iter < n * 30; iter++) {
-    if (answers.slice(0, n).every((a) => a != null)) return "solved";
-
-    const drs = deduce(fp, answers, eliminated);
-    if (drs.length > 0) {
-      for (const dr of drs) applyAction(dr.action, answers, eliminated);
-      continue;
-    }
-
-    const lr = lookahead(fp, answers, eliminated);
-    if (lr) {
-      eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
-      continue;
-    }
-
-    break;
-  }
-
-  return answers.slice(0, n).every((a) => a != null) ? "solved" : "stuck";
+  const { answers } = solvePuzzle(fp);
+  return answers.slice(0, fp.n).every((a) => a != null) ? "solved" : "stuck";
 }
 
 export function checkPuzzleSolved(
@@ -85,5 +73,20 @@ function applyAction(action: DeduceAction, answers: (Answer | null)[], eliminate
     }
   } else if (action.type === "eliminate") {
     eliminated[action.qi] |= 1 << action.oi;
+  }
+}
+
+function collectSteps(action: DeduceAction, n: number, steps: string[]): void {
+  if (action.type === "force") {
+    steps.push(`${action.qi + 1}${action.answer}`);
+  } else if (action.type === "eliminate") {
+    steps.push(`${action.qi + 1}${LETTERS[action.oi].toLowerCase()}`);
+  } else if (action.type === "eliminateMulti") {
+    for (let i = 0; i < n; i++) {
+      if (!((action.questionMask >> i) & 1)) continue;
+      for (let oi = 0; oi < 5; oi++) {
+        if ((action.optionMask >> oi) & 1) steps.push(`${i + 1}${LETTERS[oi].toLowerCase()}`);
+      }
+    }
   }
 }
