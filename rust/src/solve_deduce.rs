@@ -1,5 +1,5 @@
+use crate::build::phantom_mask;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
-use crate::gen_common::phantom_mask;
 use crate::lookahead::lookahead;
 use crate::types::*;
 

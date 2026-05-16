@@ -2197,7 +2197,7 @@ mod tests {
 
     #[test]
     fn test_deduce_soundness_fuzz() {
-        use crate::gen_common::build_flat_puzzle;
+        use crate::build::build_flat_puzzle;
         use crate::rng::Rng;
         use crate::solve_brute::solve;
 
@@ -2313,7 +2313,7 @@ mod tests {
             let solution = solutions[0];
 
             // Verify construction correctness: each question's correct option must be valid
-            let opt_sol = crate::gen_common::to_optional(&solution, n);
+            let opt_sol = crate::build::to_optional(&solution, n);
             let mut valid = true;
             for qi in 0..n {
                 if crate::check_validity::check_question_against_solution(

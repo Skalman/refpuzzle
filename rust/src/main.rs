@@ -1,11 +1,11 @@
 #![allow(clippy::needless_range_loop)]
 
+mod build;
 mod check_validity;
 mod construct;
 mod deduce;
 mod difficulty;
 mod evaluate;
-mod gen_common;
 mod lookahead;
 mod rng;
 mod solve_brute;
@@ -13,8 +13,8 @@ mod solve_brute;
 mod solve_deduce;
 mod types;
 
+use build::GenerateResult;
 use difficulty::PROFILES;
-use gen_common::GenerateResult;
 use rng::Rng;
 use serde_json::{Value, json};
 use std::time::Instant;
@@ -164,13 +164,13 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), Option<GenerateResult>, gen_common::Stats)> = tasks
+    let results: Vec<((usize, u8), Option<GenerateResult>, build::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), seeds)| {
             let profile = &PROFILES[level as usize - 1];
             let mut result = None;
-            let mut stats = gen_common::Stats::default();
+            let mut stats = build::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
                 if let Some(r) = construct::generate(profile, &mut rng, max_attempts, &mut stats) {
@@ -196,7 +196,7 @@ fn main() {
         })
         .collect();
 
-    let mut stats = gen_common::Stats::default();
+    let mut stats = build::Stats::default();
     for (_, _, s) in &results {
         stats.merge(s);
     }
@@ -697,7 +697,7 @@ fn report_first_incorrect_if_needed(
 
 fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
     let n = fp.n;
-    let pm = gen_common::phantom_mask(fp.option_count);
+    let pm = build::phantom_mask(fp.option_count);
     let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
     let mut eliminated = [pm; MAX_N];
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];

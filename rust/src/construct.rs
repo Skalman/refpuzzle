@@ -1,10 +1,10 @@
 use arrayvec::ArrayVec;
 
-use crate::difficulty::DifficultyProfile;
-use crate::gen_common::{
+use crate::build::{
     GenerateResult, Stats, build_flat_puzzle, count_letter, letter_counts, solution_satisfies_type,
     validate_and_repair,
 };
+use crate::difficulty::DifficultyProfile;
 use crate::rng::Rng;
 use crate::types::*;
 
