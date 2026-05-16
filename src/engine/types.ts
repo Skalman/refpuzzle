@@ -156,7 +156,7 @@ export interface FlatQuestion {
   beforeIndex: number;
 }
 
-function flattenQuestion(t: QuestionType): FlatQuestion {
+export function flattenQuestion(t: QuestionType): FlatQuestion {
   return {
     t: QT_MAP[t.type],
     answer: "answer" in t ? t.answer : null,

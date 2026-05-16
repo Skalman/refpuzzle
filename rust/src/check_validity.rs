@@ -380,27 +380,28 @@ pub fn check_value_validity(
             }
         }
 
-        // ── Unique ──
+        // ── Unique: "not the answer to any OTHER question" ──
         QuestionType::Unique => {
             if !(0..=4).contains(&value) {
                 return Validity::Invalid;
             }
             let letter = LETTERS[value as usize];
             let amask = 1u8 << value;
-            let mut count: i16 = 0;
+            let mut others: i16 = 0;
             let mut could_match: i16 = 0;
             for j in 0..n {
+                if j == qi {
+                    continue;
+                }
                 match answers[j] {
-                    Some(x) if x == letter => count += 1,
+                    Some(x) if x == letter => others += 1,
                     None if eliminated[j] & amask == 0 => could_match += 1,
                     _ => {}
                 }
             }
-            if count > 1 {
+            if others > 0 {
                 Validity::Invalid
-            } else if count == 0 && could_match == 0 {
-                Validity::Invalid
-            } else if count == 1 && could_match == 0 {
+            } else if could_match == 0 {
                 Validity::Valid
             } else {
                 Validity::Pending

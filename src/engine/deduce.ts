@@ -4,6 +4,7 @@ import {
   VOWELS,
   letterIdx,
   L2I,
+  flattenQuestion,
   QT_COUNT_ANSWER,
   QT_COUNT_ANSWER_BEFORE,
   QT_COUNT_ANSWER_AFTER,
@@ -29,6 +30,8 @@ import {
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
 } from "./types.ts";
+import { checkValueValidity } from "./check-validity.ts";
+import { V_INVALID } from "./state.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
   "CountSaturated",
@@ -1426,12 +1429,6 @@ export function deduceWithRule(
     }
   }
 
-  function predMask(pred: Pred): number {
-    let m = 0;
-    for (let i = 0; i < 5; i++) if (pred(LETTERS[i])) m |= 1 << i;
-    return m;
-  }
-
   // TrueStatement claim invalid: claim contradicts known answers
   if (run("TrueStatementClaimInvalid")) {
     for (let qi = 0; qi < n; qi++) {
@@ -1440,60 +1437,18 @@ export function deduceWithRule(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
-        const cqt = claim.questionType;
-        let invalid = false;
-        if ((cqt.type === "FirstWith" || cqt.type === "LastWith") && claim.value < n) {
-          const tqi = claim.value;
-          if (answers[tqi] != null && answers[tqi] !== cqt.answer) invalid = true;
-        }
-        if (cqt.type === "AnswerOf" && cqt.questionIndex < n) {
-          if (
-            answers[cqt.questionIndex] != null &&
-            letterIdx(answers[cqt.questionIndex]!) !== claim.value
-          )
-            invalid = true;
-        }
-        if (
-          cqt.type === "CountAnswer" ||
-          cqt.type === "CountVowel" ||
-          cqt.type === "CountConsonant" ||
-          cqt.type === "CountAnswerAfter" ||
-          cqt.type === "CountAnswerBefore"
-        ) {
-          const pred: Pred | null =
-            cqt.type === "CountAnswer"
-              ? (a) => a === cqt.answer
-              : cqt.type === "CountVowel"
-                ? (a) => VOWELS.has(a)
-                : cqt.type === "CountConsonant"
-                  ? (a) => !VOWELS.has(a)
-                  : cqt.type === "CountAnswerAfter" || cqt.type === "CountAnswerBefore"
-                    ? (a) => a === cqt.answer
-                    : null;
-          if (pred) {
-            const from = cqt.type === "CountAnswerAfter" ? cqt.afterIndex + 1 : 0;
-            const to = cqt.type === "CountAnswerBefore" ? cqt.beforeIndex : n;
-            const cr = countMatching(answers, eliminated, pred, predMask(pred), from, to);
-            if (crMin(cr) > claim.value || crMax(cr) < claim.value) invalid = true;
-          }
-        }
-        if (cqt.type === "MostCommon") {
-          const claimedLetter = LETTERS[claim.value];
-          let maxOther = 0;
-          for (let li = 0; li < 5; li++) {
-            if (li === claim.value) continue;
-            let c = 0;
-            for (let j = 0; j < n; j++) if (answers[j] === LETTERS[li]) c++;
-            if (c > maxOther) maxOther = c;
-          }
-          let claimedMax = 0;
-          for (let j = 0; j < n; j++) {
-            if (answers[j] === claimedLetter) claimedMax++;
-            else if (answers[j] == null && !isElim(eliminated, j, claim.value)) claimedMax++;
-          }
-          if (claimedMax < maxOther) invalid = true;
-        }
-        if (invalid) {
+        const fq = flattenQuestion(claim.questionType);
+        const v = checkValueValidity(
+          fq,
+          claim.value,
+          LETTERS[oi],
+          qi,
+          answers,
+          eliminated,
+          n,
+          fp.optionCount,
+        );
+        if (v === V_INVALID) {
           results.push(res({ type: "eliminate", qi, oi }, "TrueStatementClaimInvalid"));
         }
       }

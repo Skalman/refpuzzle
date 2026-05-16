@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, FlatQuestion } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
@@ -134,20 +134,19 @@ function lastInRange(
   }
 }
 
-// ── Main function ──
+// ── Core validity check ──
 
-export function checkAnswerValidity(
-  fp: FlatPuzzle,
+export function checkValueValidity(
+  q: FlatQuestion,
+  v: number | null,
+  a: Answer,
+  qi: number,
   answers: (Answer | null)[],
   eliminated: number[],
-  qi: number,
+  n: number,
+  optionCount: number,
 ): Validity {
-  const a = answers[qi];
-  if (a == null) return V_NEUTRAL;
   const ai = letterIdx(a);
-  const q = fp.questions[qi];
-  const v = fp.optionValues[qi][ai];
-  const n = fp.n;
 
   // ── Counting ──
   if (q.t === QT_COUNT_ANSWER || q.t === QT_COUNT_ANSWER_BEFORE || q.t === QT_COUNT_ANSWER_AFTER) {
@@ -198,13 +197,14 @@ export function checkAnswerValidity(
 
   // ── Reference ──
   if (q.t === QT_ANSWER_OF) {
-    if (v == null) return V_PENDING;
+    if (v == null || v < 0 || v > 4) return V_INVALID;
     const target = answers[q.questionIndex];
     if (target == null) return V_PENDING;
     return letterIdx(target) === v ? V_VALID : V_INVALID;
   }
 
   if (q.t === QT_LETTER_DIST) {
+    if (v == null) return V_PENDING;
     const other = answers[q.questionIndex];
     if (other == null) return V_PENDING;
     const dist = Math.abs(ai - letterIdx(other));
@@ -229,12 +229,14 @@ export function checkAnswerValidity(
 
   // ── Unique ──
   if (q.t === QT_UNIQUE) {
-    const amask = 1 << ai;
+    if (v == null || v < 0 || v > 4) return V_INVALID;
+    const letter = LETTERS[v];
+    const amask = 1 << v;
     let others = 0;
     let couldMatch = 0;
     for (let j = 0; j < n; j++) {
       if (j === qi) continue;
-      if (answers[j] === a) others++;
+      if (answers[j] === letter) others++;
       else if (answers[j] == null && (eliminated[j] & amask) === 0) couldMatch++;
     }
     if (others > 0) return V_INVALID;
@@ -375,23 +377,6 @@ export function checkAnswerValidity(
     }
   }
 
-  // ── True statement ──
-  if (q.t === QT_TRUE_STMT) {
-    const allKnown = answers.slice(0, n).every((x) => x != null);
-    if (!allKnown) return V_PENDING;
-    const claims = fp.optionClaims[qi];
-    let trueCount = 0;
-    let selectedTrue = false;
-    for (let i = 0; i < 5; i++) {
-      const claim = claims[i];
-      if (claim && evaluateClaim(claim, qi, answers)) {
-        trueCount++;
-        if (i === ai) selectedTrue = true;
-      }
-    }
-    return selectedTrue && trueCount === 1 ? V_VALID : V_INVALID;
-  }
-
   // ── Always valid ──
   if (q.t === QT_ANSWER_IS_SELF) return V_VALID;
 
@@ -427,10 +412,10 @@ export function checkAnswerValidity(
   if (q.t === QT_LEAST_COMMON || q.t === QT_MOST_COMMON) {
     const allKnown = answers.slice(0, n).every((x) => x != null);
     if (!allKnown) return V_PENDING;
-    if (v == null || v < 0 || v >= fp.optionCount) return V_INVALID;
+    if (v == null || v < 0 || v >= optionCount) return V_INVALID;
     const counts = [0, 0, 0, 0, 0];
     for (let i = 0; i < n; i++) counts[letterIdx(answers[i]!)]++;
-    const active = counts.slice(0, fp.optionCount);
+    const active = counts.slice(0, optionCount);
     if (q.t === QT_LEAST_COMMON) {
       const min = Math.min(...active);
       return counts[v] === min && active.filter((c) => c === min).length === 1
@@ -444,7 +429,50 @@ export function checkAnswerValidity(
     }
   }
 
+  // TrueStmt can't be checked via checkValueValidity
+  if (q.t === QT_TRUE_STMT) return V_PENDING;
+
   return V_PENDING;
+}
+
+// ── Answer-level validity (delegates to checkValueValidity) ──
+
+export function checkAnswerValidity(
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  eliminated: number[],
+  qi: number,
+): Validity {
+  const a = answers[qi];
+  if (a == null) return V_NEUTRAL;
+  const ai = letterIdx(a);
+  const q = fp.questions[qi];
+  const n = fp.n;
+
+  // TrueStmt needs full puzzle context (option claims + evaluateClaim)
+  if (q.t === QT_TRUE_STMT) {
+    const allKnown = answers.slice(0, n).every((x) => x != null);
+    if (!allKnown) return V_PENDING;
+    const claims = fp.optionClaims[qi];
+    let trueCount = 0;
+    let selectedTrue = false;
+    for (let i = 0; i < 5; i++) {
+      const claim = claims[i];
+      if (claim && evaluateClaim(claim, qi, answers)) {
+        trueCount++;
+        if (i === ai) selectedTrue = true;
+      }
+    }
+    return selectedTrue && trueCount === 1 ? V_VALID : V_INVALID;
+  }
+
+  // Unique/AnswerIsSelf: value is the answer index itself (matches Rust)
+  if (q.t === QT_UNIQUE || q.t === QT_ANSWER_IS_SELF) {
+    return checkValueValidity(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
+  }
+
+  const v = fp.optionValues[qi][ai];
+  return checkValueValidity(q, v, a, qi, answers, eliminated, n, fp.optionCount);
 }
 
 export function checkQuestionAgainstSolution(
