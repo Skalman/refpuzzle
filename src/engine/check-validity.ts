@@ -29,6 +29,7 @@ import {
   QT_LETTER_DIST,
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
+  isQuestionTypeWithIdentityOptions,
 } from "./types.ts";
 import { evaluateClaim } from "./evaluate.ts";
 import { V_NEUTRAL, V_VALID, V_INVALID, V_PENDING } from "./state.ts";
@@ -466,8 +467,7 @@ export function checkAnswerValidity(
     return selectedTrue && trueCount === 1 ? V_VALID : V_INVALID;
   }
 
-  // Unique/AnswerIsSelf: value is the answer index itself (matches Rust)
-  if (q.t === QT_UNIQUE || q.t === QT_ANSWER_IS_SELF) {
+  if (isQuestionTypeWithIdentityOptions(q.t)) {
     return checkValueValidity(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
   }
 

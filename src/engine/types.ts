@@ -69,13 +69,13 @@ export type QuestionType =
   | { type: "OnlyEven"; answer: Answer }
   | { type: "ConsecIdent" }
 
-  // ── Constrained (options always A-E, answer determined by solution) ──
+  // ── Letter-valued (option values are letter indices) ──
   | { type: "AnswerOf"; questionIndex: number }
   | { type: "LeastCommon" }
   | { type: "MostCommon" }
-  | { type: "Unique" }
+  | { type: "Unique" } // identity options: option A=0, B=1, ...
   | { type: "EqualCount"; answer: Answer }
-  | { type: "AnswerIsSelf" }
+  | { type: "AnswerIsSelf" } // identity options: option A=0, B=1, ...
 
   // ── Relationship ──
   | { type: "LetterDist"; questionIndex: number }
@@ -116,6 +116,10 @@ export const QT_TRUE_STMT = rtCounter++;
 export const QT_SAME_AS_WHICH = rtCounter++;
 
 export type QuestionTypeId = number;
+
+export function isQuestionTypeWithIdentityOptions(t: QuestionTypeId): boolean {
+  return t === QT_UNIQUE || t === QT_ANSWER_IS_SELF;
+}
 
 // Mapping from string type names to numeric IDs (used in flattenRule)
 const QT_MAP: Record<string, QuestionTypeId> = {

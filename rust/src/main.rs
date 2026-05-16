@@ -294,8 +294,8 @@ fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -
         }
         return json!(a);
     }
-    // Constrained types always have A-E (0-4)
-    if qt.is_constrained() {
+    // Identity-option types: option A=0, B=1, C=2, D=3, E=4
+    if qt.has_identity_options() {
         return json!(oi);
     }
     let v = fp.option_nums[qi][oi];
@@ -906,7 +906,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                     option_nums[qi][oi] = NAN_VAL;
                 }
             }
-            if question_types[qi].is_constrained() {
+            if question_types[qi].has_identity_options() {
                 for oi in 0..5 {
                     option_answers[qi][oi] = oi as u8;
                     option_nums[qi][oi] = NAN_VAL;

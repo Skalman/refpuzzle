@@ -158,7 +158,7 @@ pub enum QuestionType {
 }
 
 impl QuestionType {
-    pub fn is_constrained(&self) -> bool {
+    pub fn has_identity_options(&self) -> bool {
         matches!(self, QuestionType::Unique | QuestionType::AnswerIsSelf)
     }
 

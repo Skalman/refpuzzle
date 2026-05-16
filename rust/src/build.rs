@@ -491,7 +491,7 @@ fn rank_repair_candidates(
             continue;
         }
         let qt = fp.question_types[qi];
-        if qt.is_constrained() || matches!(qt, QuestionType::TrueStmt) {
+        if qt.has_identity_options() || matches!(qt, QuestionType::TrueStmt) {
             continue;
         }
         let score = match qt {
@@ -788,7 +788,7 @@ pub fn build_flat_puzzle(
         let qt = &question_types[qi];
         let correct_oi = solution[qi].idx();
 
-        if qt.is_constrained() {
+        if qt.has_identity_options() {
             for oi in 0..5 {
                 option_answers[qi][oi] = oi as u8;
             }

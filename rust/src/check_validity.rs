@@ -759,7 +759,7 @@ pub fn check_answer_validity(
                 oc,
             )
         }
-        QuestionType::Unique | QuestionType::AnswerIsSelf => {
+        _ if t.has_identity_options() => {
             check_value_validity(t, ai as i16, a, qi, answers, eliminated, n, oc)
         }
         _ => {
