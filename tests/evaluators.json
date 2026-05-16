@@ -143,6 +143,60 @@
       "qi": 0,
       "expect": false
     },
+    { "section": "=== LeastCommon (optionCount=3) ===" },
+    {
+      "name": "least_common_3opt: A=1 B=2 C=0, claims C → true",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "LeastCommon" }, "o": [1, 2, 0] }
+        ]
+      },
+      "answers": ["A", "B", "B"],
+      "qi": 2,
+      "expect": true
+    },
+    {
+      "name": "least_common_3opt: A=2 B=1 C=0, claims B → false",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "LeastCommon" }, "o": [1, 2, 0] }
+        ]
+      },
+      "answers": ["A", "B", "A"],
+      "qi": 2,
+      "expect": false
+    },
+    { "section": "=== MostCommon (optionCount=3) ===" },
+    {
+      "name": "most_common_3opt: A=1 B=2 C=0, claims B → true",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "MostCommon" }, "o": [1, 2, 0] }
+        ]
+      },
+      "answers": ["B", "B", "A"],
+      "qi": 2,
+      "expect": true
+    },
+    {
+      "name": "most_common_3opt: A=1 B=2 C=0, claims A → false",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
+          { "t": { "t": "MostCommon" }, "o": [1, 2, 0] }
+        ]
+      },
+      "answers": ["B", "B", "C"],
+      "qi": 2,
+      "expect": false
+    },
     { "section": "=== AnswerIsSelf ===" },
     {
       "name": "answer_is_self: always true",

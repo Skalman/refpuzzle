@@ -194,19 +194,19 @@ export function checkQuestionAgainstSolution(
     }
 
     case QT_LEAST_COMMON: {
-      if (v == null) return false;
+      if (v == null || v < 0 || v >= fp.optionCount) return false;
       const c = fillCounts(answers);
-      let min = c[0];
-      for (let i = 1; i < 5; i++) if (c[i] < min) min = c[i];
-      return c[v] === min && c.filter((x) => x === min).length === 1;
+      const active = c.slice(0, fp.optionCount);
+      const min = Math.min(...active);
+      return c[v] === min && active.filter((x) => x === min).length === 1;
     }
 
     case QT_MOST_COMMON: {
-      if (v == null) return false;
+      if (v == null || v < 0 || v >= fp.optionCount) return false;
       const c = fillCounts(answers);
-      let max = c[0];
-      for (let i = 1; i < 5; i++) if (c[i] > max) max = c[i];
-      return c[v] === max && c.filter((x) => x === max).length === 1;
+      const active = c.slice(0, fp.optionCount);
+      const max = Math.max(...active);
+      return c[v] === max && active.filter((x) => x === max).length === 1;
     }
 
     case QT_UNIQUE:
