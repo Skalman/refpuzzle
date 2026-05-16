@@ -142,7 +142,8 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
       return;
     }
 
-    for (const letter of LETTERS) {
+    for (let li = 0; li < fp.optionCount; li++) {
+      const letter = LETTERS[li];
       current[qi] = letter;
       assignedBits |= bit;
       if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {

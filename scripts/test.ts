@@ -78,6 +78,7 @@ function bruteForce(puzzle: Puzzle, maxN = 8): Answer[][] {
   const n = puzzle.questions.length;
   if (n > maxN) return []; // too large for brute force
   const fp = flattenPuzzle(puzzle);
+  const oc = puzzle.optionCount ?? 5;
   const solutions: Answer[][] = [];
   const current: Answer[] = new Array(n).fill("A");
 
@@ -87,8 +88,8 @@ function bruteForce(puzzle: Puzzle, maxN = 8): Answer[][] {
       if (valid) solutions.push([...current]);
       return;
     }
-    for (const letter of LETTERS) {
-      current[depth] = letter;
+    for (let li = 0; li < oc; li++) {
+      current[depth] = LETTERS[li];
       recurse(depth + 1);
     }
   }
