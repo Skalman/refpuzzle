@@ -136,8 +136,9 @@ function testGeneratedSolver() {
     const ruleKeys = new Set(puzzle.questions.map((q) => JSON.stringify(q.questionType)));
     assert(ruleKeys.size === puzzle.questions.length, `${name}: all question rules are unique`);
 
+    const oc = puzzle.optionCount ?? 5;
     for (let i = 0; i < puzzle.questions.length; i++) {
-      assert(puzzle.questions[i].options.length === 5, `${name} Q${i + 1}: has 5 options`);
+      assert(puzzle.questions[i].options.length === oc, `${name} Q${i + 1}: has ${oc} options`);
     }
 
     for (let i = 0; i < puzzle.questions.length; i++) {
@@ -145,7 +146,7 @@ function testGeneratedSolver() {
       const values = puzzle.questions[i].options.map((o) => JSON.stringify(o.value));
       const unique = new Set(values);
       assert(
-        unique.size === 5,
+        unique.size === oc,
         `${name} Q${i + 1}: all option values are distinct (${values.join(", ")})`,
       );
     }
