@@ -34,7 +34,7 @@ if (new URLSearchParams(window.location.search).has("debug")) {
   sessionStorage.setItem("debug", "1");
 }
 
-function InlineHelp() {
+function InlineHelp({ highlight }: { highlight?: boolean }) {
   const s = t();
   const [firstVisit, setFirstVisit] = useState(() => {
     try {
@@ -55,9 +55,11 @@ function InlineHelp() {
     return () => clearTimeout(timer);
   }, [firstVisit]);
 
+  const show = highlight || firstVisit;
+
   return (
     <div class="inline-help">
-      <div class={`how-to-play${firstVisit ? " how-to-play--first-visit" : ""}`}>
+      <div class={`how-to-play${show ? " how-to-play--first-visit" : ""}`}>
         <h4>{s.help.title}</h4>
         <ol>
           {s.help.howToPlaySteps.map((step, i) => (
@@ -234,6 +236,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   const tabsRef = useRef<HTMLDivElement>(null);
   const [pendingTutorial, setPendingTutorial] = useState(false);
   const [highlightTab, setHighlightTab] = useState<number | null>(null);
+  const [highlightHelp, setHighlightHelp] = useState(false);
 
   const selectLevel = useCallback(
     (level: number) => {
@@ -405,6 +408,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
           }}
           autoStartTutorial={pendingTutorial && activeLevel === 1}
           onTutorialConsumed={() => setPendingTutorial(false)}
+          onTutorialDone={() => setHighlightHelp(true)}
         />
       )}
 
@@ -417,7 +421,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         />
       )}
 
-      <InlineHelp />
+      <InlineHelp highlight={highlightHelp} />
 
       {puzzles && (
         <div class="print-only">

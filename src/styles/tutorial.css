@@ -172,13 +172,21 @@
 .tutorial-scrim {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--scrim);
   z-index: 50;
   pointer-events: none;
 }
 .tutorial-active {
   position: relative;
   z-index: 51;
+}
+.questions-grid.tutorial-grid {
+  border-radius: 0.75rem;
+  padding: 0.5rem;
+  background: var(--accent-soft);
+}
+.questions-grid.tutorial-grid.tutorial-welcome-grid {
+  border: 1px solid var(--accent);
 }
 
 /* Highlight active question during tutorial */

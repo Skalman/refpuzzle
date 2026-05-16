@@ -19,6 +19,7 @@
   --neutral-bar: #d1d5db;
   --strikethrough: rgba(0, 0, 0, 0.25);
   --dropdown-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  --scrim: rgba(255, 255, 255, 0.4);
   --tab-intro: #94a3b8;
   --tab-beginner: #22c55e;
   --tab-easy: #60a5fa;
@@ -45,6 +46,7 @@
   --neutral-bar: #4b5563;
   --strikethrough: rgba(255, 255, 255, 0.3);
   --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  --scrim: rgba(0, 0, 0, 0.4);
   --tab-intro: #cbd5e1;
 }
 
@@ -67,6 +69,7 @@
     --neutral-bar: #4b5563;
     --strikethrough: rgba(255, 255, 255, 0.3);
     --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    --scrim: rgba(0, 0, 0, 0.4);
     --tab-intro: #cbd5e1;
   }
 }

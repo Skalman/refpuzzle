@@ -44,6 +44,7 @@ interface PuzzleViewProps {
   onStartTutorial?: () => void;
   autoStartTutorial?: boolean;
   onTutorialConsumed?: () => void;
+  onTutorialDone?: () => void;
 }
 
 export function PuzzleView({
@@ -56,6 +57,7 @@ export function PuzzleView({
   onStartTutorial,
   autoStartTutorial,
   onTutorialConsumed,
+  onTutorialDone,
 }: PuzzleViewProps) {
   const s = t();
   const debugMode =
@@ -688,7 +690,7 @@ export function PuzzleView({
         <TutorialHighlightCtx.Provider value={tutorial.active ? tutorial.highlight : null}>
           <div
             ref={gridRef}
-            class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorial.active ? " tutorial-dimmed" : ""}`}
+            class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorial.active || tutorial.welcome ? " tutorial-grid" : ""}${tutorial.active ? " tutorial-dimmed" : ""}${tutorial.welcome && !tutorial.active ? " tutorial-welcome-grid" : ""}`}
             style={{
               gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
             }}
@@ -727,6 +729,7 @@ export function PuzzleView({
                   ...getClientInfo(),
                 });
               }
+              if (tutorialReachedEnd.current) onTutorialDone?.();
               tutorialReachedEnd.current = false;
               tutorial.dismiss();
             }}
