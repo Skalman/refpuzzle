@@ -15,7 +15,13 @@ pub enum SolveStep {
     },
 }
 
-pub fn solve(fp: &FlatPuzzle) -> (bool, Vec<SolveStep>) {
+pub struct SolveResult {
+    pub solved: bool,
+    pub answers: [Option<Answer>; MAX_N],
+    pub steps: Vec<SolveStep>,
+}
+
+pub fn solve(fp: &FlatPuzzle) -> SolveResult {
     let n = fp.n;
     let pm = phantom_mask(fp.option_count);
     let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
@@ -32,7 +38,11 @@ pub fn solve(fp: &FlatPuzzle) -> (bool, Vec<SolveStep>) {
                     &answers,
                 )
             });
-            return (valid, steps);
+            return SolveResult {
+                solved: valid,
+                answers,
+                steps,
+            };
         }
 
         let drs = deduce(fp, &answers, &eliminated);
@@ -59,7 +69,11 @@ pub fn solve(fp: &FlatPuzzle) -> (bool, Vec<SolveStep>) {
     }
 
     let solved = (0..n).all(|i| answers[i].is_some());
-    (solved, steps)
+    SolveResult {
+        solved,
+        answers,
+        steps,
+    }
 }
 
 pub fn format_step(step: &SolveStep) -> Vec<String> {
@@ -160,17 +174,37 @@ mod tests {
                 }
             };
 
-            let (solved, _steps) = solve(&fp);
-            let got = if solved { "solved" } else { "stuck" };
+            let result = solve(&fp);
+            let got = if result.solved { "solved" } else { "stuck" };
 
-            if got == expect {
-                passed += 1;
-            } else {
+            if got != expect {
                 failed += 1;
                 eprintln!("FAIL: {name}");
                 eprintln!("  expected: {expect}");
                 eprintln!("  got:      {got}");
+                continue;
             }
+
+            if let Some(expected_sol) = test.get("solution").and_then(|s| s.as_str()) {
+                let got_sol: String = result
+                    .answers
+                    .iter()
+                    .take(fp.n)
+                    .map(|a| match a {
+                        Some(a) => a.as_char(),
+                        None => '?',
+                    })
+                    .collect();
+                if got_sol != expected_sol {
+                    failed += 1;
+                    eprintln!("FAIL: {name}");
+                    eprintln!("  expected solution: {expected_sol}");
+                    eprintln!("  got solution:      {got_sol}");
+                    continue;
+                }
+            }
+
+            passed += 1;
         }
 
         eprintln!("{passed}/{} passed", passed + failed);

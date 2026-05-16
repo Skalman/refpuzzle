@@ -7,7 +7,7 @@ import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solve-brute.ts";
-import { solvePuzzle, checkSolvable } from "../src/engine/solve-deduce.ts";
+import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -765,12 +765,13 @@ function testSharedSolve() {
         name: string;
         puzzle: Record<string, unknown>;
         expect: SolveOutcome;
+        solution?: string;
       }
   )[];
 
   for (const t of tests) {
     if ("section" in t) continue;
-    const { name, puzzle: compact, expect } = t;
+    const { name, puzzle: compact, expect, solution } = t;
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON fixture
     const wrapped = { "0101": { "1": compact } } as any;
@@ -778,8 +779,16 @@ function testSharedSolve() {
     const puzzle = parsed["0101"]["1"];
     const fp = flattenPuzzle(puzzle);
 
-    const got = checkSolvable(fp);
+    const result = solvePuzzle(fp);
+    const got: SolveOutcome = result.answers.slice(0, fp.n).every((a) => a != null)
+      ? "solved"
+      : "stuck";
     assert(got === expect, `shared solve: ${name}: expected ${expect}, got ${got}`);
+
+    if (solution) {
+      const gotSol = result.answers.slice(0, fp.n).join("");
+      assert(gotSol === solution, `shared solve: ${name}: expected ${solution}, got ${gotSol}`);
+    }
   }
 }
 
