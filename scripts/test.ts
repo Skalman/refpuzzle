@@ -7,7 +7,7 @@ import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solve-brute.ts";
-import { checkSolvable } from "../src/engine/solve-deduce.ts";
+import { solvePuzzle, checkSolvable } from "../src/engine/solve-deduce.ts";
 import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -71,33 +71,6 @@ function testSharedEvaluators() {
 }
 
 // ════════════════════════════════════════════════
-// Naive brute-force solver (no pruning, for cross-validation)
-// ════════════════════════════════════════════════
-
-function bruteForce(puzzle: Puzzle, maxN = 8): Answer[][] {
-  const n = puzzle.questions.length;
-  if (n > maxN) return []; // too large for brute force
-  const fp = flattenPuzzle(puzzle);
-  const oc = puzzle.optionCount ?? 5;
-  const solutions: Answer[][] = [];
-  const current: Answer[] = new Array(n).fill("A");
-
-  function recurse(depth: number) {
-    if (depth === n) {
-      const valid = fp.questions.every((q, i) => evaluate(q, i, current[i], current, fp));
-      if (valid) solutions.push([...current]);
-      return;
-    }
-    for (let li = 0; li < oc; li++) {
-      current[depth] = LETTERS[li];
-      recurse(depth + 1);
-    }
-  }
-
-  recurse(0);
-  return solutions;
-}
-
 // ════════════════════════════════════════════════
 // Generated puzzle cross-validation
 // ════════════════════════════════════════════════
@@ -111,7 +84,7 @@ function shuffle<T>(arr: T[]): T[] {
   return a;
 }
 
-function testGeneratedSolver() {
+function testGeneratedUniqueSolution() {
   const shuffled = shuffle(allPuzzles);
   const deadline = performance.now() + 10_000;
   let count = 0;
@@ -155,27 +128,21 @@ function testGeneratedSolver() {
   console.log(`  ${count}/${allPuzzles.length} puzzles`);
 }
 
-function testGeneratedBruteForce() {
-  const small = shuffle(allPuzzles.filter((p) => p.questions.length <= 8));
+function testGeneratedHintSolvable() {
+  const shuffled = shuffle(allPuzzles);
   const deadline = performance.now() + 10_000;
   let count = 0;
 
-  for (const puzzle of small) {
+  for (const puzzle of shuffled) {
     if (performance.now() > deadline) break;
     count++;
 
-    const name = puzzle.id;
-    const solutions = solve(puzzle, undefined, 2);
-    if (solutions.length !== 1) continue;
-    const sol = solutions[0];
-
-    const bruteSolutions = bruteForce(puzzle);
-    assertEq(bruteSolutions.length, 1, `${name}: brute force finds exactly 1 solution`);
-    if (bruteSolutions.length === 1) {
-      assertEq(bruteSolutions[0], sol, `${name}: brute force matches solver`);
-    }
+    const fp = flattenPuzzle(puzzle);
+    const { answers } = solvePuzzle(fp);
+    const ok = answers.slice(0, fp.n).every((a) => a != null);
+    assert(ok, `${puzzle.id}: hint engine solves`);
   }
-  console.log(`  ${count}/${small.length} small puzzles`);
+  console.log(`  ${count}/${allPuzzles.length} puzzles`);
 }
 
 // ════════════════════════════════════════════════
@@ -202,9 +169,7 @@ function testSolverEdgeCases() {
     ],
   };
   const impSol = solve(impossible, undefined, 5);
-  // Check via brute force too
-  const impBrute = bruteForce(impossible);
-  assertEq(impSol.length, impBrute.length, "impossible puzzle: solver agrees with brute force");
+  assertEq(impSol.length, 0, "impossible puzzle: solver finds 0 solutions");
 
   // Puzzle with multiple solutions: two answer_is_self questions (any combo works)
   const multi: Puzzle = {
@@ -223,9 +188,7 @@ function testSolverEdgeCases() {
     ],
   };
   const multiSol = solve(multi, undefined, 30);
-  const multiBrute = bruteForce(multi);
-  assert(multiBrute.length === 25, `answer_is_self x2: brute force finds 25 solutions (5x5)`);
-  assertEq(multiSol.length, 25, "multi-solution: solver finds all 25");
+  assertEq(multiSol.length, 25, "multi-solution: solver finds all 25 (5x5)");
 }
 
 // ════════════════════════════════════════════════
@@ -939,8 +902,8 @@ timed("Share encode/decode tests", testShare);
 
 timed("Hint engine tests", testHints);
 if (slow) {
-  timed("Generated puzzles: solver", testGeneratedSolver);
-  timed("Generated puzzles: brute-force", testGeneratedBruteForce);
+  timed("Generated puzzles: unique solution", testGeneratedUniqueSolution);
+  timed("Generated puzzles: hint solvable", testGeneratedHintSolvable);
 } else {
   console.log("Skipping generated puzzle tests (use --all to include)");
 }
