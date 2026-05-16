@@ -855,8 +855,8 @@ mod tests {
 
     #[test]
     fn test_shared_evaluators() {
-        let json_str = std::fs::read_to_string("../tests/evaluators.json")
-            .expect("can't read tests/evaluators.json");
+        let json_str = std::fs::read_to_string("../tests/evaluate.json")
+            .expect("can't read tests/evaluate.json");
         let suite: Value = serde_json::from_str(&json_str).unwrap();
         let tests = suite["tests"].as_array().unwrap();
 

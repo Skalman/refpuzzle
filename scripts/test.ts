@@ -53,7 +53,7 @@ function assertEq<T>(actual: T, expected: T, msg: string) {
 
 function testSharedEvaluators() {
   const suite = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, "../tests/evaluators.json"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "../tests/evaluate.json"), "utf8"),
   );
   for (const test of suite.tests) {
     if ("section" in test) continue;
