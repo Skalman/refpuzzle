@@ -108,7 +108,9 @@ export function generateConstructive(
     if (tracing) {
       const oc = cr.oc;
       for (let i = 0; i < cr.n; i++) {
-        const vals = puzzle.questions[i].options.slice(0, oc).map((o) => String(o.value));
+        const vals = puzzle.questions[i].options
+          .slice(0, oc)
+          .map((o) => (o.value == null ? "null" : String(o.value)));
         trace(`options Q${String(i + 1)}: [${vals.join(",")}]`);
       }
     }
@@ -517,9 +519,10 @@ function validatePuzzle(
     const fp2 = flattenPuzzle(puzzle);
     const probe = deduce(fp2, stuckState.answers, stuckState.eliminated);
     if (tracing) {
+      const fmtVal = (v: number | null) => (v == null ? "null" : String(v));
       const after = puzzle.questions[qi].options.map((o) => o.value);
       trace(
-        `--- repair Q${String(qi + 1)}: [${before.join(",")}] -> [${after.join(",")}] probe=${String(probe.length)} ---`,
+        `--- repair Q${String(qi + 1)}: [${before.map(fmtVal).join(",")}] -> [${after.map(fmtVal).join(",")}] probe=${String(probe.length)} ---`,
       );
     }
     if (probe.length === 0) continue;
