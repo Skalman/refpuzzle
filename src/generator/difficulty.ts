@@ -1,23 +1,44 @@
 import type { QuestionType } from "../engine/types.ts";
 
 export interface DifficultyProfile {
-  level: 1 | 2 | 3 | 4 | 5;
+  level: number;
   name: string;
   questionCount: number;
+  optionCount: number;
   allowedTypes: QuestionType["type"][];
 }
 
 export const profiles: DifficultyProfile[] = [
   {
     level: 1,
-    name: "Beginner",
-    questionCount: 4,
-    allowedTypes: ["CountAnswer", "AnswerOf", "AnswerIsSelf", "FirstWith", "LastWith"],
+    name: "Intro",
+    questionCount: 3,
+    optionCount: 3,
+    allowedTypes: [
+      "CountAnswer",
+      "AnswerOf",
+      "FirstWith",
+      "LastWith",
+      "SameAs",
+      "PrevSame",
+      "NextSame",
+      "MostCommon",
+      "LeastCommon",
+      "NoOtherHasAnswer",
+    ],
   },
   {
     level: 2,
+    name: "Beginner",
+    questionCount: 4,
+    optionCount: 5,
+    allowedTypes: ["CountAnswer", "AnswerOf", "AnswerIsSelf", "FirstWith", "LastWith"],
+  },
+  {
+    level: 3,
     name: "Easy",
     questionCount: 5,
+    optionCount: 5,
     allowedTypes: [
       "CountAnswer",
       "AnswerOf",
@@ -26,15 +47,15 @@ export const profiles: DifficultyProfile[] = [
       "ClosestBefore",
       "FirstWith",
       "LastWith",
-
       "NextSame",
       "PrevSame",
     ],
   },
   {
-    level: 3,
+    level: 4,
     name: "Medium",
     questionCount: 8,
+    optionCount: 5,
     allowedTypes: [
       "CountAnswer",
       "AnswerOf",
@@ -43,7 +64,6 @@ export const profiles: DifficultyProfile[] = [
       "ClosestBefore",
       "FirstWith",
       "LastWith",
-
       "NextSame",
       "PrevSame",
       "LeastCommon",
@@ -57,9 +77,10 @@ export const profiles: DifficultyProfile[] = [
     ],
   },
   {
-    level: 4,
+    level: 5,
     name: "Hard",
     questionCount: 10,
+    optionCount: 5,
     allowedTypes: [
       "CountAnswer",
       "AnswerOf",
@@ -68,7 +89,6 @@ export const profiles: DifficultyProfile[] = [
       "ClosestBefore",
       "FirstWith",
       "LastWith",
-
       "NextSame",
       "PrevSame",
       "LeastCommon",
@@ -85,12 +105,14 @@ export const profiles: DifficultyProfile[] = [
       "ConsecIdent",
       "OnlyOdd",
       "OnlyEven",
+      "SameAsWhich",
     ],
   },
   {
-    level: 5,
+    level: 6,
     name: "Expert",
     questionCount: 12,
+    optionCount: 5,
     allowedTypes: [
       "CountAnswer",
       "AnswerOf",
@@ -99,7 +121,6 @@ export const profiles: DifficultyProfile[] = [
       "ClosestBefore",
       "FirstWith",
       "LastWith",
-
       "NextSame",
       "PrevSame",
       "LeastCommon",
@@ -117,6 +138,7 @@ export const profiles: DifficultyProfile[] = [
       "OnlyOdd",
       "OnlyEven",
       "TrueStmt",
+      "SameAsWhich",
     ],
   },
 ];
