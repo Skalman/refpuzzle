@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 
 use crate::build::{
-    GenerateResult, Stats, build_flat_puzzle, count_letter, letter_counts, solution_satisfies_type,
+    GenerateResult, Stats, count_letter, fill_options, letter_counts, solution_satisfies_type,
     validate_and_repair,
 };
 use crate::difficulty::DifficultyProfile;
@@ -412,7 +412,7 @@ fn try_construct(
         }
     }
 
-    let mut fp = build_flat_puzzle(
+    let mut fp = fill_options(
         &state.question_types,
         &solution,
         n,

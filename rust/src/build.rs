@@ -893,7 +893,7 @@ pub fn repair_one_question(
 
 // ── Build FlatPuzzle with options ──
 
-pub fn build_flat_puzzle(
+pub fn fill_options(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
     n: usize,

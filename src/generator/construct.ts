@@ -94,7 +94,7 @@ export function generateConstructive(
   tracing = false,
 ): GenerateResult | null {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const cr = tryConstructive(profile, rng);
+    const cr = tryConstruct(profile, rng);
     if (!cr) {
       if (tracing) trace(`=== attempt ${String(attempt + 1)}: construct failed ===`);
       continue;
@@ -114,7 +114,7 @@ export function generateConstructive(
         trace(`options Q${String(i + 1)}: [${vals.join(",")}]`);
       }
     }
-    const result = validatePuzzle(puzzle, cr.solution, cr.n, rng, tracing);
+    const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing);
     if (result) {
       if (tracing) trace(`=== attempt ${String(attempt + 1)}: SUCCESS ===`);
       return result;
@@ -242,7 +242,7 @@ function allowed(
   return types.filter((t) => profile.allowedTypes.includes(t));
 }
 
-function tryConstructive(profile: DifficultyProfile, rng: RNG): ConstructResult | null {
+function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | null {
   const n = profile.questionCount;
   const oc = profile.optionCount;
   const validLetters = LETTERS.slice(0, oc);
@@ -470,7 +470,7 @@ function fillOptions(cr: ConstructResult, rng: RNG): Puzzle {
   };
 }
 
-function validatePuzzle(
+function validateAndRepair(
   puzzle: Puzzle,
   solution: Answer[],
   n: number,

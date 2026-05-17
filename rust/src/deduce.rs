@@ -2197,7 +2197,7 @@ mod tests {
 
     #[test]
     fn test_deduce_soundness_fuzz() {
-        use crate::build::build_flat_puzzle;
+        use crate::build::fill_options;
         use crate::rng::Rng;
         use crate::solve_brute::solve;
 
@@ -2302,7 +2302,7 @@ mod tests {
             }
 
             let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                build_flat_puzzle(&question_types, &solution, n, 5, &mut Rng::new(seed))
+                fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed))
             }));
             let Ok(Some(fp)) = fp else { continue };
 
