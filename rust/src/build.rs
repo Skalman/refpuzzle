@@ -290,13 +290,25 @@ fn trace_deduce_batch(batch: u32, drs: &[DeduceResult], n: usize) {
 fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
     let letters_lower = ['a', 'b', 'c', 'd', 'e'];
     eprintln!(
-        "--- lookahead: assume Q{}={} -> contradiction Q{} -> elim {}{} ---",
+        "--- lookahead: assume Q{}={} -> contradiction Q{} -> elim {}{} (chain={}) ---",
         lr.assumption_qi + 1,
         lr.assumption_answer.as_char(),
         lr.contradiction_qi + 1,
         lr.eliminate_qi + 1,
-        letters_lower[lr.eliminate_oi]
+        letters_lower[lr.eliminate_oi],
+        lr.chain.len()
     );
+    for dr in &lr.chain {
+        match dr.action {
+            DeduceAction::Force { qi, answer } => {
+                eprintln!("    {}{} {}", qi + 1, answer.as_char(), dr.rule.to_str());
+            }
+            DeduceAction::Eliminate { qi, oi } => {
+                eprintln!("    {}{} {}", qi + 1, letters_lower[oi], dr.rule.to_str());
+            }
+            _ => {}
+        }
+    }
 }
 
 #[cold]

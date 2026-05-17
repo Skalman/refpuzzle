@@ -576,8 +576,11 @@ function runHintEngine(
     if (lr) {
       if (tracing) {
         trace(
-          `--- lookahead: assume Q${String(lr.assumptionQi + 1)}=${lr.assumptionAnswer} -> contradiction Q${String(lr.contradictionQi + 1)} -> elim ${String(lr.eliminateQi + 1)}${LETTERS[lr.eliminateOi].toLowerCase()} ---`,
+          `--- lookahead: assume Q${String(lr.assumptionQi + 1)}=${lr.assumptionAnswer} -> contradiction Q${String(lr.contradictionQi + 1)} -> elim ${String(lr.eliminateQi + 1)}${LETTERS[lr.eliminateOi].toLowerCase()} (chain=${String(lr.chain.length)}) ---`,
         );
+        for (const dr of lr.chain) {
+          for (const line of formatAction(dr.action, dr.rule, n)) trace(`  ${line}`);
+        }
       }
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;
