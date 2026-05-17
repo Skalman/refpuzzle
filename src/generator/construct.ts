@@ -123,7 +123,9 @@ export function generateConstructive(
   return null;
 }
 
-const CONSTRAINED_TYPES = new Set<string>(["NoOtherHasAnswer", "AnswerIsSelf"]);
+function hasIdentityOptions(t: QuestionType["type"]): boolean {
+  return t === "NoOtherHasAnswer" || t === "AnswerIsSelf";
+}
 
 // Rule types by category
 const ENTRY_TYPES: QuestionType["type"][] = [
@@ -627,7 +629,7 @@ function rankRepairCandidates(
   for (let qi = 0; qi < n; qi++) {
     if (stuckAnswers[qi] != null) continue;
     const rule = puzzle.questions[qi].questionType;
-    if (CONSTRAINED_TYPES.has(rule.type) || rule.type === "TrueStmt") continue;
+    if (hasIdentityOptions(rule.type) || rule.type === "TrueStmt") continue;
     let score: number;
     if (isCountingType(rule.type)) {
       score = 3;
@@ -1117,7 +1119,7 @@ function engineerOptions(
 ): OptionDef[] {
   const correctOi = L2I[solution[qi]];
 
-  if (CONSTRAINED_TYPES.has(rule.type)) {
+  if (hasIdentityOptions(rule.type)) {
     return Array.from({ length: oc }, (_, i) => ({ value: i }));
   }
 
