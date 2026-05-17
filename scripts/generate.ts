@@ -130,11 +130,12 @@ function taskSeeds(yr: number, mm: number, dd: number, level: number, count: num
 // ── Compact JSON serialization (matches Rust output) ──
 
 function compactQuestionType(qt: QuestionType): Record<string, unknown> {
-  const obj: Record<string, unknown> = { t: qt.type };
+  const obj: Record<string, unknown> = {};
   if ("answer" in qt) obj.a = "ABCDE".indexOf(qt.answer);
   if ("questionIndex" in qt) obj.q = qt.questionIndex;
   if ("afterIndex" in qt) obj.q = qt.afterIndex;
   if ("beforeIndex" in qt) obj.q = qt.beforeIndex;
+  obj.t = qt.type;
   return obj;
 }
 

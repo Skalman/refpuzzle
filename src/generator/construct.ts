@@ -159,8 +159,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   }
 
   // 2. Shuffle question indices — we'll assign rules in this order
-  const slots = Array.from({ length: n }, (_, i) => i);
-  rng.shuffle(slots);
+  const slots = rng.shuffle(Array.from({ length: n }, (_, i) => i));
 
   const rules: (QuestionType | null)[] = new Array(n).fill(null);
   const assigned = new Set<number>(); // questions with rules assigned
@@ -242,7 +241,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
 
   // Phase 2: answer_of_question backbone
   const chainCount = Math.min(
-    extraChain ? 3 : n <= 5 && rng.int(0, 1) === 0 ? 1 : 2,
+    extraChain ? 3 : n <= 3 ? (rng.int(0, 1) === 0 ? 1 : 0) : n <= 5 && rng.int(0, 1) === 0 ? 1 : 2,
     n - assigned.size,
   );
   for (let c = 0; c < chainCount; c++) {
@@ -308,8 +307,9 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // Phase 6: Structural rules — inspect solution, pick matching types
   for (let s = 0; s < structuralReserve && assigned.size < n; s++) {
     const qi = slots[assigned.size];
-    const fitting = avStructural.filter((t) => solutionCompatible(t, qi, solution, n, oc));
-    rng.shuffle(fitting);
+    const fitting = rng.shuffle(
+      avStructural.filter((t) => solutionCompatible(t, qi, solution, n, oc)),
+    );
     let placed = false;
     for (const type of fitting) {
       if (placeRule(type, assigned.size)) {
