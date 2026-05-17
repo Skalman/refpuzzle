@@ -270,6 +270,16 @@ fn try_construct(
     let av_positional = filter_allowed(POSITIONAL_TYPES, profile);
     let av_fill = filter_allowed(FILL_TYPES, profile);
 
+    let trace_phase = |name: &str, state: &PlacementState| {
+        if trace {
+            let placed: Vec<String> = (0..n)
+                .filter(|&i| (state.assigned >> i) & 1 == 1)
+                .map(|i| format!("Q{}={}", i + 1, format_type_tag(&state.question_types[i])))
+                .collect();
+            eprintln!("  [{}] {}", name, placed.join(" "));
+        }
+    };
+
     // Phase 1: Counting entry point (skip 50% of the time for small puzzles)
     let skip_counting = n <= 3 && rng.int(0, 1) == 0;
     if !skip_counting
@@ -283,6 +293,8 @@ fn try_construct(
             return None;
         }
     }
+
+    trace_phase("p1", &state);
 
     // Phase 2: answer_of backbone
     let chain_count = if extra_chain {
@@ -304,6 +316,8 @@ fn try_construct(
         }
     }
 
+    trace_phase("p2", &state);
+
     // Phase 3: Optional prev_same/next_same at edge positions
     let p3_check = rng.int(0, 1);
     if p3_check == 0 && state.assigned_count < n {
@@ -319,6 +333,8 @@ fn try_construct(
         }
     }
 
+    trace_phase("p3", &state);
+
     // Phase 4: Positional types (skip for tiny puzzles)
     let pos_count = if av_positional.is_empty() || n <= 3 {
         0
@@ -330,6 +346,8 @@ fn try_construct(
             state.try_place(rng.pick(&av_positional), &solution, n, oc, rng);
         }
     }
+
+    trace_phase("p4", &state);
 
     // Phase 5: Exotic guaranteed types
     let exotic: &[QuestionTypeKind] = &[
@@ -345,6 +363,8 @@ fn try_construct(
             state.try_place(kind, &solution, n, oc, rng);
         }
     }
+
+    trace_phase("p5", &state);
 
     // Phase 6: Fill remaining (reserving slots for constrained types)
     let av_constrained: ArrayVec<QuestionTypeKind, 32> = av_fill
@@ -386,7 +406,9 @@ fn try_construct(
         }
     }
 
-    // Phase 7: Constrained types (need specific solution properties)
+    trace_phase("p6", &state);
+
+    // Phase 7: Structural types (need specific solution properties)
     for _ in 0..constrained_reserve {
         if state.assigned_count >= n {
             break;
@@ -425,6 +447,8 @@ fn try_construct(
             }
         }
     }
+
+    trace_phase("p6", &state);
 
     let Some(mut fp) = fill_options(
         &state.question_types,
@@ -795,8 +819,15 @@ fn random_type_params(
             if plen == 0 {
                 return None;
             }
+            let ref_qi = rng.pick(&pool[..plen]) as usize;
+            if solution[ref_qi] == solution[qi] {
+                return None;
+            }
+            if !(0..n).any(|j| j != qi && j != ref_qi && solution[j] == solution[ref_qi]) {
+                return None;
+            }
             Some(QuestionType::SameAsWhich {
-                question_index: rng.pick(&pool[..plen]),
+                question_index: ref_qi as u8,
             })
         }
     }

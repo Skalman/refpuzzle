@@ -94,7 +94,7 @@ export function generateConstructive(
   tracing = false,
 ): GenerateResult | null {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const cr = tryConstruct(profile, rng);
+    const cr = tryConstruct(profile, rng, tracing);
     if (!cr) {
       if (tracing) trace(`=== attempt ${String(attempt + 1)}: construct failed ===`);
       continue;
@@ -243,7 +243,11 @@ function allowed(
   return types.filter((t) => profile.allowedTypes.includes(t));
 }
 
-function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | null {
+function tryConstruct(
+  profile: DifficultyProfile,
+  rng: RNG,
+  tracing = false,
+): ConstructResult | null {
   const n = profile.questionCount;
   const oc = profile.optionCount;
   const validLetters = LETTERS.slice(0, oc);
@@ -349,11 +353,22 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
     return placeRule(rng.pick(types), assigned.size);
   }
 
+  function tracePhase(name: string): void {
+    if (!tracing) return;
+    const placed = slots
+      .filter((qi) => assigned.has(qi))
+      .map((qi) => `Q${String(qi + 1)}=${formatTypeTag(rules[qi]!)}`)
+      .join(" ");
+    trace(`  [${name}] ${placed}`);
+  }
+
   // Phase 1: Counting entry point (skip 50% for small puzzles)
   const skipCounting = n <= 3 && rng.int(0, 1) === 0;
   if (!skipCounting) {
     if (avEntry.length === 0 || !placeFrom(avEntry)) return null;
   }
+
+  tracePhase("p1");
 
   // Phase 2: answer_of_question backbone
   const chainCount = Math.min(
@@ -364,7 +379,9 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
     if (!placeRule("AnswerOf", assigned.size)) return null;
   }
 
-  // Phase 2b: occasionally place prev/next_same (need specific slot positions)
+  tracePhase("p2");
+
+  // Phase 3: occasionally place prev/next_same (need specific slot positions)
   const p2bCheck = rng.int(0, 1);
   if (p2bCheck === 0 && assigned.size < n) {
     const candidates: [QuestionType["type"], number][] = [
@@ -382,14 +399,18 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
     }
   }
 
-  // Phase 3: 2-3 positional rules (skip for tiny puzzles)
+  tracePhase("p3");
+
+  // Phase 4: Positional types (skip for tiny puzzles)
   const posCount = Math.min(
     avPositional.length > 0 && n > 3 ? Math.max(2, Math.floor(n / 5)) : 0,
     n - assigned.size,
   );
   for (let p = 0; p < posCount; p++) placeFrom(avPositional);
 
-  // Phase 4: Guaranteed exotic types for variety
+  tracePhase("p4");
+
+  // Phase 5: Exotic guaranteed types
   const exoticSlots: QuestionType["type"][] = [];
   if (allowed(["LetterDist"], profile).length > 0) exoticSlots.push("LetterDist");
   if (allowed(["TrueStmt"], profile).length > 0) exoticSlots.push("TrueStmt");
@@ -399,7 +420,9 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
     placeRule(type, assigned.size);
   }
 
-  // Phase 5: Fill remaining, reserving slots for structural rules
+  tracePhase("p5");
+
+  // Phase 6: Fill remaining, reserving slots for structural types
   const avStructural = avVariety.filter((t) => STRUCTURAL_TYPES.has(t));
   const structuralReserve = Math.min(avStructural.length > 0 ? 1 : 0, n - assigned.size);
   const fillTarget = n - structuralReserve;
@@ -424,7 +447,9 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
     }
   }
 
-  // Phase 6: Structural rules — inspect solution, pick matching types
+  tracePhase("p6");
+
+  // Phase 7: Structural types (need specific solution properties)
   for (let s = 0; s < structuralReserve && assigned.size < n; s++) {
     const qi = slots[assigned.size];
     const fitting = rng.shuffle(
@@ -452,6 +477,8 @@ function tryConstruct(profile: DifficultyProfile, rng: RNG): ConstructResult | n
         return null;
     }
   }
+
+  tracePhase("p7");
 
   const finalRules: QuestionType[] = rules.filter((t): t is QuestionType => t !== null);
   return { types: finalRules, solution, n, oc, level: profile.level, name: profile.name };
