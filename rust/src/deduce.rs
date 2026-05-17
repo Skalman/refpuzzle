@@ -396,16 +396,26 @@ fn deduce_impl(
             && let QuestionType::AnswerOf { question_index } = *t
             && let Some(target) = answers[question_index as usize]
         {
+            let mut best: Option<usize> = None;
             for oi in 0..5usize {
-                if !is_elim(eliminated, qi, oi) && fp.option_answers[qi][oi] == target as u8 {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::AnswerOfForward,
-                    );
+                if fp.option_answers[qi][oi] == target as u8 {
+                    if !is_elim(eliminated, qi, oi) {
+                        best = Some(oi);
+                        break;
+                    }
+                    if best.is_none() {
+                        best = Some(oi);
+                    }
                 }
+            }
+            if let Some(oi) = best {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: LETTERS[oi],
+                    },
+                    DeduceRule::AnswerOfForward,
+                );
             }
         }
 

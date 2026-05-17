@@ -335,10 +335,18 @@ function deduceImpl(
       if (q.t === QT_ANSWER_OF && answers[q.questionIndex] != null) {
         const target = answers[q.questionIndex]!;
         const targetIdx = letterIdx(target);
+        let best = -1;
         for (let oi = 0; oi < 5; oi++) {
           if (fp.optionValues[qi][oi] === targetIdx) {
-            results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "AnswerOfForward"));
+            if (!isElim(eliminated, qi, oi)) {
+              best = oi;
+              break;
+            }
+            if (best < 0) best = oi;
           }
+        }
+        if (best >= 0) {
+          results.push(res({ type: "force", qi, answer: LETTERS[best] }, "AnswerOfForward"));
         }
       }
     }
@@ -804,7 +812,7 @@ function deduceImpl(
           if (other == null) {
             if (v == null) {
               results.push(res({ type: "eliminate", qi, oi }, "LetterDistNoMatch"));
-            } else {
+            } else if (v <= Math.max(oi, 4 - oi)) {
               let anyPossible = false;
               for (let ti = 0; ti < 5; ti++) {
                 if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v) {
@@ -1352,7 +1360,7 @@ function deduceImpl(
       }
     }
 
-    if (run("ConsecIdentForwardElim")) {
+    if (!fast && run("ConsecIdentForwardElim")) {
       for (let oi = 0; oi < 5; oi++) {
         if (answers[p] == null && !isElim(eliminated, p, oi) && (possB & (1 << oi)) === 0)
           results.push(res({ type: "eliminate", qi: p, oi }, "ConsecIdentForwardElim"));
@@ -1361,7 +1369,7 @@ function deduceImpl(
       }
     }
 
-    if (run("ConsecIdentForwardBothForce")) {
+    if (!fast && run("ConsecIdentForwardBothForce")) {
       if (answers[p] == null && answers[p + 1] == null) {
         const common = possA & possB;
         if (common !== 0 && (common & (common - 1)) === 0) {

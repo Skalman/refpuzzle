@@ -692,7 +692,7 @@ function repairOneQuestion(
   }
 
   // General case: positional, ConsecIdent, OnlyOdd/Even, EqualCount, SameAs, etc.
-  const bestOi = findClosestOption(opts, correctOi, correctVal, elim, oc);
+  const bestOi = findClosestOption(opts, correctOi, correctVal, elim, oc, 1);
   if (bestOi == null) return;
 
   let minVal = 0;
@@ -761,13 +761,15 @@ function findClosestOption(
   correctVal: number | null,
   elim: number,
   oc: number,
+  nullDist = -1,
 ): number | null {
   let bestOi: number | null = null;
   let bestDist = Infinity;
   for (let oi = 0; oi < oc; oi++) {
     if (oi === correctOi || ((elim >> oi) & 1) !== 0) continue;
     const v = opts[oi].value;
-    const dist = absDiff(v, correctVal);
+    const dist =
+      nullDist >= 0 && (v == null || correctVal == null) ? nullDist : absDiff(v, correctVal);
     if (dist < bestDist) {
       bestDist = dist;
       bestOi = oi;

@@ -71,6 +71,19 @@
       "expect": "1A"
     },
     {
+      "name": "AnswerOf forward: matching option eliminated → still force",
+      "rule": "AnswerOfForward",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "AnswerOf", "q": 1 }, "o": [1, 0, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["a", "B", ""],
+      "expect": "1A"
+    },
+    {
       "name": "AnswerOf reverse: other references this → force",
       "rule": "AnswerOfReverse",
       "puzzle": {

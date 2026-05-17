@@ -306,7 +306,25 @@ fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
             DeduceAction::Eliminate { qi, oi } => {
                 eprintln!("    {}{} {}", qi + 1, letters_lower[oi], dr.rule.to_str());
             }
-            _ => {}
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                for i in 0..crate::types::MAX_N {
+                    if (question_mask >> i) & 1 == 1 {
+                        for oi in 0..5usize {
+                            if (option_mask >> oi) & 1 == 1 {
+                                eprintln!(
+                                    "    {}{} {}",
+                                    i + 1,
+                                    letters_lower[oi],
+                                    dr.rule.to_str()
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -520,13 +538,20 @@ pub fn validate_and_repair(
     for &qi in &candidates {
         stats.repair_attempts += 1;
 
-        let before: [i16; 5] = fp.option_nums[qi];
+        let before_nums: [i16; 5] = fp.option_nums[qi];
+        let before_answers: [u8; 5] = fp.option_answers[qi];
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
-        if fp.option_nums[qi] != before {
+        if fp.option_nums[qi] != before_nums || fp.option_answers[qi] != before_answers {
             any_changed = true;
             let probe = deduce(fp, &stuck_answers, &stuck_elim);
             if trace {
-                trace_repair(qi, &before, &fp.option_nums[qi], probe.len());
+                if fp.option_nums[qi] != before_nums {
+                    trace_repair(qi, &before_nums, &fp.option_nums[qi], probe.len());
+                } else {
+                    let ba: [i16; 5] = before_answers.map(|v| v as i16);
+                    let aa: [i16; 5] = fp.option_answers[qi].map(|v| v as i16);
+                    trace_repair(qi, &ba, &aa, probe.len());
+                }
             }
             if probe.is_empty() {
                 continue;
@@ -567,6 +592,9 @@ pub fn validate_and_repair(
     }
 
     if !repaired {
+        if trace {
+            eprintln!("--- solve (final) ---");
+        }
         let t0 = std::time::Instant::now();
         let (ok, _, _) = try_solve(fp, stats, trace);
         stats.hint_us += us(t0);
@@ -675,12 +703,8 @@ pub fn repair_one_question(
                 }
             }
         }
-        QuestionType::LetterDist { .. }
-        | QuestionType::LeastCommon
-        | QuestionType::MostCommon
-        | QuestionType::NoOtherHasAnswer => {
+        QuestionType::LetterDist { .. } | QuestionType::NoOtherHasAnswer => {
             let correct_val = fp.option_nums[qi][correct_oi];
-            // Find closest non-eliminated wrong option, replace with furthest value
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..5 {
@@ -714,6 +738,43 @@ pub fn repair_one_question(
                     }
                 }
                 fp.option_nums[qi][oi] = best_new;
+            }
+        }
+        QuestionType::LeastCommon | QuestionType::MostCommon => {
+            let correct_val = fp.option_answers[qi][correct_oi] as i16;
+            let mut best_oi = None;
+            let mut best_dist = u16::MAX;
+            for oi in 0..5 {
+                if oi != correct_oi && (elim >> oi) & 1 == 0 {
+                    let dist = abs_diff(fp.option_answers[qi][oi] as i16, correct_val);
+                    if dist < best_dist {
+                        best_dist = dist;
+                        best_oi = Some(oi);
+                    }
+                }
+            }
+            if let Some(oi) = best_oi {
+                let old_val = fp.option_answers[qi][oi] as i16;
+                let mut best_new = old_val;
+                let mut best_new_dist = 0u16;
+                for v in 0..5i16 {
+                    if v != correct_val && v != old_val {
+                        let mut in_use = false;
+                        for k in 0..5 {
+                            if k != oi && fp.option_answers[qi][k] as i16 == v {
+                                in_use = true;
+                            }
+                        }
+                        if !in_use {
+                            let d = abs_diff(v, correct_val);
+                            if d > best_new_dist {
+                                best_new_dist = d;
+                                best_new = v;
+                            }
+                        }
+                    }
+                }
+                fp.option_answers[qi][oi] = best_new as u8;
             }
         }
         _ if is_counting_type(&qt) => {
