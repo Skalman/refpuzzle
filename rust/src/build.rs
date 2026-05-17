@@ -162,7 +162,7 @@ fn try_solve_from(
 ) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
     let n = fp.n;
 
-    for _ in 0..n * 30 {
+    for _ in 0..n * 15 {
         if (0..n).all(|i| answers[i].is_some()) {
             let valid = (0..n).all(|i| {
                 crate::check_validity::check_question_against_solution(

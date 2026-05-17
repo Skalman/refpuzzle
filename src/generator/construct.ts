@@ -411,12 +411,16 @@ function validatePuzzle(
     if (!evaluate(fp, i, solution[i], solution)) return null;
   }
 
-  const solutions = solve(puzzle, undefined, 2);
-  if (solutions.length !== 1) return null;
-
+  // Step 1: Can the hint engine solve it?
   const stuckState = runHintEngine(puzzle, n);
-  if (stuckState.solved) return { puzzle, solution: solutions[0] };
+  if (stuckState.solved) {
+    // Step 2: Is the solution unique?
+    const solutions = solve(puzzle, undefined, 2);
+    if (solutions.length === 1) return { puzzle, solution: solutions[0] };
+    return null;
+  }
 
+  // Step 3: Repair distractors and retry
   for (let retry = 0; retry < 3; retry++) {
     repairDistractors(puzzle, solution, stuckState.answers, n, rng);
     const fp2 = flattenPuzzle(puzzle);
@@ -428,9 +432,9 @@ function validatePuzzle(
       }
     }
     if (!evalOk) return null;
-    const sols2 = solve(puzzle, undefined, 2);
-    if (sols2.length !== 1) continue;
-    if (checkSolvable(puzzle, n)) return { puzzle, solution: sols2[0] };
+    if (!checkSolvable(puzzle, n)) continue;
+    const solutions = solve(puzzle, undefined, 2);
+    if (solutions.length === 1) return { puzzle, solution: solutions[0] };
   }
 
   return null;
@@ -452,7 +456,8 @@ function runHintEngine(puzzle: Puzzle, n: number): { solved: boolean; answers: (
       for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
       continue;
     }
-    const lr = lookahead(fp, answers, eliminated);
+    if (fp.optionCount < 5) return { solved: false, answers };
+    const lr = lookahead(fp, answers, eliminated, 6);
     if (lr) {
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;
