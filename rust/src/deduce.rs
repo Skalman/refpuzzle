@@ -720,9 +720,6 @@ fn deduce_impl(
                             max_pos = v;
                         }
                     }
-                    if max_pos < 0 {
-                        continue;
-                    }
                     let letter_oi = answer.idx();
                     let mut q_mask = 0u16;
                     for j in (max_pos as usize + 1)..scan_end {

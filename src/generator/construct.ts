@@ -102,7 +102,6 @@ export function generateConstructive(
     if (tracing) {
       trace(`=== attempt ${String(attempt + 1)} ===`);
       trace(`solution: ${cr.solution.join("")}`);
-      trace(`types: ${cr.types.map((t, i) => `${formatTypeTag(t)}@${String(i)}`).join(" ")}`);
     }
     const puzzle = fillOptions(cr, rng);
     if (tracing) {
@@ -111,7 +110,7 @@ export function generateConstructive(
         const vals = puzzle.questions[i].options
           .slice(0, oc)
           .map((o) => (o.value == null ? "null" : String(o.value)));
-        trace(`options Q${String(i + 1)}: [${vals.join(",")}]`);
+        trace(`Q${String(i + 1)}: ${formatTypeTag(cr.types[i])} [${vals.join(",")}]`);
       }
     }
     const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing);

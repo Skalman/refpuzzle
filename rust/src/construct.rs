@@ -67,6 +67,8 @@ pub fn generate(
                 eprintln!("=== attempt {}: SUCCESS ===", attempt + 1);
             }
             return Some(r);
+        } else if trace {
+            eprintln!("=== attempt {}: construct failed ===", attempt + 1);
         }
     }
     None
@@ -424,11 +426,6 @@ fn try_construct(
         eprintln!("=== attempt {} ===", attempt + 1);
         let sol_str: String = solution.iter().take(n).map(|a| a.as_char()).collect();
         eprintln!("solution: {}", sol_str);
-        let types_str: String = (0..n)
-            .map(|i| format!("{}@{}", format_type_tag(&state.question_types[i]), i))
-            .collect::<Vec<_>>()
-            .join(" ");
-        eprintln!("types: {}", types_str);
         for qi in 0..n {
             let vals: Vec<String> = (0..oc)
                 .map(|oi| {
@@ -442,7 +439,12 @@ fn try_construct(
                     }
                 })
                 .collect();
-            eprintln!("options Q{}: [{}]", qi + 1, vals.join(","));
+            eprintln!(
+                "Q{}: {} [{}]",
+                qi + 1,
+                format_type_tag(&state.question_types[qi]),
+                vals.join(",")
+            );
         }
     }
 
@@ -581,10 +583,7 @@ fn solution_fits_type(
         }
         QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
         QuestionTypeKind::SameAsWhich => true,
-        QuestionTypeKind::NoOtherHasAnswer => {
-            let counts = letter_counts(sol, n);
-            counts.iter().filter(|&&c| c == 1).count() == 1
-        }
+        QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionTypeKind::EqualCount => true,
         _ if is_constrained_type(kind) => solution_satisfies_type_for_kind(kind, qi, sol, n),
         _ => true,

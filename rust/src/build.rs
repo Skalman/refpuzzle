@@ -676,6 +676,7 @@ pub fn repair_one_question(
     rng: &mut Rng,
 ) {
     let n = fp.n;
+    let oc = fp.option_count;
     let correct_oi = solution[qi].idx();
     let elim = stuck_elim[qi];
     let qt = fp.question_types[qi];
@@ -723,7 +724,7 @@ pub fn repair_one_question(
                 for v in 0..5i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
-                        for k in 0..5 {
+                        for k in 0..oc {
                             if k != oi && fp.option_nums[qi][k] == v {
                                 in_use = true;
                             }
@@ -760,7 +761,7 @@ pub fn repair_one_question(
                 for v in 0..5i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
-                        for k in 0..5 {
+                        for k in 0..oc {
                             if k != oi && fp.option_answers[qi][k] as i16 == v {
                                 in_use = true;
                             }
@@ -802,7 +803,7 @@ pub fn repair_one_question(
                 for v in 0..=max {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
-                        for k in 0..5 {
+                        for k in 0..oc {
                             if k != oi && fp.option_nums[qi][k] == v {
                                 in_use = true;
                             }
@@ -846,7 +847,7 @@ pub fn repair_one_question(
                         continue;
                     }
                     let mut in_use = false;
-                    for k in 0..5 {
+                    for k in 0..oc {
                         if k != oi && fp.option_nums[qi][k] == j {
                             in_use = true;
                         }
@@ -928,7 +929,7 @@ pub fn repair_one_question(
                         continue;
                     }
                     let mut in_use = false;
-                    for k in 0..5 {
+                    for k in 0..oc {
                         if k != oi && fp.option_nums[qi][k] == v {
                             in_use = true;
                         }
