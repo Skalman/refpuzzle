@@ -79,9 +79,9 @@ fn main() {
             }
             "--help" | "-h" => {
                 eprintln!(
-                    "Usage: logiquiz-gen --year YYYY -o FILE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--level 1-6] [-m] [--stats]"
+                    "Usage: refpuzzle --year YYYY -o FILE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--level 1-6] [-m] [--stats]"
                 );
-                eprintln!("       logiquiz-gen --check <file.json> [MMDD-level-N]");
+                eprintln!("       refpuzzle --check <file.json> [MMDD-level-N]");
                 eprintln!("  Generates a year of daily puzzles.");
                 eprintln!(
                     "  Seeds are derived from the date, so the same date always produces the same puzzle."
