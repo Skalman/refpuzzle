@@ -23,7 +23,7 @@ import {
   QT_ANSWER_OF,
   QT_LEAST_COMMON,
   QT_MOST_COMMON,
-  QT_UNIQUE,
+  QT_NO_OTHER_HAS_ANSWER,
   QT_EQUAL_COUNT,
   QT_ANSWER_IS_SELF,
   QT_LETTER_DIST,
@@ -228,8 +228,8 @@ export function checkValueValidity(
     return targetAns === refAns ? V_VALID : V_INVALID;
   }
 
-  // ── Unique ──
-  if (q.t === QT_UNIQUE) {
+  // ── NoOtherHasAnswer ──
+  if (q.t === QT_NO_OTHER_HAS_ANSWER) {
     if (v == null || v < 0 || v > 4) return V_INVALID;
     const letter = LETTERS[v];
     const amask = 1 << v;

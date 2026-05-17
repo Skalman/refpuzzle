@@ -73,7 +73,7 @@ export type QuestionType =
   | { type: "AnswerOf"; questionIndex: number }
   | { type: "LeastCommon" }
   | { type: "MostCommon" }
-  | { type: "Unique" } // identity options: option A=0, B=1, ...
+  | { type: "NoOtherHasAnswer" } // identity options: option A=0, B=1, ...
   | { type: "EqualCount"; answer: Answer }
   | { type: "AnswerIsSelf" } // identity options: option A=0, B=1, ...
 
@@ -108,7 +108,7 @@ export const QT_CONSEC_IDENT = rtCounter++;
 export const QT_ANSWER_OF = rtCounter++;
 export const QT_LEAST_COMMON = rtCounter++;
 export const QT_MOST_COMMON = rtCounter++;
-export const QT_UNIQUE = rtCounter++;
+export const QT_NO_OTHER_HAS_ANSWER = rtCounter++;
 export const QT_EQUAL_COUNT = rtCounter++;
 export const QT_ANSWER_IS_SELF = rtCounter++;
 export const QT_LETTER_DIST = rtCounter++;
@@ -118,7 +118,7 @@ export const QT_SAME_AS_WHICH = rtCounter++;
 export type QuestionTypeId = number;
 
 export function isQuestionTypeWithIdentityOptions(t: QuestionTypeId): boolean {
-  return t === QT_UNIQUE || t === QT_ANSWER_IS_SELF;
+  return t === QT_NO_OTHER_HAS_ANSWER || t === QT_ANSWER_IS_SELF;
 }
 
 // Mapping from string type names to numeric IDs (used in flattenRule)
@@ -143,7 +143,7 @@ const QT_MAP: Record<string, QuestionTypeId> = {
   AnswerOf: QT_ANSWER_OF,
   LeastCommon: QT_LEAST_COMMON,
   MostCommon: QT_MOST_COMMON,
-  Unique: QT_UNIQUE,
+  NoOtherHasAnswer: QT_NO_OTHER_HAS_ANSWER,
   EqualCount: QT_EQUAL_COUNT,
   AnswerIsSelf: QT_ANSWER_IS_SELF,
   LetterDist: QT_LETTER_DIST,
@@ -188,7 +188,7 @@ const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
   QT_LEAST_COMMON,
   QT_MOST_COMMON,
   QT_MOST_COMMON_COUNT,
-  QT_UNIQUE,
+  QT_NO_OTHER_HAS_ANSWER,
   QT_EQUAL_COUNT,
   QT_TRUE_STMT,
   QT_ONLY_SAME,

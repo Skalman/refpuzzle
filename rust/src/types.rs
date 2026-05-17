@@ -71,7 +71,7 @@ pub enum QuestionTypeKind {
     AnswerOf,
     LeastCommon,
     MostCommon,
-    Unique,
+    NoOtherHasAnswer,
     EqualCount,
     AnswerIsSelf,
     LetterDist,
@@ -140,7 +140,7 @@ pub enum QuestionType {
     },
     LeastCommon,
     MostCommon,
-    Unique,
+    NoOtherHasAnswer,
     EqualCount {
         #[serde(rename = "a")]
         answer: Answer,
@@ -159,7 +159,10 @@ pub enum QuestionType {
 
 impl QuestionType {
     pub fn has_identity_options(&self) -> bool {
-        matches!(self, QuestionType::Unique | QuestionType::AnswerIsSelf)
+        matches!(
+            self,
+            QuestionType::NoOtherHasAnswer | QuestionType::AnswerIsSelf
+        )
     }
 
     pub fn is_global(&self) -> bool {
@@ -171,7 +174,7 @@ impl QuestionType {
                 | QuestionType::LeastCommon
                 | QuestionType::MostCommon
                 | QuestionType::MostCommonCount
-                | QuestionType::Unique
+                | QuestionType::NoOtherHasAnswer
                 | QuestionType::EqualCount { .. }
                 | QuestionType::TrueStmt
                 | QuestionType::OnlySame
@@ -194,7 +197,7 @@ impl QuestionType {
                 | QuestionType::LeastCommon
                 | QuestionType::MostCommon
                 | QuestionType::MostCommonCount
-                | QuestionType::Unique
+                | QuestionType::NoOtherHasAnswer
                 | QuestionType::EqualCount { .. }
                 | QuestionType::TrueStmt
                 | QuestionType::OnlySame

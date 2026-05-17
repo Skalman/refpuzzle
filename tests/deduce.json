@@ -2140,14 +2140,14 @@
       "expect": "1a"
     },
     {
-      "name": "TrueStatementClaimInvalid: Unique claims B is unique, but Q3=B and Q4=B → eliminate",
+      "name": "TrueStatementClaimInvalid: NoOtherHasAnswer claims B is unique, but Q3=B and Q4=B → eliminate",
       "rule": "TrueStatementClaimInvalid",
       "puzzle": {
         "q": [
           {
             "t": { "t": "TrueStmt" },
             "c": [
-              { "t": "Unique", "v": 1 },
+              { "t": "NoOtherHasAnswer", "v": 1 },
               { "a": 0, "t": "CountAnswer", "v": 1 },
               { "a": 1, "t": "CountAnswer", "v": 2 },
               { "a": 2, "t": "CountAnswer", "v": 1 },

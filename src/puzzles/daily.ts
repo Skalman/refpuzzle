@@ -89,7 +89,7 @@ function expandQuestion(q: CompactQuestionType): QuestionType {
     case "ConsecIdent":
     case "LeastCommon":
     case "MostCommon":
-    case "Unique":
+    case "NoOtherHasAnswer":
     case "AnswerIsSelf":
     case "TrueStmt":
       return { type };

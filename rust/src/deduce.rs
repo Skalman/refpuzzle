@@ -586,16 +586,16 @@ fn deduce_impl(
                         match_count += 1;
                     }
                 }
-                if match_count == 1 {
-                    if let Some(oi) = match_oi {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[oi],
-                            },
-                            DeduceRule::CountAllAnswered,
-                        );
-                    }
+                if match_count == 1
+                    && let Some(oi) = match_oi
+                {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::CountAllAnswered,
+                    );
                 }
             }
         }
@@ -2252,7 +2252,7 @@ mod tests {
                 }
                 18 => QuestionType::LeastCommon,
                 19 => QuestionType::MostCommon,
-                20 => QuestionType::Unique,
+                20 => QuestionType::NoOtherHasAnswer,
                 21 => QuestionType::EqualCount {
                     answer: rng.pick(&LETTERS),
                 },

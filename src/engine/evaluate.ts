@@ -24,7 +24,7 @@ import {
   QT_ANSWER_OF,
   QT_LEAST_COMMON,
   QT_MOST_COMMON,
-  QT_UNIQUE,
+  QT_NO_OTHER_HAS_ANSWER,
   QT_EQUAL_COUNT,
   QT_ANSWER_IS_SELF,
   QT_LETTER_DIST,
@@ -217,8 +217,13 @@ export function checkQuestionAgainstSolution(
       return c[v] === max && active.filter((x) => x === max).length === 1;
     }
 
-    case QT_UNIQUE:
-      return countAnswer(answers, selectedAnswer) === 1;
+    case QT_NO_OTHER_HAS_ANSWER: {
+      for (let i = 0; i < n; i++) {
+        if (i === questionIdx) continue;
+        if (answers[i] === selectedAnswer) return false;
+      }
+      return true;
+    }
 
     case QT_EQUAL_COUNT: {
       const refCount = countAnswer(answers, q.answer!);
@@ -325,13 +330,14 @@ export function evaluateClaim(claim: Claim, qi: number, answers: (Answer | null)
       const min = Math.min(...counts);
       return counts[value] === min && counts.filter((c) => c === min).length === 1;
     }
-    case "Unique": {
+    case "NoOtherHasAnswer": {
       if (value < 0 || value > 4) return false;
-      const counts = [0, 0, 0, 0, 0];
-      for (const a of answers) {
-        if (a !== null) counts[L2I[a]] += 1;
+      const letter = LETTERS[value];
+      for (let i = 0; i < n; i++) {
+        if (i === qi) continue;
+        if (answers[i] === letter) return false;
       }
-      return counts[value] === 1 && counts.filter((c) => c === 1).length === 1;
+      return true;
     }
     case "EqualCount": {
       if (value < 0 || value > 4) return false;

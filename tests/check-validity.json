@@ -342,7 +342,7 @@
       "qi": 0,
       "puzzle": {
         "q": [
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
@@ -356,7 +356,7 @@
       "qi": 0,
       "puzzle": {
         "q": [
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
@@ -370,7 +370,7 @@
       "qi": 0,
       "puzzle": {
         "q": [
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
@@ -384,7 +384,7 @@
       "qi": 0,
       "puzzle": {
         "q": [
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }

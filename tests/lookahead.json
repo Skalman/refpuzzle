@@ -52,7 +52,7 @@
         "q": [
           { "t": { "t": "AnswerOf", "q": 1 }, "o": [0, 1, 2, 3, 4] },
           { "t": { "t": "AnswerOf", "q": 2 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
         ]
       },
@@ -91,7 +91,7 @@
       "puzzle": {
         "q": [
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "Unique" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
           { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
         ]

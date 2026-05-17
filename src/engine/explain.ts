@@ -33,7 +33,7 @@ import {
   QT_ONLY_EVEN,
   QT_CONSEC_IDENT,
   QT_ANSWER_OF,
-  QT_UNIQUE,
+  QT_NO_OTHER_HAS_ANSWER,
   QT_EQUAL_COUNT,
   QT_LEAST_COMMON,
   QT_MOST_COMMON,
@@ -1167,7 +1167,7 @@ function explainElimDetail(
     }
   }
 
-  if (q.t === QT_UNIQUE) {
+  if (q.t === QT_NO_OTHER_HAS_ANSWER) {
     for (let i = 0; i < n; i++) {
       if (answers[i] === letter)
         return d(
@@ -1438,7 +1438,7 @@ function explainInvalidDetail(
     }
   }
 
-  if (q.t === QT_UNIQUE) {
+  if (q.t === QT_NO_OTHER_HAS_ANSWER) {
     for (let i = 0; i < n; i++) {
       if (i !== qi && answers[i] === a)
         return `${Q(qi)} claims ${a} is unique, but ${Q(i)} already has answer ${a}`;

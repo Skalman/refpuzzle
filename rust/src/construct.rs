@@ -63,7 +63,7 @@ const FILL_TYPES: &[QuestionTypeKind] = &[
     QuestionTypeKind::OnlyEven,
     QuestionTypeKind::LeastCommon,
     QuestionTypeKind::MostCommon,
-    QuestionTypeKind::Unique,
+    QuestionTypeKind::NoOtherHasAnswer,
     QuestionTypeKind::EqualCount,
     QuestionTypeKind::AnswerIsSelf,
     QuestionTypeKind::TrueStmt,
@@ -232,11 +232,11 @@ fn try_construct(
 
     // Phase 1: Counting entry point (skip 50% of the time for small puzzles)
     let skip_counting = n <= 3 && rng.int(0, 1) == 0;
-    if !skip_counting {
-        if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng)
-        {
-            return None;
-        }
+    if !skip_counting
+        && (av_counting.is_empty()
+            || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng))
+    {
+        return None;
     }
 
     // Phase 2: answer_of backbone
@@ -474,7 +474,7 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
     matches!(
         kind,
         QuestionTypeKind::ConsecIdent
-            | QuestionTypeKind::Unique
+            | QuestionTypeKind::NoOtherHasAnswer
             | QuestionTypeKind::OnlySame
             | QuestionTypeKind::OnlyOdd
             | QuestionTypeKind::OnlyEven
@@ -502,7 +502,7 @@ fn solution_fits_type(
         }
         QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
         QuestionTypeKind::SameAsWhich => true,
-        QuestionTypeKind::Unique => {
+        QuestionTypeKind::NoOtherHasAnswer => {
             let counts = letter_counts(sol, n);
             counts.iter().filter(|&&c| c == 1).count() == 1
         }
@@ -528,7 +528,7 @@ fn solution_satisfies_type_for_kind(
             }
             pairs == 1
         }
-        QuestionTypeKind::Unique => count_letter(sol, sol[qi], n) == 1,
+        QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionTypeKind::OnlySame => {
             let mut m = 0;
             for i in 0..n {
@@ -674,7 +674,7 @@ fn random_type_params(
         }
         QuestionTypeKind::LeastCommon => Some(QuestionType::LeastCommon),
         QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
-        QuestionTypeKind::Unique => Some(QuestionType::Unique),
+        QuestionTypeKind::NoOtherHasAnswer => Some(QuestionType::NoOtherHasAnswer),
         QuestionTypeKind::EqualCount => {
             let ref_letter = rng.pick(letters);
             let ref_count = count_letter(solution, ref_letter, n);

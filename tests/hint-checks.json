@@ -102,7 +102,7 @@
       "expect": "!1"
     },
     {
-      "name": "Unique contradiction: answer appears twice",
+      "name": "NoOtherHasAnswer contradiction: answer appears twice",
       "puzzle": {
         "q": [
           { "r": { "t": "unique_answer" }, "o": [null, null, null, null, null] },
@@ -1423,7 +1423,7 @@
       "expect": "1b"
     },
     {
-      "name": "Unique contradiction: same answer appears in 3 questions",
+      "name": "NoOtherHasAnswer contradiction: same answer appears in 3 questions",
       "description": "unique_answer Q1=A. Q2=A, Q3=A. count=3 > 1.",
       "puzzle": {
         "q": [

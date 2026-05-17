@@ -132,7 +132,7 @@ pub fn solution_satisfies_type(
             }
             matches == 1
         }
-        QuestionType::Unique => count_letter(sol, sol[qi], n) == 1,
+        QuestionType::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionType::EqualCount { .. } => true,
         QuestionType::SameAsWhich { question_index } => {
             let ref_ans = sol[question_index as usize];
@@ -307,7 +307,7 @@ fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
         QuestionType::AnswerOf { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
-        | QuestionType::Unique
+        | QuestionType::NoOtherHasAnswer
         | QuestionType::LetterDist { .. }
         | QuestionType::EqualCount { .. } => {
             for v in 0..5i16 {
@@ -558,7 +558,7 @@ pub fn repair_one_question(
         QuestionType::LetterDist { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
-        | QuestionType::Unique => {
+        | QuestionType::NoOtherHasAnswer => {
             let correct_val = fp.option_nums[qi][correct_oi];
             // Find closest non-eliminated wrong option, replace with furthest value
             let mut best_oi = None;
@@ -1149,7 +1149,7 @@ fn claim_category(claim: &Claim) -> u16 {
         } => 1000 + answer.idx() as u16 * 20 + before_index as u16,
         QuestionType::MostCommonCount => 1100,
         QuestionType::LeastCommon => 1200,
-        QuestionType::Unique => 1300,
+        QuestionType::NoOtherHasAnswer => 1300,
         QuestionType::EqualCount { answer } => 1400 + answer.idx() as u16,
         QuestionType::ConsecIdent => 1500,
         QuestionType::OnlyOdd { answer } => 1600 + answer.idx() as u16,

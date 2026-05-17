@@ -143,17 +143,20 @@ fn evaluate_claim_extended(
             let min = *counts.iter().min().unwrap_or(&0);
             counts[value as usize] == min && counts.iter().filter(|&&c| c == min).count() == 1
         }
-        QuestionType::Unique => {
+        QuestionType::NoOtherHasAnswer => {
             if !(0..=4).contains(&value) {
                 return false;
             }
-            let mut counts = [0i16; 5];
-            for i in 0..n {
-                if let Some(a) = answers[i] {
-                    counts[a.idx()] += 1;
+            let letter = LETTERS[value as usize];
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if answers[j] == Some(letter) {
+                    return false;
                 }
             }
-            counts[value as usize] == 1 && counts.iter().filter(|&&c| c == 1).count() == 1
+            true
         }
         QuestionType::EqualCount { answer } => {
             if !(0..=4).contains(&value) {

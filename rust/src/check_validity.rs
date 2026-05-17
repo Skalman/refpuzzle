@@ -236,6 +236,7 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
 
 // ── Main function ──
 
+#[allow(clippy::too_many_arguments)]
 pub fn check_value_validity(
     qt: &QuestionType,
     value: i16,
@@ -380,8 +381,8 @@ pub fn check_value_validity(
             }
         }
 
-        // ── Unique: "not the answer to any OTHER question" ──
-        QuestionType::Unique => {
+        // ── NoOtherHasAnswer: "not the answer to any OTHER question" ──
+        QuestionType::NoOtherHasAnswer => {
             if !(0..=4).contains(&value) {
                 return Validity::Invalid;
             }

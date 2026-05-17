@@ -186,25 +186,25 @@ fn propagate_forces(
             if current[j].is_some() {
                 continue;
             }
-            if let QuestionType::AnswerOf { question_index } = fp.question_types[j] {
-                if question_index as usize == qi {
-                    let target_oi = current[qi].unwrap().idx() as u8;
-                    let mut found: Option<usize> = None;
-                    for oi in 0..5usize {
-                        if fp.option_answers[j][oi] == target_oi {
-                            if found.is_some() {
-                                found = None;
-                                break;
-                            }
-                            found = Some(oi);
+            if let QuestionType::AnswerOf { question_index } = fp.question_types[j]
+                && question_index as usize == qi
+            {
+                let target_oi = current[qi].unwrap().idx() as u8;
+                let mut found: Option<usize> = None;
+                for oi in 0..5usize {
+                    if fp.option_answers[j][oi] == target_oi {
+                        if found.is_some() {
+                            found = None;
+                            break;
                         }
+                        found = Some(oi);
                     }
-                    if let Some(oi) = found {
-                        current[j] = Some(LETTERS[oi]);
-                        *assigned_bits |= 1 << j;
-                        forced.push(j);
-                        queue.push(j);
-                    }
+                }
+                if let Some(oi) = found {
+                    current[j] = Some(LETTERS[oi]);
+                    *assigned_bits |= 1 << j;
+                    forced.push(j);
+                    queue.push(j);
                 }
             }
         }

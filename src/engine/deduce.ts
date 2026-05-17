@@ -1438,9 +1438,10 @@ export function deduceWithRule(
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
         const fq = flattenQuestion(claim.questionType);
+        const claimVal = claim.value === -1 ? null : claim.value;
         const v = checkValueValidity(
           fq,
-          claim.value,
+          claimVal,
           LETTERS[oi],
           qi,
           answers,

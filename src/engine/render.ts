@@ -45,7 +45,7 @@ export function renderQuestionText(qt: QuestionType): string {
       return "Which is the least common answer?";
     case "MostCommon":
       return "Which is the most common answer?";
-    case "Unique":
+    case "NoOtherHasAnswer":
       return "Which answer is not the answer to any other question?";
     case "EqualCount":
       return `Which answer appears the same number of times as ${qt.answer}?`;
@@ -56,6 +56,7 @@ export function renderQuestionText(qt: QuestionType): string {
     case "TrueStmt":
       return "Which statement is the only true statement?";
   }
+  qt satisfies never;
   return "";
 }
 
@@ -102,7 +103,13 @@ export function renderClaimLabel(claim: Claim): string {
   );
 }
 
-const LETTER_RULES = new Set(["AnswerOf", "LeastCommon", "MostCommon", "Unique", "AnswerIsSelf"]);
+const LETTER_RULES = new Set([
+  "AnswerOf",
+  "LeastCommon",
+  "MostCommon",
+  "NoOtherHasAnswer",
+  "AnswerIsSelf",
+]);
 
 function isLetterRule(type: string): boolean {
   return LETTER_RULES.has(type);

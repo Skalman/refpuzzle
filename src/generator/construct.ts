@@ -44,7 +44,7 @@ export function generateConstructive(
   return null;
 }
 
-const CONSTRAINED_TYPES = new Set<string>(["Unique", "AnswerIsSelf"]);
+const CONSTRAINED_TYPES = new Set<string>(["NoOtherHasAnswer", "AnswerIsSelf"]);
 
 // Rule types by category
 const ENTRY_TYPES: QuestionType["type"][] = [
@@ -74,7 +74,7 @@ const VARIETY_TYPES: QuestionType["type"][] = [
   "OnlyEven",
   "LeastCommon",
   "MostCommon",
-  "Unique",
+  "NoOtherHasAnswer",
   "EqualCount",
   "AnswerIsSelf",
   "TrueStmt",
@@ -82,7 +82,7 @@ const VARIETY_TYPES: QuestionType["type"][] = [
 
 const STRUCTURAL_TYPES = new Set<QuestionType["type"]>([
   "ConsecIdent",
-  "Unique",
+  "NoOtherHasAnswer",
   "OnlySame",
   "OnlyOdd",
   "OnlyEven",
@@ -669,7 +669,7 @@ function makeRule(
     case "ConsecIdent":
     case "LeastCommon":
     case "MostCommon":
-    case "Unique":
+    case "NoOtherHasAnswer":
       return { type };
     case "EqualCount": {
       const refLetter = rng.pick(LETTERS);
@@ -713,7 +713,7 @@ function checkStructural(rule: QuestionType, qi: number, sol: Answer[]): boolean
         if ((i + 1) % 2 === parity && sol[i] === rule.answer) m++;
       return m === 1;
     }
-    case "Unique":
+    case "NoOtherHasAnswer":
       return sol.filter((a) => a === sol[qi]).length === 1;
     default:
       return true;
@@ -732,7 +732,7 @@ function solutionHasStructural(
       for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairs++;
       return pairs === 1;
     }
-    case "Unique":
+    case "NoOtherHasAnswer":
       return solution.slice(0, n).filter((a) => a === solution[qi]).length === 1;
     case "OnlySame": {
       let m = 0;
@@ -1086,7 +1086,7 @@ const CLAIM_GENS: ClaimGen[] = [
     const counts = [0, 0, 0, 0, 0];
     for (const a of sol) counts[L2I[a]] += 1;
     if (counts.filter((c) => c === 1).length !== 1) return null;
-    return { questionType: { type: "Unique" }, value: counts.indexOf(1) };
+    return { questionType: { type: "NoOtherHasAnswer" }, value: counts.indexOf(1) };
   },
   (sol, _qi, _n, rng) => {
     const ref = rng.pick(LETTERS);
@@ -1193,7 +1193,7 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     case "AnswerOf":
     case "MostCommon":
     case "LeastCommon":
-    case "Unique":
+    case "NoOtherHasAnswer":
     case "EqualCount":
       return { ...claim, value: L2I[rng.pick(LETTERS)] };
     default:
@@ -1238,7 +1238,7 @@ function claimCategory(c: Claim): string {
       return "mostcommoncount";
     case "LeastCommon":
       return "leastcommon";
-    case "Unique":
+    case "NoOtherHasAnswer":
       return "unique";
     case "EqualCount":
       return "equalcount:" + qt.answer;
