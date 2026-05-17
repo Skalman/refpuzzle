@@ -1,6 +1,6 @@
 import type { Answer, FlatPuzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import { deduce } from "./deduce.ts";
+import { deduce, deduceFast } from "./deduce.ts";
 import type { DeduceAction, DeduceResult } from "./deduce.ts";
 import { checkAnswerValidity } from "./check-validity.ts";
 
@@ -38,6 +38,7 @@ function tryAssumption(
   qi: number,
   oi: number,
   stopDeducingAfterNResults: number,
+  fast: boolean,
 ): LookaheadResult | null {
   const n = fp.n;
   const hypAnswers: (Answer | null)[] = answers.slice(0, n);
@@ -49,7 +50,9 @@ function tryAssumption(
   let contradiction = false;
 
   while (chain.length < stopDeducingAfterNResults) {
-    const drs = deduce(fp, hypAnswers, hypEliminated);
+    const drs = fast
+      ? deduceFast(fp, hypAnswers, hypEliminated)
+      : deduce(fp, hypAnswers, hypEliminated);
     if (drs.length === 0) break;
     for (const dr of drs) {
       if (hasContradiction(dr.action, hypAnswers)) {
@@ -108,13 +111,22 @@ export function lookahead(
   answers: (Answer | null)[],
   eliminated: number[],
   stopDeducingAfterNResults = Infinity,
+  fast = false,
 ): LookaheadResult | null {
   const n = fp.n;
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] != null) continue;
     for (let oi = 0; oi < 5; oi++) {
       if ((eliminated[qi] >> oi) & 1) continue;
-      const result = tryAssumption(fp, answers, eliminated, qi, oi, stopDeducingAfterNResults);
+      const result = tryAssumption(
+        fp,
+        answers,
+        eliminated,
+        qi,
+        oi,
+        stopDeducingAfterNResults,
+        fast,
+      );
       if (result) return result;
     }
   }
@@ -133,7 +145,15 @@ export function lookaheadShortest(
     if (answers[qi] != null) continue;
     for (let oi = 0; oi < 5; oi++) {
       if ((eliminated[qi] >> oi) & 1) continue;
-      const result = tryAssumption(fp, answers, eliminated, qi, oi, stopDeducingAfterNResults);
+      const result = tryAssumption(
+        fp,
+        answers,
+        eliminated,
+        qi,
+        oi,
+        stopDeducingAfterNResults,
+        false,
+      );
       if (result && (best == null || result.chain.length < best.chain.length)) {
         best = result;
         if (best.chain.length === 0) return best;

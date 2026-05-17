@@ -479,7 +479,7 @@ function runHintEngine(
       continue;
     }
     if (fp.optionCount < 5) return { solved: false, answers, eliminated };
-    const lr = lookahead(fp, answers, eliminated, 6);
+    const lr = lookahead(fp, answers, eliminated, 6, true);
     if (lr) {
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;

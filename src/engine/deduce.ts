@@ -221,7 +221,15 @@ export function deduce(
   answers: (Answer | null)[],
   eliminated: number[],
 ): DeduceResult[] {
-  return deduceWithRule(fp, answers, eliminated, null);
+  return deduceImpl(fp, answers, eliminated, null, null, false);
+}
+
+export function deduceFast(
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  eliminated: number[],
+): DeduceResult[] {
+  return deduceImpl(fp, answers, eliminated, null, null, true);
 }
 
 export function deduceWithRule(
@@ -230,6 +238,17 @@ export function deduceWithRule(
   eliminated: number[],
   rule: DeduceRule | null,
   exclude: DeduceRule | null = null,
+): DeduceResult[] {
+  return deduceImpl(fp, answers, eliminated, rule, exclude, false);
+}
+
+function deduceImpl(
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  eliminated: number[],
+  rule: DeduceRule | null,
+  exclude: DeduceRule | null,
+  fast: boolean,
 ): DeduceResult[] {
   const n = fp.n;
   const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
@@ -461,7 +480,7 @@ export function deduceWithRule(
       }
     }
 
-    if (run("CountAllAnswered")) {
+    if (!fast && run("CountAllAnswered")) {
       const cp = countPred(q);
       if (cp) {
         const [from, to] = countRange(q, n);
@@ -593,7 +612,7 @@ export function deduceWithRule(
   }
 
   // ── OnlyOdd/OnlyEven range elimination ──
-  if (run("OnlyOddEvenRangeElim")) {
+  if (!fast && run("OnlyOddEvenRangeElim")) {
     for (let src = 0; src < n; src++) {
       if (answers[src] != null) continue;
       const srcR = fp.questions[src];
@@ -643,7 +662,7 @@ export function deduceWithRule(
       if (fp.questions[i].t === QT_COUNT_CONSONANT) consonantQi = i;
     }
     if (vowelQi >= 0 && consonantQi >= 0) {
-      if (run("VowelCrossElim")) {
+      if (!fast && run("VowelCrossElim")) {
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(eliminated, vowelQi, oi)) continue;
           const vv = fp.optionValues[vowelQi][oi];
@@ -1096,142 +1115,144 @@ export function deduceWithRule(
   }
 
   // ── LeastCommon ──
-  for (let qi = 0; qi < n; qi++) {
-    if (answers[qi] != null) continue;
-    const q = fp.questions[qi];
-    if (q.t !== QT_LEAST_COMMON) continue;
+  if (!fast)
+    for (let qi = 0; qi < n; qi++) {
+      if (answers[qi] != null) continue;
+      const q = fp.questions[qi];
+      if (q.t !== QT_LEAST_COMMON) continue;
 
-    // Compute min/max possible count for each letter
-    const minCount = [0, 0, 0, 0, 0];
-    const maxCount = [0, 0, 0, 0, 0];
-    for (let j = 0; j < n; j++) {
-      if (j === qi) continue;
-      if (answers[j] != null) {
-        const li = letterIdx(answers[j]!);
-        minCount[li]++;
-        maxCount[li]++;
-      } else {
-        for (let li = 0; li < 5; li++) {
-          if (!isElim(eliminated, j, li)) maxCount[li]++;
-        }
-      }
-    }
-
-    const canBeLeastOpt = [false, false, false, false, false];
-    const mustBeLeastOpt = [false, false, false, false, false];
-
-    for (let oi = 0; oi < 5; oi++) {
-      if (isElim(eliminated, qi, oi)) continue;
-      const v = fp.optionValues[qi][oi];
-      if (v == null || v < 0 || v >= 5) continue;
-      const claimed = v;
-      const selfLetter = oi;
-
-      const adjMin = [...minCount];
-      const adjMax = [...maxCount];
-      adjMin[selfLetter]++;
-      adjMax[selfLetter]++;
-
-      const canBeLeast = [0, 1, 2, 3, 4].every(
-        (li) => li === claimed || adjMax[li] >= adjMin[claimed],
-      );
-      const mustBeLeast = [0, 1, 2, 3, 4].every(
-        (li) => li === claimed || adjMin[li] > adjMax[claimed],
-      );
-
-      canBeLeastOpt[oi] = canBeLeast;
-      mustBeLeastOpt[oi] = mustBeLeast;
-
-      if (run("LeastCommonElim") && !canBeLeast) {
-        results.push(res({ type: "eliminate", qi, oi }, "LeastCommonElim"));
-      }
-    }
-
-    if (run("LeastCommonForce")) {
-      for (let oi = 0; oi < 5; oi++) {
-        if (!mustBeLeastOpt[oi]) continue;
-        const onlyViable = [0, 1, 2, 3, 4].every(
-          (oj) => oj === oi || isElim(eliminated, qi, oj) || !canBeLeastOpt[oj],
-        );
-        if (onlyViable) {
-          results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "LeastCommonForce"));
-        }
-      }
-    }
-  }
-
-  // ── MostCommon ──
-  for (let qi = 0; qi < n; qi++) {
-    if (answers[qi] != null) continue;
-    const q = fp.questions[qi];
-    if (q.t !== QT_MOST_COMMON) continue;
-
-    const minCount = [0, 0, 0, 0, 0];
-    const maxCount = [0, 0, 0, 0, 0];
-    for (let j = 0; j < n; j++) {
-      if (j === qi) continue;
-      if (answers[j] != null) {
-        const li = letterIdx(answers[j]!);
-        minCount[li]++;
-        maxCount[li]++;
-      } else {
-        for (let li = 0; li < 5; li++) {
-          if (!isElim(eliminated, j, li)) maxCount[li]++;
-        }
-      }
-    }
-
-    const canBeMostOpt = [false, false, false, false, false];
-    const mustBeMostOpt = [false, false, false, false, false];
-
-    for (let oi = 0; oi < 5; oi++) {
-      if (isElim(eliminated, qi, oi)) continue;
-      const v = fp.optionValues[qi][oi];
-      if (v == null || v < 0 || v >= 5) continue;
-      const claimed = v;
-      const selfLetter = oi;
-
-      const adjMin = [...minCount];
-      const adjMax = [...maxCount];
-      adjMin[selfLetter]++;
-      adjMax[selfLetter]++;
-
-      let canBeMost = true;
-      let mustBeMost = true;
-      for (let li = 0; li < 5; li++) {
-        if (li === claimed) continue;
-        if (adjMin[li] > adjMax[claimed]) canBeMost = false;
-        if (adjMax[li] >= adjMin[claimed]) mustBeMost = false;
-      }
-
-      canBeMostOpt[oi] = canBeMost;
-      mustBeMostOpt[oi] = mustBeMost;
-
-      if (run("MostCommonElim") && !canBeMost) {
-        results.push(res({ type: "eliminate", qi, oi }, "MostCommonElim"));
-      }
-    }
-
-    if (run("MostCommonForce")) {
-      for (let oi = 0; oi < 5; oi++) {
-        if (!mustBeMostOpt[oi]) continue;
-        let onlyViable = true;
-        for (let oj = 0; oj < 5; oj++) {
-          if (oj === oi || isElim(eliminated, qi, oj)) continue;
-          if (canBeMostOpt[oj]) {
-            onlyViable = false;
-            break;
+      // Compute min/max possible count for each letter
+      const minCount = [0, 0, 0, 0, 0];
+      const maxCount = [0, 0, 0, 0, 0];
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (answers[j] != null) {
+          const li = letterIdx(answers[j]!);
+          minCount[li]++;
+          maxCount[li]++;
+        } else {
+          for (let li = 0; li < 5; li++) {
+            if (!isElim(eliminated, j, li)) maxCount[li]++;
           }
         }
-        if (onlyViable) {
-          results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "MostCommonForce"));
+      }
+
+      const canBeLeastOpt = [false, false, false, false, false];
+      const mustBeLeastOpt = [false, false, false, false, false];
+
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const v = fp.optionValues[qi][oi];
+        if (v == null || v < 0 || v >= 5) continue;
+        const claimed = v;
+        const selfLetter = oi;
+
+        const adjMin = [...minCount];
+        const adjMax = [...maxCount];
+        adjMin[selfLetter]++;
+        adjMax[selfLetter]++;
+
+        const canBeLeast = [0, 1, 2, 3, 4].every(
+          (li) => li === claimed || adjMax[li] >= adjMin[claimed],
+        );
+        const mustBeLeast = [0, 1, 2, 3, 4].every(
+          (li) => li === claimed || adjMin[li] > adjMax[claimed],
+        );
+
+        canBeLeastOpt[oi] = canBeLeast;
+        mustBeLeastOpt[oi] = mustBeLeast;
+
+        if (run("LeastCommonElim") && !canBeLeast) {
+          results.push(res({ type: "eliminate", qi, oi }, "LeastCommonElim"));
+        }
+      }
+
+      if (run("LeastCommonForce")) {
+        for (let oi = 0; oi < 5; oi++) {
+          if (!mustBeLeastOpt[oi]) continue;
+          const onlyViable = [0, 1, 2, 3, 4].every(
+            (oj) => oj === oi || isElim(eliminated, qi, oj) || !canBeLeastOpt[oj],
+          );
+          if (onlyViable) {
+            results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "LeastCommonForce"));
+          }
         }
       }
     }
-  }
+
+  // ── MostCommon ──
+  if (!fast)
+    for (let qi = 0; qi < n; qi++) {
+      if (answers[qi] != null) continue;
+      const q = fp.questions[qi];
+      if (q.t !== QT_MOST_COMMON) continue;
+
+      const minCount = [0, 0, 0, 0, 0];
+      const maxCount = [0, 0, 0, 0, 0];
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (answers[j] != null) {
+          const li = letterIdx(answers[j]!);
+          minCount[li]++;
+          maxCount[li]++;
+        } else {
+          for (let li = 0; li < 5; li++) {
+            if (!isElim(eliminated, j, li)) maxCount[li]++;
+          }
+        }
+      }
+
+      const canBeMostOpt = [false, false, false, false, false];
+      const mustBeMostOpt = [false, false, false, false, false];
+
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const v = fp.optionValues[qi][oi];
+        if (v == null || v < 0 || v >= 5) continue;
+        const claimed = v;
+        const selfLetter = oi;
+
+        const adjMin = [...minCount];
+        const adjMax = [...maxCount];
+        adjMin[selfLetter]++;
+        adjMax[selfLetter]++;
+
+        let canBeMost = true;
+        let mustBeMost = true;
+        for (let li = 0; li < 5; li++) {
+          if (li === claimed) continue;
+          if (adjMin[li] > adjMax[claimed]) canBeMost = false;
+          if (adjMax[li] >= adjMin[claimed]) mustBeMost = false;
+        }
+
+        canBeMostOpt[oi] = canBeMost;
+        mustBeMostOpt[oi] = mustBeMost;
+
+        if (run("MostCommonElim") && !canBeMost) {
+          results.push(res({ type: "eliminate", qi, oi }, "MostCommonElim"));
+        }
+      }
+
+      if (run("MostCommonForce")) {
+        for (let oi = 0; oi < 5; oi++) {
+          if (!mustBeMostOpt[oi]) continue;
+          let onlyViable = true;
+          for (let oj = 0; oj < 5; oj++) {
+            if (oj === oi || isElim(eliminated, qi, oj)) continue;
+            if (canBeMostOpt[oj]) {
+              onlyViable = false;
+              break;
+            }
+          }
+          if (onlyViable) {
+            results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "MostCommonForce"));
+          }
+        }
+      }
+    }
 
   // ── TrueStatement forward ──
-  if (run("TrueStatementForward")) {
+  if (!fast && run("TrueStatementForward")) {
     for (let qi = 0; qi < n; qi++) {
       const a = answers[qi];
       if (a == null) continue;
@@ -1288,7 +1309,7 @@ export function deduceWithRule(
   }
 
   // OnlySame None forward: answered None means no other question can have this letter
-  if (run("OnlySameNoneForward")) {
+  if (!fast && run("OnlySameNoneForward")) {
     for (let qi = 0; qi < n; qi++) {
       if (fp.questions[qi].t !== QT_ONLY_SAME) continue;
       if (answers[qi] == null) continue;
@@ -1314,7 +1335,7 @@ export function deduceWithRule(
     const possA = ~eliminated[p] & 0b11111;
     const possB = ~eliminated[p + 1] & 0b11111;
 
-    if (run("ConsecIdentForwardForce")) {
+    if (!fast && run("ConsecIdentForwardForce")) {
       if (answers[p] != null && answers[p + 1] == null) {
         const oi = letterIdx(answers[p]);
         if (!isElim(eliminated, p + 1, oi))
@@ -1357,7 +1378,7 @@ export function deduceWithRule(
   }
 
   // SameAsWhich reverse: when answered, propagate to option target and ref question
-  if (run("SameAsWhichReverse")) {
+  if (!fast && run("SameAsWhichReverse")) {
     for (let src = 0; src < n; src++) {
       const srcAns = answers[src];
       if (srcAns == null) continue;
@@ -1407,7 +1428,7 @@ export function deduceWithRule(
   }
 
   // TrueStatement self-reference: claim contradicts the option's own letter
-  if (run("TrueStatementSelfRef")) {
+  if (!fast && run("TrueStatementSelfRef")) {
     for (let qi = 0; qi < n; qi++) {
       if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
@@ -1438,7 +1459,7 @@ export function deduceWithRule(
   }
 
   // TrueStatement claim invalid: claim contradicts known answers
-  if (run("TrueStatementClaimInvalid")) {
+  if (!fast && run("TrueStatementClaimInvalid")) {
     for (let qi = 0; qi < n; qi++) {
       if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
