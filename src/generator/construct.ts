@@ -70,6 +70,7 @@ const VARIETY_TYPES: QuestionType["type"][] = [
   "NextSame",
   "OnlySame",
   "SameAs",
+  "SameAsWhich",
   "OnlyOdd",
   "OnlyEven",
   "LeastCommon",
@@ -128,9 +129,11 @@ function allowed(
 
 function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult | null {
   const n = profile.questionCount;
+  const oc = profile.optionCount;
+  const validLetters = LETTERS.slice(0, oc);
 
   // 1. Random solution
-  const solution: Answer[] = Array.from({ length: n }, () => rng.pick(LETTERS));
+  const solution: Answer[] = Array.from({ length: n }, () => rng.pick(validLetters));
 
   // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
   if (profile.allowedTypes.includes("ConsecIdent") && rng.int(0, 1) === 0) {
@@ -145,7 +148,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
         if (k === keep) continue;
         const pos = pairPositions[k] + 1;
         for (;;) {
-          const nl = rng.pick(LETTERS);
+          const nl = rng.pick(validLetters);
           if (nl !== solution[pos - 1] && (pos + 1 >= n || nl !== solution[pos + 1])) {
             solution[pos] = nl;
             break;
@@ -201,9 +204,9 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     const group = symmetricGroup(type);
     if (group !== null && (groupCounts[group] ?? 0) >= (groupCaps[group] ?? 3)) return false;
     const qi = slots[slotIdx];
-    if (!solutionCompatible(type, qi, solution, n)) return false;
+    if (!solutionCompatible(type, qi, solution, n, oc)) return false;
     for (let attempt = 0; attempt < 10; attempt++) {
-      const rule = makeRule(type, qi, n, solution, assigned, rng);
+      const rule = makeRule(type, qi, n, oc, solution, assigned, rng);
       if (!rule) continue;
       if (COUNT_RULE_TYPES.has(rule.type) && "answer" in rule) {
         const letter = rule.answer as string;
@@ -231,9 +234,11 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     return placeRule(rng.pick(types), assigned.size);
   }
 
-  // Phase 1: Counting entry point (crackable via lookahead)
-  if (avEntry.length === 0) return null;
-  if (!placeFrom(avEntry)) return null;
+  // Phase 1: Counting entry point (skip 50% for small puzzles)
+  const skipCounting = n <= 3 && rng.int(0, 1) === 0;
+  if (!skipCounting) {
+    if (avEntry.length === 0 || !placeFrom(avEntry)) return null;
+  }
 
   // Phase 2: answer_of_question backbone
   const chainCount = Math.min(
@@ -303,7 +308,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // Phase 6: Structural rules — inspect solution, pick matching types
   for (let s = 0; s < structuralReserve && assigned.size < n; s++) {
     const qi = slots[assigned.size];
-    const fitting = avStructural.filter((t) => solutionCompatible(t, qi, solution, n));
+    const fitting = avStructural.filter((t) => solutionCompatible(t, qi, solution, n, oc));
     rng.shuffle(fitting);
     let placed = false;
     for (const type of fitting) {
@@ -331,7 +336,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
   // 3. Build and validate puzzle
   const finalRules: QuestionType[] = rules.filter((t): t is QuestionType => t !== null);
   const questions = finalRules.map<QuestionDef>((questionType, i) => ({
-    options: engineerOptions(questionType, i, solution, n, rng),
+    options: engineerOptions(questionType, i, solution, n, oc, rng),
     questionType,
   }));
 
@@ -340,6 +345,7 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): GenerateResult |
     title: profile.name,
     difficulty: String(profile.level),
     questions,
+    optionCount: oc,
   };
 
   const fp = flattenPuzzle(puzzle);
@@ -380,8 +386,9 @@ function checkSolvable(puzzle: Puzzle, n: number): boolean {
 
 function runHintEngine(puzzle: Puzzle, n: number): { solved: boolean; answers: (Answer | null)[] } {
   const fp = flattenPuzzle(puzzle);
+  const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
   const answers: (Answer | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(0);
+  const eliminated: number[] = new Array(n).fill(phantomMask);
   for (let step = 0; step < n * 15; step++) {
     if (answers.every((a) => a != null)) return { solved: true, answers };
     const drs = deduce(fp, answers, eliminated);
@@ -602,25 +609,27 @@ function makeRule(
   type: QuestionType["type"],
   qi: number,
   n: number,
+  oc: number,
   solution: Answer[],
   assigned: Set<number>,
   rng: RNG,
 ): QuestionType | null {
+  const validLetters = LETTERS.slice(0, oc);
   switch (type) {
     case "CountAnswer":
-      return { type, answer: rng.pick(LETTERS) };
+      return { type, answer: rng.pick(validLetters) };
     case "CountAnswerBefore":
       if (n < 6) return null;
       return {
         type,
-        answer: rng.pick(LETTERS),
+        answer: rng.pick(validLetters),
         beforeIndex: rng.int(4, n - 1),
       };
     case "CountAnswerAfter":
       if (n < 6) return null;
       return {
         type,
-        answer: rng.pick(LETTERS),
+        answer: rng.pick(validLetters),
         afterIndex: rng.int(0, Math.max(0, n - 5)),
       };
     case "CountVowel":
@@ -635,7 +644,6 @@ function makeRule(
     case "LetterDist": {
       const targets = [...assigned].filter((j) => j !== qi);
       if (targets.length === 0) {
-        // Can point at any other question
         const pool = [];
         for (let j = 0; j < n; j++) if (j !== qi) pool.push(j);
         return { type, questionIndex: rng.pick(pool) };
@@ -646,18 +654,18 @@ function makeRule(
       return {
         type,
         afterIndex: rng.int(0, Math.max(0, n - 5)),
-        answer: rng.pick(LETTERS),
+        answer: rng.pick(validLetters),
       };
     case "ClosestBefore":
       if (n < 5) return null;
       return {
         type,
         beforeIndex: rng.int(4, n - 1),
-        answer: rng.pick(LETTERS),
+        answer: rng.pick(validLetters),
       };
     case "FirstWith":
     case "LastWith":
-      return { type, answer: rng.pick(LETTERS) };
+      return { type, answer: rng.pick(validLetters) };
     case "PrevSame":
       if (qi < 4) return null;
       return { type };
@@ -672,9 +680,9 @@ function makeRule(
     case "NoOtherHasAnswer":
       return { type };
     case "EqualCount": {
-      const refLetter = rng.pick(LETTERS);
+      const refLetter = rng.pick(validLetters);
       const refCount = solution.filter((a) => a === refLetter).length;
-      const hasMatch = LETTERS.some(
+      const hasMatch = validLetters.some(
         (l) => l !== refLetter && solution.filter((a) => a === l).length === refCount,
       );
       if (!hasMatch && rng.int(0, 4) > 1) return null;
@@ -682,11 +690,22 @@ function makeRule(
     }
     case "OnlyOdd":
     case "OnlyEven":
-      return { type, answer: rng.pick(LETTERS) };
+      return { type, answer: rng.pick(validLetters) };
     case "AnswerIsSelf":
       return { type };
     case "TrueStmt":
       return { type };
+    case "SameAsWhich": {
+      const targets = [...assigned].filter((j) => j !== qi);
+      if (targets.length === 0) return null;
+      const ref = rng.pick(targets);
+      if (solution[ref] === solution[qi]) return null;
+      for (let j = 0; j < n; j++) {
+        if (j !== qi && j !== ref && solution[j] === solution[ref])
+          return { type, questionIndex: ref };
+      }
+      return null;
+    }
   }
   return null;
 }
@@ -758,14 +777,15 @@ function solutionCompatible(
   qi: number,
   solution: Answer[],
   n: number,
+  oc: number,
 ): boolean {
   switch (type) {
     case "LeastCommon": {
-      const c = letterCounts(solution.slice(0, n));
+      const c = letterCounts(solution.slice(0, n)).slice(0, oc);
       return c.filter((v) => v === Math.min(...c)).length === 1;
     }
     case "MostCommon": {
-      const c = letterCounts(solution.slice(0, n));
+      const c = letterCounts(solution.slice(0, n)).slice(0, oc);
       return c.filter((v) => v === Math.max(...c)).length === 1;
     }
     case "SameAs": {
@@ -792,30 +812,31 @@ function engineerOptions(
   qi: number,
   solution: Answer[],
   n: number,
+  oc: number,
   rng: RNG,
 ): OptionDef[] {
-  // Constrained types: value is the letter index (0=A, 1=B, etc.)
-  if (CONSTRAINED_TYPES.has(rule.type)) return LETTERS.map((_l, i) => ({ value: i }));
-  if (rule.type === "TrueStmt") return buildClaims(qi, solution, n, rng);
+  const letterPool = Array.from({ length: oc }, (_, i) => i);
+  if (CONSTRAINED_TYPES.has(rule.type)) return letterPool.map((i) => ({ value: i }));
+  if (rule.type === "TrueStmt") return buildClaims(qi, solution, n, rng).slice(0, oc);
   if (rule.type === "LeastCommon" || rule.type === "MostCommon") {
-    const counts = letterCounts(solution.slice(0, n));
+    const counts = letterCounts(solution.slice(0, n)).slice(0, oc);
     const target = rule.type === "LeastCommon" ? Math.min(...counts) : Math.max(...counts);
     const correctIdx = counts.indexOf(target);
     const targetIdx = L2I[solution[qi]];
-    const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
-    const opts: OptionDef[] = new Array(5);
+    const pool = rng.shuffle(letterPool.filter((i) => i !== correctIdx));
+    const opts: OptionDef[] = new Array(oc);
     opts[targetIdx] = { value: correctIdx };
     let di = 0;
-    for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: pool[di++] };
+    for (let i = 0; i < oc; i++) if (i !== targetIdx) opts[i] = { value: pool[di++] };
     return opts;
   }
   const correct = computeValue(rule, qi, solution);
   const targetIdx = L2I[solution[qi]];
-  const distractors = makeDistractors(rule, correct, qi, n, rng);
-  const opts: OptionDef[] = new Array(5);
+  const distractors = makeDistractors(rule, correct, qi, n, oc, rng).slice(0, oc - 1);
+  const opts: OptionDef[] = new Array(oc);
   opts[targetIdx] = { value: correct };
   let di = 0;
-  for (let i = 0; i < 5; i++) if (i !== targetIdx) opts[i] = { value: distractors[di++] };
+  for (let i = 0; i < oc; i++) if (i !== targetIdx) opts[i] = { value: distractors[di++] };
   return opts;
 }
 
@@ -878,6 +899,13 @@ function computeValue(rule: QuestionType, qi: number, sol: Answer[]): number | n
     }
     case "LetterDist":
       return Math.abs(L2I[sol[qi]] - L2I[sol[rule.questionIndex]]);
+    case "SameAsWhich": {
+      const refAns = sol[rule.questionIndex];
+      for (let i = 0; i < sol.length; i++) {
+        if (i !== qi && i !== rule.questionIndex && sol[i] === refAns) return i;
+      }
+      return null;
+    }
   }
   throw new Error(`computeValue: ${rule.type}`);
 }
@@ -887,18 +915,20 @@ function makeDistractors(
   correct: number | null,
   qi: number,
   n: number,
+  oc: number,
   rng: RNG,
 ): (number | null)[] {
-  if (rule.type === "AnswerOf") return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct));
+  const letterPool = Array.from({ length: oc }, (_, i) => i);
+  if (rule.type === "AnswerOf") return rng.shuffle(letterPool.filter((v) => v !== correct));
   if (rule.type === "LetterDist")
-    return rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correct)).slice(0, 4);
+    return rng.shuffle(letterPool.filter((v) => v !== correct)).slice(0, oc - 1);
   if (rule.type === "ConsecIdent") {
     const pool: (number | null)[] = [];
     for (let i = 0; i < n - 1; i++) {
       if (i !== correct) pool.push(i);
     }
     if (correct != null) pool.push(null);
-    return rng.shuffle(pool).slice(0, 4);
+    return rng.shuffle(pool).slice(0, oc - 1);
   }
   if (
     [
@@ -914,8 +944,8 @@ function makeDistractors(
     if (rule.type === "CountAnswerBefore") max = rule.beforeIndex;
     if (rule.type === "CountAnswerAfter") max = n - rule.afterIndex - 1;
     const pool: number[] = [];
-    for (let i = 0; i <= Math.max(max, 4); i++) if (i !== correct) pool.push(i);
-    return rng.shuffle(pool).slice(0, 4);
+    for (let i = 0; i <= Math.max(max, oc - 1); i++) if (i !== correct) pool.push(i);
+    return rng.shuffle(pool).slice(0, oc - 1);
   }
   if (rule.type === "OnlyOdd" || rule.type === "OnlyEven") {
     const parity = rule.type === "OnlyOdd" ? 1 : 0;
@@ -924,13 +954,20 @@ function makeDistractors(
       if ((i + 1) % 2 === parity && i !== correct) pool.push(i);
     }
     if (correct != null) pool.push(null);
-    return rng.shuffle(pool).slice(0, 4);
+    return rng.shuffle(pool).slice(0, oc - 1);
   }
   if (rule.type === "EqualCount") {
     const pool: (number | null)[] = [];
-    for (const l of LETTERS) {
-      const li = L2I[l];
-      if (l !== rule.answer && li !== correct) pool.push(li);
+    for (let i = 0; i < oc; i++) {
+      if (LETTERS[i] !== rule.answer && i !== correct) pool.push(i);
+    }
+    if (correct != null) pool.push(null);
+    return rng.shuffle(pool).slice(0, oc - 1);
+  }
+  if (rule.type === "SameAsWhich") {
+    const pool: (number | null)[] = [];
+    for (let i = 0; i < n; i++) {
+      if (i !== qi && i !== rule.questionIndex && i !== correct) pool.push(i);
     }
     if (correct != null) pool.push(null);
     return rng.shuffle(pool).slice(0, 4);
@@ -948,7 +985,7 @@ function makeDistractors(
     if (i !== correct && !(excludeSelf && i === qi)) pool.push(i);
   }
   if (correct != null) pool.push(null);
-  return rng.shuffle(pool).slice(0, 4);
+  return rng.shuffle(pool).slice(0, oc - 1);
 }
 
 function buildClaims(qi: number, solution: Answer[], n: number, rng: RNG): StatementOption[] {
