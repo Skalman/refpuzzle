@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 
 use crate::check_validity::check_question_against_solution;
-use crate::deduce::{DeduceAction, deduce};
+use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::evaluate::evaluate_claim;
 use crate::lookahead::lookahead;
 use crate::rng::Rng;
@@ -149,9 +149,13 @@ pub fn phantom_mask(option_count: usize) -> u8 {
     (0b11111u8) & !((1u8 << option_count) - 1)
 }
 
-fn try_solve(fp: &FlatPuzzle, stats: &mut Stats) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+fn try_solve(
+    fp: &FlatPuzzle,
+    stats: &mut Stats,
+    trace: bool,
+) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
     let pm = phantom_mask(fp.option_count);
-    try_solve_from(fp, [None; MAX_N], [pm; MAX_N], stats)
+    try_solve_from(fp, [None; MAX_N], [pm; MAX_N], stats, trace)
 }
 
 fn try_solve_from(
@@ -159,8 +163,10 @@ fn try_solve_from(
     mut answers: [Option<Answer>; MAX_N],
     mut eliminated: [u8; MAX_N],
     stats: &mut Stats,
+    trace: bool,
 ) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
     let n = fp.n;
+    let mut batch = 0u32;
 
     for _ in 0..n * 15 {
         if (0..n).all(|i| answers[i].is_some()) {
@@ -179,6 +185,10 @@ fn try_solve_from(
         let drs = deduce(fp, &answers, &eliminated);
         stats.deduce_results += drs.len() as u32;
         if !drs.is_empty() {
+            if trace {
+                trace_deduce_batch(batch, &drs, n);
+                batch += 1;
+            }
             for dr in &drs {
                 match dr.action {
                     DeduceAction::Force { qi, answer } => {
@@ -230,6 +240,9 @@ fn try_solve_from(
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             stats.lookahead_hits += 1;
+            if trace {
+                trace_lookahead(&lr);
+            }
             eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }
@@ -237,6 +250,79 @@ fn try_solve_from(
         return (false, answers, eliminated);
     }
     (false, answers, eliminated)
+}
+
+// ── Trace helpers ──
+
+#[cold]
+#[inline(never)]
+fn trace_deduce_batch(batch: u32, drs: &[DeduceResult], n: usize) {
+    eprintln!("--- deduce batch {} ({} results) ---", batch, drs.len());
+    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+    for dr in drs {
+        match dr.action {
+            DeduceAction::Force { qi, answer } => {
+                eprintln!("  {}{} {}", qi + 1, answer.as_char(), dr.rule.to_str());
+            }
+            DeduceAction::Eliminate { qi, oi } => {
+                eprintln!("  {}{} {}", qi + 1, letters_lower[oi], dr.rule.to_str());
+            }
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                for i in 0..n {
+                    if (question_mask >> i) & 1 == 1 {
+                        for oi in 0..5usize {
+                            if (option_mask >> oi) & 1 == 1 {
+                                eprintln!("  {}{} {}", i + 1, letters_lower[oi], dr.rule.to_str());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cold]
+#[inline(never)]
+fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
+    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+    eprintln!(
+        "--- lookahead: assume Q{}={} -> contradiction Q{} -> elim {}{} ---",
+        lr.assumption_qi + 1,
+        lr.assumption_answer.as_char(),
+        lr.contradiction_qi + 1,
+        lr.eliminate_qi + 1,
+        letters_lower[lr.eliminate_oi]
+    );
+}
+
+#[cold]
+#[inline(never)]
+fn trace_repair(qi: usize, before: &[i16; 5], after: &[i16; 5], probe_len: usize) {
+    let fmt = |v: &[i16; 5]| -> String {
+        v.iter()
+            .map(|&x| {
+                if x == NONE_VAL {
+                    "null".to_string()
+                } else if x == NAN_VAL {
+                    "nan".to_string()
+                } else {
+                    x.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(",")
+    };
+    eprintln!(
+        "--- repair Q{}: [{}] -> [{}] probe={} ---",
+        qi + 1,
+        fmt(before),
+        fmt(after),
+        probe_len
+    );
 }
 
 fn abs_diff(a: i16, b: i16) -> u16 {
@@ -356,6 +442,7 @@ pub fn validate_and_repair(
     n: usize,
     rng: &mut Rng,
     stats: &mut Stats,
+    trace: bool,
 ) -> bool {
     stats.attempts += 1;
 
@@ -376,15 +463,29 @@ pub fn validate_and_repair(
     #[cfg(debug_assertions)]
     validate_option_values(fp);
 
-    // Step 1: Can the engine solve it? (fast, rejects most bad puzzles)
+    // Step 1: Can the engine solve it?
+    if trace {
+        eprintln!("--- solve ---");
+    }
     let t0 = std::time::Instant::now();
-    let (ok, stuck_answers, stuck_elim) = try_solve(fp, stats);
+    let (ok, stuck_answers, stuck_elim) = try_solve(fp, stats, trace);
     stats.hint_us += us(t0);
+    if trace {
+        let answered = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
+        eprintln!(
+            "hint: {} {}/{}",
+            if ok { "solved" } else { "stuck" },
+            answered,
+            n
+        );
+    }
     if ok {
-        // Step 2: Is the solution unique? (expensive, only for solvable puzzles)
         let t0 = std::time::Instant::now();
         let solutions = solve(fp, None, 2);
         stats.solve_us += us(t0);
+        if trace {
+            eprintln!("uniqueness: {} solution(s)", solutions.len());
+        }
         if solutions.len() == 1 {
             return true;
         }
@@ -411,22 +512,29 @@ pub fn validate_and_repair(
         repair_one_question(fp, qi, solution, &stuck_elim, rng);
         if fp.option_nums[qi] != before {
             any_changed = true;
+            let probe = deduce(fp, &stuck_answers, &stuck_elim);
+            if trace {
+                trace_repair(qi, &before, &fp.option_nums[qi], probe.len());
+            }
+            if probe.is_empty() {
+                continue;
+            }
         } else {
-            continue;
-        }
-
-        // Quick check: does a single deduce round find anything new?
-        let probe = deduce(fp, &stuck_answers, &stuck_elim);
-        if probe.is_empty() {
+            if trace {
+                eprintln!("--- repair Q{}: no change ---", qi + 1);
+            }
             continue;
         }
 
         // The tweak unblocked something — do a full solve
+        if trace {
+            eprintln!("--- solve (after repair) ---");
+        }
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
-            try_solve(fp, stats)
+            try_solve(fp, stats, trace)
         } else {
-            try_solve_from(fp, stuck_answers, stuck_elim, stats)
+            try_solve_from(fp, stuck_answers, stuck_elim, stats, trace)
         };
         stats.hint_us += us(t0);
 
@@ -448,7 +556,7 @@ pub fn validate_and_repair(
 
     if !repaired {
         let t0 = std::time::Instant::now();
-        let (ok, _, _) = try_solve(fp, stats);
+        let (ok, _, _) = try_solve(fp, stats, trace);
         stats.hint_us += us(t0);
         repaired = ok;
     }

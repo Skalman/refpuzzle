@@ -28,6 +28,7 @@ fn main() {
     let mut max_attempts: usize = 100;
     let mut level_filter: Option<u8> = None;
     let mut show_stats = false;
+    let mut trace = false;
     let mut output_path: Option<String> = None;
     let mut merge = false;
 
@@ -65,6 +66,9 @@ fn main() {
             }
             "--stats" => {
                 show_stats = true;
+            }
+            "--trace" => {
+                trace = true;
             }
             "--check" => {
                 i += 1;
@@ -173,7 +177,9 @@ fn main() {
             let mut stats = build::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) = construct::generate(profile, &mut rng, max_attempts, &mut stats) {
+                if let Some(r) =
+                    construct::generate(profile, &mut rng, max_attempts, &mut stats, trace)
+                {
                     result = Some(r);
                     break;
                 }

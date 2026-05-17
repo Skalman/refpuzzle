@@ -15,6 +15,7 @@ let merge = false;
 let levelFilter: number | null = null;
 let maxAttempts = 100;
 let showStats = false;
+let tracing = false;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
@@ -52,6 +53,9 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--stats":
       showStats = true;
+      break;
+    case "--trace":
+      tracing = true;
       break;
     case "--help":
     case "-h":
@@ -189,7 +193,7 @@ for (const [mm, dd] of days) {
     for (const seed of seeds) {
       totalAttempts++;
       const rng = new RNG(seed);
-      result = generate(profile, rng, maxAttempts);
+      result = generate(profile, rng, maxAttempts, tracing);
       if (result) break;
     }
 

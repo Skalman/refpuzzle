@@ -25,9 +25,13 @@ pub fn generate(
     rng: &mut Rng,
     max_attempts: usize,
     stats: &mut Stats,
+    trace: bool,
 ) -> Option<GenerateResult> {
-    for _ in 0..max_attempts {
-        if let Some(r) = try_construct(profile, rng, stats) {
+    for attempt in 0..max_attempts {
+        if let Some(r) = try_construct(profile, rng, stats, trace, attempt) {
+            if trace {
+                eprintln!("=== attempt {}: SUCCESS ===", attempt + 1);
+            }
             return Some(r);
         }
     }
@@ -206,6 +210,8 @@ fn try_construct(
     profile: &DifficultyProfile,
     rng: &mut Rng,
     stats: &mut Stats,
+    trace: bool,
+    attempt: usize,
 ) -> Option<GenerateResult> {
     let n = profile.question_count;
     let oc = profile.option_count;
@@ -257,12 +263,14 @@ fn try_construct(
     }
 
     // Phase 3: Optional prev_same/next_same at edge positions
-    if rng.int(0, 1) == 0 && state.assigned_count < n {
+    let p3_check = rng.int(0, 1);
+    if p3_check == 0 && state.assigned_count < n {
         let candidates: &[(QuestionTypeKind, usize)] = &[
             (QuestionTypeKind::PrevSame, n - 1),
             (QuestionTypeKind::NextSame, 0),
         ];
-        let (kind, needed_qi) = candidates[rng.int(0, 1) as usize];
+        let cand_idx = rng.int(0, 1) as usize;
+        let (kind, needed_qi) = candidates[cand_idx];
         if profile.allowed_types.contains(&kind) && (state.assigned & (1 << needed_qi)) == 0 {
             state.swap_slot_to_front(needed_qi);
             state.try_place(kind, &solution, n, oc, rng);
@@ -378,7 +386,44 @@ fn try_construct(
         rng,
     )?;
 
-    if !validate_and_repair(&state.question_types, &solution, &mut fp, n, rng, stats) {
+    if trace {
+        eprintln!("=== attempt {} ===", attempt + 1);
+        let sol_str: String = solution.iter().take(n).map(|a| a.as_char()).collect();
+        eprintln!("solution: {}", sol_str);
+        let types_str: String = (0..n)
+            .map(|i| format!("{:?}@{}", state.question_types[i], i))
+            .collect::<Vec<_>>()
+            .join(" ");
+        eprintln!("types: {}", types_str);
+        for qi in 0..n {
+            let vals: Vec<String> = (0..oc)
+                .map(|oi| {
+                    let v = fp.option_nums[qi][oi];
+                    if v == NONE_VAL {
+                        "null".to_string()
+                    } else if v == NAN_VAL {
+                        fp.option_answers[qi][oi].to_string()
+                    } else {
+                        v.to_string()
+                    }
+                })
+                .collect();
+            eprintln!("options Q{}: [{}]", qi + 1, vals.join(","));
+        }
+    }
+
+    if !validate_and_repair(
+        &state.question_types,
+        &solution,
+        &mut fp,
+        n,
+        rng,
+        stats,
+        trace,
+    ) {
+        if trace {
+            eprintln!("=== attempt {}: FAILED ===", attempt + 1);
+        }
         return None;
     }
 
