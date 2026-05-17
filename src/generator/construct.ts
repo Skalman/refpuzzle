@@ -641,8 +641,7 @@ function repairOneQuestion(
 }
 
 function absDiff(a: number | null, b: number | null): number {
-  if (a == null || b == null) return 0;
-  return Math.abs(a - b);
+  return Math.abs((a ?? -1) - (b ?? -1));
 }
 
 function findClosestOption(
@@ -657,7 +656,7 @@ function findClosestOption(
   for (let oi = 0; oi < oc; oi++) {
     if (oi === correctOi || ((elim >> oi) & 1) !== 0) continue;
     const v = opts[oi].value;
-    const dist = v == null || correctVal == null ? 1 : absDiff(v, correctVal);
+    const dist = absDiff(v, correctVal);
     if (dist < bestDist) {
       bestDist = dist;
       bestOi = oi;
