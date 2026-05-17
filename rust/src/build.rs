@@ -331,9 +331,10 @@ fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
 
 #[cold]
 #[inline(never)]
-fn trace_repair(qi: usize, before: &[i16; 5], after: &[i16; 5], probe_len: usize) {
+fn trace_repair(qi: usize, before: &[i16; 5], after: &[i16; 5], oc: usize, probe_len: usize) {
     let fmt = |v: &[i16; 5]| -> String {
-        v.iter()
+        v[..oc]
+            .iter()
             .map(|&x| {
                 if x == NONE_VAL {
                     "null".to_string()
@@ -546,11 +547,17 @@ pub fn validate_and_repair(
             let probe = deduce(fp, &stuck_answers, &stuck_elim);
             if trace {
                 if fp.option_nums[qi] != before_nums {
-                    trace_repair(qi, &before_nums, &fp.option_nums[qi], probe.len());
+                    trace_repair(
+                        qi,
+                        &before_nums,
+                        &fp.option_nums[qi],
+                        fp.option_count,
+                        probe.len(),
+                    );
                 } else {
                     let ba: [i16; 5] = before_answers.map(|v| v as i16);
                     let aa: [i16; 5] = fp.option_answers[qi].map(|v| v as i16);
-                    trace_repair(qi, &ba, &aa, probe.len());
+                    trace_repair(qi, &ba, &aa, fp.option_count, probe.len());
                 }
             }
             if probe.is_empty() {
