@@ -420,21 +420,30 @@ function validatePuzzle(
     return null;
   }
 
-  // Step 3: Repair distractors and retry
-  for (let retry = 0; retry < 3; retry++) {
-    repairDistractors(puzzle, solution, stuckState.answers, n, rng);
-    const fp2 = flattenPuzzle(puzzle);
-    let evalOk = true;
-    for (let i = 0; i < n; i++) {
-      if (!evaluate(fp2, i, solution[i], solution)) {
-        evalOk = false;
+  // Step 3: Repair — find candidates, tweak one at a time
+  const candidates = rankRepairCandidates(puzzle, stuckState.answers, n);
+
+  for (const qi of candidates) {
+    const snapshot = structuredClone(puzzle.questions[qi].options);
+    repairOneQuestion(puzzle, qi, solution, stuckState.eliminated, rng);
+
+    let changed = false;
+    for (let i = 0; i < snapshot.length; i++) {
+      if (puzzle.questions[qi].options[i].value !== snapshot[i].value) {
+        changed = true;
         break;
       }
     }
-    if (!evalOk) return null;
-    if (!checkSolvable(puzzle, n)) continue;
-    const solutions = solve(puzzle, undefined, 2);
-    if (solutions.length === 1) return { puzzle, solution: solutions[0] };
+    if (!changed) continue;
+
+    const fp2 = flattenPuzzle(puzzle);
+    const probe = deduce(fp2, stuckState.answers, stuckState.eliminated);
+    if (probe.length > 0 && checkSolvable(puzzle, n)) {
+      const solutions = solve(puzzle, undefined, 2);
+      if (solutions.length === 1) return { puzzle, solution: solutions[0] };
+    }
+
+    puzzle.questions[qi].options = snapshot;
   }
 
   return null;
@@ -444,99 +453,54 @@ function checkSolvable(puzzle: Puzzle, n: number): boolean {
   return runHintEngine(puzzle, n).solved;
 }
 
-function runHintEngine(puzzle: Puzzle, n: number): { solved: boolean; answers: (Answer | null)[] } {
+function runHintEngine(
+  puzzle: Puzzle,
+  n: number,
+): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
   const fp = flattenPuzzle(puzzle);
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
   const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
   for (let step = 0; step < n * 15; step++) {
-    if (answers.every((a) => a != null)) return { solved: true, answers };
+    if (answers.every((a) => a != null)) return { solved: true, answers, eliminated };
     const drs = deduce(fp, answers, eliminated);
     if (drs.length > 0) {
       for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
       continue;
     }
-    if (fp.optionCount < 5) return { solved: false, answers };
+    if (fp.optionCount < 5) return { solved: false, answers, eliminated };
     const lr = lookahead(fp, answers, eliminated, 6);
     if (lr) {
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;
     }
-    return { solved: false, answers };
+    return { solved: false, answers, eliminated };
   }
-  return { solved: false, answers };
+  return { solved: false, answers, eliminated };
 }
 
-function repairDistractors(
+function rankRepairCandidates(
   puzzle: Puzzle,
-  solution: Answer[],
   stuckAnswers: (Answer | null)[],
   n: number,
-  rng: RNG,
-): void {
+): number[] {
+  const scored: [number, number][] = [];
   for (let qi = 0; qi < n; qi++) {
     if (stuckAnswers[qi] != null) continue;
     const rule = puzzle.questions[qi].questionType;
-    const correctOi = L2I[solution[qi]];
-
-    if (CONSTRAINED_TYPES.has(rule.type)) continue;
-    if (rule.type === "TrueStmt") continue;
-
-    const opts = puzzle.questions[qi].options;
-
-    if (rule.type === "AnswerOf") {
-      const target = stuckAnswers[rule.questionIndex];
-      if (target != null) {
-        const correctIdx = L2I[target];
-        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((i) => i !== correctIdx));
-        let di = 0;
-        for (let oi = 0; oi < 5; oi++) {
-          if (oi !== correctOi) opts[oi] = { value: pool[di++] };
-        }
-      }
-      continue;
-    }
-
-    const correctVal = opts[correctOi].value;
-
-    if (rule.type === "LetterDist" && rule.questionIndex != null) {
-      const other = stuckAnswers[rule.questionIndex];
-      if (other != null) {
-        const correctDist = Math.abs(L2I[solution[qi]] - L2I[other]);
-        const pool = rng.shuffle([0, 1, 2, 3, 4].filter((v) => v !== correctDist));
-        let di = 0;
-        for (let oi = 0; oi < 5; oi++) {
-          if (oi !== correctOi) opts[oi] = { value: pool[di++] };
-        }
-      }
-      continue;
-    }
-
+    if (CONSTRAINED_TYPES.has(rule.type) || rule.type === "TrueStmt") continue;
+    let score: number;
     if (isCountingType(rule.type)) {
-      const distractors = repairCountingDistractors(rule, correctVal, stuckAnswers, n, rng);
-      let di = 0;
-      for (let oi = 0; oi < 5; oi++) {
-        if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
-      }
-      continue;
+      score = 3;
+    } else if (rule.type === "AnswerOf" || rule.type === "LetterDist") {
+      score = stuckAnswers[rule.questionIndex] != null ? 2 : 0;
+    } else {
+      score = 1;
     }
-
-    if (rule.type === "ConsecIdent") {
-      const distractors = repairPairDistractors(correctVal, stuckAnswers, n, rng);
-      let di = 0;
-      for (let oi = 0; oi < 5; oi++) {
-        if (oi !== correctOi) opts[oi] = { value: distractors[di++] };
-      }
-      continue;
-    }
-
-    // Positional rules — generate new distractors
-    const newDistractors = repairPositionalDistractors(rule, correctVal, qi, stuckAnswers, n, rng);
-    let di = 0;
-    for (let oi = 0; oi < 5; oi++) {
-      if (oi !== correctOi) opts[oi] = { value: newDistractors[di++] };
-    }
+    if (score > 0) scored.push([qi, score]);
   }
+  scored.sort((a, b) => b[1] - a[1]);
+  return scored.map(([qi]) => qi);
 }
 
 function isCountingType(type: string): boolean {
@@ -550,104 +514,189 @@ function isCountingType(type: string): boolean {
   ].includes(type);
 }
 
-function repairCountingDistractors(
-  rule: QuestionType,
-  correctVal: number | null,
-  answers: (Answer | null)[],
-  n: number,
-  rng: RNG,
-): (number | null)[] {
-  const from = rule.type === "CountAnswerAfter" ? rule.afterIndex + 1 : 0;
-  const to = rule.type === "CountAnswerBefore" ? rule.beforeIndex : n;
-
-  let confirmed = 0;
-  let unknown = 0;
-  for (let i = from; i < to; i++) {
-    if (answers[i] == null) {
-      unknown++;
-    } else if (
-      rule.type === "CountVowel"
-        ? answers[i] === "A" || answers[i] === "E"
-        : rule.type === "CountConsonant"
-          ? answers[i] !== "A" && answers[i] !== "E"
-          : "answer" in rule && answers[i] === rule.answer
-    ) {
-      confirmed++;
-    }
-  }
-
-  const pool: number[] = [];
-  for (let v = 0; v < confirmed; v++) if (v !== correctVal) pool.push(v);
-  for (let v = confirmed + unknown + 1; v <= n; v++) if (v !== correctVal) pool.push(v);
-  const max =
-    rule.type === "CountAnswerBefore"
-      ? rule.beforeIndex
-      : rule.type === "CountAnswerAfter"
-        ? n - rule.afterIndex - 1
-        : n;
-  for (let v = 0; v <= Math.max(max, 4); v++) {
-    if (v !== correctVal && !pool.includes(v)) pool.push(v);
-  }
-  return rng.shuffle(pool).slice(0, 4);
-}
-
-function repairPairDistractors(
-  correctVal: number | null,
-  answers: (Answer | null)[],
-  n: number,
-  rng: RNG,
-): (number | null)[] {
-  const pool: (number | null)[] = [];
-  for (let i = 0; i < n - 1; i++) {
-    if (i === correctVal) continue;
-    if (answers[i] != null && answers[i + 1] != null && answers[i] !== answers[i + 1]) {
-      pool.unshift(i);
-    } else {
-      pool.push(i);
-    }
-  }
-  if (correctVal != null) pool.push(null);
-  return rng.shuffle(pool).slice(0, 4);
-}
-
-function repairPositionalDistractors(
-  rule: QuestionType,
-  correctVal: number | null,
+function repairOneQuestion(
+  puzzle: Puzzle,
   qi: number,
-  answers: (Answer | null)[],
-  n: number,
+  solution: Answer[],
+  stuckElim: number[],
   rng: RNG,
-): (number | null)[] {
-  const answer = "answer" in rule ? rule.answer : undefined;
-  let minPos = 0;
-  let maxPos = n - 1;
-  if (rule.type === "ClosestAfter") minPos = rule.afterIndex + 1;
-  if (rule.type === "ClosestBefore") maxPos = rule.beforeIndex - 1;
-  if (rule.type === "PrevSame") maxPos = qi - 1;
-  if (rule.type === "NextSame") minPos = qi + 1;
+): void {
+  const n = puzzle.questions.length;
+  const oc = puzzle.optionCount ?? 5;
+  const rule = puzzle.questions[qi].questionType;
+  const correctOi = L2I[solution[qi]];
+  const elim = stuckElim[qi];
+  const opts = puzzle.questions[qi].options;
 
-  const pool: (number | null)[] = [];
-
-  if (answer) {
-    for (let i = minPos; i <= maxPos; i++) {
-      if (i === correctVal) continue;
-      if (answers[i] != null && answers[i] !== answer) {
-        pool.unshift(i);
-      } else {
-        pool.push(i);
+  if (rule.type === "AnswerOf") {
+    const correctAnswer = solution[rule.questionIndex];
+    const pool = rng.shuffle(LETTERS.slice(0, oc).filter((l) => l !== correctAnswer));
+    let di = 0;
+    for (let oi = 0; oi < oc; oi++) {
+      if (oi !== correctOi && ((elim >> oi) & 1) === 0 && di < pool.length) {
+        opts[oi] = { value: L2I[pool[di++]] };
       }
     }
-    const hasMatch = answers.slice(minPos, maxPos + 1).some((a) => a === answer);
-    if (correctVal != null && hasMatch) pool.unshift(null);
-    else if (correctVal != null) pool.push(null);
-  } else {
-    for (let i = minPos; i <= maxPos; i++) {
-      if (i !== correctVal) pool.push(i);
-    }
-    if (correctVal != null) pool.push(null);
+    return;
   }
 
-  return rng.shuffle(pool).slice(0, 4);
+  const correctVal = opts[correctOi].value;
+
+  if (
+    rule.type === "LetterDist" ||
+    rule.type === "LeastCommon" ||
+    rule.type === "MostCommon" ||
+    rule.type === "NoOtherHasAnswer"
+  ) {
+    replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, 4);
+    return;
+  }
+
+  if (isCountingType(rule.type)) {
+    const vals = validValues(rule, n);
+    const max = vals.length > 0 ? (vals[vals.length - 1] ?? 0) : 0;
+    replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, max);
+    return;
+  }
+
+  if (rule.type === "SameAsWhich") {
+    const refAns = solution[rule.questionIndex];
+    const bestOi = findClosestOption(opts, correctOi, correctVal, elim, oc);
+    if (bestOi == null) return;
+    const oldVal = opts[bestOi].value;
+    let bestNew = oldVal;
+    let bestDist = 0;
+    for (let j = 0; j < n; j++) {
+      if (j === qi || j === rule.questionIndex || solution[j] === refAns) continue;
+      if (j === correctVal || j === oldVal) continue;
+      if (isInUse(opts, bestOi, j, oc)) continue;
+      const d = absDiff(j, correctVal);
+      if (d > bestDist) {
+        bestDist = d;
+        bestNew = j;
+      }
+    }
+    opts[bestOi] = { value: bestNew };
+    return;
+  }
+
+  // General case: positional, ConsecIdent, OnlyOdd/Even, EqualCount, SameAs, etc.
+  const bestOi = findClosestOption(opts, correctOi, correctVal, elim, oc);
+  if (bestOi == null) return;
+
+  let minVal = 0;
+  let maxVal = n - 1;
+  let step = 1;
+  const excludeSelf = rule.type === "OnlySame" || rule.type === "SameAs";
+  let excludeRef = -2;
+
+  if (rule.type === "ConsecIdent") {
+    maxVal = Math.max(n - 2, 0);
+  } else if (rule.type === "PrevSame") {
+    maxVal = qi - 1;
+  } else if (rule.type === "NextSame") {
+    minVal = qi + 1;
+  } else if (rule.type === "OnlyOdd") {
+    minVal = 0;
+    step = 2;
+  } else if (rule.type === "OnlyEven") {
+    minVal = 1;
+    step = 2;
+  } else if (rule.type === "EqualCount") {
+    minVal = 0;
+    maxVal = 4;
+    excludeRef = L2I[rule.answer];
+  } else if (rule.type === "ClosestAfter") {
+    minVal = rule.afterIndex + 1;
+  } else if (rule.type === "ClosestBefore") {
+    maxVal = rule.beforeIndex - 1;
+  }
+
+  const oldVal = opts[bestOi].value;
+  let bestNew = oldVal;
+  let bestDist = 0;
+
+  // Try all values in range + null (None)
+  const candidates: (number | null)[] = [];
+  for (let v = minVal; v <= maxVal; v += step) candidates.push(v);
+  candidates.push(null);
+
+  for (const v of candidates) {
+    if (v === correctVal || v === oldVal) continue;
+    if (excludeSelf && v === qi) continue;
+    if (v === excludeRef) continue;
+    if (isInUse(opts, bestOi, v, oc)) continue;
+    let d: number;
+    if (v == null || correctVal == null) {
+      d = maxVal + 1;
+    } else {
+      d = absDiff(v, correctVal);
+    }
+    if (d > bestDist) {
+      bestDist = d;
+      bestNew = v;
+    }
+  }
+  opts[bestOi] = { value: bestNew };
+}
+
+function absDiff(a: number | null, b: number | null): number {
+  if (a == null || b == null) return 0;
+  return Math.abs(a - b);
+}
+
+function findClosestOption(
+  opts: OptionDef[],
+  correctOi: number,
+  correctVal: number | null,
+  elim: number,
+  oc: number,
+): number | null {
+  let bestOi: number | null = null;
+  let bestDist = Infinity;
+  for (let oi = 0; oi < oc; oi++) {
+    if (oi === correctOi || ((elim >> oi) & 1) !== 0) continue;
+    const v = opts[oi].value;
+    const dist = v == null || correctVal == null ? 1 : absDiff(v, correctVal);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestOi = oi;
+    }
+  }
+  return bestOi;
+}
+
+function isInUse(opts: OptionDef[], skipOi: number, value: number | null, oc: number): boolean {
+  for (let k = 0; k < oc; k++) {
+    if (k !== skipOi && opts[k].value === value) return true;
+  }
+  return false;
+}
+
+function replaceClosestWithFurthest(
+  opts: OptionDef[],
+  correctOi: number,
+  correctVal: number | null,
+  elim: number,
+  oc: number,
+  minRange: number,
+  maxRange: number,
+): void {
+  const bestOi = findClosestOption(opts, correctOi, correctVal, elim, oc);
+  if (bestOi == null) return;
+  const oldVal = opts[bestOi].value;
+  let bestNew = oldVal;
+  let bestDist = 0;
+  for (let v = minRange; v <= maxRange; v++) {
+    if (v === correctVal || v === oldVal) continue;
+    if (isInUse(opts, bestOi, v, oc)) continue;
+    const d = absDiff(v, correctVal);
+    if (d > bestDist) {
+      bestDist = d;
+      bestNew = v;
+    }
+  }
+  opts[bestOi] = { value: bestNew };
 }
 
 function applyDeduceAction(action: DeduceAction, answers: (Answer | null)[], eliminated: number[]) {
