@@ -85,6 +85,20 @@
       "state": ["B", "A", "a", "B"],
       "expect": "valid"
     },
+    {
+      "name": "count_answer: null value → invalid (count can never be null)",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          { "t": { "t": "CountAnswer", "a": 4 }, "o": [null, 0, 3, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["A", "", "", ""],
+      "expect": "invalid"
+    },
     { "section": "=== count_answer_before / count_answer_after ===" },
     {
       "name": "count_answer_before: count in range exceeds value → invalid",

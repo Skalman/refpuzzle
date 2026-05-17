@@ -151,7 +151,7 @@ export function checkValueValidity(
 
   // ── Counting ──
   if (q.t === QT_COUNT_ANSWER || q.t === QT_COUNT_ANSWER_BEFORE || q.t === QT_COUNT_ANSWER_AFTER) {
-    if (v == null) return V_PENDING;
+    if (v == null) return V_INVALID;
     const answer = q.answer!;
     const [from, to] = countRange(q, n);
     const matchMask = 1 << letterIdx(answer);
@@ -160,19 +160,19 @@ export function checkValueValidity(
   }
 
   if (q.t === QT_COUNT_VOWEL) {
-    if (v == null) return V_PENDING;
+    if (v == null) return V_INVALID;
     const cr = countMatching(answers, eliminated, (x) => VOWELS.has(x), 0b10001, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
   if (q.t === QT_COUNT_CONSONANT) {
-    if (v == null) return V_PENDING;
+    if (v == null) return V_INVALID;
     const cr = countMatching(answers, eliminated, (x) => !VOWELS.has(x), 0b01110, 0, n);
     return countValidity(cr.count, cr.remaining, v);
   }
 
   if (q.t === QT_MOST_COMMON_COUNT) {
-    if (v == null) return V_PENDING;
+    if (v == null) return V_INVALID;
     const counts = [0, 0, 0, 0, 0];
     let allKnown = true;
     for (let i = 0; i < n; i++) {

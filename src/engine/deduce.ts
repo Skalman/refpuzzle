@@ -705,7 +705,7 @@ export function deduceWithRule(
         const [from, to] = countRange(q, n);
         const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
         if (run("CountExceeded")) {
-          if (v != null && crMin(cr) > v) {
+          if (v == null || crMin(cr) > v) {
             results.push(res({ type: "eliminate", qi, oi }, "CountExceeded"));
           }
         }
@@ -716,7 +716,11 @@ export function deduceWithRule(
         }
       }
 
-      if (q.t === QT_MOST_COMMON_COUNT && v != null && run("MostCommonCountElim")) {
+      if (q.t === QT_MOST_COMMON_COUNT && run("MostCommonCountElim")) {
+        if (v == null) {
+          results.push(res({ type: "eliminate", qi, oi }, "MostCommonCountElim"));
+          continue;
+        }
         let maxKnown = 0;
         let maxPossible = 0;
         for (const letter of LETTERS.slice(0, fp.optionCount)) {
@@ -778,16 +782,20 @@ export function deduceWithRule(
         }
         if (run("LetterDistNoMatch")) {
           const other = answers[q.questionIndex];
-          if (other == null && v != null) {
-            let anyPossible = false;
-            for (let ti = 0; ti < 5; ti++) {
-              if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v) {
-                anyPossible = true;
-                break;
-              }
-            }
-            if (!anyPossible) {
+          if (other == null) {
+            if (v == null) {
               results.push(res({ type: "eliminate", qi, oi }, "LetterDistNoMatch"));
+            } else {
+              let anyPossible = false;
+              for (let ti = 0; ti < 5; ti++) {
+                if (!isElim(eliminated, q.questionIndex, ti) && Math.abs(oi - ti) === v) {
+                  anyPossible = true;
+                  break;
+                }
+              }
+              if (!anyPossible) {
+                results.push(res({ type: "eliminate", qi, oi }, "LetterDistNoMatch"));
+              }
             }
           }
         }

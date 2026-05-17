@@ -301,7 +301,8 @@ function tryConstructive(profile: DifficultyProfile, rng: RNG): ConstructResult 
       ["PrevSame", n - 1],
       ["NextSame", 0],
     ];
-    const [kind, neededQi] = candidates[rng.int(0, 1)];
+    const candIdx = rng.int(0, 1);
+    const [kind, neededQi] = candidates[candIdx];
     if (profile.allowedTypes.includes(kind) && !assigned.has(neededQi)) {
       const idx = slots.indexOf(neededQi, assigned.size);
       if (idx >= 0) {
@@ -412,6 +413,7 @@ function validatePuzzle(
   }
 
   // Step 1: Can the hint engine solve it?
+
   const stuckState = runHintEngine(puzzle, n);
   if (stuckState.solved) {
     // Step 2: Is the solution unique?
@@ -420,16 +422,17 @@ function validatePuzzle(
     return null;
   }
 
-  // Step 3: Repair — find candidates, tweak one at a time
+  // Step 3: Repair — tweak candidates cumulatively (no revert, matching Rust)
   const candidates = rankRepairCandidates(puzzle, stuckState.answers, n);
+  let repaired = false;
 
   for (const qi of candidates) {
-    const snapshot = structuredClone(puzzle.questions[qi].options);
+    const before = puzzle.questions[qi].options.map((o) => o.value);
     repairOneQuestion(puzzle, qi, solution, stuckState.eliminated, rng);
 
     let changed = false;
-    for (let i = 0; i < snapshot.length; i++) {
-      if (puzzle.questions[qi].options[i].value !== snapshot[i].value) {
+    for (let i = 0; i < before.length; i++) {
+      if (puzzle.questions[qi].options[i].value !== before[i]) {
         changed = true;
         break;
       }
@@ -438,13 +441,18 @@ function validatePuzzle(
 
     const fp2 = flattenPuzzle(puzzle);
     const probe = deduce(fp2, stuckState.answers, stuckState.eliminated);
-    if (probe.length > 0 && checkSolvable(puzzle, n)) {
-      const solutions = solve(puzzle, undefined, 2);
-      if (solutions.length === 1) return { puzzle, solution: solutions[0] };
-    }
+    if (probe.length === 0) continue;
 
-    puzzle.questions[qi].options = snapshot;
+    if (checkSolvable(puzzle, n)) {
+      repaired = true;
+      break;
+    }
   }
+
+  if (!repaired && !checkSolvable(puzzle, n)) return null;
+
+  const solutions = solve(puzzle, undefined, 2);
+  if (solutions.length === 1) return { puzzle, solution: solutions[0] };
 
   return null;
 }
@@ -465,7 +473,9 @@ function runHintEngine(
     if (answers.every((a) => a != null)) return { solved: true, answers, eliminated };
     const drs = deduce(fp, answers, eliminated);
     if (drs.length > 0) {
-      for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
+      for (const dr of drs) {
+        applyDeduceAction(dr.action, answers, eliminated);
+      }
       continue;
     }
     if (fp.optionCount < 5) return { solved: false, answers, eliminated };
@@ -746,12 +756,12 @@ function makeRule(
     case "MostCommonCount":
       return { type };
     case "AnswerOf": {
-      const targets = [...assigned].filter((j) => j !== qi);
+      const targets = [...assigned].filter((j) => j !== qi).sort((a, b) => a - b);
       if (targets.length === 0) return null;
       return { type, questionIndex: rng.pick(targets) };
     }
     case "LetterDist": {
-      const targets = [...assigned].filter((j) => j !== qi);
+      const targets = [...assigned].filter((j) => j !== qi).sort((a, b) => a - b);
       if (targets.length === 0) {
         const pool = [];
         for (let j = 0; j < n; j++) if (j !== qi) pool.push(j);
@@ -805,7 +815,7 @@ function makeRule(
     case "TrueStmt":
       return { type };
     case "SameAsWhich": {
-      const targets = [...assigned].filter((j) => j !== qi);
+      const targets = [...assigned].filter((j) => j !== qi).sort((a, b) => a - b);
       if (targets.length === 0) return null;
       const ref = rng.pick(targets);
       if (solution[ref] === solution[qi]) return null;
