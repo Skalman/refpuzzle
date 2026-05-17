@@ -67,8 +67,6 @@ pub fn generate(
                 eprintln!("=== attempt {}: SUCCESS ===", attempt + 1);
             }
             return Some(r);
-        } else if trace {
-            eprintln!("=== attempt {}: construct failed ===", attempt + 1);
         }
     }
     None
@@ -278,7 +276,12 @@ fn try_construct(
         && (av_counting.is_empty()
             || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng))
     {
-        return None;
+        {
+            if trace {
+                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+            }
+            return None;
+        }
     }
 
     // Phase 2: answer_of backbone
@@ -294,6 +297,9 @@ fn try_construct(
     .min(n - state.assigned_count);
     for _ in 0..chain_count {
         if !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng) {
+            if trace {
+                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+            }
             return None;
         }
     }
@@ -373,6 +379,9 @@ fn try_construct(
             && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
             && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
         {
+            if trace {
+                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+            }
             return None;
         }
     }
@@ -409,18 +418,26 @@ fn try_construct(
                 && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
                 && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
             {
+                if trace {
+                    eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+                }
                 return None;
             }
         }
     }
 
-    let mut fp = fill_options(
+    let Some(mut fp) = fill_options(
         &state.question_types,
         &solution,
         n,
         profile.option_count,
         rng,
-    )?;
+    ) else {
+        if trace {
+            eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+        }
+        return None;
+    };
 
     if trace {
         eprintln!("=== attempt {} ===", attempt + 1);

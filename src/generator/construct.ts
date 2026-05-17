@@ -497,6 +497,7 @@ function validateAndRepair(
 
   // Step 3: Repair — tweak candidates cumulatively (no revert, matching Rust)
   const candidates = rankRepairCandidates(puzzle, stuckState.answers, n);
+  const answeredBefore = stuckState.answers.filter((a) => a != null).length;
   let repaired = false;
 
   for (const qi of candidates) {
@@ -527,7 +528,10 @@ function validateAndRepair(
     if (probe.length === 0) continue;
 
     if (tracing) trace("--- solve (after repair) ---");
-    const solvedAfterRepair = runHintEngine(puzzle, n, tracing).solved;
+    const solvedAfterRepair =
+      answeredBefore > 0
+        ? runHintEngineFrom(puzzle, n, stuckState.answers, stuckState.eliminated, tracing).solved
+        : runHintEngine(puzzle, n, tracing).solved;
     if (solvedAfterRepair) {
       repaired = true;
       break;
@@ -546,6 +550,16 @@ function validateAndRepair(
   return null;
 }
 
+function runHintEngineFrom(
+  puzzle: Puzzle,
+  n: number,
+  initAnswers: (Answer | null)[],
+  initEliminated: number[],
+  tracing = false,
+): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
+  return runHintEngineImpl(puzzle, n, initAnswers.slice(0, n), initEliminated.slice(0, n), tracing);
+}
+
 function runHintEngine(
   puzzle: Puzzle,
   n: number,
@@ -553,8 +567,23 @@ function runHintEngine(
 ): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
   const fp = flattenPuzzle(puzzle);
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
-  const answers: (Answer | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(phantomMask);
+  return runHintEngineImpl(
+    puzzle,
+    n,
+    new Array(n).fill(null),
+    new Array(n).fill(phantomMask),
+    tracing,
+  );
+}
+
+function runHintEngineImpl(
+  puzzle: Puzzle,
+  n: number,
+  answers: (Answer | null)[],
+  eliminated: number[],
+  tracing: boolean,
+): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
+  const fp = flattenPuzzle(puzzle);
   let batch = 0;
   for (let step = 0; step < n * 15; step++) {
     if (answers.every((a) => a != null)) return { solved: true, answers, eliminated };

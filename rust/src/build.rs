@@ -149,16 +149,16 @@ pub fn phantom_mask(option_count: usize) -> u8 {
     (0b11111u8) & !((1u8 << option_count) - 1)
 }
 
-fn try_solve(
+fn run_hint_engine(
     fp: &FlatPuzzle,
     stats: &mut Stats,
     trace: bool,
 ) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
     let pm = phantom_mask(fp.option_count);
-    try_solve_from(fp, [None; MAX_N], [pm; MAX_N], stats, trace)
+    run_hint_engine_from(fp, [None; MAX_N], [pm; MAX_N], stats, trace)
 }
 
-fn try_solve_from(
+fn run_hint_engine_from(
     fp: &FlatPuzzle,
     mut answers: [Option<Answer>; MAX_N],
     mut eliminated: [u8; MAX_N],
@@ -499,7 +499,7 @@ pub fn validate_and_repair(
         eprintln!("--- solve ---");
     }
     let t0 = std::time::Instant::now();
-    let (ok, stuck_answers, stuck_elim) = try_solve(fp, stats, trace);
+    let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp, stats, trace);
     stats.hint_us += us(t0);
     if trace {
         let answered = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
@@ -576,9 +576,9 @@ pub fn validate_and_repair(
         }
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
-            try_solve(fp, stats, trace)
+            run_hint_engine(fp, stats, trace)
         } else {
-            try_solve_from(fp, stuck_answers, stuck_elim, stats, trace)
+            run_hint_engine_from(fp, stuck_answers, stuck_elim, stats, trace)
         };
         stats.hint_us += us(t0);
 
@@ -603,7 +603,7 @@ pub fn validate_and_repair(
             eprintln!("--- solve (final) ---");
         }
         let t0 = std::time::Instant::now();
-        let (ok, _, _) = try_solve(fp, stats, trace);
+        let (ok, _, _) = run_hint_engine(fp, stats, trace);
         stats.hint_us += us(t0);
         repaired = ok;
     }
