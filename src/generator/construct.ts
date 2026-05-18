@@ -41,9 +41,21 @@ interface ConstructResult {
   name: string;
 }
 
-function trace(msg: string) {
-  console.error(msg);
-}
+import {
+  traceConstructFailed,
+  traceAttempt,
+  traceQuestion,
+  tracePhase as tracePhaseImpl,
+  traceSuccess,
+  traceFailed,
+  traceSolve,
+  traceHint,
+  traceUniqueness,
+  traceBatch,
+  traceLookahead as traceLookaheadImpl,
+  traceRepair,
+  traceRepairNoChange,
+} from "./trace.ts";
 
 function formatTypeTag(qt: QuestionType): string {
   switch (qt.type) {
@@ -72,21 +84,6 @@ function formatTypeTag(qt: QuestionType): string {
   }
 }
 
-function formatAction(a: DeduceAction, rule: string, n: number): string[] {
-  if (a.type === "force") return [`  ${String(a.qi + 1)}${a.answer} ${rule}`];
-  if (a.type === "eliminate")
-    return [`  ${String(a.qi + 1)}${LETTERS[a.oi].toLowerCase()} ${rule}`];
-  const lines: string[] = [];
-  for (let i = 0; i < n; i++) {
-    if (!((a.questionMask >> i) & 1)) continue;
-    for (let oi = 0; oi < 5; oi++) {
-      if ((a.optionMask >> oi) & 1)
-        lines.push(`  ${String(i + 1)}${LETTERS[oi].toLowerCase()} ${rule}`);
-    }
-  }
-  return lines;
-}
-
 export function generateConstructive(
   profile: DifficultyProfile,
   rng: RNG,
@@ -96,29 +93,24 @@ export function generateConstructive(
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const cr = tryConstruct(profile, rng, tracing);
     if (!cr) {
-      if (tracing) trace(`=== attempt ${String(attempt + 1)}: construct failed ===`);
+      if (tracing) traceConstructFailed(attempt + 1);
       continue;
-    }
-    if (tracing) {
-      trace(`=== attempt ${String(attempt + 1)} ===`);
-      trace(`solution: ${cr.solution.join("")}`);
     }
     const puzzle = fillOptions(cr, rng);
     if (tracing) {
+      traceAttempt(attempt + 1, cr.solution);
       const oc = cr.oc;
       for (let i = 0; i < cr.n; i++) {
-        const vals = puzzle.questions[i].options
-          .slice(0, oc)
-          .map((o) => (o.value == null ? "null" : String(o.value)));
-        trace(`Q${String(i + 1)}: ${formatTypeTag(cr.types[i])} [${vals.join(",")}]`);
+        const vals = puzzle.questions[i].options.slice(0, oc).map((o) => o.value);
+        traceQuestion(i, formatTypeTag(cr.types[i]), vals);
       }
     }
     const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing);
     if (result) {
-      if (tracing) trace(`=== attempt ${String(attempt + 1)}: SUCCESS ===`);
+      if (tracing) traceSuccess(attempt + 1);
       return result;
     }
-    if (tracing) trace(`=== attempt ${String(attempt + 1)}: FAILED ===`);
+    if (tracing) traceFailed(attempt + 1);
   }
   return null;
 }
@@ -358,9 +350,8 @@ function tryConstruct(
     const placed = slots
       .filter((qi) => assigned.has(qi))
       .sort((a, b) => a - b)
-      .map((qi) => `Q${String(qi + 1)}=${formatTypeTag(rules[qi]!)}`)
-      .join(" ");
-    trace(`  [${name}] ${placed}`);
+      .map((qi) => ({ qi, type: formatTypeTag(rules[qi]!) }));
+    tracePhaseImpl(name, placed);
   }
 
   // Phase 1: Counting entry point (skip 50% for small puzzles)
@@ -512,15 +503,15 @@ function validateAndRepair(
   }
 
   // Step 1: Can the hint engine solve it?
-  if (tracing) trace("--- solve ---");
+  if (tracing) traceSolve("initial");
   const stuckState = runHintEngine(puzzle, n, tracing);
   if (tracing) {
     const answered = stuckState.answers.filter((a) => a != null).length;
-    trace(`hint: ${stuckState.solved ? "solved" : "stuck"} ${String(answered)}/${String(n)}`);
+    traceHint(stuckState.solved, answered, n);
   }
   if (stuckState.solved) {
     const solutions = solve(puzzle, undefined, 2);
-    if (tracing) trace(`uniqueness: ${String(solutions.length)} solution(s)`);
+    if (tracing) traceUniqueness(solutions.length);
     if (solutions.length === 1) return { puzzle, solution: solutions[0] };
     return null;
   }
@@ -542,22 +533,19 @@ function validateAndRepair(
       }
     }
     if (!changed) {
-      if (tracing) trace(`--- repair Q${String(qi + 1)}: no change ---`);
+      if (tracing) traceRepairNoChange(qi);
       continue;
     }
 
     const fp2 = flattenPuzzle(puzzle);
     const probe = deduce(fp2, stuckState.answers, stuckState.eliminated);
     if (tracing) {
-      const fmtVal = (v: number | null) => (v == null ? "null" : String(v));
       const after = puzzle.questions[qi].options.map((o) => o.value);
-      trace(
-        `--- repair Q${String(qi + 1)}: [${before.map(fmtVal).join(",")}] -> [${after.map(fmtVal).join(",")}] probe=${String(probe.length)} ---`,
-      );
+      traceRepair(qi, before, after, probe.length);
     }
     if (probe.length === 0) continue;
 
-    if (tracing) trace("--- solve (after repair) ---");
+    if (tracing) traceSolve("after_repair");
     const solvedAfterRepair =
       answeredBefore > 0
         ? runHintEngineFrom(puzzle, n, stuckState.answers, stuckState.eliminated, tracing).solved
@@ -569,12 +557,12 @@ function validateAndRepair(
   }
 
   if (!repaired) {
-    if (tracing) trace("--- solve (final) ---");
+    if (tracing) traceSolve("final");
     if (!runHintEngine(puzzle, n, tracing).solved) return null;
   }
 
   const solutions = solve(puzzle, undefined, 2);
-  if (tracing) trace(`uniqueness: ${String(solutions.length)} solution(s)`);
+  if (tracing) traceUniqueness(solutions.length);
   if (solutions.length === 1) return { puzzle, solution: solutions[0] };
 
   return null;
@@ -619,12 +607,7 @@ function runHintEngineImpl(
     if (answers.every((a) => a != null)) return { solved: true, answers, eliminated };
     const drs = deduce(fp, answers, eliminated);
     if (drs.length > 0) {
-      if (tracing) {
-        trace(`--- deduce batch ${String(batch)} (${String(drs.length)} results) ---`);
-        for (const dr of drs) {
-          for (const line of formatAction(dr.action, dr.rule, n)) trace(line);
-        }
-      }
+      if (tracing) traceBatch(batch, drs);
       batch++;
       for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
       continue;
@@ -632,14 +615,7 @@ function runHintEngineImpl(
     if (fp.optionCount < 5) return { solved: false, answers, eliminated };
     const lr = lookahead(fp, answers, eliminated, 6, true);
     if (lr) {
-      if (tracing) {
-        trace(
-          `--- lookahead: assume Q${String(lr.assumptionQi + 1)}=${lr.assumptionAnswer} -> contradiction Q${String(lr.contradictionQi + 1)} -> elim ${String(lr.eliminateQi + 1)}${LETTERS[lr.eliminateOi].toLowerCase()} (chain=${String(lr.chain.length)}) ---`,
-        );
-        for (const dr of lr.chain) {
-          for (const line of formatAction(dr.action, dr.rule, n)) trace(`  ${line}`);
-        }
-      }
+      if (tracing) traceLookaheadImpl(lr);
       eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;
     }
