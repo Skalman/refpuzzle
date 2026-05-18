@@ -1068,6 +1068,7 @@ function solutionCompatible(
       return c.filter((v) => v === Math.max(...c)).length === 1;
     }
     case "SameAs": {
+      if (n <= oc) return false;
       for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
       return false;
     }
@@ -1084,6 +1085,13 @@ function letterCounts(sol: Answer[]): number[] {
   const c = [0, 0, 0, 0, 0];
   for (const a of sol) c[L2I[a]]++;
   return c;
+}
+
+function rangeWithNull(len: number, map: (i: number) => number = (i) => i): (number | null)[] {
+  const v: (number | null)[] = [];
+  for (let i = 0; i < len; i++) v.push(map(i));
+  v.push(null);
+  return v;
 }
 
 function validValues(rule: QuestionType, n: number): (number | null)[] {
@@ -1105,17 +1113,19 @@ function validValues(rule: QuestionType, n: number): (number | null)[] {
     case "EqualCount":
       return [0, 1, 2, 3, 4];
     case "ClosestAfter":
-      return Array.from({ length: n - rule.afterIndex - 1 }, (_, i) => i + rule.afterIndex + 1);
+      return rangeWithNull(n - rule.afterIndex - 1, (i) => i + rule.afterIndex + 1);
     case "ClosestBefore":
-      return Array.from({ length: rule.beforeIndex }, (_, i) => i);
+      return rangeWithNull(rule.beforeIndex);
     case "OnlyOdd":
-      return Array.from({ length: Math.ceil(n / 2) }, (_, i) => i * 2);
+      return rangeWithNull(Math.ceil(n / 2), (i) => i * 2);
     case "OnlyEven":
-      return Array.from({ length: Math.floor(n / 2) }, (_, i) => i * 2 + 1);
+      return rangeWithNull(Math.floor(n / 2), (i) => i * 2 + 1);
     case "ConsecIdent":
-      return Array.from({ length: n - 1 }, (_, i) => i);
-    default:
+      return rangeWithNull(n - 1);
+    case "SameAs":
       return Array.from({ length: n }, (_, i) => i);
+    default:
+      return rangeWithNull(n);
   }
 }
 
@@ -1131,7 +1141,6 @@ function pickDistractors(
   for (const v of vals) {
     if (v !== correct && !(excludeSelf && v === qi)) pool.push(v);
   }
-  if (correct != null) pool.push(null);
   const shuffled = rng.shuffle(pool);
   return shuffled.slice(0, 4);
 }

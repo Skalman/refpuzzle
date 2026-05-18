@@ -435,32 +435,43 @@ fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
             for v in (after_index as i16 + 1)..n as i16 {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
         QuestionType::ClosestBefore { before_index, .. } => {
             for v in 0..before_index as i16 {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
         QuestionType::OnlyOdd { .. } => {
             for v in (0..n as i16).step_by(2) {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
         QuestionType::OnlyEven { .. } => {
             for v in (1..n as i16).step_by(2) {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
         QuestionType::ConsecIdent => {
             for v in 0..n as i16 - 1 {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
         QuestionType::TrueStmt | QuestionType::AnswerIsSelf => {}
+        QuestionType::SameAs => {
+            for v in 0..n as i16 {
+                out.push(v);
+            }
+        }
         _ => {
             for v in 0..n as i16 {
                 out.push(v);
             }
+            out.push(NONE_VAL);
         }
     }
     out
@@ -1286,10 +1297,6 @@ fn pick_distractors(
             pool[plen] = v;
             plen += 1;
         }
-    }
-    if correct != NONE_VAL {
-        pool[plen] = NONE_VAL;
-        plen += 1;
     }
     rng.shuffle(&mut pool[..plen]);
     let mut result = [0i16; 4];

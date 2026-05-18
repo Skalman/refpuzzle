@@ -622,7 +622,7 @@ fn solution_fits_type(
             let max = *counts[..oc].iter().max().unwrap_or(&0);
             counts[..oc].iter().filter(|&&c| c == max).count() == 1
         }
-        QuestionTypeKind::SameAs => (0..n).any(|i| i != qi && sol[i] == sol[qi]),
+        QuestionTypeKind::SameAs => n > oc && (0..n).any(|i| i != qi && sol[i] == sol[qi]),
         QuestionTypeKind::SameAsWhich => true,
         QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionTypeKind::EqualCount => true,
