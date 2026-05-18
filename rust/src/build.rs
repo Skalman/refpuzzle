@@ -1662,16 +1662,41 @@ fn make_false_claim(
 }
 
 fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
-    let pool = valid_values(&claim.question_type, n);
-    if pool.is_empty() {
-        return None;
-    }
-    let wrong = rng.pick(&pool);
-    if wrong == claim.value {
+    let new_val = match claim.question_type {
+        QuestionType::CountAnswer { .. }
+        | QuestionType::CountConsonant
+        | QuestionType::CountVowel
+        | QuestionType::CountAnswerAfter { .. }
+        | QuestionType::CountAnswerBefore { .. }
+        | QuestionType::MostCommonCount => {
+            let offsets: [i16; 4] = [-2, -1, 1, 2];
+            let offset = rng.pick(&offsets);
+            let v = claim.value + offset;
+            if v < 0 || v > n as i16 {
+                return None;
+            }
+            v
+        }
+        QuestionType::FirstWith { .. }
+        | QuestionType::LastWith { .. }
+        | QuestionType::ClosestAfter { .. }
+        | QuestionType::ClosestBefore { .. }
+        | QuestionType::ConsecIdent
+        | QuestionType::OnlyOdd { .. }
+        | QuestionType::OnlyEven { .. }
+        | QuestionType::SameAsWhich { .. } => rng.int(0, n as i32 - 1) as i16,
+        QuestionType::AnswerOf { .. }
+        | QuestionType::MostCommon
+        | QuestionType::LeastCommon
+        | QuestionType::NoOtherHasAnswer
+        | QuestionType::EqualCount { .. } => rng.pick(&LETTERS).idx() as i16,
+        _ => return None,
+    };
+    if new_val == claim.value {
         return None;
     }
     Some(Claim {
-        value: wrong,
+        value: new_val,
         ..claim
     })
 }

@@ -101,8 +101,13 @@ export function generateConstructive(
       traceAttempt(attempt + 1, cr.solution);
       const oc = cr.oc;
       for (let i = 0; i < cr.n; i++) {
-        const vals = puzzle.questions[i].options.slice(0, oc).map((o) => o.value);
-        traceQuestion(i, formatTypeTag(cr.types[i]), vals);
+        const opts = puzzle.questions[i].options.slice(0, oc);
+        const vals = opts.map((o) => o.value);
+        const claims =
+          cr.types[i].type === "TrueStmt"
+            ? opts.map((o) => ("claim" in o ? o.claim : null))
+            : undefined;
+        traceQuestion(i, formatTypeTag(cr.types[i]), vals, claims);
       }
     }
     const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing);
@@ -1423,12 +1428,6 @@ const CLAIM_GENS: ClaimGen[] = [
     const min = Math.min(...counts);
     if (counts.filter((c) => c === min).length !== 1) return null;
     return { questionType: { type: "LeastCommon" }, value: counts.indexOf(min) };
-  },
-  (sol) => {
-    const counts = [0, 0, 0, 0, 0];
-    for (const a of sol) counts[L2I[a]] += 1;
-    if (counts.filter((c) => c === 1).length !== 1) return null;
-    return { questionType: { type: "NoOtherHasAnswer" }, value: counts.indexOf(1) };
   },
   (sol, _qi, _n, rng) => {
     const ref = rng.pick(LETTERS);

@@ -54,6 +54,93 @@ fn format_type_tag(qt: &QuestionType) -> String {
     }
 }
 
+fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
+    let type_name = match qt {
+        QuestionType::CountAnswer { .. } => "CountAnswer",
+        QuestionType::CountConsonant => "CountConsonant",
+        QuestionType::CountVowel => "CountVowel",
+        QuestionType::CountAnswerAfter { .. } => "CountAnswerAfter",
+        QuestionType::CountAnswerBefore { .. } => "CountAnswerBefore",
+        QuestionType::AnswerOf { .. } => "AnswerOf",
+        QuestionType::FirstWith { .. } => "FirstWith",
+        QuestionType::LastWith { .. } => "LastWith",
+        QuestionType::MostCommon => "MostCommon",
+        QuestionType::LeastCommon => "LeastCommon",
+        QuestionType::MostCommonCount => "MostCommonCount",
+        QuestionType::NoOtherHasAnswer => "NoOtherHasAnswer",
+        QuestionType::ConsecIdent => "ConsecIdent",
+        QuestionType::OnlyOdd { .. } => "OnlyOdd",
+        QuestionType::OnlyEven { .. } => "OnlyEven",
+        QuestionType::EqualCount { .. } => "EqualCount",
+        QuestionType::ClosestAfter { .. } => "ClosestAfter",
+        QuestionType::ClosestBefore { .. } => "ClosestBefore",
+        QuestionType::SameAsWhich { .. } => "SameAsWhich",
+        _ => "Unknown",
+    };
+    let mut obj = serde_json::Map::new();
+    obj.insert("type".into(), serde_json::json!(type_name));
+    match *qt {
+        QuestionType::CountAnswer { answer }
+        | QuestionType::FirstWith { answer }
+        | QuestionType::LastWith { answer }
+        | QuestionType::OnlyOdd { answer }
+        | QuestionType::OnlyEven { answer }
+        | QuestionType::EqualCount { answer } => {
+            obj.insert(
+                "answer".into(),
+                serde_json::json!(answer.as_char().to_string()),
+            );
+        }
+        QuestionType::CountAnswerAfter {
+            answer,
+            after_index,
+        } => {
+            obj.insert(
+                "answer".into(),
+                serde_json::json!(answer.as_char().to_string()),
+            );
+            obj.insert("afterIndex".into(), serde_json::json!(after_index));
+        }
+        QuestionType::CountAnswerBefore {
+            answer,
+            before_index,
+        } => {
+            obj.insert(
+                "answer".into(),
+                serde_json::json!(answer.as_char().to_string()),
+            );
+            obj.insert("beforeIndex".into(), serde_json::json!(before_index));
+        }
+        QuestionType::ClosestAfter {
+            answer,
+            after_index,
+        } => {
+            obj.insert(
+                "answer".into(),
+                serde_json::json!(answer.as_char().to_string()),
+            );
+            obj.insert("afterIndex".into(), serde_json::json!(after_index));
+        }
+        QuestionType::ClosestBefore {
+            answer,
+            before_index,
+        } => {
+            obj.insert(
+                "answer".into(),
+                serde_json::json!(answer.as_char().to_string()),
+            );
+            obj.insert("beforeIndex".into(), serde_json::json!(before_index));
+        }
+        QuestionType::AnswerOf { question_index }
+        | QuestionType::LetterDist { question_index }
+        | QuestionType::SameAsWhich { question_index } => {
+            obj.insert("questionIndex".into(), serde_json::json!(question_index));
+        }
+        _ => {}
+    }
+    serde_json::Value::Object(obj)
+}
+
 pub fn generate(
     profile: &DifficultyProfile,
     rng: &mut Rng,
@@ -505,15 +592,29 @@ fn try_construct(
                     }
                 })
                 .collect();
-            eprintln!(
-                "{}",
-                serde_json::json!({
-                    "t": "question",
-                    "qi": qi,
-                    "type": format_type_tag(&state.question_types[qi]),
-                    "options": vals
-                })
-            );
+            let mut obj = serde_json::json!({
+                "t": "question",
+                "qi": qi,
+                "type": format_type_tag(&state.question_types[qi]),
+                "options": vals
+            });
+            if matches!(state.question_types[qi], QuestionType::TrueStmt) {
+                let claims: Vec<serde_json::Value> = (0..oc)
+                    .map(|oi| match &fp.option_claims[qi][oi] {
+                        Some(c) => {
+                            let mut co = serde_json::json!({
+                                "questionType": format!("{:?}", c.question_type),
+                                "value": c.value,
+                            });
+                            co["questionType"] = format_claim_qt(&c.question_type);
+                            co
+                        }
+                        None => serde_json::Value::Null,
+                    })
+                    .collect();
+                obj["claims"] = serde_json::json!(claims);
+            }
+            eprintln!("{}", obj);
         }
     }
 

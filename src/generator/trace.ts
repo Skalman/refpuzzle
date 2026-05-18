@@ -14,8 +14,15 @@ export function traceAttempt(attempt: number, solution: Answer[]) {
   emit({ t: "attempt", attempt, solution: solution.join("") });
 }
 
-export function traceQuestion(qi: number, type: string, options: (number | null)[]) {
-  emit({ t: "question", qi, type, options });
+export function traceQuestion(
+  qi: number,
+  type: string,
+  options: (number | null)[],
+  claims?: unknown,
+) {
+  const obj: Record<string, unknown> = { t: "question", qi, type, options };
+  if (claims) obj.claims = claims;
+  emit(obj);
 }
 
 export function tracePhase(name: string, placed: { qi: number; type: string }[]) {
