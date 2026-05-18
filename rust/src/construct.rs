@@ -64,7 +64,10 @@ pub fn generate(
     for attempt in 0..max_attempts {
         if let Some(r) = try_construct(profile, rng, stats, trace, attempt) {
             if trace {
-                eprintln!("=== attempt {}: SUCCESS ===", attempt + 1);
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"t": "success", "attempt": attempt + 1})
+                );
             }
             return Some(r);
         }
@@ -272,11 +275,16 @@ fn try_construct(
 
     let trace_phase = |name: &str, state: &PlacementState| {
         if trace {
-            let placed: Vec<String> = (0..n)
+            let placed: Vec<serde_json::Value> = (0..n)
                 .filter(|&i| (state.assigned >> i) & 1 == 1)
-                .map(|i| format!("Q{}={}", i + 1, format_type_tag(&state.question_types[i])))
+                .map(|i| {
+                    serde_json::json!({"qi": i, "type": format_type_tag(&state.question_types[i])})
+                })
                 .collect();
-            eprintln!("  [{}] {}", name, placed.join(" "));
+            eprintln!(
+                "{}",
+                serde_json::json!({"t": "phase", "name": name, "placed": placed})
+            );
         }
     };
 
@@ -288,7 +296,10 @@ fn try_construct(
     {
         {
             if trace {
-                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
+                );
             }
             return None;
         }
@@ -310,7 +321,10 @@ fn try_construct(
     for _ in 0..chain_count {
         if !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng) {
             if trace {
-                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
+                );
             }
             return None;
         }
@@ -400,7 +414,10 @@ fn try_construct(
             && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
         {
             if trace {
-                eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+                eprintln!(
+                    "{}",
+                    serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
+                );
             }
             return None;
         }
@@ -441,7 +458,10 @@ fn try_construct(
                 && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
             {
                 if trace {
-                    eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+                    eprintln!(
+                        "{}",
+                        serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
+                    );
                 }
                 return None;
             }
@@ -458,33 +478,41 @@ fn try_construct(
         rng,
     ) else {
         if trace {
-            eprintln!("=== attempt {}: construct failed ===", attempt + 1);
+            eprintln!(
+                "{}",
+                serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
+            );
         }
         return None;
     };
 
     if trace {
-        eprintln!("=== attempt {} ===", attempt + 1);
         let sol_str: String = solution.iter().take(n).map(|a| a.as_char()).collect();
-        eprintln!("solution: {}", sol_str);
+        eprintln!(
+            "{}",
+            serde_json::json!({"t": "attempt", "attempt": attempt + 1, "solution": sol_str})
+        );
         for qi in 0..n {
-            let vals: Vec<String> = (0..oc)
+            let vals: Vec<serde_json::Value> = (0..oc)
                 .map(|oi| {
                     let v = fp.option_nums[qi][oi];
                     if matches!(state.question_types[qi], QuestionType::TrueStmt) || v == NONE_VAL {
-                        "null".to_string()
+                        serde_json::Value::Null
                     } else if v == NAN_VAL {
-                        fp.option_answers[qi][oi].to_string()
+                        serde_json::json!(fp.option_answers[qi][oi])
                     } else {
-                        v.to_string()
+                        serde_json::json!(v)
                     }
                 })
                 .collect();
             eprintln!(
-                "Q{}: {} [{}]",
-                qi + 1,
-                format_type_tag(&state.question_types[qi]),
-                vals.join(",")
+                "{}",
+                serde_json::json!({
+                    "t": "question",
+                    "qi": qi,
+                    "type": format_type_tag(&state.question_types[qi]),
+                    "options": vals
+                })
             );
         }
     }
@@ -499,7 +527,10 @@ fn try_construct(
         trace,
     ) {
         if trace {
-            eprintln!("=== attempt {}: FAILED ===", attempt + 1);
+            eprintln!(
+                "{}",
+                serde_json::json!({"t": "failed", "attempt": attempt + 1})
+            );
         }
         return None;
     }

@@ -1,4 +1,5 @@
 use arrayvec::ArrayVec;
+use serde_json::{Value, json};
 
 use crate::check_validity::check_question_against_solution;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
@@ -254,105 +255,74 @@ fn run_hint_engine_from(
 
 // ── Trace helpers ──
 
-#[cold]
-#[inline(never)]
-fn trace_deduce_batch(batch: u32, drs: &[DeduceResult], n: usize) {
-    eprintln!("--- deduce batch {} ({} results) ---", batch, drs.len());
-    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
-    for dr in drs {
-        match dr.action {
-            DeduceAction::Force { qi, answer } => {
-                eprintln!("  {}{} {}", qi + 1, answer.as_char(), dr.rule.to_str());
-            }
-            DeduceAction::Eliminate { qi, oi } => {
-                eprintln!("  {}{} {}", qi + 1, letters_lower[oi], dr.rule.to_str());
-            }
-            DeduceAction::EliminateMulti {
-                question_mask,
-                option_mask,
-            } => {
-                for i in 0..n {
-                    if (question_mask >> i) & 1 == 1 {
-                        for oi in 0..5usize {
-                            if (option_mask >> oi) & 1 == 1 {
-                                eprintln!("  {}{} {}", i + 1, letters_lower[oi], dr.rule.to_str());
-                            }
-                        }
-                    }
-                }
-            }
+fn action_to_json(action: &DeduceAction, rule: &str) -> Value {
+    match *action {
+        DeduceAction::Force { qi, answer } => {
+            json!({"qi": qi, "answer": answer.as_char().to_string(), "rule": rule})
+        }
+        DeduceAction::Eliminate { qi, oi } => {
+            json!({"qi": qi, "oi": oi, "rule": rule})
+        }
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            json!({"qi": -1, "qm": question_mask, "om": option_mask, "rule": rule})
         }
     }
+}
+
+#[cold]
+#[inline(never)]
+fn trace_deduce_batch(batch: u32, drs: &[DeduceResult], _n: usize) {
+    let actions: Vec<Value> = drs
+        .iter()
+        .map(|dr| action_to_json(&dr.action, dr.rule.to_str()))
+        .collect();
+    eprintln!(
+        "{}",
+        json!({"t": "batch", "batch": batch, "actions": actions})
+    );
 }
 
 #[cold]
 #[inline(never)]
 fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
-    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+    let chain: Vec<Value> = lr
+        .chain
+        .iter()
+        .map(|dr| action_to_json(&dr.action, dr.rule.to_str()))
+        .collect();
     eprintln!(
-        "--- lookahead: assume Q{}={} -> contradiction Q{} -> elim {}{} (chain={}) ---",
-        lr.assumption_qi + 1,
-        lr.assumption_answer.as_char(),
-        lr.contradiction_qi + 1,
-        lr.eliminate_qi + 1,
-        letters_lower[lr.eliminate_oi],
-        lr.chain.len()
+        "{}",
+        json!({
+            "t": "lookahead",
+            "assume": [lr.assumption_qi, lr.assumption_answer.as_char().to_string()],
+            "contradiction": lr.contradiction_qi,
+            "eliminate": [lr.eliminate_qi, lr.eliminate_oi],
+            "chain": chain
+        })
     );
-    for dr in &lr.chain {
-        match dr.action {
-            DeduceAction::Force { qi, answer } => {
-                eprintln!("    {}{} {}", qi + 1, answer.as_char(), dr.rule.to_str());
-            }
-            DeduceAction::Eliminate { qi, oi } => {
-                eprintln!("    {}{} {}", qi + 1, letters_lower[oi], dr.rule.to_str());
-            }
-            DeduceAction::EliminateMulti {
-                question_mask,
-                option_mask,
-            } => {
-                for i in 0..crate::types::MAX_N {
-                    if (question_mask >> i) & 1 == 1 {
-                        for oi in 0..5usize {
-                            if (option_mask >> oi) & 1 == 1 {
-                                eprintln!(
-                                    "    {}{} {}",
-                                    i + 1,
-                                    letters_lower[oi],
-                                    dr.rule.to_str()
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[cold]
 #[inline(never)]
 fn trace_repair(qi: usize, before: &[i16; 5], after: &[i16; 5], oc: usize, probe_len: usize) {
-    let fmt = |v: &[i16; 5]| -> String {
+    let to_json = |v: &[i16; 5]| -> Vec<Value> {
         v[..oc]
             .iter()
             .map(|&x| {
-                if x == NONE_VAL {
-                    "null".to_string()
-                } else if x == NAN_VAL {
-                    "nan".to_string()
+                if x == NONE_VAL || x == NAN_VAL {
+                    Value::Null
                 } else {
-                    x.to_string()
+                    json!(x)
                 }
             })
-            .collect::<Vec<_>>()
-            .join(",")
+            .collect()
     };
     eprintln!(
-        "--- repair Q{}: [{}] -> [{}] probe={} ---",
-        qi + 1,
-        fmt(before),
-        fmt(after),
-        probe_len
+        "{}",
+        json!({"t": "repair", "qi": qi, "before": to_json(before), "after": to_json(after), "probe": probe_len})
     );
 }
 
@@ -507,7 +477,7 @@ pub fn validate_and_repair(
 
     // Step 1: Can the engine solve it?
     if trace {
-        eprintln!("--- solve ---");
+        eprintln!("{}", json!({"t": "solve", "label": "initial"}));
     }
     let t0 = std::time::Instant::now();
     let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp, stats, trace);
@@ -515,10 +485,8 @@ pub fn validate_and_repair(
     if trace {
         let answered = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
         eprintln!(
-            "hint: {} {}/{}",
-            if ok { "solved" } else { "stuck" },
-            answered,
-            n
+            "{}",
+            json!({"t": "hint", "solved": ok, "answered": answered, "n": n})
         );
     }
     if ok {
@@ -526,7 +494,10 @@ pub fn validate_and_repair(
         let solutions = solve(fp, None, 2);
         stats.solve_us += us(t0);
         if trace {
-            eprintln!("uniqueness: {} solution(s)", solutions.len());
+            eprintln!(
+                "{}",
+                json!({"t": "uniqueness", "solutions": solutions.len()})
+            );
         }
         if solutions.len() == 1 {
             return true;
@@ -576,14 +547,14 @@ pub fn validate_and_repair(
             }
         } else {
             if trace {
-                eprintln!("--- repair Q{}: no change ---", qi + 1);
+                eprintln!("{}", json!({"t": "repair", "qi": qi, "changed": false}));
             }
             continue;
         }
 
         // The tweak unblocked something — do a full solve
         if trace {
-            eprintln!("--- solve (after repair) ---");
+            eprintln!("{}", json!({"t": "solve", "label": "after_repair"}));
         }
         let t0 = std::time::Instant::now();
         let (ok, _, _) = if solved_before == 0 {
@@ -611,7 +582,7 @@ pub fn validate_and_repair(
 
     if !repaired {
         if trace {
-            eprintln!("--- solve (final) ---");
+            eprintln!("{}", json!({"t": "solve", "label": "final"}));
         }
         let t0 = std::time::Instant::now();
         let (ok, _, _) = run_hint_engine(fp, stats, trace);
