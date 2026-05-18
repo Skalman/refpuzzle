@@ -20,11 +20,157 @@ use serde_json::{Value, json};
 use std::time::Instant;
 use types::*;
 
+struct DateRange {
+    year: u32,
+    start_mm: u32,
+    start_dd: u32,
+    end_mm: u32,
+    end_dd: u32,
+}
+
+fn parse_date_range(input: &str) -> DateRange {
+    let (start_str, end_str) = if let Some((a, b)) = input.split_once("..") {
+        (a, Some(b))
+    } else {
+        (input, None)
+    };
+
+    let parse_part = |s: &str| -> (u32, Option<u32>, Option<u32>) {
+        let parts: Vec<&str> = s.split('-').collect();
+        match parts.len() {
+            1 => (parts[0].parse().expect("invalid year"), None, None),
+            2 => (
+                parts[0].parse().expect("invalid year"),
+                Some(parts[1].parse().expect("invalid month")),
+                None,
+            ),
+            3 => (
+                parts[0].parse().expect("invalid year"),
+                Some(parts[1].parse().expect("invalid month")),
+                Some(parts[2].parse().expect("invalid day")),
+            ),
+            _ => {
+                eprintln!("Invalid date format: {s}");
+                std::process::exit(1);
+            }
+        }
+    };
+
+    fn last_day(year: u32, month: u32) -> u32 {
+        match month {
+            2 => {
+                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
+                {
+                    29
+                } else {
+                    28
+                }
+            }
+            4 | 6 | 9 | 11 => 30,
+            _ => 31,
+        }
+    }
+
+    let (sy, sm, sd) = parse_part(start_str);
+    let start_mm = sm.unwrap_or(if sy == 2026 { 4 } else { 1 });
+    let start_dd = sd.unwrap_or(if sy == 2026 && sm.is_none() { 19 } else { 1 });
+
+    let (ey, em, ed) = if let Some(e) = end_str {
+        parse_part(e)
+    } else {
+        (sy, sm, sd)
+    };
+
+    if sy != ey {
+        eprintln!("Date range must not cross year boundaries: {input}");
+        std::process::exit(1);
+    }
+
+    let end_mm = em.unwrap_or(12);
+    let end_dd = ed.unwrap_or_else(|| last_day(ey, end_mm));
+
+    let launch = 20260419u32;
+    let mut start_mm = start_mm;
+    let mut start_dd = start_dd;
+    let start_val = sy * 10000 + start_mm * 100 + start_dd;
+    if sy == 2026 && start_val < launch {
+        start_mm = 4;
+        start_dd = 19;
+    }
+    let start_val = sy * 10000 + start_mm * 100 + start_dd;
+    if start_val < launch {
+        eprintln!("Date range must not start before 2026-04-19: {input}");
+        std::process::exit(1);
+    }
+    let end_val = ey * 10000 + end_mm * 100 + end_dd;
+    if start_val > end_val {
+        eprintln!(
+            "Start date is after end date: {}-{:02}-{:02}..{}-{:02}-{:02}",
+            sy, start_mm, start_dd, ey, end_mm, end_dd
+        );
+        std::process::exit(1);
+    }
+
+    DateRange {
+        year: sy,
+        start_mm,
+        start_dd,
+        end_mm,
+        end_dd,
+    }
+}
+
+fn print_help() {
+    eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
+    eprintln!("       refpuzzle check <file.json> [MMDD-level]");
+    eprintln!();
+    eprintln!("Options:");
+    eprintln!("  -o FILE       output file (required, - for stdout)");
+    eprintln!("  -m            merge into existing file");
+    eprintln!("  -l, --level   generate only this level (1-6)");
+    eprintln!("  -a, --attempts  max attempts per seed (default 100)");
+    eprintln!("  --stats       show generation statistics");
+    eprintln!("  --trace       show trace output");
+    eprintln!();
+    eprintln!("Examples:");
+    eprintln!("  refpuzzle gen 2051 -o out.json");
+    eprintln!("  refpuzzle gen 2051-03 -o out.json -l 4");
+    eprintln!("  refpuzzle gen 2051-01..2051-06 -o out.json -m");
+    eprintln!("  refpuzzle check puzzles/daily/2051.json");
+    eprintln!("  refpuzzle check puzzles/daily/2051.json 0315-4");
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let mut year: Option<u32> = None;
-    let mut start_date: Option<String> = None;
-    let mut end_date: Option<String> = None;
+
+    if args.len() < 2 || args[1] == "--help" || args[1] == "-h" {
+        print_help();
+        if args.len() >= 2 {
+            return;
+        }
+        std::process::exit(1);
+    }
+
+    match args[1].as_str() {
+        "gen" => {}
+        "check" => {
+            if args.len() < 3 {
+                eprintln!("Usage: refpuzzle check <file.json> [MMDD-level]");
+                std::process::exit(1);
+            }
+            let file = &args[2];
+            let target = args.get(3).cloned();
+            check_json(file, target.as_deref());
+            return;
+        }
+        _ => {
+            eprintln!("Unknown subcommand: {}. Use 'gen' or 'check'.", args[1]);
+            std::process::exit(1);
+        }
+    }
+
+    // Parse gen subcommand args
+    let mut date_range_str: Option<String> = None;
     let mut max_attempts: usize = 100;
     let mut level_filter: Option<u8> = None;
     let mut show_stats = false;
@@ -32,17 +178,9 @@ fn main() {
     let mut output_path: Option<String> = None;
     let mut merge = false;
 
-    let mut i = 1;
+    let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
-            "--year" | "-y" => {
-                i += 1;
-                year = Some(args[i].parse().expect("invalid year"));
-            }
-            "--start" => {
-                i += 1;
-                start_date = Some(args[i].clone());
-            }
             "--attempts" | "-a" => {
                 i += 1;
                 max_attempts = args[i].parse().expect("invalid attempts");
@@ -52,10 +190,6 @@ fn main() {
                 let l: u8 = args[i].parse().expect("invalid level");
                 assert!((1..=6).contains(&l), "level must be 1-6");
                 level_filter = Some(l);
-            }
-            "--end" => {
-                i += 1;
-                end_date = Some(args[i].clone());
             }
             "--output" | "-o" => {
                 i += 1;
@@ -70,53 +204,33 @@ fn main() {
             "--trace" => {
                 trace = true;
             }
-            "--check" => {
-                i += 1;
-                let file = &args[i];
-                let target = args.get(i + 1).cloned();
-                check_json(file, target.as_deref());
-                return;
-            }
             "--help" | "-h" => {
-                eprintln!(
-                    "Usage: refpuzzle --year YYYY -o FILE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--level 1-6] [-m] [--stats]"
-                );
-                eprintln!("       refpuzzle --check <file.json> [MMDD-level-N]");
-                eprintln!("  Generates a year of daily puzzles.");
-                eprintln!(
-                    "  Seeds are derived from the date, so the same date always produces the same puzzle."
-                );
-                eprintln!("  -o FILE  output file (required, use - for stdout)");
-                eprintln!("  -m       merge into existing file (only overwrite generated puzzles)");
-                eprintln!("  --level  generate only this level (default: all 6)");
-                eprintln!("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026)");
-                eprintln!("  --end    defaults to YYYY-12-31");
-                eprintln!("  --stats  show generation statistics");
-                eprintln!("  --check  verify solvability of puzzles in a JSON file");
+                print_help();
                 return;
             }
-            _ => {
-                eprintln!("Unknown argument: {}", args[i]);
-                std::process::exit(1);
+            other => {
+                if other.starts_with('-') {
+                    eprintln!("Unknown option: {other}");
+                    std::process::exit(1);
+                }
+                date_range_str = Some(other.to_string());
             }
         }
         i += 1;
     }
 
-    let year = year.unwrap_or(2026);
-    let start = start_date.unwrap_or_else(|| {
-        if year == 2026 {
-            "2026-04-19".into()
-        } else {
-            format!("{year}-01-01")
-        }
+    let date_range_str = date_range_str.unwrap_or_else(|| {
+        eprintln!("Error: date range is required. Example: refpuzzle gen 2051 -o out.json");
+        std::process::exit(1);
     });
-
-    let end = end_date.unwrap_or_else(|| format!("{year}-12-31"));
-    let start_mm: u32 = start[5..7].parse().unwrap();
-    let start_dd: u32 = start[8..10].parse().unwrap();
-    let end_mm: u32 = end[5..7].parse().unwrap();
-    let end_dd: u32 = end[8..10].parse().unwrap();
+    let dr = parse_date_range(&date_range_str);
+    let year = dr.year;
+    let start = format!("{}-{:02}-{:02}", year, dr.start_mm, dr.start_dd);
+    let end = format!("{}-{:02}-{:02}", year, dr.end_mm, dr.end_dd);
+    let start_mm = dr.start_mm;
+    let start_dd = dr.start_dd;
+    let end_mm = dr.end_mm;
+    let end_dd = dr.end_dd;
 
     let output_path = output_path.unwrap_or_else(|| {
         eprintln!("Error: -o/--output is required (use -o - for stdout)");

@@ -6,10 +6,107 @@ import type { Puzzle, QuestionType, Claim } from "../src/engine/types.ts";
 
 // ── CLI ──
 
+const PROJECT_LAUNCH = "2026-04-19";
+
+function printHelp(): never {
+  console.error(`Usage: pnpm generate <date-range> -o FILE [options]
+
+Date range formats:
+  2051              full year (2051-01-01..2051-12-31)
+  2051-03           full month (2051-03-01..2051-03-31)
+  2051-03-15        single day
+  2051-03..2051-06  month range (2051-03-01..2051-06-30)
+  2051-01-01..2051-06-30  exact range
+
+Options:
+  -o FILE           output file (required, - for stdout)
+  -m                merge into existing file
+  -l, --level       generate only this level (1-6)
+  -a, --attempts    max attempts per seed (default 100)
+  --stats           show generation statistics
+  --trace           show trace output
+
+Examples:
+  pnpm generate 2051 -o out.json
+  pnpm generate 2051-03 -o out.json -l 4
+  pnpm generate 2051-01..2051-06 -o out.json -m`);
+  process.exit(0);
+}
+
+/** Return the last day of the given month. */
+function lastDay(y: number, m: number): number {
+  if (m === 2) return y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0) ? 29 : 28;
+  return [0, 31, 0, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m];
+}
+
+/** Parse a date-range string and return [year, startDate, endDate]. */
+function parseDateRange(raw: string): { year: number; start: string; end: string } {
+  const parts = raw.split("..");
+
+  function parseEndpoint(s: string, side: "start" | "end"): string {
+    if (/^\d{4}$/.test(s)) {
+      const y = Number(s);
+      return side === "start" ? `${y}-01-01` : `${y}-12-31`;
+    }
+    if (/^\d{4}-\d{2}$/.test(s)) {
+      const y = Number(s.slice(0, 4));
+      const m = Number(s.slice(5, 7));
+      if (m < 1 || m > 12) {
+        console.error(`Invalid month in date range: ${s}`);
+        return process.exit(1);
+      }
+      return side === "start" ? `${s}-01` : `${s}-${String(lastDay(y, m)).padStart(2, "0")}`;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      return s;
+    }
+    console.error(`Invalid date format: ${s}`);
+    return process.exit(1);
+  }
+
+  let start: string;
+  let end: string;
+
+  if (parts.length === 1) {
+    start = parseEndpoint(parts[0], "start");
+    end = parseEndpoint(parts[0], "end");
+  } else if (parts.length === 2) {
+    start = parseEndpoint(parts[0], "start");
+    end = parseEndpoint(parts[1], "end");
+  } else {
+    console.error(`Invalid date range: ${raw}`);
+    process.exit(1);
+  }
+
+  const startYear = Number(start.slice(0, 4));
+  const endYear = Number(end.slice(0, 4));
+  if (startYear !== endYear) {
+    console.error(`Date range must not cross year boundaries: ${start}..${end}`);
+    process.exit(1);
+  }
+
+  const year = startYear;
+
+  // Backward compat: for year 2026, clamp start to project launch date
+  if (year === 2026 && start < PROJECT_LAUNCH) {
+    start = PROJECT_LAUNCH;
+  }
+
+  if (start < PROJECT_LAUNCH) {
+    console.error(`Date range must not start before ${PROJECT_LAUNCH}: ${start}`);
+    process.exit(1);
+  }
+
+  if (start > end) {
+    console.error(`Start date is after end date: ${start}..${end}`);
+    process.exit(1);
+  }
+
+  return { year, start, end };
+}
+
 const args = process.argv.slice(2);
-let year = 2026;
-let startDate: string | null = null;
-let endDate: string | null = null;
+let dateRangeArg: string | null = null;
 let outputPath: string | null = null;
 let merge = false;
 let levelFilter: number | null = null;
@@ -19,16 +116,6 @@ let tracing = false;
 
 for (let i = 0; i < args.length; i++) {
   switch (args[i]) {
-    case "--year":
-    case "-y":
-      year = Number(args[++i]);
-      break;
-    case "--start":
-      startDate = args[++i];
-      break;
-    case "--end":
-      endDate = args[++i];
-      break;
     case "--output":
     case "-o":
       outputPath = args[++i];
@@ -59,30 +146,32 @@ for (let i = 0; i < args.length; i++) {
       break;
     case "--help":
     case "-h":
-      console.error(
-        "Usage: node scripts/generate.ts --year YYYY -o FILE [--start YYYY-MM-DD] [--end YYYY-MM-DD] [--level 1-6] [-m] [--stats]",
-      );
-      console.error("  -o FILE  output file (required, use - for stdout)");
-      console.error("  -m       merge into existing file");
-      console.error("  --level  generate only this level (default: all 6)");
-      console.error("  --start  defaults to YYYY-01-01 (or 2026-04-19 for 2026)");
-      console.error("  --end    defaults to YYYY-12-31");
-      console.error("  --stats  show generation statistics");
-      process.exit(0);
+      printHelp();
       break;
     default:
-      console.error(`Unknown argument: ${args[i]}`);
-      process.exit(1);
+      if (args[i].startsWith("-")) {
+        console.error(`Unknown option: ${args[i]}`);
+        process.exit(1);
+      }
+      if (dateRangeArg !== null) {
+        console.error(`Unexpected positional argument: ${args[i]}`);
+        process.exit(1);
+      }
+      dateRangeArg = args[i];
   }
 }
 
+if (!dateRangeArg) {
+  console.error("Error: date range argument is required");
+  console.error("Run with --help for usage");
+  process.exit(1);
+}
 if (!outputPath) {
   console.error("Error: -o/--output is required (use -o - for stdout)");
   process.exit(1);
 }
 
-const start = startDate ?? (year === 2026 ? "2026-04-19" : `${year}-01-01`);
-const end = endDate ?? `${year}-12-31`;
+const { year, start, end } = parseDateRange(dateRangeArg);
 const startMm = Number(start.slice(5, 7));
 const startDd = Number(start.slice(8, 10));
 const endMm = Number(end.slice(5, 7));
