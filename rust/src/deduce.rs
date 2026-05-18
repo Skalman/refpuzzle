@@ -108,6 +108,7 @@ deduce_rules! {
     NextSameNoneMatch,
     OnlySameNoneMatch,
     OnlySameNoneForward,
+    SameAsNegative,
     SameAsWhichForward,
     SameAsWhichReverse,
 }
@@ -1754,6 +1755,43 @@ fn deduce_impl(
                         DeduceRule::OnlySameNoneForward,
                     );
                 }
+            }
+        }
+    }
+
+    // SameAs negative: non-selected option targets cannot share this question's answer
+    if run(DeduceRule::SameAsNegative) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::SameAs) {
+                continue;
+            }
+            let Some(ans) = answers[qi] else { continue };
+            let ai = ans.idx();
+            let selected = fp.option_nums[qi][ai];
+            let mut q_mask = 0u16;
+            for oi in 0..5usize {
+                if oi == ai {
+                    continue;
+                }
+                let target = fp.option_nums[qi][oi];
+                if target < 0 || target as usize >= n || target as usize == qi {
+                    continue;
+                }
+                if target != selected
+                    && answers[target as usize].is_none()
+                    && !is_elim(eliminated, target as usize, ai)
+                {
+                    q_mask |= 1 << target;
+                }
+            }
+            if q_mask != 0 {
+                push(
+                    DeduceAction::EliminateMulti {
+                        question_mask: q_mask,
+                        option_mask: 1 << ai,
+                    },
+                    DeduceRule::SameAsNegative,
+                );
             }
         }
     }

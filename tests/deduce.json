@@ -829,6 +829,22 @@
       "expect": "1a"
     },
     {
+      "name": "SameAs: answered C (→Q4), so non-selected targets Q2,Q3,Q5,Q6 must not share answer",
+      "rule": "SameAsNegative",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAs" }, "o": [1, 2, 3, 4, 5] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["C", "", "", "", "", ""],
+      "expect": "qm110110o00100"
+    },
+    {
       "name": "OnlySameOtherMatch: Q3=B already, so Q1 option B (pointing to Q2) can't be 'only'",
       "rule": "OnlySameOtherMatch",
       "puzzle": {

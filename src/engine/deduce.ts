@@ -103,6 +103,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "NextSameNoneMatch",
   "OnlySameNoneMatch",
   "OnlySameNoneForward",
+  "SameAsNegative",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
   "SameAsWhichForward",
@@ -1329,6 +1330,33 @@ function deduceImpl(
         if (answers[j] == null && !isElim(eliminated, j, ai)) {
           results.push(res({ type: "eliminate", qi: j, oi: ai }, "OnlySameNoneForward"));
         }
+      }
+    }
+  }
+
+  // SameAs negative: non-selected option targets cannot share this question's answer
+  if (run("SameAsNegative")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== QT_SAME_AS) continue;
+      if (answers[qi] == null) continue;
+      const ai = letterIdx(answers[qi]!);
+      const selected = fp.optionValues[qi][ai];
+      let qMask = 0;
+      for (let oi = 0; oi < 5; oi++) {
+        if (oi === ai) continue;
+        const target = fp.optionValues[qi][oi];
+        if (target == null || target < 0 || target >= n || target === qi) continue;
+        if (target !== selected && answers[target] == null && !isElim(eliminated, target, ai)) {
+          qMask |= 1 << target;
+        }
+      }
+      if (qMask !== 0) {
+        results.push(
+          res(
+            { type: "eliminateMulti", questionMask: qMask, optionMask: 1 << ai },
+            "SameAsNegative",
+          ),
+        );
       }
     }
   }

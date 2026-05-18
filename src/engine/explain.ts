@@ -181,7 +181,7 @@ export function explainDeduce(
     }
 
     const firstQi = qis[0];
-    const reason = explainMultiElim(fp, answers, eliminated, firstQi, a.optionMask);
+    const reason = explainMultiElim(fp, answers, eliminated, firstQi, a.optionMask, result.rule);
     const steps: ExplainStep[] = [];
     if (reason.otherQi != null) {
       steps.push(simple(`Try looking at ${Q(reason.otherQi)}.`));
@@ -787,37 +787,51 @@ function explainMultiElim(
   _eliminated: number[],
   qi: number,
   _optionMask: number,
+  rule: string,
 ): { text: string; otherQi: number | null } {
   const n = fp.n;
-  for (let src = 0; src < n; src++) {
-    if (src === qi) continue;
-    const srcR = fp.questions[src];
-    if (srcR.t !== QT_LETTER_DIST || srcR.questionIndex !== qi) continue;
-    const srcAns = answers[src];
-    if (srcAns != null) {
-      const dist = fp.optionValues[src][letterIdx(srcAns)];
+  if (rule === "SameAsNegative") {
+    for (let src = 0; src < n; src++) {
+      if (src === qi || fp.questions[src].t !== QT_SAME_AS || answers[src] == null) continue;
       return {
-        text: `${Q(src)} is answered ${srcAns} with letter distance ${dist}, so only answers at distance ${dist} from ${srcAns} are possible.`,
-        otherQi: src,
-      };
-    }
-    return {
-      text: `${Q(src)}'s remaining options limit which answers are possible for ${Q(qi)}.`,
-      otherQi: src,
-    };
-  }
-  for (let src = 0; src < n; src++) {
-    if (src === qi) continue;
-    const srcR = fp.questions[src];
-    if ((srcR.t === QT_ONLY_ODD || srcR.t === QT_ONLY_EVEN) && srcR.answer != null) {
-      const parity = srcR.t === QT_ONLY_ODD ? "odd" : "even";
-      return {
-        text: `${Q(src)} asks for the only ${parity}-numbered question with answer ${srcR.answer}, limiting which ${parity} questions can have that answer.`,
+        text: `${Q(src)} identifies which question shares its answer, so the other listed questions cannot have the same answer.`,
         otherQi: src,
       };
     }
   }
-  throw new Error(`No explainMultiElim source for ${Q(qi)}`);
+  if (rule === "LetterDistReverseElim") {
+    for (let src = 0; src < n; src++) {
+      if (src === qi) continue;
+      const srcR = fp.questions[src];
+      if (srcR.t !== QT_LETTER_DIST || srcR.questionIndex !== qi) continue;
+      const srcAns = answers[src];
+      if (srcAns != null) {
+        const dist = fp.optionValues[src][letterIdx(srcAns)];
+        return {
+          text: `${Q(src)} is answered ${srcAns} with letter distance ${dist}, so only answers at distance ${dist} from ${srcAns} are possible.`,
+          otherQi: src,
+        };
+      }
+      return {
+        text: `${Q(src)}'s remaining options limit which answers are possible for ${Q(qi)}.`,
+        otherQi: src,
+      };
+    }
+  }
+  if (rule === "OnlyOddEvenRangeElim") {
+    for (let src = 0; src < n; src++) {
+      if (src === qi) continue;
+      const srcR = fp.questions[src];
+      if ((srcR.t === QT_ONLY_ODD || srcR.t === QT_ONLY_EVEN) && srcR.answer != null) {
+        const parity = srcR.t === QT_ONLY_ODD ? "odd" : "even";
+        return {
+          text: `${Q(src)} asks for the only ${parity}-numbered question with answer ${srcR.answer}, limiting which ${parity} questions can have that answer.`,
+          otherQi: src,
+        };
+      }
+    }
+  }
+  throw new Error(`No explainMultiElim handler for rule ${rule} at ${Q(qi)}`);
 }
 
 interface ElimDetail {
