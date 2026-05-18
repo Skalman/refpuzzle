@@ -1205,6 +1205,20 @@ function engineerOptions(
     return opts;
   }
 
+  if (rule.type === "SameAs") {
+    const correct = computeValue(rule, qi, solution);
+    const pool: number[] = [];
+    for (let j = 0; j < n; j++) {
+      if (j !== qi && j !== correct && solution[j] !== solution[qi]) pool.push(j);
+    }
+    const shuffled = rng.shuffle(pool);
+    const opts: OptionDef[] = new Array(oc);
+    opts[correctOi] = { value: correct };
+    let di = 0;
+    for (let i = 0; i < oc; i++) if (i !== correctOi) opts[i] = { value: shuffled[di++] ?? null };
+    return opts;
+  }
+
   if (rule.type === "SameAsWhich") {
     const correct = computeValue(rule, qi, solution);
     const refAns = solution[rule.questionIndex];

@@ -1108,6 +1108,22 @@ pub fn fill_options(
                 distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
+            QuestionType::SameAs => {
+                option_nums[qi][correct_oi] = correct_val;
+                let self_ans = solution[qi];
+                let mut pool = [0i16; MAX_N];
+                let mut plen = 0;
+                for j in 0..n {
+                    if j != qi && j as i16 != correct_val && solution[j] != self_ans {
+                        pool[plen] = j as i16;
+                        plen += 1;
+                    }
+                }
+                rng.shuffle(&mut pool[..plen]);
+                let mut distractors = [0i16; 4];
+                distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
             _ => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
