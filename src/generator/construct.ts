@@ -357,6 +357,7 @@ function tryConstruct(
     if (!tracing) return;
     const placed = slots
       .filter((qi) => assigned.has(qi))
+      .sort((a, b) => a - b)
       .map((qi) => `Q${String(qi + 1)}=${formatTypeTag(rules[qi]!)}`)
       .join(" ");
     trace(`  [${name}] ${placed}`);

@@ -448,7 +448,7 @@ fn try_construct(
         }
     }
 
-    trace_phase("p6", &state);
+    trace_phase("p7", &state);
 
     let Some(mut fp) = fill_options(
         &state.question_types,
@@ -471,7 +471,7 @@ fn try_construct(
             let vals: Vec<String> = (0..oc)
                 .map(|oi| {
                     let v = fp.option_nums[qi][oi];
-                    if v == NONE_VAL {
+                    if matches!(state.question_types[qi], QuestionType::TrueStmt) || v == NONE_VAL {
                         "null".to_string()
                     } else if v == NAN_VAL {
                         fp.option_answers[qi][oi].to_string()

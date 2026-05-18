@@ -16,6 +16,7 @@
     "generate": "node scripts/generate.ts",
     "generate:old": "node scripts/generate-puzzles.ts",
     "check": "node scripts/check.ts",
+    "trace-diff": "node scripts/trace-diff.ts",
     "test": "node scripts/test.ts",
     "test:all": "node scripts/test.ts --all",
     "bench": "vite build --config scripts/vite-bench.config.ts && node dist-scripts/bench.js",
