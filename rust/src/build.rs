@@ -580,19 +580,15 @@ pub fn validate_and_repair(
         }
     }
 
-    if !repaired {
-        if trace {
-            eprintln!("{}", json!({"t": "solve", "label": "final"}));
-        }
-        let t0 = std::time::Instant::now();
-        let (ok, _, _) = run_hint_engine(fp, stats, trace);
-        stats.hint_us += us(t0);
-        repaired = ok;
-    }
-
     stats.repair_us += us(repair_t0);
 
-    if !repaired {
+    if trace {
+        eprintln!("{}", json!({"t": "solve", "label": "final"}));
+    }
+    let t0 = std::time::Instant::now();
+    let (ok, _, _) = run_hint_engine(fp, stats, trace);
+    stats.hint_us += us(t0);
+    if !ok {
         return false;
     }
 
