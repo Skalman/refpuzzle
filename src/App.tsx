@@ -247,13 +247,20 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     [dateStr, route],
   );
 
+  const activeTabState = hasState(puzzleId(dateStr, activeLevel));
+  const activeTabIcon = activeTabState.completed
+    ? "solved"
+    : activeTabState.started
+      ? "started"
+      : "";
+
   useEffect(() => {
     const container = tabsRef.current;
     if (!container) return;
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const tab = container.children[activeLevel - 1] as HTMLElement | undefined;
     if (tab) tab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
-  }, [activeLevel]);
+  }, [activeLevel, activeTabIcon]);
 
   // Page-level keyboard shortcuts
   useEffect(() => {
