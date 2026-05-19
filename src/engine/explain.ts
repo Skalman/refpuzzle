@@ -434,6 +434,13 @@ function explainForce(
     }
   }
 
+  if (rule === "TrueStatementClaimValid") {
+    return [
+      simple(`Try looking at ${Q(qi)}.`),
+      simple(`Only one of ${Q(qi)}'s claims is still possible, so it must be the answer.`),
+    ];
+  }
+
   throw new Error(`explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`);
 }
 

@@ -1098,7 +1098,7 @@
     },
     { "section": "=== only_true_statement ===" },
     {
-      "name": "only_true_stmt: selected claim is only true one → valid",
+      "name": "only_true_stmt: selected claim true, depends on own answer → consistent",
       "qi": 0,
       "puzzle": {
         "q": [
@@ -1118,7 +1118,7 @@
         ]
       },
       "state": ["B", "B", "D", "D"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "only_true_stmt: selected claim is false → invalid",
@@ -1165,6 +1165,99 @@
       },
       "state": ["B", "B", "", ""],
       "expect": "pending"
+    },
+    {
+      "name": "only_true_stmt: selected claim provably false with partial state → invalid",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "t": "CountAnswer", "a": 0, "v": 3 },
+              { "t": "CountAnswer", "a": 1, "v": 0 },
+              { "t": "CountConsonant", "v": 3 },
+              { "t": "CountConsonant", "v": 1 },
+              { "t": "CountVowel", "v": 1 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["B", "B", "", ""],
+      "expect": "invalid"
+    },
+    {
+      "name": "only_true_stmt: selected claim provably true, all others invalid → consistent",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "t": "CountAnswer", "a": 2, "v": 2 },
+              { "t": "CountAnswer", "a": 2, "v": 0 },
+              { "t": "CountAnswer", "a": 2, "v": 1 },
+              { "t": "CountAnswer", "a": 2, "v": 4 },
+              { "t": "CountAnswer", "a": 2, "v": 3 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["A", "C", "C", "B", "D"],
+      "expect": "consistent"
+    },
+    {
+      "name": "only_true_stmt: claim doesn't depend on own answer → valid (proven)",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "q": 1, "t": "AnswerOf", "v": 1 },
+              { "q": 1, "t": "AnswerOf", "v": 0 },
+              { "q": 1, "t": "AnswerOf", "v": 2 },
+              { "q": 1, "t": "AnswerOf", "v": 3 },
+              { "q": 1, "t": "AnswerOf", "v": 4 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["A", "B", "C", "D"],
+      "expect": "valid"
+    },
+    {
+      "name": "only_true_stmt: all options eliminated → invalid",
+      "qi": 0,
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 0, "t": "CountAnswer", "v": 1 },
+              { "a": 0, "t": "CountAnswer", "v": 2 },
+              { "a": 1, "t": "CountAnswer", "v": 1 },
+              { "a": 1, "t": "CountAnswer", "v": 2 },
+              { "a": 2, "t": "CountAnswer", "v": 1 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["abcde", "", "", ""],
+      "expect": "invalid"
     },
     { "section": "=== answer_is_self ===" },
     {

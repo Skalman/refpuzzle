@@ -3,6 +3,7 @@ import {
   LETTERS,
   VOWELS,
   letterIdx,
+  flattenQuestion,
   QT_COUNT_ANSWER,
   QT_COUNT_ANSWER_BEFORE,
   QT_COUNT_ANSWER_AFTER,
@@ -31,8 +32,7 @@ import {
   QT_SAME_AS_WHICH,
   isQuestionTypeWithIdentityOptions,
 } from "./types.ts";
-import { evaluateClaim } from "./evaluate.ts";
-import { V_NEUTRAL, V_VALID, V_INVALID, V_PENDING } from "./state.ts";
+import { V_NEUTRAL, V_VALID, V_CONSISTENT, V_INVALID, V_PENDING } from "./state.ts";
 import type { Validity } from "./state.ts";
 
 // ── Helpers ──
@@ -445,26 +445,55 @@ export function checkAnswerValidity(
   qi: number,
 ): Validity {
   const a = answers[qi];
-  if (a == null) return V_NEUTRAL;
+  if (a == null) {
+    const oc = fp.optionCount;
+    const allElim = (~eliminated[qi] & ((1 << oc) - 1)) === 0;
+    if (allElim) return V_INVALID;
+    return V_NEUTRAL;
+  }
   const ai = letterIdx(a);
   const q = fp.questions[qi];
   const n = fp.n;
 
-  // TrueStmt needs full puzzle context (option claims + evaluateClaim)
   if (q.t === QT_TRUE_STMT) {
-    const allKnown = answers.slice(0, n).every((x) => x != null);
-    if (!allKnown) return V_PENDING;
     const claims = fp.optionClaims[qi];
-    let trueCount = 0;
-    let selectedTrue = false;
-    for (let i = 0; i < 5; i++) {
-      const claim = claims[i];
-      if (claim && evaluateClaim(claim, qi, answers)) {
-        trueCount++;
-        if (i === ai) selectedTrue = true;
-      }
+    const selectedClaim = claims[ai];
+    if (!selectedClaim) return V_INVALID;
+
+    const selectedFq = flattenQuestion(selectedClaim.questionType);
+    const selectedVal = selectedClaim.value === -1 ? null : selectedClaim.value;
+    const selectedV = checkValueValidity(
+      selectedFq,
+      selectedVal,
+      a,
+      qi,
+      answers,
+      eliminated,
+      n,
+      fp.optionCount,
+    );
+
+    if (selectedV !== V_VALID) return selectedV;
+
+    // Claim is VALID with this answer. Check if it holds for ALL possible answers (PROVEN)
+    // or only this one (CONSISTENT).
+    for (let oi = 0; oi < 5; oi++) {
+      if (oi === ai) continue;
+      const hypAnswers = answers.slice();
+      hypAnswers[qi] = LETTERS[oi];
+      const v = checkValueValidity(
+        selectedFq,
+        selectedVal,
+        LETTERS[oi],
+        qi,
+        hypAnswers,
+        eliminated,
+        n,
+        fp.optionCount,
+      );
+      if (v !== V_VALID) return V_CONSISTENT;
     }
-    return selectedTrue && trueCount === 1 ? V_VALID : V_INVALID;
+    return V_VALID;
   }
 
   if (isQuestionTypeWithIdentityOptions(q.t)) {

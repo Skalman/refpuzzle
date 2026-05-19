@@ -41,7 +41,8 @@
     background: var(--neutral-bar);
     border-radius: 999px;
   }
-  &.valid {
+  &.valid,
+  &.consistent {
     background: var(--valid);
     border-radius: 999px;
   }

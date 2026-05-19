@@ -2191,6 +2191,30 @@
       },
       "state": ["", "A", "B", "B", "C"],
       "expect": "1a"
+    },
+    {
+      "name": "TrueStatementClaimValid: only one claim still possible → force",
+      "rule": "TrueStatementClaimValid",
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 2, "t": "CountAnswer", "v": 2 },
+              { "a": 2, "t": "CountAnswer", "v": 0 },
+              { "a": 2, "t": "CountAnswer", "v": 1 },
+              { "a": 2, "t": "CountAnswer", "v": 4 },
+              { "a": 2, "t": "CountAnswer", "v": 3 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "C", "C", "B", "D"],
+      "expect": "1A"
     }
   ]
 }

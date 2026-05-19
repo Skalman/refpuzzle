@@ -106,6 +106,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "SameAsNegative",
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
+  "TrueStatementClaimValid",
   "SameAsWhichForward",
   "SameAsWhichReverse",
 ] as const;
@@ -1517,6 +1518,46 @@ function deduceImpl(
         if (v === V_INVALID) {
           results.push(res({ type: "eliminate", qi, oi }, "TrueStatementClaimInvalid"));
         }
+      }
+    }
+  }
+
+  // TrueStatement claim valid: if exactly one non-eliminated claim is not provably false, force it
+  if (!fast && run("TrueStatementClaimValid")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
+      if (answers[qi] != null) continue;
+      let survivingOi = -1;
+      let survivingCount = 0;
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const claim = fp.optionClaims[qi][oi];
+        if (!claim) continue;
+        const fq = flattenQuestion(claim.questionType);
+        const claimVal = claim.value === -1 ? null : claim.value;
+        const hypAnswers = answers.slice();
+        hypAnswers[qi] = LETTERS[oi];
+        const hypElim = eliminated.slice();
+        hypElim[qi] = 0b11111 ^ (1 << oi);
+        const v = checkValueValidity(
+          fq,
+          claimVal,
+          LETTERS[oi],
+          qi,
+          hypAnswers,
+          hypElim,
+          n,
+          fp.optionCount,
+        );
+        if (v !== V_INVALID) {
+          survivingCount++;
+          survivingOi = oi;
+        }
+      }
+      if (survivingCount === 1 && survivingOi >= 0) {
+        results.push(
+          res({ type: "force", qi, answer: LETTERS[survivingOi] }, "TrueStatementClaimValid"),
+        );
       }
     }
   }

@@ -99,6 +99,7 @@ deduce_rules! {
     ConsecIdentReverse,
     TrueStatementSelfRef,
     TrueStatementClaimInvalid,
+    TrueStatementClaimValid,
     ConsecIdentForwardForce,
     ConsecIdentForwardElim,
     ConsecIdentForwardBothForce,
@@ -2043,6 +2044,57 @@ fn deduce_impl(
                         DeduceRule::TrueStatementClaimInvalid,
                     );
                 }
+            }
+        }
+    }
+
+    // TrueStatement claim valid: if exactly one non-eliminated claim is not provably false, force it
+    if !fast && run(DeduceRule::TrueStatementClaimValid) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
+                continue;
+            }
+            if answers[qi].is_some() {
+                continue;
+            }
+            let mut surviving_oi: Option<usize> = None;
+            let mut surviving_count = 0;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let Some(claim) = &fp.option_claims[qi][oi] else {
+                    continue;
+                };
+                let mut hyp_answers = *answers;
+                let mut hyp_elim = *eliminated;
+                hyp_answers[qi] = Some(LETTERS[oi]);
+                hyp_elim[qi] = 0b11111 ^ (1 << oi);
+                let v = crate::check_validity::check_value_validity(
+                    &claim.question_type,
+                    claim.value,
+                    LETTERS[oi],
+                    qi,
+                    &hyp_answers,
+                    &hyp_elim,
+                    n,
+                    fp.option_count,
+                );
+                if v != crate::check_validity::Validity::Invalid {
+                    surviving_count += 1;
+                    surviving_oi = Some(oi);
+                }
+            }
+            if surviving_count == 1
+                && let Some(oi) = surviving_oi
+            {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: LETTERS[oi],
+                    },
+                    DeduceRule::TrueStatementClaimValid,
+                );
             }
         }
     }
