@@ -583,7 +583,7 @@ fn check_json(path: &str, target: Option<&str>) {
                     let mm = &day[..2];
                     let dd = &day[2..4];
                     let hash = steps.join(".");
-                    eprintln!("  http://localhost:5173/day/{year}-{mm}-{dd}?l={lvl}&debug#{hash}");
+                    eprintln!("  http://localhost:5173/{year}-{mm}-{dd}/{lvl}?debug#{hash}");
                 }
                 let solutions = solve_brute::solve(&fp, None, 10);
                 eprintln!("Brute-force: {} solution(s)", solutions.len());
