@@ -4,6 +4,7 @@ import { deduce } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
 import { checkAnswerValidity } from "./check-validity.ts";
+import { isValid } from "./state.ts";
 
 export interface SolveResult {
   answers: (Answer | null)[];
@@ -57,7 +58,7 @@ export function checkPuzzleSolved(
   const n = fp.n;
   for (let i = 0; i < n; i++) {
     if (answers[i] == null) return false;
-    if (checkAnswerValidity(fp, answers, eliminated, i) !== "valid") return false;
+    if (!isValid(checkAnswerValidity(fp, answers, eliminated, i))) return false;
   }
   return true;
 }

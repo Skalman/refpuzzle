@@ -3,7 +3,7 @@ import { tinykeys } from "tinykeys";
 import type { Marks, Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
 import { checkAnswerValidity } from "../engine/check-validity.ts";
-import { deriveState } from "../engine/state.ts";
+import { deriveState, isValid } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
@@ -110,10 +110,23 @@ export function PuzzleView({
   const historyIdxRef = useRef(initState.historyIdx);
   const forceHistoryUpdate = useForceUpdate();
 
+  const initCompleted = initState.completed || validity.every(isValid);
   const tabStateRef = useRef({
     started: initState.history.length > 1,
-    completed: initState.completed,
+    completed: initCompleted,
   });
+  useEffect(() => {
+    if (initCompleted && !initState.completed) {
+      saveState(puzzle.id, {
+        questions: initState.questions,
+        completed: true,
+        history: initState.history,
+        historyIdx: initState.historyIdx,
+        hints: initState.hints,
+      });
+      onChanged();
+    }
+  }, [initCompleted, initState, puzzle.id, onChanged]);
   const historyBurstRef = useRef({ lastTime: 0 });
   const tutorialReachedEnd = useRef(false);
 
@@ -214,7 +227,7 @@ export function PuzzleView({
       );
       setValidity(result);
 
-      const isCompleted = result.every((v) => v === "valid");
+      const isCompleted = result.every(isValid);
       saveState(puzzle.id, {
         questions: qs,
         completed: isCompleted,
@@ -256,7 +269,7 @@ export function PuzzleView({
     }
   }, [tutorial.active]);
 
-  const completed = validity.length > 0 && validity.every((v) => v === "valid");
+  const completed = validity.length > 0 && validity.every(isValid);
   const completedRef = useRef(completed);
   completedRef.current = completed;
   const canUndo = historyIdxRef.current > 0;

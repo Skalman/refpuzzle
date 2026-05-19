@@ -41,7 +41,7 @@
         ]
       },
       "state": ["C", "A", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "count_answer: count < value, remaining could match → pending",
@@ -83,7 +83,7 @@
         ]
       },
       "state": ["B", "A", "a", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "count_answer: null value → invalid (count can never be null)",
@@ -126,7 +126,7 @@
         ]
       },
       "state": ["A", "B", "B", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "count_answer_after: count + remaining < value → invalid",
@@ -154,7 +154,7 @@
         ]
       },
       "state": ["D", "B", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     { "section": "=== count_vowel / count_consonant ===" },
     {
@@ -183,7 +183,7 @@
         ]
       },
       "state": ["B", "A", "E", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "count_vowel: unanswered could be vowels → pending",
@@ -225,7 +225,7 @@
         ]
       },
       "state": ["B", "B", "C", "A"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     { "section": "=== answer_of_question ===" },
     {
@@ -292,7 +292,7 @@
         ]
       },
       "state": ["C", "A", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "letter_distance: other not answered → pending",
@@ -334,7 +334,7 @@
         ]
       },
       "state": ["A", "A", "", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "same_answer_as: target not answered → pending",
@@ -377,7 +377,7 @@
         ]
       },
       "state": ["A", "B", "C", "D"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "unique_answer: no duplicate yet, unanswered could match → pending",
@@ -405,7 +405,7 @@
         ]
       },
       "state": ["A", "B", "a", "a"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     { "section": "=== first_with_answer ===" },
     {
@@ -462,7 +462,7 @@
         ]
       },
       "state": ["C", "B", "A", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "first_with: claims None, no A exists → valid",
@@ -476,7 +476,7 @@
         ]
       },
       "state": ["D", "B", "C", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "first_with: position has A but earlier unanswered → pending",
@@ -518,7 +518,7 @@
         ]
       },
       "state": ["C", "a", "A", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "consec_ident: Q1=C but C eliminated from Q2 → invalid",
@@ -576,7 +576,7 @@
         ]
       },
       "state": ["B", "A", "B", "C"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "last_with: correct position but later unanswered → pending",
@@ -605,7 +605,7 @@
         ]
       },
       "state": ["B", "A", "B", "C"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "closest_after: earlier match in range → invalid",
@@ -634,7 +634,7 @@
         ]
       },
       "state": ["B", "A", "B", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "closest_before: later match in range → invalid",
@@ -719,7 +719,7 @@
         ]
       },
       "state": ["A", "B", "A", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "prev_same: claims None, no match → valid",
@@ -733,7 +733,7 @@
         ]
       },
       "state": ["B", "B", "C", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "prev_same: target ok but closer unanswered → pending",
@@ -776,7 +776,7 @@
         ]
       },
       "state": ["C", "B", "C", "D"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "next_same: target unanswered → pending",
@@ -833,7 +833,7 @@
         ]
       },
       "state": ["A", "A", "B", "C"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "only_same: target matches but others unanswered → pending",
@@ -890,7 +890,7 @@
         ]
       },
       "state": ["B", "A", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "consec_ident: claims None, all answered differently → valid",
@@ -904,7 +904,7 @@
         ]
       },
       "state": ["A", "B", "C", "D"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "consec_ident: pair matches but others uncertain → pending",
@@ -977,7 +977,7 @@
         ]
       },
       "state": ["C", "B", "A", "B", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "only_odd: correct position but other odd unanswered → pending",
@@ -1065,7 +1065,7 @@
         ]
       },
       "state": ["B", "A", "B", "B", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "only_even: correct position but other even unanswered → pending",
@@ -1271,7 +1271,7 @@
         ]
       },
       "state": ["C", "", ""],
-      "expect": "valid"
+      "expect": "consistent"
     },
     { "section": "=== most_common_count ===" },
     {
@@ -1300,7 +1300,7 @@
         ]
       },
       "state": ["C", "A", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "most_common_count: unanswered → pending",
@@ -1335,7 +1335,7 @@
         ]
       },
       "state": ["A", "B", "B", "C", "C", "D", "D", "E", "E", "E"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "least_common: all answered, wrong → invalid",
@@ -1378,7 +1378,7 @@
         ]
       },
       "state": ["A", "A", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "most_common: all answered, wrong → invalid",
@@ -1421,7 +1421,7 @@
         ]
       },
       "state": ["A", "A", "B", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "equal_count: all answered, counts differ → invalid",
@@ -1478,7 +1478,7 @@
         ]
       },
       "state": ["E", "A", "A", "B"],
-      "expect": "valid"
+      "expect": "consistent"
     },
     {
       "name": "equal_count: None wrong, another letter matches → invalid",

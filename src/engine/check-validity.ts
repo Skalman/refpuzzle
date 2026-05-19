@@ -32,7 +32,7 @@ import {
   QT_SAME_AS_WHICH,
   isQuestionTypeWithIdentityOptions,
 } from "./types.ts";
-import { V_NEUTRAL, V_VALID, V_CONSISTENT, V_INVALID, V_PENDING } from "./state.ts";
+import { V_NEUTRAL, V_VALID, V_CONSISTENT, V_INVALID, V_PENDING, isValid } from "./state.ts";
 import type { Validity } from "./state.ts";
 
 // ── Helpers ──
@@ -497,11 +497,18 @@ export function checkAnswerValidity(
   }
 
   if (isQuestionTypeWithIdentityOptions(q.t)) {
-    return checkValueValidity(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
+    const result = checkValueValidity(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
+    return result === V_VALID && affectedByOwnAnswer(q, qi) ? V_CONSISTENT : result;
   }
 
   const v = fp.optionValues[qi][ai];
-  return checkValueValidity(q, v, a, qi, answers, eliminated, n, fp.optionCount);
+  const result = checkValueValidity(q, v, a, qi, answers, eliminated, n, fp.optionCount);
+  return result === V_VALID && affectedByOwnAnswer(q, qi) ? V_CONSISTENT : result;
+}
+
+function affectedByOwnAnswer(q: FlatQuestion, qi: number): boolean {
+  if (q.t === QT_ANSWER_OF || q.t === QT_SAME_AS_WHICH) return q.questionIndex === qi;
+  return true;
 }
 
 export function checkQuestionAgainstSolution(
@@ -511,5 +518,5 @@ export function checkQuestionAgainstSolution(
   answers: (Answer | null)[],
 ): boolean {
   const empty = new Array(fp.n).fill(0);
-  return checkAnswerValidity(fp, answers, empty, qi) === V_VALID;
+  return isValid(checkAnswerValidity(fp, answers, empty, qi));
 }

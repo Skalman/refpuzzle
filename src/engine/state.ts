@@ -18,6 +18,10 @@ export type Validity =
   | typeof V_PENDING
   | typeof V_CONSISTENT;
 
+export function isValid(v: Validity): boolean {
+  return v === V_VALID || v === V_CONSISTENT;
+}
+
 export function deriveState(
   markSets: Marks[],
   optionCount = 5,
