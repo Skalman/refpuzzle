@@ -1,21 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
   <rect width="100" height="100" rx="20" fill="#6366f1"/>
   <g stroke-width="3" stroke-linecap="round" fill="none">
-    <path d="M22.0,28.0 A60,60 0 0,1 54.9,18.4" stroke="#f472b6"/>
-    <path d="M75.0,22.0 A60,60 0 0,1 76.4,56.4" stroke="#29bafe"/>
-    <path d="M68.0,75.0 A60,60 0 0,1 29.3,47.1" stroke="#facc15"/>
-    <path d="M24.0,78.0 A60,60 0 0,1 17.6,47.9" stroke="#4ade80"/>
+    <path d="M22.0,28.0 A60,60 0 0,1 54.9,18.4" stroke="#ff4d94"/>
+    <path d="M75.0,22.0 A60,60 0 0,1 76.4,56.4" stroke="#00d4ff"/>
+    <path d="M68.0,75.0 A60,60 0 0,1 29.3,47.1" stroke="#ffe014"/>
+    <path d="M24.0,78.0 A60,60 0 0,1 17.6,47.9" stroke="#00e676"/>
   </g>
   <g>
-    <polygon points="62.4,18.9 47.5,12.3 47.4,25.3" fill="#f472b6"/>
-    <polygon points="74.0,63.5 84.1,50.6 71.5,47.4" fill="#29bafe"/>
-    <polygon points="25.9,40.4 27.9,56.6 39.1,49.9" fill="#facc15"/>
-    <polygon points="18.4,40.5 11.2,55.1 24.2,55.7" fill="#4ade80"/>
+    <polygon points="62.4,18.9 47.5,12.3 47.4,25.3" fill="#ff4d94"/>
+    <polygon points="74.0,63.5 84.1,50.6 71.5,47.4" fill="#00d4ff"/>
+    <polygon points="25.9,40.4 27.9,56.6 39.1,49.9" fill="#ffe014"/>
+    <polygon points="18.4,40.5 11.2,55.1 24.2,55.7" fill="#00e676"/>
   </g>
   <g>
-    <circle cx="22" cy="28" r="5" fill="#f472b6"/>
-    <circle cx="75" cy="22" r="5" fill="#29bafe"/>
-    <circle cx="68" cy="75" r="5" fill="#facc15"/>
-    <circle cx="24" cy="78" r="5" fill="#4ade80"/>
+    <circle cx="22" cy="28" r="5" fill="#ff4d94"/>
+    <circle cx="75" cy="22" r="5" fill="#00d4ff"/>
+    <circle cx="68" cy="75" r="5" fill="#ffe014"/>
+    <circle cx="24" cy="78" r="5" fill="#00e676"/>
   </g>
 </svg>

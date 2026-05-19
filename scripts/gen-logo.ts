@@ -164,8 +164,8 @@ for (const [fromKey, toKey] of edges) {
 
 const STYLE = `<style>@media (max-width: 47px) { .heads { display: none; } .arcs { stroke-width: 4.5; } }</style>`;
 
-const nodeColors = ["#f472b6", "#60a5fa", "#facc15", "#4ade80"]; // pink, blue, yellow, green
-const arcColors = ["#f472b6", "#60a5fa", "#facc15", "#4ade80"];
+const nodeColors = ["#ff4d94", "#00d4ff", "#ffe014", "#00e676"]; // pink, blue, yellow, green
+const arcColors = ["#ff4d94", "#00d4ff", "#ffe014", "#00e676"];
 const nodeList = Object.values(nodes);
 
 // Helper to wrap content in SVG
