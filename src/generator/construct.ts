@@ -24,6 +24,7 @@ import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";
 import { solve } from "./solve-brute.ts";
+import { validatePuzzleForm } from "../engine/validate-form.ts";
 import { RNG } from "./rng.ts";
 import type { DifficultyProfile } from "./difficulty.ts";
 
@@ -502,6 +503,14 @@ function validateAndRepair(
   rng: RNG,
   tracing = false,
 ): GenerateResult | null {
+  const formErrors = validatePuzzleForm(puzzle);
+  if (formErrors.length > 0) {
+    if (tracing) {
+      for (const e of formErrors) console.error(`FORM ERROR Q${String(e.qi + 1)}: ${e.message}`);
+    }
+    return null;
+  }
+
   const fp = flattenPuzzle(puzzle);
   for (let i = 0; i < n; i++) {
     if (!evaluate(fp, i, solution[i], solution)) return null;
@@ -524,7 +533,6 @@ function validateAndRepair(
   // Step 3: Repair — tweak candidates cumulatively (no revert, matching Rust)
   const candidates = rankRepairCandidates(puzzle, stuckState.answers, n);
   const answeredBefore = stuckState.answers.filter((a) => a != null).length;
-  let repaired = false;
 
   for (const qi of candidates) {
     const before = puzzle.questions[qi].options.map((o) => o.value);
@@ -555,16 +563,11 @@ function validateAndRepair(
       answeredBefore > 0
         ? runHintEngineFrom(puzzle, n, stuckState.answers, stuckState.eliminated, tracing).solved
         : runHintEngine(puzzle, n, tracing).solved;
-    if (solvedAfterRepair) {
-      repaired = true;
-      break;
-    }
+    if (solvedAfterRepair) break;
   }
 
-  if (!repaired) {
-    if (tracing) traceSolve("final");
-    if (!runHintEngine(puzzle, n, tracing).solved) return null;
-  }
+  if (tracing) traceSolve("final");
+  if (!runHintEngine(puzzle, n, tracing).solved) return null;
 
   const solutions = solve(puzzle, undefined, 2);
   if (tracing) traceUniqueness(solutions.length);
@@ -1535,8 +1538,12 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     case "MostCommon":
     case "LeastCommon":
     case "NoOtherHasAnswer":
-    case "EqualCount":
       return { ...claim, value: L2I[rng.pick(LETTERS)] };
+    case "EqualCount": {
+      const v = L2I[rng.pick(LETTERS)];
+      if (v === L2I[claim.questionType.answer]) return null;
+      return { ...claim, value: v };
+    }
     default:
       return null;
   }

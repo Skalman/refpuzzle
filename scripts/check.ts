@@ -6,6 +6,7 @@ import { V_VALID } from "../src/engine/state.ts";
 import { solvePuzzle, checkPuzzleSolved } from "../src/engine/solve-deduce.ts";
 import { solve } from "../src/generator/solve-brute.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
+import { validatePuzzleForm } from "../src/engine/validate-form.ts";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -37,6 +38,13 @@ const failures: string[] = [];
 
 for (const { id, puzzle } of entries) {
   total++;
+  const formErrors = validatePuzzleForm(puzzle);
+  if (formErrors.length > 0) {
+    console.error(`${id}: FORM ERRORS`);
+    for (const e of formErrors) console.error(`  Q${e.qi + 1}: ${e.message}`);
+    failures.push(`${id} (form)`);
+    continue;
+  }
   const fp = flattenPuzzle(puzzle);
   const n = fp.n;
   const { answers, steps } = solvePuzzle(fp);

@@ -1688,8 +1688,14 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::AnswerOf { .. }
         | QuestionType::MostCommon
         | QuestionType::LeastCommon
-        | QuestionType::NoOtherHasAnswer
-        | QuestionType::EqualCount { .. } => rng.pick(&LETTERS).idx() as i16,
+        | QuestionType::NoOtherHasAnswer => rng.pick(&LETTERS).idx() as i16,
+        QuestionType::EqualCount { answer } => {
+            let v = rng.pick(&LETTERS).idx() as i16;
+            if v == answer.idx() as i16 {
+                return None;
+            }
+            v
+        }
         _ => return None,
     };
     if new_val == claim.value {
