@@ -87,3 +87,6 @@
 .icon-hint {
   color: var(--pending);
 }
+.icon-stale {
+  color: var(--invalid);
+}

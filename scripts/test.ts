@@ -455,6 +455,7 @@ function mkState(steps: Marks[]): SavedState {
   return {
     questions: last,
     completed: false,
+    stale: false,
     history,
     historyIdx: history.length - 1,
     hints: new Map(),

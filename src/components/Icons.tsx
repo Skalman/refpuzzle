@@ -93,6 +93,10 @@ export function IconCheck(p: Props) {
   return <I {...p} d="M20 6 9 17l-5-5" />;
 }
 
+export function IconWarning(p: Props) {
+  return <I {...p} d="M12 2 1 21h22L12 2zm0 7v6m0 2v2" />;
+}
+
 // X (incorrect mark)
 export function IconX(p: Props) {
   return <IM {...p} paths={["M18 6 6 18", "m6 6 12 12"]} />;

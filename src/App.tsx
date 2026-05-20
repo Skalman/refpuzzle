@@ -4,7 +4,7 @@ import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
 import { KeyboardHelp } from "./components/KeyboardHelp.tsx";
-import { IconCheck, IconX, IconDot } from "./components/Icons.tsx";
+import { IconCheck, IconX, IconDot, IconWarning } from "./components/Icons.tsx";
 import { exportData, planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
@@ -248,11 +248,13 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   );
 
   const activeTabState = hasState(puzzleId(dateStr, activeLevel));
-  const activeTabIcon = activeTabState.completed
-    ? "solved"
-    : activeTabState.started
-      ? "started"
-      : "";
+  const activeTabIcon = activeTabState.stale
+    ? "stale"
+    : activeTabState.completed
+      ? "solved"
+      : activeTabState.started
+        ? "started"
+        : "";
 
   useEffect(() => {
     const container = tabsRef.current;
@@ -358,22 +360,27 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
       >
         {[1, 2, 3, 4, 5, 6].map((level) => {
           const state = hasState(puzzleId(dateStr, level));
-          const { started, completed: solved } = state;
+          const { started, completed: solved, stale } = state;
           return (
             <button
               key={level}
               role="tab"
               aria-selected={activeLevel === level}
               tabIndex={activeLevel === level ? 0 : -1}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved ? "tab-solved" : ""} ${started ? "tab-started" : ""}${highlightTab === level ? " tutorial-highlight-btn" : ""}`}
+              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved && !stale ? "tab-solved" : ""} ${stale ? "tab-stale" : ""} ${started ? "tab-started" : ""}${highlightTab === level ? " tutorial-highlight-btn" : ""}`}
               onClick={() => selectLevel(level)}
             >
-              {solved && (
+              {solved && !stale && (
                 <span class="tab-check">
                   <IconCheck size="0.9em" />{" "}
                 </span>
               )}
-              {started && !solved && (
+              {stale && (
+                <span class="tab-stale-icon">
+                  <IconWarning size="0.9em" />{" "}
+                </span>
+              )}
+              {started && !solved && !stale && (
                 <span class="tab-started-dot">
                   <IconDot size="0.9em" />{" "}
                 </span>
@@ -482,11 +489,12 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
 function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
   const s = t();
   const levels = [1, 2, 3, 4, 5, 6].map((l) => {
-    const { started, completed } = hasState(puzzleId(dateStr, l));
-    return { level: l, started, completed };
+    const { started, completed, stale } = hasState(puzzleId(dateStr, l));
+    return { level: l, started, completed, stale };
   });
-  const solved = levels.filter((l) => l.completed);
-  const started = levels.filter((l) => l.started && !l.completed);
+  const solved = levels.filter((l) => l.completed && !l.stale);
+  const stale = levels.filter((l) => l.stale);
+  const started = levels.filter((l) => l.started && !l.completed && !l.stale);
   return (
     <a href={`/${dateStr}/1`} class={`history-item ${isToday ? "history-today" : ""}`}>
       <span class="history-date">
@@ -496,7 +504,7 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
       <span class="history-progress">
         {solved.length === 6 ? (
           s.daily.allSolved
-        ) : solved.length > 0 || started.length > 0 ? (
+        ) : solved.length > 0 || stale.length > 0 || started.length > 0 ? (
           <>
             {solved.length > 0 && (
               <span>
@@ -504,7 +512,14 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
                 {solved.map((l) => s.difficulty[l.level]).join(", ")}
               </span>
             )}
-            {solved.length > 0 && started.length > 0 && "  "}
+            {stale.length > 0 && (
+              <span>
+                {" "}
+                <IconWarning size="0.9em" class="icon-stale" />{" "}
+                {stale.map((l) => s.difficulty[l.level]).join(", ")}
+              </span>
+            )}
+            {(solved.length > 0 || stale.length > 0) && started.length > 0 && "  "}
             {started.length > 0 && (
               <span>
                 <IconDot size="0.9em" class="icon-hint" />{" "}

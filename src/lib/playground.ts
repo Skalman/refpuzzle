@@ -21,6 +21,7 @@ export function savedStateFromMarks(marks: Marks[]): SavedState {
   return {
     questions: history[history.length - 1],
     completed: false,
+    stale: false,
     history,
     historyIdx: history.length - 1,
     hints: new Map(),

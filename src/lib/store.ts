@@ -8,11 +8,14 @@ export interface QuestionState {
 export interface SavedState {
   questions: QuestionState[];
   completed: boolean;
+  stale: boolean;
   history: QuestionState[][];
   historyIdx: number;
   hints: Map<number, number>;
 }
 
+export const PUZZLE_VERSION = 1;
+const VERSION_KEY = "refpuzzle:version";
 const PREFIX = "refpuzzle:puzzle:";
 const LETTERS = ["A", "B", "C", "D", "E"];
 
@@ -71,14 +74,16 @@ export function encodeHistory(state: SavedState): string {
   }
 
   if (state.completed) actions.push("x");
+  if (state.stale) actions.push("!");
 
   return actions.join(".");
 }
 
 export function decodeHistory(encoded: string, n: number): SavedState | null {
   const tokens = encoded.split(".");
-  const completed = tokens[tokens.length - 1] === "x";
-  const actions = tokens.filter((t) => t !== "x");
+  const stale = tokens[tokens.length - 1] === "!";
+  const completed = stale ? tokens[tokens.length - 2] === "x" : tokens[tokens.length - 1] === "x";
+  const actions = tokens.filter((t) => t !== "x" && t !== "!");
 
   const history: QuestionState[][] = [];
   const current = Array.from({ length: n }, () => ({ marks: [...FRESH_MARKS] as Marks }));
@@ -111,6 +116,7 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
   return {
     questions: history[historyIdx],
     completed,
+    stale,
     history,
     historyIdx,
     hints,
@@ -127,6 +133,15 @@ export interface PuzzleMeta {
 }
 
 const META_SEP = "|";
+
+function isStaleHistory(history: string): boolean {
+  return history.endsWith(".!");
+}
+
+function isCompletedHistory(history: string): boolean {
+  const h = history.endsWith(".!") ? history.slice(0, -2) : history;
+  return h.endsWith(".x") || h === "x";
+}
 
 function stripMeta(raw: string): string {
   const i = raw.indexOf(META_SEP);
@@ -153,14 +168,22 @@ function parseMeta(s: string): PuzzleMeta {
   };
 }
 
-export function hasState(puzzleId: string): { started: boolean; completed: boolean } {
+export function hasState(puzzleId: string): {
+  started: boolean;
+  completed: boolean;
+  stale: boolean;
+} {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
-    if (!raw) return { started: false, completed: false };
+    if (!raw) return { started: false, completed: false, stale: false };
     const history = stripMeta(raw);
-    return { started: true, completed: history.endsWith(".x") || history === "x" };
+    return {
+      started: true,
+      completed: isCompletedHistory(history),
+      stale: isStaleHistory(history),
+    };
   } catch {
-    return { started: false, completed: false };
+    return { started: false, completed: false, stale: false };
   }
 }
 
@@ -216,6 +239,62 @@ export function clearMeta(puzzleId: string): void {
     if (raw?.includes(META_SEP)) {
       localStorage.setItem(PREFIX + puzzleId, stripMeta(raw));
     }
+  } catch {}
+}
+
+export function getStoredVersion(): number {
+  try {
+    return Number(localStorage.getItem(VERSION_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function setStoredVersion(v: number): void {
+  try {
+    localStorage.setItem(VERSION_KEY, String(v));
+  } catch {}
+}
+
+export function getCompletedPuzzleIds(): string[] {
+  const ids: string[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k?.startsWith(PREFIX)) continue;
+      const raw = localStorage.getItem(k);
+      if (!raw) continue;
+      const history = stripMeta(raw);
+      if (isCompletedHistory(history)) {
+        ids.push(k.slice(PREFIX.length));
+      }
+    }
+  } catch {}
+  return ids;
+}
+
+export function markStale(puzzleId: string): void {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return;
+    const history = stripMeta(raw);
+    if (!history.endsWith(".x") && history !== "x") return;
+    const i = raw.indexOf(META_SEP);
+    const metaSuffix = i >= 0 ? raw.slice(i) : "";
+    localStorage.setItem(PREFIX + puzzleId, history + ".!" + metaSuffix);
+  } catch {}
+}
+
+export function unmarkStale(puzzleId: string): void {
+  try {
+    const raw = localStorage.getItem(PREFIX + puzzleId);
+    if (!raw) return;
+    const history = stripMeta(raw);
+    if (!history.endsWith(".!")) return;
+    const cleaned = history.slice(0, -2);
+    const i = raw.indexOf(META_SEP);
+    const metaSuffix = i >= 0 ? raw.slice(i) : "";
+    localStorage.setItem(PREFIX + puzzleId, cleaned + metaSuffix);
   } catch {}
 }
 

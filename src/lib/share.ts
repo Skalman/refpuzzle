@@ -2,7 +2,8 @@ import type { SavedState } from "./store.ts";
 import { encodeHistory, decodeHistory } from "./store.ts";
 
 export function getShareUrl(dateStr: string, level: number, state: SavedState): string {
-  const encoded = encodeHistory(state);
+  const shareState = state.stale ? { ...state, stale: false } : state;
+  const encoded = encodeHistory(shareState);
   return `${window.location.origin}/${dateStr}/${level}#${encoded}`;
 }
 

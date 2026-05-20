@@ -79,6 +79,7 @@ export function PuzzleView({
     return {
       questions: blank,
       completed: false,
+      stale: false,
       history: [blankClone],
       historyIdx: 0,
       hints: new Map<number, number>(),
@@ -120,6 +121,7 @@ export function PuzzleView({
       saveState(puzzle.id, {
         questions: initState.questions,
         completed: true,
+        stale: false,
         history: initState.history,
         historyIdx: initState.historyIdx,
         hints: initState.hints,
@@ -231,6 +233,7 @@ export function PuzzleView({
       saveState(puzzle.id, {
         questions: qs,
         completed: isCompleted,
+        stale: false,
         history: historyRef.current,
         historyIdx: historyIdxRef.current,
         hints: hintMarkers.current,
@@ -416,6 +419,7 @@ export function PuzzleView({
       url: getShareUrl(dateStr, level, {
         questions,
         completed,
+        stale: false,
         history: historyRef.current,
         historyIdx: historyIdxRef.current,
         hints: hintMarkers.current,
