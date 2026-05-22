@@ -117,7 +117,7 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
   for (let i = 0; i < n; i++) {
     if (solveOk) {
       const v: Validity = checkAnswerValidity(fp, answers, eliminated, i);
-      validityPerQuestion.push(v === "consistent" ? "valid" : v);
+      validityPerQuestion.push(v);
       if (!isValid(v) && v !== "pending") validityOk = false;
     } else {
       validityPerQuestion.push("n/a");

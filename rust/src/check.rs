@@ -176,7 +176,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let validity_ok = if cr.ok {
         (0..n).all(|i| {
             let v = check_validity::check_answer_validity(fp, &cr.answers, &cr.eliminated, i);
-            v == check_validity::Validity::Valid || v == check_validity::Validity::Pending
+            v.is_valid() || v == check_validity::Validity::Pending
         })
     } else {
         true
@@ -186,6 +186,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
             if cr.ok {
                 match check_validity::check_answer_validity(fp, &cr.answers, &cr.eliminated, i) {
                     check_validity::Validity::Valid => "valid",
+                    check_validity::Validity::Consistent => "consistent",
                     check_validity::Validity::Invalid => "invalid",
                     check_validity::Validity::Pending => "pending",
                     check_validity::Validity::Neutral => "neutral",

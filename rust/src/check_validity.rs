@@ -1,12 +1,18 @@
-use crate::evaluate::evaluate_claim;
 use crate::types::*;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Validity {
     Neutral,
     Valid,
+    Consistent,
     Invalid,
     Pending,
+}
+
+impl Validity {
+    pub fn is_valid(self) -> bool {
+        matches!(self, Validity::Valid | Validity::Consistent)
+    }
 }
 
 // ── Helpers ──
@@ -707,6 +713,22 @@ pub fn check_value_validity(
     }
 }
 
+fn affected_by_own_answer(t: &QuestionType, qi: usize) -> bool {
+    match *t {
+        QuestionType::AnswerOf { question_index } => question_index as usize == qi,
+        QuestionType::SameAsWhich { question_index } => question_index as usize == qi,
+        _ => true,
+    }
+}
+
+fn maybe_consistent(result: Validity, t: &QuestionType, qi: usize) -> Validity {
+    if result == Validity::Valid && affected_by_own_answer(t, qi) {
+        Validity::Consistent
+    } else {
+        result
+    }
+}
+
 pub fn check_answer_validity(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
@@ -715,59 +737,93 @@ pub fn check_answer_validity(
 ) -> Validity {
     let a = match answers[qi] {
         Some(a) => a,
-        None => return Validity::Neutral,
+        None => {
+            let oc = fp.option_count;
+            if (!eliminated[qi] & ((1 << oc) - 1)) == 0 {
+                return Validity::Invalid;
+            }
+            return Validity::Neutral;
+        }
     };
     let ai = a.idx();
     let t = &fp.question_types[qi];
     let n = fp.n;
 
     if matches!(t, QuestionType::TrueStmt) {
-        if !all_answered(answers, n) {
-            return Validity::Pending;
-        }
         let claims = &fp.option_claims[qi];
-        let mut true_count = 0u8;
-        let mut selected_true = false;
-        for i in 0..5 {
-            if let Some(c) = &claims[i]
-                && evaluate_claim(c, qi, answers, n)
-            {
-                true_count += 1;
-                if i == ai {
-                    selected_true = true;
-                }
+        let selected_claim = match &claims[ai] {
+            Some(c) => c,
+            None => return Validity::Invalid,
+        };
+        let selected_v = check_value_validity(
+            &selected_claim.question_type,
+            selected_claim.value,
+            a,
+            qi,
+            answers,
+            eliminated,
+            n,
+            fp.option_count,
+        );
+        if selected_v != Validity::Valid {
+            return selected_v;
+        }
+        for oi in 0..5usize {
+            if oi == ai {
+                continue;
+            }
+            let mut hyp_answers = *answers;
+            hyp_answers[qi] = Some(LETTERS[oi]);
+            let v = check_value_validity(
+                &selected_claim.question_type,
+                selected_claim.value,
+                LETTERS[oi],
+                qi,
+                &hyp_answers,
+                eliminated,
+                n,
+                fp.option_count,
+            );
+            if v != Validity::Valid {
+                return Validity::Consistent;
             }
         }
-        return if selected_true && true_count == 1 {
-            Validity::Valid
-        } else {
-            Validity::Invalid
-        };
+        return Validity::Valid;
     }
 
     let on = fp.option_nums[qi][ai];
     let oc = fp.option_count;
     match *t {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => {
-            check_value_validity(
+            maybe_consistent(
+                check_value_validity(
+                    t,
+                    fp.option_answers[qi][ai] as i16,
+                    a,
+                    qi,
+                    answers,
+                    eliminated,
+                    n,
+                    oc,
+                ),
                 t,
-                fp.option_answers[qi][ai] as i16,
-                a,
                 qi,
-                answers,
-                eliminated,
-                n,
-                oc,
             )
         }
-        _ if t.has_identity_options() => {
-            check_value_validity(t, ai as i16, a, qi, answers, eliminated, n, oc)
-        }
+        _ if t.has_identity_options() => maybe_consistent(
+            check_value_validity(t, ai as i16, a, qi, answers, eliminated, n, oc),
+            t,
+            qi,
+        ),
         _ => {
             if on == NAN_VAL {
                 return Validity::Pending;
             }
-            check_value_validity(t, on, a, qi, answers, eliminated, n, oc)
+            maybe_consistent(
+                check_value_validity(t, on, a, qi, answers, eliminated, n, oc),
+                t,
+                qi,
+            )
         }
     }
 }
@@ -779,7 +835,7 @@ pub fn check_question_against_solution(
     answers: &[Option<Answer>; MAX_N],
 ) -> bool {
     let empty = [0u8; MAX_N];
-    check_answer_validity(fp, answers, &empty, qi) == Validity::Valid
+    check_answer_validity(fp, answers, &empty, qi).is_valid()
 }
 
 #[cfg(test)]
@@ -836,6 +892,7 @@ mod tests {
             let got_str = match got {
                 Validity::Neutral => "neutral",
                 Validity::Valid => "valid",
+                Validity::Consistent => "consistent",
                 Validity::Invalid => "invalid",
                 Validity::Pending => "pending",
             };
