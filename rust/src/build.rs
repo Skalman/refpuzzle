@@ -1086,6 +1086,9 @@ pub fn fill_options(
                         plen += 1;
                     }
                 }
+                if plen < option_count - 1 {
+                    return None;
+                }
                 rng.shuffle(&mut pool[..plen]);
                 let mut distractors = [0i16; 4];
                 distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
