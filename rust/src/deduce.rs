@@ -724,7 +724,12 @@ fn deduce_impl(
                     }
                     let letter_oi = answer.idx();
                     let mut q_mask = 0u16;
-                    for j in (max_pos as usize + 1)..scan_end {
+                    let scan_start = if max_pos >= 0 {
+                        max_pos as usize + 1
+                    } else {
+                        0
+                    };
+                    for j in scan_start..scan_end {
                         if answers[j].is_some() {
                             continue;
                         }
