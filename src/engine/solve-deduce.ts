@@ -8,6 +8,7 @@ import { isValid } from "./state.ts";
 
 export interface SolveResult {
   answers: (Answer | null)[];
+  eliminated: number[];
   steps: string[];
 }
 
@@ -40,7 +41,7 @@ export function solvePuzzle(fp: FlatPuzzle): SolveResult {
     break;
   }
 
-  return { answers, steps };
+  return { answers, eliminated, steps };
 }
 
 export type SolveOutcome = "solved" | "stuck";

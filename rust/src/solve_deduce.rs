@@ -165,7 +165,7 @@ mod tests {
             let name = test["name"].as_str().unwrap();
             let expect = test["expect"].as_str().unwrap();
 
-            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
             let fp = match fp {
                 Some(fp) => fp,
                 None => {

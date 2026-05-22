@@ -2175,7 +2175,7 @@ mod tests {
             let expect = test["expect"].as_str();
             let rule_filter = test.get("rule").and_then(|v| v.as_str());
 
-            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
             let fp = match fp {
                 Some(fp) => fp,
                 None => {

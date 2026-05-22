@@ -806,7 +806,7 @@ mod tests {
             let states = test["state"].as_array().unwrap();
             let expect = test["expect"].as_str().unwrap();
 
-            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
             let fp = match fp {
                 Some(fp) => fp,
                 None => {
@@ -872,7 +872,7 @@ mod tests {
             let qi = test["qi"].as_u64().unwrap() as usize;
             let expect = test["expect"].as_bool().unwrap();
 
-            let fp = crate::parse_puzzle(&test["puzzle"]);
+            let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
             let fp = match fp {
                 Some(fp) => fp,
                 None => {

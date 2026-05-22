@@ -1,17 +1,21 @@
 #![allow(clippy::needless_range_loop)]
 
 mod build;
+mod check;
 mod check_validity;
 mod construct;
 mod deduce;
 mod difficulty;
 mod evaluate;
+mod format;
 mod lookahead;
 mod rng;
+mod serialize;
 mod solve_brute;
 #[allow(dead_code)]
 mod solve_deduce;
 mod types;
+mod validate_form;
 
 use build::GenerateResult;
 use difficulty::PROFILES;
@@ -122,7 +126,8 @@ fn parse_date_range(input: &str) -> DateRange {
 
 fn print_help() {
     eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
-    eprintln!("       refpuzzle check <file.json> [MMDD-level]");
+    eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
+    eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -o FILE       output file (required, - for stdout)");
@@ -131,6 +136,7 @@ fn print_help() {
     eprintln!("  -a, --attempts  max attempts per seed (default 100)");
     eprintln!("  --stats       show generation statistics");
     eprintln!("  --trace       show trace output");
+    eprintln!("  --json        output check results as JSON");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  refpuzzle gen 2051 -o out.json");
@@ -138,6 +144,7 @@ fn print_help() {
     eprintln!("  refpuzzle gen 2051-01..2051-06 -o out.json -m");
     eprintln!("  refpuzzle check puzzles/daily/2051.json");
     eprintln!("  refpuzzle check puzzles/daily/2051.json 0315-4");
+    eprintln!("  refpuzzle check puzzles/daily/2051.json --json | refpuzzle format-check");
 }
 
 fn main() {
@@ -154,17 +161,36 @@ fn main() {
     match args[1].as_str() {
         "gen" => {}
         "check" => {
-            if args.len() < 3 {
-                eprintln!("Usage: refpuzzle check <file.json> [MMDD-level]");
+            let mut file = None;
+            let mut target = None;
+            let mut json_output = false;
+            for arg in &args[2..] {
+                match arg.as_str() {
+                    "--json" => json_output = true,
+                    s if file.is_none() => file = Some(s.to_string()),
+                    s if target.is_none() => target = Some(s.to_string()),
+                    other => {
+                        eprintln!("Unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+            }
+            if file.is_none() {
+                eprintln!("Usage: refpuzzle check <file.json> [MMDD-level] [--json]");
                 std::process::exit(1);
             }
-            let file = &args[2];
-            let target = args.get(3).cloned();
-            check_json(file, target.as_deref());
+            check::check_command(file.as_ref().unwrap(), target.as_deref(), json_output);
+            return;
+        }
+        "format-check" => {
+            check::format_check_stdin();
             return;
         }
         _ => {
-            eprintln!("Unknown subcommand: {}. Use 'gen' or 'check'.", args[1]);
+            eprintln!(
+                "Unknown subcommand: {}. Use 'gen', 'check', or 'format-check'.",
+                args[1]
+            );
             std::process::exit(1);
         }
     }
@@ -434,7 +460,7 @@ fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
             let mut q = serde_json::Map::new();
             if let QuestionType::TrueStmt = qt {
                 let claims: Vec<Value> = (0..oc)
-                    .map(|oi| claim_to_json(&result.fp.option_claims[qi][oi]))
+                    .map(|oi| serialize::claim_to_json(&result.fp.option_claims[qi][oi]))
                     .collect();
                 q.insert("c".into(), json!(claims));
             } else {
@@ -494,567 +520,6 @@ fn question_type_to_json(qt: &QuestionType) -> Value {
     serde_json::to_value(qt).unwrap()
 }
 
-fn check_json(path: &str, target: Option<&str>) {
-    let data: Value =
-        serde_json::from_str(&std::fs::read_to_string(path).expect("can't read file"))
-            .expect("invalid JSON");
-    let obj = data.as_object().expect("top-level must be object");
-
-    let mut total = 0;
-    let mut solved = 0;
-    let mut failures = Vec::new();
-
-    for (day, levels) in obj {
-        let levels = levels.as_object().unwrap();
-        for (lvl, puzzle) in levels {
-            let key = format!("{day}-{lvl}");
-            if let Some(t) = target
-                && key != t
-            {
-                continue;
-            }
-            let fp = match parse_puzzle(puzzle) {
-                Some(fp) => fp,
-                None => {
-                    eprintln!("  SKIP {key}: parse failed");
-                    continue;
-                }
-            };
-            total += 1;
-            let (ok, steps) = run_check(&fp, &key);
-            if ok {
-                solved += 1;
-            } else {
-                let mut answered_set = std::collections::HashSet::new();
-                for s in &steps {
-                    if s.chars().last().is_some_and(|c| c.is_uppercase()) {
-                        let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-                        answered_set.insert(qi);
-                    }
-                }
-                let answered = answered_set.len();
-                let year = &path
-                    .replace(".json", "")
-                    .chars()
-                    .rev()
-                    .take(4)
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect::<String>();
-                let mm = &day[..2];
-                let dd = &day[2..4];
-                let level = lvl;
-                let hash = steps.join(".");
-                let url = format!("http://localhost:5173/{year}-{mm}-{dd}/{level}?debug#{hash}");
-                failures.push(format!("{key}: {answered}/{} — {url}", fp.n));
-            }
-            if target.is_some() {
-                let mut answered_set = std::collections::HashSet::new();
-                for s in &steps {
-                    if s.chars().last().is_some_and(|c| c.is_uppercase()) {
-                        let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-                        answered_set.insert(qi);
-                    }
-                }
-                let status = if ok {
-                    "solved"
-                } else if answered_set.len() == fp.n {
-                    "INVALID (all answered but solution is wrong)"
-                } else {
-                    "STUCK"
-                };
-                eprintln!(
-                    "Hint engine: {status} {}/{} answered",
-                    answered_set.len(),
-                    fp.n
-                );
-                eprintln!("  {}", steps.join("."));
-                if !ok {
-                    let year = &path
-                        .replace(".json", "")
-                        .chars()
-                        .rev()
-                        .take(4)
-                        .collect::<String>()
-                        .chars()
-                        .rev()
-                        .collect::<String>();
-                    let mm = &day[..2];
-                    let dd = &day[2..4];
-                    let hash = steps.join(".");
-                    eprintln!("  http://localhost:5173/{year}-{mm}-{dd}/{lvl}?debug#{hash}");
-                }
-                let solutions = solve_brute::solve(&fp, None, 10);
-                eprintln!("Brute-force: {} solution(s)", solutions.len());
-                for (i, sol) in solutions.iter().enumerate() {
-                    let s: String = sol.iter().take(fp.n).map(|a| a.as_char()).collect();
-                    eprintln!("  #{}: {}", i + 1, s);
-                }
-                if !ok || solutions.len() != 1 {
-                    std::process::exit(1);
-                }
-                return;
-            }
-        }
-    }
-
-    println!("{solved}/{total} solved");
-    if !failures.is_empty() {
-        println!("\nFailed ({}):", failures.len());
-        for f in &failures {
-            println!("  {f}");
-        }
-        std::process::exit(1);
-    }
-}
-
-#[derive(Clone)]
-struct LookaheadTrace {
-    eliminate_qi: usize,
-    eliminate_oi: usize,
-    assumption_qi: usize,
-    assumption_answer: Answer,
-    contradiction_qi: usize,
-    chain: Vec<deduce::DeduceResult>,
-}
-
-#[derive(Clone)]
-enum CheckAction {
-    Force {
-        qi: usize,
-        answer: Answer,
-        rule: deduce::DeduceRule,
-    },
-    Eliminate {
-        qi: usize,
-        oi: usize,
-        rule: deduce::DeduceRule,
-    },
-    EliminateMulti {
-        question_mask: u16,
-        option_mask: u8,
-        rule: deduce::DeduceRule,
-    },
-    LookaheadEliminate {
-        trace: LookaheadTrace,
-    },
-}
-
-struct IncorrectActionReport {
-    index: usize,
-    summary: String,
-    details: Vec<String>,
-}
-
-fn format_deduce_action(action: &deduce::DeduceAction) -> String {
-    match *action {
-        deduce::DeduceAction::Force { qi, answer } => {
-            format!("force Q{}={}", qi + 1, answer.as_char())
-        }
-        deduce::DeduceAction::Eliminate { qi, oi } => {
-            format!("eliminate Q{}{}", qi + 1, LETTERS[oi].as_char())
-        }
-        deduce::DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => {
-            let qs: Vec<String> = (0..MAX_N)
-                .filter(|&qi| (question_mask >> qi) & 1 == 1)
-                .map(|qi| format!("Q{}", qi + 1))
-                .collect();
-            let opts: String = (0..5usize)
-                .filter(|&oi| (option_mask >> oi) & 1 == 1)
-                .map(|oi| LETTERS[oi].as_char())
-                .collect();
-            format!("eliminate-multi [{}] options [{}]", qs.join(", "), opts)
-        }
-    }
-}
-
-fn first_incorrect_action(
-    actions: &[CheckAction],
-    solution: &[Answer; MAX_N],
-    n: usize,
-) -> Option<IncorrectActionReport> {
-    for (idx, action) in actions.iter().enumerate() {
-        match action {
-            CheckAction::Force { qi, answer, rule } => {
-                if solution[*qi] != *answer {
-                    return Some(IncorrectActionReport {
-                        index: idx + 1,
-                        summary: format!(
-                            "force Q{}={} by {} (expected {})",
-                            *qi + 1,
-                            answer.as_char(),
-                            rule.to_str(),
-                            solution[*qi].as_char(),
-                        ),
-                        details: Vec::new(),
-                    });
-                }
-            }
-            CheckAction::Eliminate { qi, oi, rule } => {
-                if solution[*qi] == LETTERS[*oi] {
-                    return Some(IncorrectActionReport {
-                        index: idx + 1,
-                        summary: format!(
-                            "eliminate Q{}{} by {} (eliminates true answer)",
-                            *qi + 1,
-                            LETTERS[*oi].as_char(),
-                            rule.to_str(),
-                        ),
-                        details: Vec::new(),
-                    });
-                }
-            }
-            CheckAction::EliminateMulti {
-                question_mask,
-                option_mask,
-                rule,
-            } => {
-                for qi in 0..n {
-                    if (question_mask >> qi) & 1 == 0 {
-                        continue;
-                    }
-                    let sol_oi = solution[qi].idx();
-                    if (option_mask >> sol_oi) & 1 == 1 {
-                        return Some(IncorrectActionReport {
-                            index: idx + 1,
-                            summary: format!(
-                                "eliminate-multi by {} removes Q{}{} (true answer)",
-                                rule.to_str(),
-                                qi + 1,
-                                solution[qi].as_char(),
-                            ),
-                            details: Vec::new(),
-                        });
-                    }
-                }
-            }
-            CheckAction::LookaheadEliminate { trace } => {
-                if solution[trace.eliminate_qi] == LETTERS[trace.eliminate_oi] {
-                    let mut details = vec![
-                        format!(
-                            "assumption: Q{}={}",
-                            trace.assumption_qi + 1,
-                            trace.assumption_answer.as_char()
-                        ),
-                        format!("contradiction at Q{}", trace.contradiction_qi + 1),
-                    ];
-                    if trace.chain.is_empty() {
-                        details.push("deduction chain: (empty)".to_string());
-                    } else {
-                        details.push("deduction chain:".to_string());
-                        for (i, dr) in trace.chain.iter().enumerate() {
-                            details.push(format!(
-                                "  {}. {} via {}",
-                                i + 1,
-                                format_deduce_action(&dr.action),
-                                dr.rule.to_str()
-                            ));
-                        }
-                    }
-
-                    return Some(IncorrectActionReport {
-                        index: idx + 1,
-                        summary: format!(
-                            "lookahead eliminate Q{}{} (eliminates true answer)",
-                            trace.eliminate_qi + 1,
-                            LETTERS[trace.eliminate_oi].as_char(),
-                        ),
-                        details,
-                    });
-                }
-            }
-        }
-    }
-    None
-}
-
-fn report_first_incorrect_if_needed(
-    key: &str,
-    fp: &FlatPuzzle,
-    actions: &[CheckAction],
-    n: usize,
-    conflict_reported: &mut bool,
-    brute_solutions: &mut Option<Vec<[Answer; MAX_N]>>,
-) {
-    if *conflict_reported {
-        return;
-    }
-    *conflict_reported = true;
-
-    let solutions = brute_solutions.get_or_insert_with(|| solve_brute::solve(fp, None, 2));
-    match solutions.len() {
-        0 => {
-            eprintln!(
-                "CONFLICT [{key}]: brute-force solver found no solutions; cannot locate first incorrect action"
-            );
-        }
-        1 => {
-            if let Some(report) = first_incorrect_action(actions, &solutions[0], n) {
-                eprintln!(
-                    "CONFLICT [{key}]: first incorrect action #{}: {}",
-                    report.index, report.summary
-                );
-                for line in report.details {
-                    eprintln!("CONFLICT [{key}]:   {line}");
-                }
-            } else {
-                eprintln!(
-                    "CONFLICT [{key}]: no incorrect force/elimination found before conflict against unique solution"
-                );
-            }
-        }
-        m => {
-            eprintln!(
-                "CONFLICT [{key}]: brute-force solver found {m} solutions; first incorrect action is ambiguous"
-            );
-        }
-    }
-}
-
-fn run_check(fp: &FlatPuzzle, key: &str) -> (bool, Vec<String>) {
-    let n = fp.n;
-    let pm = build::phantom_mask(fp.option_count);
-    let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-    let mut eliminated = [pm; MAX_N];
-    let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
-    let mut action_log: Vec<CheckAction> = Vec::new();
-    let mut conflict_reported = false;
-    let mut brute_solutions: Option<Vec<[Answer; MAX_N]>> = None;
-    let mut steps = Vec::new();
-    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
-
-    for _ in 0..n * 30 {
-        if (0..n).all(|i| answers[i].is_some()) {
-            let valid = (0..n).all(|i| {
-                check_validity::check_question_against_solution(
-                    fp,
-                    i,
-                    answers[i].unwrap(),
-                    &answers,
-                )
-            });
-            return (valid, steps);
-        }
-        let drs = deduce::deduce(fp, &answers, &eliminated);
-        if !drs.is_empty() {
-            for dr in &drs {
-                match dr.action {
-                    deduce::DeduceAction::Force { qi, answer } => {
-                        action_log.push(CheckAction::Force {
-                            qi,
-                            answer,
-                            rule: dr.rule,
-                        });
-                        if let Some(existing) = answers[qi] {
-                            if existing != answer {
-                                let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
-                                eprintln!(
-                                    "CONFLICT [{key}]: Q{} forced {} by {} but already {} (set by {})",
-                                    qi + 1,
-                                    answer.as_char(),
-                                    dr.rule.to_str(),
-                                    existing.as_char(),
-                                    origin,
-                                );
-                                report_first_incorrect_if_needed(
-                                    key,
-                                    fp,
-                                    &action_log,
-                                    n,
-                                    &mut conflict_reported,
-                                    &mut brute_solutions,
-                                );
-                            }
-                        } else {
-                            forced_by[qi] = Some(dr.rule);
-                        }
-                        eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                        answers[qi] = Some(answer);
-                        steps.push(format!("{}{}", qi + 1, answer.as_char()));
-                    }
-                    deduce::DeduceAction::Eliminate { qi, oi } => {
-                        action_log.push(CheckAction::Eliminate {
-                            qi,
-                            oi,
-                            rule: dr.rule,
-                        });
-                        if answers[qi] == Some(LETTERS[oi]) {
-                            let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
-                            eprintln!(
-                                "CONFLICT [{key}]: Q{} eliminating {} by {} but already forced to it (set by {})",
-                                qi + 1,
-                                LETTERS[oi].as_char(),
-                                dr.rule.to_str(),
-                                origin,
-                            );
-                            report_first_incorrect_if_needed(
-                                key,
-                                fp,
-                                &action_log,
-                                n,
-                                &mut conflict_reported,
-                                &mut brute_solutions,
-                            );
-                        }
-                        eliminated[qi] |= 1 << oi;
-                        steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
-                    }
-                    deduce::DeduceAction::EliminateMulti {
-                        question_mask,
-                        option_mask,
-                    } => {
-                        action_log.push(CheckAction::EliminateMulti {
-                            question_mask,
-                            option_mask,
-                            rule: dr.rule,
-                        });
-                        for i in 0..n {
-                            if (question_mask >> i) & 1 == 1 {
-                                eliminated[i] |= option_mask;
-                                for oi in 0..5usize {
-                                    if (option_mask >> oi) & 1 == 1 {
-                                        if answers[i] == Some(LETTERS[oi]) {
-                                            let origin =
-                                                forced_by[i].map_or("unknown", |r| r.to_str());
-                                            eprintln!(
-                                                "CONFLICT [{key}]: Q{} eliminating {} by {} (multi) but already forced to it (set by {})",
-                                                i + 1,
-                                                LETTERS[oi].as_char(),
-                                                dr.rule.to_str(),
-                                                origin,
-                                            );
-                                            report_first_incorrect_if_needed(
-                                                key,
-                                                fp,
-                                                &action_log,
-                                                n,
-                                                &mut conflict_reported,
-                                                &mut brute_solutions,
-                                            );
-                                        }
-                                        steps.push(format!("{}{}", i + 1, letters_lower[oi]));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX, false) {
-            action_log.push(CheckAction::LookaheadEliminate {
-                trace: LookaheadTrace {
-                    eliminate_qi: lr.eliminate_qi,
-                    eliminate_oi: lr.eliminate_oi,
-                    assumption_qi: lr.assumption_qi,
-                    assumption_answer: lr.assumption_answer,
-                    contradiction_qi: lr.contradiction_qi,
-                    chain: lr.chain.iter().copied().collect(),
-                },
-            });
-            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
-            steps.push(format!(
-                "{}{}",
-                lr.eliminate_qi + 1,
-                letters_lower[lr.eliminate_oi]
-            ));
-            continue;
-        }
-        break;
-    }
-    (false, steps)
-}
-
-pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
-    let qs = v.get("q")?.as_array()?;
-    let n = qs.len();
-    if n == 0 || n > MAX_N {
-        return None;
-    }
-
-    let option_count = qs
-        .first()
-        .and_then(|q| q.get("o"))
-        .and_then(|o| o.as_array())
-        .map_or(5, |a| a.len());
-
-    let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
-    let mut option_nums = [[NAN_VAL; 5]; MAX_N];
-    let mut option_answers = [[0xFFu8; 5]; MAX_N];
-    let mut option_claims: [[Option<Claim>; 5]; MAX_N] = [[None; 5]; MAX_N];
-
-    for (qi, q) in qs.iter().enumerate() {
-        let t = q.get("t")?;
-        question_types[qi] = serde_json::from_value(t.clone()).ok()?;
-
-        if let Some(claims) = q.get("c") {
-            let claims = claims.as_array()?;
-            for (oi, c) in claims.iter().enumerate() {
-                if c.is_null() {
-                    continue;
-                }
-                option_claims[qi][oi] = Some(serde_json::from_value(c.clone()).ok()?);
-                option_nums[qi][oi] = NAN_VAL;
-            }
-        } else if let Some(opts) = q.get("o") {
-            let opts = opts.as_array()?;
-            for (oi, o) in opts.iter().enumerate() {
-                if o.is_null() {
-                    option_nums[qi][oi] = NONE_VAL;
-                } else {
-                    option_nums[qi][oi] = o.as_i64()? as i16;
-                }
-            }
-            if matches!(
-                question_types[qi],
-                QuestionType::AnswerOf { .. }
-                    | QuestionType::LeastCommon
-                    | QuestionType::MostCommon
-            ) {
-                for oi in 0..5 {
-                    option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
-                    {
-                        option_nums[qi][oi] as u8
-                    } else {
-                        0xFF
-                    };
-                    option_nums[qi][oi] = NAN_VAL;
-                }
-            }
-            if question_types[qi].has_identity_options() {
-                for oi in 0..5 {
-                    option_answers[qi][oi] = oi as u8;
-                    option_nums[qi][oi] = NAN_VAL;
-                }
-            }
-        }
-    }
-
-    let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
-    Some(FlatPuzzle {
-        question_types,
-        option_nums,
-        option_answers,
-        option_claims,
-        affected_by,
-        global_indices,
-        n,
-        option_count,
-    })
-}
-
-fn claim_to_json(claim: &Option<Claim>) -> Value {
-    match claim {
-        None => Value::Null,
-        Some(c) => serde_json::to_value(c).unwrap(),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1093,7 +558,7 @@ mod tests {
                 };
                 for (lvl, puzzle) in levels {
                     let key = format!("{filename}/{day}-{lvl}");
-                    if let Some(fp) = parse_puzzle(puzzle) {
+                    if let Some(fp) = serialize::parse_puzzle(puzzle) {
                         puzzles.push((key, fp));
                     }
                 }
@@ -1113,7 +578,8 @@ mod tests {
         let mut failures: Vec<String> = Vec::new();
 
         for (key, fp) in &puzzles {
-            let (ok, _steps) = run_check(fp, key);
+            let cr = check::run_check(fp, key);
+            let ok = cr.ok;
             if !ok {
                 failures.push(key.clone());
             }

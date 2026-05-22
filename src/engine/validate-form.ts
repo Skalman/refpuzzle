@@ -1,8 +1,11 @@
 import type { Puzzle } from "./types.ts";
 
+export type Severity = "warning" | "error";
+
 export interface FormError {
   qi: number;
   message: string;
+  severity: Severity;
 }
 
 export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
@@ -22,9 +25,13 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
     if (qt.type === "AnswerOf" || qt.type === "LetterDist" || qt.type === "SameAsWhich") {
       const ref = qt.questionIndex;
       if (ref < 0 || ref >= n) {
-        errors.push({ qi, message: `${qt.type} references out-of-range question ${String(ref)}` });
+        errors.push({
+          qi,
+          message: `${qt.type} references out-of-range question ${String(ref)}`,
+          severity: "error",
+        });
       } else if (ref === qi) {
-        errors.push({ qi, message: `${qt.type} references itself` });
+        errors.push({ qi, message: `${qt.type} references itself`, severity: "error" });
       }
     }
 
@@ -33,20 +40,21 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
       for (let oi = 0; oi < oc; oi++) {
         const v = vals[oi];
         if (v == null) {
-          errors.push({ qi, message: `SameAs option ${oi} is null` });
+          errors.push({ qi, message: `SameAs option ${oi} is null`, severity: "error" });
         } else if (v === qi) {
-          errors.push({ qi, message: `SameAs option ${oi} references itself` });
+          errors.push({ qi, message: `SameAs option ${oi} references itself`, severity: "error" });
         } else if (v < 0 || v >= n) {
           errors.push({
             qi,
             message: `SameAs option ${oi} references out-of-range question ${String(v)}`,
+            severity: "error",
           });
         }
       }
       const targets = vals.filter((v) => v != null);
       const unique = new Set(targets);
       if (unique.size < targets.length) {
-        errors.push({ qi, message: "SameAs has duplicate option targets" });
+        errors.push({ qi, message: "SameAs has duplicate option targets", severity: "error" });
       }
     }
 
@@ -54,7 +62,11 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
     if (qt.type === "OnlySame") {
       for (let oi = 0; oi < oc; oi++) {
         if (vals[oi] === qi) {
-          errors.push({ qi, message: `OnlySame option ${oi} references itself` });
+          errors.push({
+            qi,
+            message: `OnlySame option ${oi} references itself`,
+            severity: "warning",
+          });
         }
       }
     }
@@ -67,6 +79,7 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
           errors.push({
             qi,
             message: `EqualCount(${qt.answer}) option ${oi} points to ${qt.answer} (self-referencing)`,
+            severity: "warning",
           });
         }
       }
@@ -77,7 +90,7 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
       const nonNull = vals.filter((v): v is number => v != null);
       const unique = new Set(nonNull);
       if (unique.size < nonNull.length) {
-        errors.push({ qi, message: "Duplicate option values" });
+        errors.push({ qi, message: "Duplicate option values", severity: "warning" });
       }
     }
 
@@ -94,7 +107,8 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
           if (v < 0 || v > n) {
             errors.push({
               qi,
-              message: `Option ${oi} value ${String(v)} out of range [0,${String(n)}]`,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
             });
           }
           break;
@@ -102,13 +116,18 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
           if (v < 0 || v > qt.beforeIndex) {
             errors.push({
               qi,
-              message: `Option ${oi} value ${String(v)} out of range [0,${String(qt.beforeIndex)}]`,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
             });
           }
           break;
         case "CountAnswerAfter":
           if (v < 0 || v > n - qt.afterIndex - 1) {
-            errors.push({ qi, message: `Option ${oi} value ${String(v)} out of range` });
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
           }
           break;
         case "AnswerOf":
@@ -117,13 +136,13 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
         case "NoOtherHasAnswer":
         case "EqualCount":
         case "AnswerIsSelf":
-          if (v < 0 || v > 4) {
-            errors.push({ qi, message: `Option ${oi} value ${String(v)} out of range [0,4]` });
-          }
-          break;
         case "LetterDist":
           if (v < 0 || v > 4) {
-            errors.push({ qi, message: `Option ${oi} value ${String(v)} out of range [0,4]` });
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
           }
           break;
         case "FirstWith":
@@ -141,7 +160,8 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
           if (v < 0 || v >= n) {
             errors.push({
               qi,
-              message: `Option ${oi} value ${String(v)} out of range [0,${String(n - 1)}]`,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
             });
           }
           break;
@@ -159,6 +179,7 @@ export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
           errors.push({
             qi,
             message: `TrueStmt option ${oi} has EqualCount(${cqt.answer}) pointing to ${cqt.answer} (self-referencing)`,
+            severity: "warning",
           });
         }
       }
