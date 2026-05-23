@@ -2412,25 +2412,32 @@ mod tests {
             if solutions.len() != 1 {
                 continue;
             }
-            let solution = solutions[0];
-
-            // Verify construction correctness: each question's correct option must be valid
-            let opt_sol = crate::build::to_optional(&solution, n);
-            let mut valid = true;
-            for qi in 0..n {
-                if crate::check_validity::check_question_against_solution(
-                    &fp,
-                    qi,
-                    solution[qi],
-                    &opt_sol,
-                ) == false
-                {
-                    valid = false;
-                    break;
+            if (0..n).any(|i| solutions[0][i] != solution[i]) {
+                eprintln!("CONSTRUCTION FAIL seed={seed}:");
+                eprintln!(
+                    "  construction: {:?}",
+                    &solution[..n]
+                        .iter()
+                        .map(|a| a.as_char())
+                        .collect::<Vec<_>>()
+                );
+                eprintln!(
+                    "  brute:        {:?}",
+                    &solutions[0][..n]
+                        .iter()
+                        .map(|a| a.as_char())
+                        .collect::<Vec<_>>()
+                );
+                for qi in 0..n {
+                    eprintln!(
+                        "  Q{}: {:?} opts={:?} ans={:?}",
+                        qi + 1,
+                        fp.question_types[qi],
+                        &fp.option_nums[qi],
+                        &fp.option_answers[qi]
+                    );
                 }
-            }
-            if !valid {
-                continue;
+                panic!("fill_options bug: brute solution != construction solution (seed={seed})");
             }
 
             puzzles_tested += 1;
