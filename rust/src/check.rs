@@ -4,6 +4,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::build;
+use crate::check_form;
 use crate::check_validity;
 use crate::deduce;
 use crate::format;
@@ -11,7 +12,6 @@ use crate::lookahead;
 use crate::serialize;
 use crate::solve_brute;
 use crate::types::*;
-use crate::validate_form;
 
 // ── Color ──
 
@@ -145,15 +145,15 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let n = fp.n;
     let oc = fp.option_count;
 
-    let fe = validate_form::validate_puzzle_form(fp);
+    let fe = check_form::check_form(fp);
     let form_warnings: Vec<String> = fe
         .iter()
-        .filter(|e| matches!(e.severity, validate_form::Severity::Warning))
+        .filter(|e| matches!(e.severity, check_form::Severity::Warning))
         .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
         .collect();
     let form_errors: Vec<String> = fe
         .iter()
-        .filter(|e| matches!(e.severity, validate_form::Severity::Error))
+        .filter(|e| matches!(e.severity, check_form::Severity::Error))
         .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
         .collect();
 

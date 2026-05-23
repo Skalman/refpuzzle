@@ -8,7 +8,7 @@ export interface FormError {
   severity: Severity;
 }
 
-export function validatePuzzleForm(puzzle: Puzzle): FormError[] {
+export function checkForm(puzzle: Puzzle): FormError[] {
   const errors: FormError[] = [];
   const n = puzzle.questions.length;
   const oc = puzzle.optionCount ?? 5;

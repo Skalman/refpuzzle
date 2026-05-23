@@ -13,7 +13,7 @@ pub struct FormError {
     pub severity: Severity,
 }
 
-pub fn validate_puzzle_form(fp: &FlatPuzzle) -> Vec<FormError> {
+pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
     let mut errors = Vec::new();
     let n = fp.n;
     let oc = fp.option_count;

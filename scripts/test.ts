@@ -10,7 +10,7 @@ import { solve } from "../src/generator/solve-brute.ts";
 import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import { validatePuzzleForm } from "../src/engine/validate-form.ts";
+import { checkForm } from "../src/engine/check-form.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -892,21 +892,21 @@ function testSharedDeduce() {
 }
 
 // ════════════════════════════════════════════════
-// Validate-form tests
+// Check-form tests
 // ════════════════════════════════════════════════
 
-function testValidateForm() {
+function testCheckForm() {
   const suite = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, "../tests/validate-form.json"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "../tests/check-form.json"), "utf8"),
   );
   for (const t of suite.tests) {
     if (t.section) continue;
     const puzzle = parseCompactYear({ "0101": { "1": t.puzzle } })["0101"]["1"];
-    const errors = validatePuzzleForm(puzzle);
+    const errors = checkForm(puzzle);
     const hasErrors = errors.length > 0;
     assert(
       hasErrors === t.expectError,
-      `validate-form: ${t.name}: expected ${t.expectError ? "errors" : "no errors"}, got ${hasErrors ? errors.map((e: { qi: number; message: string }) => e.message).join("; ") : "none"}`,
+      `check-form: ${t.name}: expected ${t.expectError ? "errors" : "no errors"}, got ${hasErrors ? errors.map((e: { qi: number; message: string }) => e.message).join("; ") : "none"}`,
     );
   }
 }
@@ -931,7 +931,7 @@ timed("Shared solve tests", testSharedSolve);
 timed("Solver edge cases", testSolverEdgeCases);
 timed("Share encode/decode tests", testShare);
 
-timed("Validate-form tests", testValidateForm);
+timed("Check-form tests", testCheckForm);
 timed("Hint engine tests", testHints);
 if (slow) {
   timed("Generated puzzles: unique solution", testGeneratedUniqueSolution);

@@ -24,7 +24,7 @@ import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";
 import { solve } from "./solve-brute.ts";
-import { validatePuzzleForm } from "../engine/validate-form.ts";
+import { checkForm } from "../engine/check-form.ts";
 import { RNG } from "./rng.ts";
 import type { DifficultyProfile } from "./difficulty.ts";
 
@@ -481,7 +481,7 @@ function validateAndRepair(
   rng: RNG,
   tracing = false,
 ): GenerateResult | null {
-  const formErrors = validatePuzzleForm(puzzle);
+  const formErrors = checkForm(puzzle);
   if (formErrors.length > 0) {
     if (tracing) {
       for (const e of formErrors) console.error(`FORM ERROR Q${String(e.qi + 1)}: ${e.message}`);

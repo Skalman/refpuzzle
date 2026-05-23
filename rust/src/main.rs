@@ -2,6 +2,7 @@
 
 mod build;
 mod check;
+mod check_form;
 mod check_validity;
 mod construct;
 mod deduce;
@@ -15,7 +16,6 @@ mod solve_brute;
 #[allow(dead_code)]
 mod solve_deduce;
 mod types;
-mod validate_form;
 
 use build::GenerateResult;
 use difficulty::PROFILES;

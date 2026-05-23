@@ -52,9 +52,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
   Deserialization helpers. `parsePuzzle()` converts compact JSON into a `FlatPuzzle`.
 
-- **validate_form.rs / validate-form.ts**
+- **check_form.rs / check-form.ts**
 
-  `validatePuzzleForm()` — structural validation of a puzzle definition (reference bounds, duplicate option values, missing fields, etc.). Returns `FormError[]` with severity. Catches authoring mistakes that aren't logic errors.
+  `checkForm()` — structural validation of a puzzle definition (reference bounds, duplicate option values, missing fields, etc.). Returns `FormError[]` with severity. Catches authoring mistakes that aren't logic errors.
 
 ## Generator (`src/generator/` — CLI-only, not bundled in frontend)
 
@@ -84,7 +84,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **generate-puzzles.ts** — Older generator script for individual puzzles (by level/seed/count). Writes to `src/puzzles/generated/`.
 
-- **check.rs / check.ts** — `pnpm check` — solvability checker. Verifies the engine solves every puzzle in a JSON file from blank. Single-puzzle mode outputs step trace. Also runs brute-force solver for cross-validation. Rust side also handles format-check and validate-form commands.
+- **check.rs / check.ts** — `pnpm check` — solvability checker. Verifies the engine solves every puzzle in a JSON file from blank. Single-puzzle mode outputs step trace. Also runs brute-force solver for cross-validation. Rust side also handles format-check and check-form commands.
 
 - **test.ts** — `pnpm test` — test runner. Runs JSON test suites (`tests/*.json`) against the TS engine. Tests checkAnswerValidity, deduce (with rule filter), lookahead, solve.
 
@@ -118,4 +118,4 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **solve.json** — End-to-end tests: verify the engine solves a puzzle from blank.
 
-- **validate-form.json** — Test cases for `validatePuzzleForm`: given a puzzle, expect specific form errors.
+- **check-form.json** — Test cases for `checkForm`: given a puzzle, expect specific form errors.

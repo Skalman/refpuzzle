@@ -6,7 +6,7 @@ import { isValid, type Validity } from "../src/engine/state.ts";
 import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import { solve } from "../src/generator/solve-brute.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
-import { validatePuzzleForm } from "../src/engine/validate-form.ts";
+import { checkForm } from "../src/engine/check-form.ts";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 
@@ -87,7 +87,7 @@ function countAnswered(steps: string[]): number {
 
 
 function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
-  const formErrors = validatePuzzleForm(puzzle);
+  const formErrors = checkForm(puzzle);
   const formWarnings = formErrors
     .filter((e) => e.severity === "warning")
     .map((e) => `Q${e.qi + 1}: ${e.message}`);
