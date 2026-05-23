@@ -593,7 +593,7 @@ mod tests {
             eprintln!("To inspect a failure, run:");
             for f in &failures {
                 let (file, key) = f.split_once('/').unwrap();
-                eprintln!("  cargo run --release -- --check ./public/puzzles/daily/{file} {key}");
+                eprintln!("  cargo run --release -- check ./public/puzzles/daily/{file} {key}");
             }
             panic!("{} hint-solve failure(s)", failures.len());
         }
