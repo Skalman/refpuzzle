@@ -208,6 +208,18 @@ impl QuestionType {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct State {
+    pub answers: [Option<Answer>; MAX_N],
+    pub eliminated: [u8; MAX_N],
+}
+
+#[derive(Clone, Copy)]
+pub struct OptionPos {
+    pub qi: usize,
+    pub oi: usize,
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Claim {
     #[serde(flatten)]

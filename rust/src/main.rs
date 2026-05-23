@@ -7,7 +7,6 @@ mod check_form;
 mod construct;
 mod deduce;
 mod difficulty;
-mod evaluate;
 mod format;
 mod lookahead;
 mod rng;
@@ -622,7 +621,16 @@ mod tests {
                 std::array::from_fn(|i| if i < fp.n { Some(sol[i]) } else { None });
 
             for qi in 0..fp.n {
-                if !check_answer::check_answers(fp, qi, sol[qi], &answers) {
+                if !check_answer::check_answer(
+                    fp,
+                    State {
+                        answers,
+                        eliminated: [0u8; MAX_N],
+                    },
+                    qi,
+                )
+                .is_valid()
+                {
                     failures.push(format!("{key}: Q{} fails validation", qi + 1));
                 }
             }

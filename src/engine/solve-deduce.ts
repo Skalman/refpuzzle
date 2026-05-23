@@ -56,10 +56,11 @@ export function checkPuzzleSolved(
   answers: (Answer | null)[],
   eliminated: number[],
 ): boolean {
+  const state = { answers, eliminated };
   const n = fp.n;
   for (let i = 0; i < n; i++) {
     if (answers[i] == null) return false;
-    if (!isValid(checkAnswer(fp, answers, eliminated, i))) return false;
+    if (!isValid(checkAnswer(fp, state, i))) return false;
   }
   return true;
 }

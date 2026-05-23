@@ -80,7 +80,7 @@ for (const test of suite.tests) {
   const n = puzzle.questions.length;
   const { answers, eliminated } = applyState(n, t.state);
 
-  const got = checkAnswer(fp, answers, eliminated, t.qi);
+  const got = checkAnswer(fp, { answers, eliminated }, t.qi);
 
   if (got === t.expect) {
     passed++;

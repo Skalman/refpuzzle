@@ -173,9 +173,13 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         true
     };
 
+    let state = State {
+        answers: cr.answers,
+        eliminated: cr.eliminated,
+    };
     let validity_ok = if cr.ok {
         (0..n).all(|i| {
-            let v = check_answer::check_answer(fp, &cr.answers, &cr.eliminated, i);
+            let v = check_answer::check_answer(fp, state, i);
             v.is_valid() || v == check_answer::Validity::Pending
         })
     } else {
@@ -184,7 +188,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let validity_per_question: Vec<String> = (0..n)
         .map(|i| {
             if cr.ok {
-                match check_answer::check_answer(fp, &cr.answers, &cr.eliminated, i) {
+                match check_answer::check_answer(fp, state, i) {
                     check_answer::Validity::Valid => "valid",
                     check_answer::Validity::Consistent => "consistent",
                     check_answer::Validity::Invalid => "invalid",
@@ -895,8 +899,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            let valid =
-                (0..n).all(|i| check_answer::check_answers(fp, i, answers[i].unwrap(), &answers));
+            let valid = check_answer::check_answers(fp, &answers);
             return CheckResult {
                 ok: valid,
                 steps,

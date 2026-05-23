@@ -92,7 +92,9 @@ function tryAssumption(
       }
       continue;
     }
-    if (checkAnswer(fp, hypAnswers, hypEliminated, checkQi) === "invalid") {
+    if (
+      checkAnswer(fp, { answers: hypAnswers, eliminated: hypEliminated }, checkQi) === "invalid"
+    ) {
       return {
         eliminateQi: qi,
         eliminateOi: oi,

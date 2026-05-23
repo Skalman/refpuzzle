@@ -1,6 +1,7 @@
 import type { Answer, Puzzle, FlatPuzzle, FlatQuestion, QuestionTypeId } from "../engine/types.ts";
 import {
   LETTERS,
+  MAX_N,
   letterIdx,
   flattenPuzzle,
   QT_COUNT_ANSWER,
@@ -25,7 +26,10 @@ import {
   QT_LETTER_DIST,
   QT_TRUE_STMT,
 } from "../engine/types.ts";
-import { checkAnswers as evaluate } from "../engine/check-answer.ts";
+import { checkAnswer, checkAnswers } from "../engine/check-answer.ts";
+import { isValid } from "../engine/state.ts";
+
+const EMPTY_ELIMINATED: number[] = Array(MAX_N).fill(0);
 
 export function solve(
   puzzle: Puzzle,
@@ -113,14 +117,7 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
     if (solutions.length >= maxSolutions) return;
 
     if (depth === n) {
-      let valid = true;
-      for (let i = 0; i < n; i++) {
-        if (!evaluate(fp, i, current[i]!, current)) {
-          valid = false;
-          break;
-        }
-      }
-      if (valid) {
+      if (checkAnswers(fp, current)) {
         const copy: Answer[] = [];
         for (let i = 0; i < n; i++) copy.push(current[i]!);
         solutions.push(copy);
@@ -176,10 +173,7 @@ function hasContradiction(
 
   // When all answered, full check (correctness guarantee)
   if (allAnswered) {
-    for (let i = 0; i < n; i++) {
-      if (!evaluate(fp, i, answers[i]!, answers)) return true;
-    }
-    return false;
+    return !checkAnswers(fp, answers);
   }
 
   // Incremental: check questions affected by the just-assigned question
@@ -214,7 +208,7 @@ function checkRule(
   const q = fp.questions[i];
 
   if (allAnswered || canFullyEvaluateLocal(q, answers, assigned, rangeMasks, i)) {
-    if (!evaluate(fp, i, answers[i]!, answers)) return true;
+    if (!isValid(checkAnswer(fp, { answers, eliminated: EMPTY_ELIMINATED }, i))) return true;
   }
 
   // Forward checking for counting rules

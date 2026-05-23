@@ -4,7 +4,6 @@ import {
   VOWELS,
   letterIdx,
   L2I,
-  flattenQuestion,
   QT_COUNT_ANSWER,
   QT_COUNT_ANSWER_BEFORE,
   QT_COUNT_ANSWER_AFTER,
@@ -30,7 +29,7 @@ import {
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
 } from "./types.ts";
-import { checkValueValidity } from "./check-answer.ts";
+import { checkClaim } from "./check-answer.ts";
 import { V_INVALID } from "./state.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
@@ -1503,18 +1502,7 @@ function deduceImpl(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
-        const fq = flattenQuestion(claim.questionType);
-        const claimVal = claim.value === -1 ? null : claim.value;
-        const v = checkValueValidity(
-          fq,
-          claimVal,
-          LETTERS[oi],
-          qi,
-          answers,
-          eliminated,
-          n,
-          fp.optionCount,
-        );
+        const v = checkClaim(fp, { answers, eliminated }, { qi, oi }, claim);
         if (v === V_INVALID) {
           results.push(res({ type: "eliminate", qi, oi }, "TrueStatementClaimInvalid"));
         }
@@ -1533,22 +1521,11 @@ function deduceImpl(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
-        const fq = flattenQuestion(claim.questionType);
-        const claimVal = claim.value === -1 ? null : claim.value;
         const hypAnswers = answers.slice();
         hypAnswers[qi] = LETTERS[oi];
         const hypElim = eliminated.slice();
         hypElim[qi] = 0b11111 ^ (1 << oi);
-        const v = checkValueValidity(
-          fq,
-          claimVal,
-          LETTERS[oi],
-          qi,
-          hypAnswers,
-          hypElim,
-          n,
-          fp.optionCount,
-        );
+        const v = checkClaim(fp, { answers: hypAnswers, eliminated: hypElim }, { qi, oi }, claim);
         if (v !== V_INVALID) {
           survivingCount++;
           survivingOi = oi;

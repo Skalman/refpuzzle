@@ -105,7 +105,7 @@ export function PuzzleView({
       initState.questions.map((q) => q.marks),
       puzzle.optionCount,
     );
-    return answers.map((_a, qi) => checkAnswer(fp, answers, eliminated, qi));
+    return answers.map((_a, qi) => checkAnswer(fp, { answers, eliminated }, qi));
   });
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
@@ -224,7 +224,9 @@ export function PuzzleView({
         qs.map((q) => q.marks),
         puzzle.optionCount,
       );
-      const result: Validity[] = answers.map((_a, qi) => checkAnswer(fp, answers, eliminated, qi));
+      const result: Validity[] = answers.map((_a, qi) =>
+        checkAnswer(fp, { answers, eliminated }, qi),
+      );
       setValidity(result);
 
       const isCompleted = result.every(isValid);

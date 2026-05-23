@@ -255,7 +255,7 @@ function testHints() {
     const fp = flattenPuzzle(contradictionPuzzle);
     setCorrect(answers, eliminated, 0, "C");
     setCorrect(answers, eliminated, 1, "B"); // claims Q1=B, but Q1=C
-    const v = checkAnswer(fp, answers, eliminated, 1);
+    const v = checkAnswer(fp, { answers, eliminated }, 1);
     assert(v === "invalid", `contradiction: Q2 should be invalid (got ${v})`);
   }
 
@@ -695,7 +695,7 @@ function testSharedCheckAnswer() {
       }
     }
 
-    const got = checkAnswer(fp, answers, eliminated, qi);
+    const got = checkAnswer(fp, { answers, eliminated }, qi);
     assert(got === expect, `shared check-answer: ${name}: expected ${expect}, got ${got}`);
   }
 }

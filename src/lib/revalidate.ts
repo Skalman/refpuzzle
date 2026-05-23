@@ -61,7 +61,7 @@ async function revalidateOne(puzzleId: string): Promise<void> {
 
     let valid = true;
     for (let qi = 0; qi < n; qi++) {
-      if (!isValid(checkAnswer(fp, answers, eliminated, qi))) {
+      if (!isValid(checkAnswer(fp, { answers, eliminated }, qi))) {
         valid = false;
         break;
       }

@@ -1,4 +1,4 @@
-use crate::check_answer::check_answers;
+use crate::check_answer::{check_answer, check_answers};
 use crate::types::*;
 use arrayvec::ArrayVec;
 
@@ -242,14 +242,7 @@ fn search(
     }
 
     if depth == n {
-        let mut valid = true;
-        for i in 0..n {
-            if !check_answers(fp, i, current[i].unwrap(), current) {
-                valid = false;
-                break;
-            }
-        }
-        if valid {
+        if check_answers(fp, current) {
             let mut copy = [Answer::A; MAX_N];
             for i in 0..n {
                 copy[i] = current[i].unwrap();
@@ -347,12 +340,7 @@ fn has_contradiction(
     let all_answered = assigned == all_bits;
 
     if all_answered {
-        for i in 0..n {
-            if !check_answers(fp, i, answers[i].unwrap(), answers) {
-                return true;
-            }
-        }
-        return false;
+        return !check_answers(fp, answers);
     }
 
     let affected = &fp.affected_by[just_assigned];
@@ -393,7 +381,15 @@ fn check_rule(
     let answer_i = answers[i].unwrap();
 
     if (all_answered || can_fully_evaluate_local(t, assigned, range_masks, i))
-        && !check_answers(fp, i, answer_i, answers)
+        && !check_answer(
+            fp,
+            State {
+                answers: *answers,
+                eliminated: [0u8; MAX_N],
+            },
+            i,
+        )
+        .is_valid()
     {
         return true;
     }

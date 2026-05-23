@@ -6,7 +6,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **types.rs / types.ts**
 
-  Core types: `Answer`, `Puzzle`, `QuestionType` (discriminated union), `FlatPuzzle`, `FlatQuestion`, `Claim`. Also `flattenPuzzle()` which pre-computes the flat representation, and numeric `QuestionTypeId` constants for hot-path switches.
+  Core types: `Answer`, `Puzzle`, `QuestionType` (discriminated union), `FlatPuzzle`, `FlatQuestion`, `Claim`. Also `State` (answers + eliminated bitmasks), `OptionPos` (qi + oi pair), `flattenPuzzle()` which pre-computes the flat representation, and numeric `QuestionTypeId` constants for hot-path switches.
 
 - **state.ts** (ts only)
 
@@ -14,7 +14,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **check_answer.rs / check-answer.ts**
 
-  `checkAnswer()` — is a given answer valid/consistent/invalid/pending? Delegates to `checkValueValidity()` for per-question-type logic. Also `checkAnswers()` used by generation to verify a question is well-formed.
+  `checkAnswer(fp, state, qi)` — is a given answer valid/consistent/invalid/pending? Delegates to `checkClaim(fp, state, opt, claim)` for per-question-type logic. Also `checkAnswers(fp, answers)` — checks all questions and returns bool; used by generation to verify a puzzle is well-formed.
 
 - **deduce.rs / deduce.ts**
 
@@ -28,9 +28,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
   `solvePuzzle()` — full solve loop from blank (deduce + lookahead). `checkSolvable()` — thin wrapper returning `"solved"` or `"stuck"`. `checkPuzzleSolved()` — checks all questions are answered and valid.
 
-- **evaluate.rs / evaluate.ts**
+- **evaluate.ts** (ts only; Rust: private helpers in `build.rs`)
 
-  `checkQuestionAgainstSolution()` (legacy evaluate entry point) and `evaluateClaim()` used by TrueStmt question type.
+  `evaluateClaim()` used by TrueStmt question type. On the Rust side, the equivalent `evaluate_claim` / `evaluate_claim_ext` live as private functions in `build.rs` since puzzle construction doesn't have a full `FlatPuzzle` yet.
 
 - **explain.ts** (ts only)
 

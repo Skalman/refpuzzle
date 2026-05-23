@@ -90,7 +90,15 @@ pub fn lookahead(
                     }
                     continue;
                 }
-                if check_answer(fp, &hyp_answers, &hyp_eliminated, check_qi) == Validity::Invalid {
+                if check_answer(
+                    fp,
+                    State {
+                        answers: hyp_answers,
+                        eliminated: hyp_eliminated,
+                    },
+                    check_qi,
+                ) == Validity::Invalid
+                {
                     return Some(LookaheadResult {
                         eliminate_qi: qi,
                         eliminate_oi: oi,

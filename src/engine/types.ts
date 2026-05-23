@@ -1,3 +1,5 @@
+export const MAX_N = 16;
+
 export type Answer = "A" | "B" | "C" | "D" | "E";
 export const VOWELS: ReadonlySet<Answer> = new Set<Answer>(["A", "E"]);
 export type OptionMark = "unmarked" | "incorrect" | "correct";
@@ -45,6 +47,16 @@ export interface StatementOption {
 export interface Claim {
   questionType: QuestionType;
   value: number;
+}
+
+export interface State {
+  answers: (Answer | null)[];
+  eliminated: number[];
+}
+
+export interface OptionPos {
+  qi: number;
+  oi: number;
 }
 
 export type QuestionType =

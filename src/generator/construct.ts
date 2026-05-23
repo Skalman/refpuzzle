@@ -18,7 +18,7 @@ import type {
   StatementOption,
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
-import { checkAnswers as evaluate } from "../engine/check-answer.ts";
+import { checkAnswers } from "../engine/check-answer.ts";
 import { evaluateClaim } from "../engine/evaluate.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
@@ -490,9 +490,7 @@ function validateAndRepair(
   }
 
   const fp = flattenPuzzle(puzzle);
-  for (let i = 0; i < n; i++) {
-    if (!evaluate(fp, i, solution[i], solution)) return null;
-  }
+  if (!checkAnswers(fp, solution)) return null;
 
   // Step 1: Can the hint engine solve it?
   if (tracing) traceSolve("initial");

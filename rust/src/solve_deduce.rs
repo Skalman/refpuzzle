@@ -30,8 +30,7 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            let valid = (0..n)
-                .all(|i| crate::check_answer::check_answers(fp, i, answers[i].unwrap(), &answers));
+            let valid = crate::check_answer::check_answers(fp, &answers);
             return SolveResult {
                 solved: valid,
                 answers,

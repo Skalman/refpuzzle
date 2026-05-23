@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle, FlatQuestion } from "./types.ts";
+import type { Answer, FlatPuzzle, FlatQuestion, State, OptionPos, Claim } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
@@ -137,7 +137,7 @@ function lastInRange(
 
 // ── Core validity check ──
 
-export function checkValueValidity(
+function checkValueValidityInner(
   q: FlatQuestion,
   v: number | null,
   a: Answer,
@@ -430,20 +430,25 @@ export function checkValueValidity(
     }
   }
 
-  // TrueStmt can't be checked via checkValueValidity
+  // TrueStmt can't be checked via checkClaim
   if (q.t === QT_TRUE_STMT) return V_PENDING;
 
   return V_PENDING;
 }
 
-// ── Answer-level validity (delegates to checkValueValidity) ──
+export function checkClaim(fp: FlatPuzzle, state: State, opt: OptionPos, claim: Claim): Validity {
+  const { qi, oi } = opt;
+  const a = LETTERS[oi];
+  const { answers, eliminated } = state;
+  const fq = flattenQuestion(claim.questionType);
+  const v = claim.value === -1 ? null : claim.value;
+  return checkValueValidityInner(fq, v, a, qi, answers, eliminated, fp.n, fp.optionCount);
+}
 
-export function checkAnswer(
-  fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
-  qi: number,
-): Validity {
+// ── Answer-level validity (delegates to checkValueValidityInner) ──
+
+export function checkAnswer(fp: FlatPuzzle, state: State, qi: number): Validity {
+  const { answers, eliminated } = state;
   const a = answers[qi];
   if (a == null) {
     const oc = fp.optionCount;
@@ -460,18 +465,7 @@ export function checkAnswer(
     const selectedClaim = claims[ai];
     if (!selectedClaim) return V_INVALID;
 
-    const selectedFq = flattenQuestion(selectedClaim.questionType);
-    const selectedVal = selectedClaim.value === -1 ? null : selectedClaim.value;
-    const selectedV = checkValueValidity(
-      selectedFq,
-      selectedVal,
-      a,
-      qi,
-      answers,
-      eliminated,
-      n,
-      fp.optionCount,
-    );
+    const selectedV = checkClaim(fp, { answers, eliminated }, { qi, oi: ai }, selectedClaim);
 
     if (selectedV !== V_VALID) return selectedV;
 
@@ -481,28 +475,19 @@ export function checkAnswer(
       if (oi === ai) continue;
       const hypAnswers = answers.slice();
       hypAnswers[qi] = LETTERS[oi];
-      const v = checkValueValidity(
-        selectedFq,
-        selectedVal,
-        LETTERS[oi],
-        qi,
-        hypAnswers,
-        eliminated,
-        n,
-        fp.optionCount,
-      );
+      const v = checkClaim(fp, { answers: hypAnswers, eliminated }, { qi, oi }, selectedClaim);
       if (v !== V_VALID) return V_CONSISTENT;
     }
     return V_VALID;
   }
 
   if (isQuestionTypeWithIdentityOptions(q.t)) {
-    const result = checkValueValidity(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
+    const result = checkValueValidityInner(q, ai, a, qi, answers, eliminated, n, fp.optionCount);
     return result === V_VALID && affectedByOwnAnswer(q, qi) ? V_CONSISTENT : result;
   }
 
   const v = fp.optionValues[qi][ai];
-  const result = checkValueValidity(q, v, a, qi, answers, eliminated, n, fp.optionCount);
+  const result = checkValueValidityInner(q, v, a, qi, answers, eliminated, n, fp.optionCount);
   return result === V_VALID && affectedByOwnAnswer(q, qi) ? V_CONSISTENT : result;
 }
 
@@ -511,12 +496,10 @@ function affectedByOwnAnswer(q: FlatQuestion, qi: number): boolean {
   return true;
 }
 
-export function checkAnswers(
-  fp: FlatPuzzle,
-  qi: number,
-  _selected: Answer,
-  answers: (Answer | null)[],
-): boolean {
-  const empty = new Array(fp.n).fill(0);
-  return isValid(checkAnswer(fp, answers, empty, qi));
+export function checkAnswers(fp: FlatPuzzle, answers: (Answer | null)[]): boolean {
+  const state: State = { answers, eliminated: new Array(fp.n).fill(0) };
+  for (let i = 0; i < fp.n; i++) {
+    if (!isValid(checkAnswer(fp, state, i))) return false;
+  }
+  return true;
 }
