@@ -8,7 +8,7 @@ import {
   unmarkStale,
 } from "./store.ts";
 import { deriveState, isValid } from "../engine/state.ts";
-import { checkAnswerValidity } from "../engine/check-validity.ts";
+import { checkAnswer } from "../engine/check-answer.ts";
 import { flattenPuzzle } from "../engine/types.ts";
 import { fetchDaily } from "../puzzles/daily.ts";
 
@@ -61,7 +61,7 @@ async function revalidateOne(puzzleId: string): Promise<void> {
 
     let valid = true;
     for (let qi = 0; qi < n; qi++) {
-      if (!isValid(checkAnswerValidity(fp, answers, eliminated, qi))) {
+      if (!isValid(checkAnswer(fp, answers, eliminated, qi))) {
         valid = false;
         break;
       }

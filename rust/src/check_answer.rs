@@ -729,7 +729,7 @@ fn maybe_consistent(result: Validity, t: &QuestionType, qi: usize) -> Validity {
     }
 }
 
-pub fn check_answer_validity(
+pub fn check_answer(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
@@ -828,14 +828,14 @@ pub fn check_answer_validity(
     }
 }
 
-pub fn check_question_against_solution(
+pub fn check_answers(
     fp: &FlatPuzzle,
     qi: usize,
     _selected: Answer,
     answers: &[Option<Answer>; MAX_N],
 ) -> bool {
     let empty = [0u8; MAX_N];
-    check_answer_validity(fp, answers, &empty, qi).is_valid()
+    check_answer(fp, answers, &empty, qi).is_valid()
 }
 
 #[cfg(test)]
@@ -844,9 +844,9 @@ mod tests {
     use serde_json::Value;
 
     #[test]
-    fn test_shared_check_validity() {
-        let json_str = std::fs::read_to_string("../tests/check-validity.json")
-            .expect("can't read tests/check-validity.json");
+    fn test_shared_check_answer() {
+        let json_str = std::fs::read_to_string("../tests/check-answer.json")
+            .expect("can't read tests/check-answer.json");
         let suite: Value = serde_json::from_str(&json_str).unwrap();
         let tests = suite["tests"].as_array().unwrap();
 
@@ -888,7 +888,7 @@ mod tests {
                 }
             }
 
-            let got = check_answer_validity(&fp, &answers, &eliminated, qi);
+            let got = check_answer(&fp, &answers, &eliminated, qi);
             let got_str = match got {
                 Validity::Neutral => "neutral",
                 Validity::Valid => "valid",
@@ -947,7 +947,7 @@ mod tests {
                 }
             }
 
-            let got = check_question_against_solution(&fp, qi, answers[qi].unwrap(), &answers);
+            let got = check_answers(&fp, qi, answers[qi].unwrap(), &answers);
 
             if got == expect {
                 passed += 1;

@@ -12,9 +12,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
   `Validity` type and constants (`V_NEUTRAL`, `V_VALID`, `V_CONSISTENT`, `V_INVALID`, `V_PENDING`), `isValid()` helper. `deriveState()` converts UI mark arrays into `answers[]` + `eliminated[]` bitmask arrays.
 
-- **check_validity.rs / check-validity.ts**
+- **check_answer.rs / check-answer.ts**
 
-  `checkAnswerValidity()` — is a given answer valid/consistent/invalid/pending? Delegates to `checkValueValidity()` for per-question-type logic. Also `checkQuestionAgainstSolution()` used by generation to verify a question is well-formed.
+  `checkAnswer()` — is a given answer valid/consistent/invalid/pending? Delegates to `checkValueValidity()` for per-question-type logic. Also `checkAnswers()` used by generation to verify a question is well-formed.
 
 - **deduce.rs / deduce.ts**
 
@@ -22,7 +22,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **lookahead.rs / lookahead.ts**
 
-  `lookahead()` — hypothetical reasoning. Assumes each remaining option, runs deduce loop, checks for contradictions via checkAnswerValidity. Returns `LookaheadResult` or null.
+  `lookahead()` — hypothetical reasoning. Assumes each remaining option, runs deduce loop, checks for contradictions via checkAnswer. Returns `LookaheadResult` or null.
 
 - **solve_deduce.rs / solve-deduce.ts**
 
@@ -60,7 +60,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **construct.rs + build.rs / construct.ts**
 
-  `generateConstructive()` — builds a puzzle: picks a random solution, places question types, fills options with distractors. `validateAndRepair()` — runs checkQuestionAgainstSolution, then `runHintEngine` (deduce+lookahead solve loop), then repair if stuck, then brute-force uniqueness check. Rust splits this: `construct.rs` has puzzle construction, `build.rs` has validate/repair/fill helpers + `Stats` for performance tracing.
+  `generateConstructive()` — builds a puzzle: picks a random solution, places question types, fills options with distractors. `validateAndRepair()` — runs checkAnswers, then `runHintEngine` (deduce+lookahead solve loop), then repair if stuck, then brute-force uniqueness check. Rust splits this: `construct.rs` has puzzle construction, `build.rs` has validate/repair/fill helpers + `Stats` for performance tracing.
 
 - **solve_brute.rs / solve-brute.ts**
 
@@ -86,9 +86,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **check.rs / check.ts** — `pnpm check` — solvability checker. Verifies the engine solves every puzzle in a JSON file from blank. Single-puzzle mode outputs step trace. Also runs brute-force solver for cross-validation. Rust side also handles format-check and check-form commands.
 
-- **test.ts** — `pnpm test` — test runner. Runs JSON test suites (`tests/*.json`) against the TS engine. Tests checkAnswerValidity, deduce (with rule filter), lookahead, solve.
+- **test.ts** — `pnpm test` — test runner. Runs JSON test suites (`tests/*.json`) against the TS engine. Tests checkAnswer, deduce (with rule filter), lookahead, solve.
 
-- **test-check-validity.mts** — Standalone runner for `tests/check-validity.json`.
+- **test-check-answer.mts** — Standalone runner for `tests/check-answer.json`.
 
 - **test-deduce.mts** — Standalone runner for `tests/deduce.json`.
 
@@ -108,7 +108,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 ## Test data (`tests/`)
 
-- **check-validity.json** — Test cases for `checkAnswerValidity`: given a puzzle + state, expect a validity result.
+- **check-answer.json** — Test cases for `checkAnswer`: given a puzzle + state, expect a validity result.
 
 - **deduce.json** — Test cases for `deduce` with rule filter: given a puzzle + state + rule, expect a specific action.
 

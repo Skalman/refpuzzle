@@ -2033,7 +2033,7 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let v = crate::check_validity::check_value_validity(
+                let v = crate::check_answer::check_value_validity(
                     &claim.question_type,
                     claim.value,
                     LETTERS[oi],
@@ -2043,7 +2043,7 @@ fn deduce_impl(
                     n,
                     fp.option_count,
                 );
-                if v == crate::check_validity::Validity::Invalid {
+                if v == crate::check_answer::Validity::Invalid {
                     push(
                         DeduceAction::Eliminate { qi, oi },
                         DeduceRule::TrueStatementClaimInvalid,
@@ -2075,7 +2075,7 @@ fn deduce_impl(
                 let mut hyp_elim = *eliminated;
                 hyp_answers[qi] = Some(LETTERS[oi]);
                 hyp_elim[qi] = 0b11111 ^ (1 << oi);
-                let v = crate::check_validity::check_value_validity(
+                let v = crate::check_answer::check_value_validity(
                     &claim.question_type,
                     claim.value,
                     LETTERS[oi],
@@ -2085,7 +2085,7 @@ fn deduce_impl(
                     n,
                     fp.option_count,
                 );
-                if v != crate::check_validity::Validity::Invalid {
+                if v != crate::check_answer::Validity::Invalid {
                     surviving_count += 1;
                     surviving_oi = Some(oi);
                 }

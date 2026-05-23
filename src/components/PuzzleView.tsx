@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
 import type { Marks, Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
-import { checkAnswerValidity } from "../engine/check-validity.ts";
+import { checkAnswer } from "../engine/check-answer.ts";
 import { deriveState, isValid } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
@@ -105,7 +105,7 @@ export function PuzzleView({
       initState.questions.map((q) => q.marks),
       puzzle.optionCount,
     );
-    return answers.map((_a, qi) => checkAnswerValidity(fp, answers, eliminated, qi));
+    return answers.map((_a, qi) => checkAnswer(fp, answers, eliminated, qi));
   });
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
@@ -224,9 +224,7 @@ export function PuzzleView({
         qs.map((q) => q.marks),
         puzzle.optionCount,
       );
-      const result: Validity[] = answers.map((_a, qi) =>
-        checkAnswerValidity(fp, answers, eliminated, qi),
-      );
+      const result: Validity[] = answers.map((_a, qi) => checkAnswer(fp, answers, eliminated, qi));
       setValidity(result);
 
       const isCompleted = result.every(isValid);

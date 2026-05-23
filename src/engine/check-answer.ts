@@ -438,7 +438,7 @@ export function checkValueValidity(
 
 // ── Answer-level validity (delegates to checkValueValidity) ──
 
-export function checkAnswerValidity(
+export function checkAnswer(
   fp: FlatPuzzle,
   answers: (Answer | null)[],
   eliminated: number[],
@@ -511,12 +511,12 @@ function affectedByOwnAnswer(q: FlatQuestion, qi: number): boolean {
   return true;
 }
 
-export function checkQuestionAgainstSolution(
+export function checkAnswers(
   fp: FlatPuzzle,
   qi: number,
   _selected: Answer,
   answers: (Answer | null)[],
 ): boolean {
   const empty = new Array(fp.n).fill(0);
-  return isValid(checkAnswerValidity(fp, answers, empty, qi));
+  return isValid(checkAnswer(fp, answers, empty, qi));
 }

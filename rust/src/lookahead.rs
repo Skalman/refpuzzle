@@ -1,6 +1,6 @@
 use arrayvec::ArrayVec;
 
-use crate::check_validity::{Validity, check_answer_validity};
+use crate::check_answer::{Validity, check_answer};
 use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_fast};
 use crate::types::*;
 
@@ -90,9 +90,7 @@ pub fn lookahead(
                     }
                     continue;
                 }
-                if check_answer_validity(fp, &hyp_answers, &hyp_eliminated, check_qi)
-                    == Validity::Invalid
-                {
+                if check_answer(fp, &hyp_answers, &hyp_eliminated, check_qi) == Validity::Invalid {
                     return Some(LookaheadResult {
                         eliminate_qi: qi,
                         eliminate_oi: oi,

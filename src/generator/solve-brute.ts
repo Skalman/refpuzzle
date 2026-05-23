@@ -25,7 +25,7 @@ import {
   QT_LETTER_DIST,
   QT_TRUE_STMT,
 } from "../engine/types.ts";
-import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
+import { checkAnswers as evaluate } from "../engine/check-answer.ts";
 
 export function solve(
   puzzle: Puzzle,

@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
-use crate::check_validity::check_question_against_solution;
+use crate::check_answer::check_answers;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::evaluate::evaluate_claim;
 use crate::lookahead::lookahead;
@@ -171,14 +171,8 @@ fn run_hint_engine_from(
 
     for _ in 0..n * 15 {
         if (0..n).all(|i| answers[i].is_some()) {
-            let valid = (0..n).all(|i| {
-                crate::check_validity::check_question_against_solution(
-                    fp,
-                    i,
-                    answers[i].unwrap(),
-                    &answers,
-                )
-            });
+            let valid = (0..n)
+                .all(|i| crate::check_answer::check_answers(fp, i, answers[i].unwrap(), &answers));
             return (valid, answers, eliminated);
         }
 
@@ -461,9 +455,9 @@ pub fn validate_and_repair(
     // Assert construction correctness
     let opt_solution = to_optional(solution, n);
     for i in 0..n {
-        if !check_question_against_solution(fp, i, solution[i], &opt_solution) {
+        if !check_answers(fp, i, solution[i], &opt_solution) {
             panic!(
-                "BUG: check_question_against_solution failed for Q{} type={:?} answer={:?} solution={:?}",
+                "BUG: check_answers failed for Q{} type={:?} answer={:?} solution={:?}",
                 i + 1,
                 question_types[i],
                 solution[i],

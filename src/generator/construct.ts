@@ -18,7 +18,7 @@ import type {
   StatementOption,
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
-import { checkQuestionAgainstSolution as evaluate } from "../engine/check-validity.ts";
+import { checkAnswers as evaluate } from "../engine/check-answer.ts";
 import { evaluateClaim } from "../engine/evaluate.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";

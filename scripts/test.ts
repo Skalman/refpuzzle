@@ -1,7 +1,7 @@
 import type { Answer, Puzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluate.ts";
-import { checkAnswerValidity } from "../src/engine/check-validity.ts";
+import { checkAnswer } from "../src/engine/check-answer.ts";
 import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
@@ -255,7 +255,7 @@ function testHints() {
     const fp = flattenPuzzle(contradictionPuzzle);
     setCorrect(answers, eliminated, 0, "C");
     setCorrect(answers, eliminated, 1, "B"); // claims Q1=B, but Q1=C
-    const v = checkAnswerValidity(fp, answers, eliminated, 1);
+    const v = checkAnswer(fp, answers, eliminated, 1);
     assert(v === "invalid", `contradiction: Q2 should be invalid (got ${v})`);
   }
 
@@ -512,12 +512,12 @@ function testShare() {
 }
 
 // ════════════════════════════════════════════════
-// Shared check-validity cross-validation (TS ↔ Rust)
+// Shared check-answer cross-validation (TS ↔ Rust)
 // ════════════════════════════════════════════════
 
-function testSharedCheckValidity() {
+function testSharedCheckAnswer() {
   const suiteJson = JSON.parse(
-    readFileSync(resolve(import.meta.dirname, "../tests/check-validity.json"), "utf8"),
+    readFileSync(resolve(import.meta.dirname, "../tests/check-answer.json"), "utf8"),
   );
   const tests = suiteJson.tests as {
     section?: string;
@@ -695,8 +695,8 @@ function testSharedCheckValidity() {
       }
     }
 
-    const got = checkAnswerValidity(fp, answers, eliminated, qi);
-    assert(got === expect, `shared check-validity: ${name}: expected ${expect}, got ${got}`);
+    const got = checkAnswer(fp, answers, eliminated, qi);
+    assert(got === expect, `shared check-answer: ${name}: expected ${expect}, got ${got}`);
   }
 }
 
@@ -925,7 +925,7 @@ function timed(name: string, fn: () => void) {
 
 timed("Shared evaluator tests", testSharedEvaluators);
 timed("Shared deduce tests", testSharedDeduce);
-timed("Shared check-validity tests", testSharedCheckValidity);
+timed("Shared check-answer tests", testSharedCheckAnswer);
 timed("Shared lookahead tests", testSharedLookahead);
 timed("Shared solve tests", testSharedSolve);
 timed("Solver edge cases", testSolverEdgeCases);

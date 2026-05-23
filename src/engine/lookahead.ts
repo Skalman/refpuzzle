@@ -2,7 +2,7 @@ import type { Answer, FlatPuzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import { deduce, deduceFast } from "./deduce.ts";
 import type { DeduceAction, DeduceResult } from "./deduce.ts";
-import { checkAnswerValidity } from "./check-validity.ts";
+import { checkAnswer } from "./check-answer.ts";
 
 export interface LookaheadResult {
   eliminateQi: number;
@@ -92,7 +92,7 @@ function tryAssumption(
       }
       continue;
     }
-    if (checkAnswerValidity(fp, hypAnswers, hypEliminated, checkQi) === "invalid") {
+    if (checkAnswer(fp, hypAnswers, hypEliminated, checkQi) === "invalid") {
       return {
         eliminateQi: qi,
         eliminateOi: oi,

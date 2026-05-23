@@ -4,7 +4,7 @@ import { parseCompactYear } from "../src/puzzles/daily.ts";
 import type { CompactPuzzle } from "../src/puzzles/daily.ts";
 import type { Answer, FlatPuzzle, Puzzle } from "../src/engine/types.ts";
 import { L2I } from "../src/engine/types.ts";
-import { checkAnswerValidity } from "../src/engine/check-validity.ts";
+import { checkAnswer } from "../src/engine/check-answer.ts";
 import type { Validity } from "../src/engine/state.ts";
 import { flattenPuzzle } from "../src/engine/types.ts";
 
@@ -28,7 +28,7 @@ function isSectionHeader(entry: TestCase | SectionHeader): entry is SectionHeade
   return "section" in entry;
 }
 
-const suite: TestSuite = JSON.parse(readFileSync("tests/check-validity.json", "utf8"));
+const suite: TestSuite = JSON.parse(readFileSync("tests/check-answer.json", "utf8"));
 
 function parsePuzzle(compact: CompactPuzzle): Puzzle {
   const wrapped: Record<string, Record<string, typeof compact>> = {
@@ -80,7 +80,7 @@ for (const test of suite.tests) {
   const n = puzzle.questions.length;
   const { answers, eliminated } = applyState(n, t.state);
 
-  const got = checkAnswerValidity(fp, answers, eliminated, t.qi);
+  const got = checkAnswer(fp, answers, eliminated, t.qi);
 
   if (got === t.expect) {
     passed++;

@@ -3,7 +3,7 @@ import { LETTERS, letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
-import { checkAnswerValidity } from "./check-validity.ts";
+import { checkAnswer } from "./check-answer.ts";
 import { isValid } from "./state.ts";
 
 export interface SolveResult {
@@ -59,7 +59,7 @@ export function checkPuzzleSolved(
   const n = fp.n;
   for (let i = 0; i < n; i++) {
     if (answers[i] == null) return false;
-    if (!isValid(checkAnswerValidity(fp, answers, eliminated, i))) return false;
+    if (!isValid(checkAnswer(fp, answers, eliminated, i))) return false;
   }
   return true;
 }

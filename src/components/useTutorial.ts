@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import type { Marks, Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
-import { checkAnswerValidity } from "../engine/check-validity.ts";
+import { checkAnswer } from "../engine/check-answer.ts";
 import { deriveState } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { collectTutorialSteps } from "../engine/tutorial.ts";
@@ -57,9 +57,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
       qs.map((q) => q.marks),
       puzzle.optionCount,
     );
-    optsRef.current.setValidity(
-      answers.map((_a, qi) => checkAnswerValidity(fp, answers, eliminated, qi)),
-    );
+    optsRef.current.setValidity(answers.map((_a, qi) => checkAnswer(fp, answers, eliminated, qi)));
   }
 
   function applyStep(step: TutorialStep) {

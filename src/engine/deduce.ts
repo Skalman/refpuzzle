@@ -30,7 +30,7 @@ import {
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
 } from "./types.ts";
-import { checkValueValidity } from "./check-validity.ts";
+import { checkValueValidity } from "./check-answer.ts";
 import { V_INVALID } from "./state.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [

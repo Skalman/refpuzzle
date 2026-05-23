@@ -2,8 +2,8 @@
 
 mod build;
 mod check;
+mod check_answer;
 mod check_form;
-mod check_validity;
 mod construct;
 mod deduce;
 mod difficulty;
@@ -622,7 +622,7 @@ mod tests {
                 std::array::from_fn(|i| if i < fp.n { Some(sol[i]) } else { None });
 
             for qi in 0..fp.n {
-                if !check_validity::check_question_against_solution(fp, qi, sol[qi], &answers) {
+                if !check_answer::check_answers(fp, qi, sol[qi], &answers) {
                     failures.push(format!("{key}: Q{} fails validation", qi + 1));
                 }
             }

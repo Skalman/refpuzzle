@@ -4,8 +4,8 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::build;
+use crate::check_answer;
 use crate::check_form;
-use crate::check_validity;
 use crate::deduce;
 use crate::format;
 use crate::lookahead;
@@ -175,8 +175,8 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
 
     let validity_ok = if cr.ok {
         (0..n).all(|i| {
-            let v = check_validity::check_answer_validity(fp, &cr.answers, &cr.eliminated, i);
-            v.is_valid() || v == check_validity::Validity::Pending
+            let v = check_answer::check_answer(fp, &cr.answers, &cr.eliminated, i);
+            v.is_valid() || v == check_answer::Validity::Pending
         })
     } else {
         true
@@ -184,12 +184,12 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let validity_per_question: Vec<String> = (0..n)
         .map(|i| {
             if cr.ok {
-                match check_validity::check_answer_validity(fp, &cr.answers, &cr.eliminated, i) {
-                    check_validity::Validity::Valid => "valid",
-                    check_validity::Validity::Consistent => "consistent",
-                    check_validity::Validity::Invalid => "invalid",
-                    check_validity::Validity::Pending => "pending",
-                    check_validity::Validity::Neutral => "neutral",
+                match check_answer::check_answer(fp, &cr.answers, &cr.eliminated, i) {
+                    check_answer::Validity::Valid => "valid",
+                    check_answer::Validity::Consistent => "consistent",
+                    check_answer::Validity::Invalid => "invalid",
+                    check_answer::Validity::Pending => "pending",
+                    check_answer::Validity::Neutral => "neutral",
                 }
                 .into()
             } else {
@@ -895,14 +895,8 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
 
     for _ in 0..n * 30 {
         if (0..n).all(|i| answers[i].is_some()) {
-            let valid = (0..n).all(|i| {
-                check_validity::check_question_against_solution(
-                    fp,
-                    i,
-                    answers[i].unwrap(),
-                    &answers,
-                )
-            });
+            let valid =
+                (0..n).all(|i| check_answer::check_answers(fp, i, answers[i].unwrap(), &answers));
             return CheckResult {
                 ok: valid,
                 steps,

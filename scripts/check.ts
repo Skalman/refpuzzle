@@ -1,5 +1,5 @@
 import type { Puzzle } from "../src/engine/types.ts";
-import { checkAnswerValidity } from "../src/engine/check-validity.ts";
+import { checkAnswer } from "../src/engine/check-answer.ts";
 import { formatTypeTag } from "../src/engine/format.ts";
 import { flattenPuzzle } from "../src/engine/types.ts";
 import { isValid, type Validity } from "../src/engine/state.ts";
@@ -116,7 +116,7 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
   let validityOk = true;
   for (let i = 0; i < n; i++) {
     if (solveOk) {
-      const v: Validity = checkAnswerValidity(fp, answers, eliminated, i);
+      const v: Validity = checkAnswer(fp, answers, eliminated, i);
       validityPerQuestion.push(v);
       if (!isValid(v) && v !== "pending") validityOk = false;
     } else {
