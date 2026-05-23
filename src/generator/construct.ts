@@ -18,8 +18,7 @@ import type {
   StatementOption,
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
-import { checkAnswers } from "../engine/check-answer.ts";
-import { evaluateClaim } from "../engine/evaluate.ts";
+import { checkAnswers, checkClaimFast } from "../engine/check-answer.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import { lookahead } from "../engine/lookahead.ts";
@@ -1126,7 +1125,7 @@ function engineerOptions(
   }
 
   if (rule.type === "TrueStmt") {
-    return buildClaims(qi, solution, n, rng).slice(0, oc);
+    return buildClaims(qi, solution, n, oc, rng).slice(0, oc);
   }
 
   const letters = LETTERS.slice(0, oc);
@@ -1310,16 +1309,22 @@ function computeValue(rule: QuestionType, qi: number, sol: Answer[]): number | n
   throw new Error(`computeValue: ${rule.type}`);
 }
 
-function buildClaims(qi: number, solution: Answer[], n: number, rng: RNG): StatementOption[] {
+function buildClaims(
+  qi: number,
+  solution: Answer[],
+  n: number,
+  optionCount: number,
+  rng: RNG,
+): StatementOption[] {
   const targetIdx = L2I[solution[qi]];
   const options: StatementOption[] = new Array(5);
-  const trueClaim = makeTrueClaim(solution, qi, n, rng);
+  const trueClaim = makeTrueClaim(solution, qi, n, optionCount, rng);
   options[targetIdx] = { value: null, claim: trueClaim };
   const usedKeys = new Set([claimCategory(trueClaim)]);
   for (let i = 0; i < 5; i++) {
     if (i === targetIdx) continue;
     for (let att = 0; att < 30; att++) {
-      const fc = makeFalseClaim(solution, qi, n, rng);
+      const fc = makeFalseClaim(solution, qi, n, optionCount, rng);
       const key = claimCategory(fc);
       if (!usedKeys.has(key)) {
         usedKeys.add(key);
@@ -1328,7 +1333,7 @@ function buildClaims(qi: number, solution: Answer[], n: number, rng: RNG): State
       }
     }
     if (!options[i]) {
-      const fc = makeFalseClaim(solution, qi, n, rng);
+      const fc = makeFalseClaim(solution, qi, n, optionCount, rng);
       options[i] = { value: null, claim: fc };
     }
   }
@@ -1507,11 +1512,11 @@ const CLAIM_GENS: ClaimGen[] = [
   },
 ];
 
-function makeTrueClaim(sol: Answer[], qi: number, n: number, rng: RNG): Claim {
+function makeTrueClaim(sol: Answer[], qi: number, n: number, optionCount: number, rng: RNG): Claim {
   for (let attempt = 0; attempt < 20; attempt++) {
     const gen = rng.pick(CLAIM_GENS);
     const claim = gen(sol, qi, n, rng);
-    if (claim != null && evaluateClaim(claim, qi, sol)) return claim;
+    if (claim != null && checkClaimFast(optionCount, sol, qi, claim)) return claim;
   }
   const a = rng.pick(LETTERS);
   return {
@@ -1558,11 +1563,17 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
   }
 }
 
-function makeFalseClaim(sol: Answer[], qi: number, n: number, rng: RNG): Claim {
+function makeFalseClaim(
+  sol: Answer[],
+  qi: number,
+  n: number,
+  optionCount: number,
+  rng: RNG,
+): Claim {
   for (let i = 0; i < 30; i++) {
-    const base = makeTrueClaim(sol, qi, n, rng);
+    const base = makeTrueClaim(sol, qi, n, optionCount, rng);
     const fc = perturbClaim(base, n, rng);
-    if (fc && !evaluateClaim(fc, qi, sol)) return fc;
+    if (fc && !checkClaimFast(optionCount, sol, qi, fc)) return fc;
   }
   return { questionType: { type: "CountAnswer", answer: "A" }, value: n + 1 };
 }

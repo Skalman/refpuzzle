@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
-use crate::check_answer::{check_answer, check_answers};
+use crate::check_answer::{check_answer, check_answers, check_claim_fast};
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::lookahead::lookahead;
 use crate::rng::Rng;
@@ -978,6 +978,7 @@ pub fn fill_options(
                 rng,
                 &mut option_claims[qi],
                 &mut option_nums[qi],
+                option_count,
             );
             continue;
         }
@@ -1414,11 +1415,11 @@ fn build_claims(
     rng: &mut Rng,
     claims: &mut [Option<Claim>; 5],
     nums: &mut [i16; 5],
+    option_count: usize,
 ) {
     let target_oi = solution[qi].idx();
-    let opt_sol = to_optional(solution, n);
 
-    let true_claim = make_true_claim(solution, qi, n, rng);
+    let true_claim = make_true_claim(solution, qi, n, rng, option_count);
     claims[target_oi] = Some(true_claim);
     nums[target_oi] = NAN_VAL;
 
@@ -1428,7 +1429,7 @@ fn build_claims(
         }
         let mut found = false;
         for _ in 0..30 {
-            let fc = make_false_claim(solution, qi, n, rng, &opt_sol);
+            let fc = make_false_claim(solution, qi, n, rng, option_count);
             let cat = claim_category(&fc);
             if cat != claim_category(claims[target_oi].as_ref().unwrap())
                 && (0..oi).all(|j| {
@@ -1441,7 +1442,7 @@ fn build_claims(
             }
         }
         if !found {
-            claims[oi] = Some(make_false_claim(solution, qi, n, rng, &opt_sol));
+            claims[oi] = Some(make_false_claim(solution, qi, n, rng, option_count));
         }
         nums[oi] = NAN_VAL;
     }
@@ -1690,10 +1691,16 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
     }
 }
 
-fn make_true_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> Claim {
+fn make_true_claim(
+    sol: &[Answer; MAX_N],
+    qi: usize,
+    n: usize,
+    rng: &mut Rng,
+    option_count: usize,
+) -> Claim {
     for _ in 0..20 {
         if let Some(claim) = try_make_claim(sol, qi, n, rng) {
-            debug_assert!(evaluate_claim(&claim, qi, &to_optional(sol, n), n));
+            debug_assert!(check_claim_fast(option_count, &sol[..n], qi, &claim));
             return claim;
         }
     }
@@ -1709,13 +1716,13 @@ fn make_false_claim(
     qi: usize,
     n: usize,
     rng: &mut Rng,
-    opt_sol: &[Option<Answer>; MAX_N],
+    option_count: usize,
 ) -> Claim {
     for _ in 0..30 {
-        let base = make_true_claim(sol, qi, n, rng);
+        let base = make_true_claim(sol, qi, n, rng, option_count);
         let fc = perturb_claim(base, n, rng);
         if let Some(fc) = fc
-            && !evaluate_claim(&fc, qi, opt_sol, n)
+            && !check_claim_fast(option_count, &sol[..n], qi, &fc)
         {
             return fc;
         }
@@ -1770,241 +1777,4 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         value: new_val,
         ..claim
     })
-}
-
-// Checks a Claim against a complete solution (no eliminated array).
-// Used by make_true_claim/make_false_claim which lack a FlatPuzzle.
-fn evaluate_claim(claim: &Claim, qi: usize, answers: &[Option<Answer>; MAX_N], n: usize) -> bool {
-    let value = claim.value;
-    match claim.question_type {
-        QuestionType::CountAnswer { answer } => {
-            answers[..n].iter().filter(|&&a| a == Some(answer)).count() as i16 == value
-        }
-        QuestionType::CountConsonant => {
-            answers[..n]
-                .iter()
-                .filter(|&&a| a.is_some_and(|x| !x.is_vowel()))
-                .count() as i16
-                == value
-        }
-        QuestionType::CountVowel => {
-            answers[..n]
-                .iter()
-                .filter(|&&a| a.is_some_and(|x| x.is_vowel()))
-                .count() as i16
-                == value
-        }
-        QuestionType::CountAnswerAfter {
-            answer,
-            after_index,
-        } => {
-            answers[(after_index as usize + 1)..n]
-                .iter()
-                .filter(|&&a| a == Some(answer))
-                .count() as i16
-                == value
-        }
-        QuestionType::CountAnswerBefore {
-            answer,
-            before_index,
-        } => {
-            answers[..before_index as usize]
-                .iter()
-                .filter(|&&a| a == Some(answer))
-                .count() as i16
-                == value
-        }
-        QuestionType::AnswerOf { question_index } => {
-            (0..=4).contains(&value)
-                && answers[question_index as usize].map(|a| a.idx() as i16) == Some(value)
-        }
-        QuestionType::FirstWith { answer } => {
-            answers[..n]
-                .iter()
-                .position(|&a| a == Some(answer))
-                .map(|i| i as i16)
-                == Some(value)
-        }
-        QuestionType::LastWith { answer } => {
-            answers[..n]
-                .iter()
-                .rposition(|&a| a == Some(answer))
-                .map(|i| i as i16)
-                .unwrap_or(NONE_VAL)
-                == value
-        }
-        QuestionType::MostCommon => {
-            if !(0..=4).contains(&value) {
-                return false;
-            }
-            let mut counts = [0i16; 5];
-            for &a in &answers[..n] {
-                if let Some(a) = a {
-                    counts[a.idx()] += 1;
-                }
-            }
-            let max = *counts.iter().max().unwrap_or(&0);
-            counts[value as usize] == max && counts.iter().filter(|&&c| c == max).count() == 1
-        }
-        _ => evaluate_claim_ext(claim, qi, answers, n),
-    }
-}
-
-fn evaluate_claim_ext(
-    claim: &Claim,
-    qi: usize,
-    answers: &[Option<Answer>; MAX_N],
-    n: usize,
-) -> bool {
-    let value = claim.value;
-    match claim.question_type {
-        QuestionType::ClosestAfter {
-            after_index,
-            answer,
-        } => {
-            answers[(after_index as usize + 1)..n]
-                .iter()
-                .position(|&a| a == Some(answer))
-                .map(|i| (after_index as usize + 1 + i) as i16)
-                .unwrap_or(NONE_VAL)
-                == value
-        }
-        QuestionType::ClosestBefore {
-            before_index,
-            answer,
-        } => {
-            answers[..before_index as usize]
-                .iter()
-                .rposition(|&a| a == Some(answer))
-                .map(|i| i as i16)
-                .unwrap_or(NONE_VAL)
-                == value
-        }
-        QuestionType::MostCommonCount => {
-            let mut counts = [0i16; 5];
-            for &a in &answers[..n] {
-                if let Some(a) = a {
-                    counts[a.idx()] += 1;
-                }
-            }
-            *counts.iter().max().unwrap_or(&0) == value
-        }
-        QuestionType::LeastCommon => {
-            if !(0..=4).contains(&value) {
-                return false;
-            }
-            let mut counts = [0i16; 5];
-            for &a in &answers[..n] {
-                if let Some(a) = a {
-                    counts[a.idx()] += 1;
-                }
-            }
-            let min = *counts.iter().min().unwrap_or(&0);
-            counts[value as usize] == min && counts.iter().filter(|&&c| c == min).count() == 1
-        }
-        QuestionType::NoOtherHasAnswer => {
-            if !(0..=4).contains(&value) {
-                return false;
-            }
-            let letter = LETTERS[value as usize];
-            (0..n)
-                .filter(|&j| j != qi)
-                .all(|j| answers[j] != Some(letter))
-        }
-        QuestionType::EqualCount { answer } => {
-            if !(0..=4).contains(&value) {
-                return false;
-            }
-            let ref_count = answers[..n].iter().filter(|&&a| a == Some(answer)).count() as i16;
-            let mut counts = [0i16; 5];
-            for &a in &answers[..n] {
-                if let Some(a) = a {
-                    counts[a.idx()] += 1;
-                }
-            }
-            counts[value as usize] == ref_count && value as usize != answer.idx()
-        }
-        QuestionType::ConsecIdent => {
-            (0..n.saturating_sub(1))
-                .find(|&i| answers[i].is_some() && answers[i] == answers[i + 1])
-                .map(|i| i as i16)
-                .unwrap_or(NONE_VAL)
-                == value
-        }
-        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-            let parity = matches!(claim.question_type, QuestionType::OnlyEven { .. }) as usize;
-            let mut found: i16 = NONE_VAL;
-            let mut count = 0;
-            for i in 0..n {
-                if i % 2 == parity && answers[i] == Some(answer) {
-                    found = i as i16;
-                    count += 1;
-                }
-            }
-            count == 1 && found == value
-        }
-        QuestionType::PrevSame => match answers[qi] {
-            None => false,
-            Some(self_ans) => {
-                (0..qi)
-                    .rev()
-                    .find(|&i| answers[i] == Some(self_ans))
-                    .map(|i| i as i16)
-                    .unwrap_or(NONE_VAL)
-                    == value
-            }
-        },
-        QuestionType::NextSame => match answers[qi] {
-            None => false,
-            Some(self_ans) => {
-                ((qi + 1)..n)
-                    .find(|&i| answers[i] == Some(self_ans))
-                    .map(|i| i as i16)
-                    .unwrap_or(NONE_VAL)
-                    == value
-            }
-        },
-        QuestionType::OnlySame => match answers[qi] {
-            None => false,
-            Some(self_ans) => {
-                let others: Vec<usize> = (0..n)
-                    .filter(|&j| j != qi && answers[j] == Some(self_ans))
-                    .collect();
-                match others.len() {
-                    0 => value == NONE_VAL,
-                    1 => others[0] as i16 == value,
-                    _ => false,
-                }
-            }
-        },
-        QuestionType::SameAs => match answers[qi] {
-            None => false,
-            Some(self_ans) => {
-                value >= 0
-                    && (value as usize) < n
-                    && value as usize != qi
-                    && answers[value as usize] == Some(self_ans)
-            }
-        },
-        QuestionType::SameAsWhich { question_index } => match answers[question_index as usize] {
-            None => false,
-            Some(ref_ans) => {
-                value >= 0
-                    && (value as usize) < n
-                    && value as usize != qi
-                    && value as usize != question_index as usize
-                    && answers[value as usize] == Some(ref_ans)
-            }
-        },
-        QuestionType::LetterDist { question_index } => {
-            match (answers[qi], answers[question_index as usize]) {
-                (Some(self_ans), Some(other)) => {
-                    (self_ans.idx() as i16 - other.idx() as i16).abs() == value
-                }
-                _ => false,
-            }
-        }
-        QuestionType::AnswerIsSelf | QuestionType::TrueStmt => false,
-        _ => unreachable!(),
-    }
 }
