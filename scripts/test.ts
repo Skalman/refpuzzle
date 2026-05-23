@@ -1,7 +1,7 @@
 import type { Answer, Puzzle, Marks } from "../src/engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
-import { checkQuestionAgainstSolution as evaluate } from "../src/engine/evaluate.ts";
-import { checkAnswer } from "../src/engine/check-answer.ts";
+import { checkAnswer, checkAnswers } from "../src/engine/check-answer.ts";
+import { isValid } from "../src/engine/state.ts";
 import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce } from "../src/engine/explain.ts";
@@ -65,8 +65,7 @@ function testSharedEvaluators() {
     const fp = flattenPuzzle(puzzle);
     const qi: number = test.qi;
     const answers: (Answer | null)[] = test.answers;
-    const selected = answers[qi]!;
-    const got = evaluate(fp.questions[qi], qi, selected, answers, fp);
+    const got = isValid(checkAnswer(fp, { answers, eliminated: new Array(fp.n).fill(0) }, qi));
     assert(got === test.expect, `${test.name}: expected ${test.expect}, got ${got}`);
   }
 }
@@ -105,7 +104,7 @@ function testGeneratedUniqueSolution() {
     const sol = solutions[0];
 
     const fp = flattenPuzzle(puzzle);
-    const allValid = fp.questions.every((q, i) => evaluate(q, i, sol[i], sol, fp));
+    const allValid = checkAnswers(fp, sol);
     assert(allValid, `${name}: solution [${sol.join(",")}] validates`);
 
     const ruleKeys = new Set(puzzle.questions.map((q) => JSON.stringify(q.questionType)));
