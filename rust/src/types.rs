@@ -1,6 +1,6 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub const MAX_N: usize = 16;
+pub const MAX_N: usize = 12;
 pub const NONE_VAL: i16 = -1;
 pub const NAN_VAL: i16 = i16::MIN;
 

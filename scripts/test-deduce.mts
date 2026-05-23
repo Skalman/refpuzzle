@@ -160,8 +160,8 @@ for (const test of suite.tests) {
   }
 
   const results = isRealRule(parsedRule)
-    ? deduceWithRule(fp, answers, eliminated, parsedRule)
-    : deduce(fp, answers, eliminated);
+    ? deduceWithRule(fp, { answers, eliminated }, parsedRule)
+    : deduce(fp, { answers, eliminated });
   const result = results[0] ?? null;
 
   const got = formatAction(result);
@@ -197,8 +197,7 @@ for (const test of suite.tests) {
   if (parsedRule != null && result && got === expected) {
     const withoutResults = deduceWithRule(
       fp,
-      answers,
-      eliminated,
+      { answers, eliminated },
       null,
       isRealRule(parsedRule) ? parsedRule : null,
     );

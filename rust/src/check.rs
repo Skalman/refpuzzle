@@ -888,8 +888,7 @@ pub struct CheckResult {
 pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let n = fp.n;
     let pm = build::phantom_mask(fp.option_count);
-    let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-    let mut eliminated = [pm; MAX_N];
+    let mut state = State { answers: [None; MAX_N], eliminated: [pm; MAX_N] };
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
     let mut action_log: Vec<CheckAction> = Vec::new();
     let mut conflict_reported = false;
@@ -898,16 +897,16 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let letters_lower = ['a', 'b', 'c', 'd', 'e'];
 
     for _ in 0..n * 30 {
-        if (0..n).all(|i| answers[i].is_some()) {
-            let valid = check_answer::check_answers(fp, &answers);
+        if (0..n).all(|i| state.answers[i].is_some()) {
+            let valid = check_answer::check_answers(fp, &state.answers);
             return CheckResult {
                 ok: valid,
                 steps,
-                answers,
-                eliminated,
+                answers: state.answers,
+                eliminated: state.eliminated,
             };
         }
-        let drs = deduce::deduce(fp, &answers, &eliminated);
+        let drs = deduce::deduce(fp, &state);
         if !drs.is_empty() {
             for dr in &drs {
                 match dr.action {
@@ -917,7 +916,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                             answer,
                             rule: dr.rule,
                         });
-                        if let Some(existing) = answers[qi] {
+                        if let Some(existing) = state.answers[qi] {
                             if existing != answer {
                                 let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                                 eprintln!(
@@ -940,8 +939,8 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                         } else {
                             forced_by[qi] = Some(dr.rule);
                         }
-                        eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                        answers[qi] = Some(answer);
+                        state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                        state.answers[qi] = Some(answer);
                         steps.push(format!("{}{}", qi + 1, answer.as_char()));
                     }
                     deduce::DeduceAction::Eliminate { qi, oi } => {
@@ -950,7 +949,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                             oi,
                             rule: dr.rule,
                         });
-                        if answers[qi] == Some(LETTERS[oi]) {
+                        if state.answers[qi] == Some(LETTERS[oi]) {
                             let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                             eprintln!(
                                 "CONFLICT [{key}]: Q{} eliminating {} by {} but already forced to it (set by {})",
@@ -968,7 +967,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                                 &mut brute_solutions,
                             );
                         }
-                        eliminated[qi] |= 1 << oi;
+                        state.eliminated[qi] |= 1 << oi;
                         steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
                     }
                     deduce::DeduceAction::EliminateMulti {
@@ -982,10 +981,10 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                         });
                         for i in 0..n {
                             if (question_mask >> i) & 1 == 1 {
-                                eliminated[i] |= option_mask;
+                                state.eliminated[i] |= option_mask;
                                 for oi in 0..5usize {
                                     if (option_mask >> oi) & 1 == 1 {
-                                        if answers[i] == Some(LETTERS[oi]) {
+                                        if state.answers[i] == Some(LETTERS[oi]) {
                                             let origin =
                                                 forced_by[i].map_or("unknown", |r| r.to_str());
                                             eprintln!(
@@ -1014,7 +1013,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
             }
             continue;
         }
-        if let Some(lr) = lookahead::lookahead(fp, &answers, &eliminated, usize::MAX, false) {
+        if let Some(lr) = lookahead::lookahead(fp, &state, usize::MAX, false) {
             action_log.push(CheckAction::LookaheadEliminate {
                 trace: LookaheadTrace {
                     eliminate_qi: lr.eliminate_qi,
@@ -1025,7 +1024,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                     chain: lr.chain.iter().copied().collect(),
                 },
             });
-            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             steps.push(format!(
                 "{}{}",
                 lr.eliminate_qi + 1,
@@ -1038,7 +1037,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     CheckResult {
         ok: false,
         steps,
-        answers,
-        eliminated,
+        answers: state.answers,
+        eliminated: state.eliminated,
     }
 }

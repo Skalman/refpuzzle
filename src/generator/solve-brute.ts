@@ -1,4 +1,4 @@
-import type { Answer, Puzzle, FlatPuzzle, FlatQuestion, QuestionTypeId } from "../engine/types.ts";
+import type { Answer, Puzzle, FlatPuzzle, FlatQuestion, QuestionTypeId, State } from "../engine/types.ts";
 import {
   LETTERS,
   MAX_N,
@@ -84,6 +84,7 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
   const fixed = fixedAnswers ?? new Array<Answer | null>(n).fill(null);
   const solutions: Answer[][] = [];
   const current = new Array<Answer | null>(n).fill(null);
+  const currentState = { answers: current, eliminated: EMPTY_ELIMINATED };
   const order = computeSearchOrder(fp);
   const allBits = (1 << n) - 1;
   let assignedBits = 0;
@@ -117,11 +118,10 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
     if (solutions.length >= maxSolutions) return;
 
     if (depth === n) {
-      if (checkAnswers(fp, current)) {
-        const copy: Answer[] = [];
-        for (let i = 0; i < n; i++) copy.push(current[i]!);
-        solutions.push(copy);
-      }
+      // hasContradiction already called checkAnswers for the last assignment
+      const copy: Answer[] = [];
+      for (let i = 0; i < n; i++) copy.push(current[i]!);
+      solutions.push(copy);
       return;
     }
 
@@ -131,7 +131,7 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
     if (fixed[qi] != null) {
       current[qi] = fixed[qi];
       assignedBits |= bit;
-      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
+      if (!hasContradiction(fp, currentState, n, qi, assignedBits, allBits, rangeMasks)) {
         search(depth + 1);
       }
       current[qi] = null;
@@ -143,7 +143,7 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
       const letter = LETTERS[li];
       current[qi] = letter;
       assignedBits |= bit;
-      if (!hasContradiction(fp, current, n, qi, assignedBits, allBits, rangeMasks)) {
+      if (!hasContradiction(fp, currentState, n, qi, assignedBits, allBits, rangeMasks)) {
         search(depth + 1);
         if (solutions.length >= maxSolutions) {
           current[qi] = null;
@@ -162,7 +162,7 @@ function solveFp(fp: FlatPuzzle, fixedAnswers?: (Answer | null)[], maxSolutions 
 
 function hasContradiction(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
+  state: State,
   n: number,
   justAssigned: number,
   assigned: number,
@@ -173,24 +173,24 @@ function hasContradiction(
 
   // When all answered, full check (correctness guarantee)
   if (allAnswered) {
-    return !checkAnswers(fp, answers);
+    return !checkAnswers(fp, state.answers);
   }
 
   // Incremental: check questions affected by the just-assigned question
   const affected = fp.affectedBy[justAssigned];
   for (let k = 0; k < affected.length; k++) {
     const i = affected[k];
-    if (answers[i] == null) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
+    if (state.answers[i] == null) continue;
+    if (checkRule(fp, state, n, i, allAnswered, assigned, rangeMasks)) return true;
   }
 
   // Check global rules for forward-checking bounds
   const globals = fp.globalIndices;
   for (let k = 0; k < globals.length; k++) {
     const i = globals[k];
-    if (answers[i] == null) continue;
+    if (state.answers[i] == null) continue;
     if (i === justAssigned) continue;
-    if (checkRule(fp, answers, n, i, allAnswered, assigned, rangeMasks)) return true;
+    if (checkRule(fp, state, n, i, allAnswered, assigned, rangeMasks)) return true;
   }
 
   return false;
@@ -198,7 +198,7 @@ function hasContradiction(
 
 function checkRule(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
+  state: State,
   n: number,
   i: number,
   allAnswered: boolean,
@@ -206,9 +206,10 @@ function checkRule(
   rangeMasks: number[],
 ): boolean {
   const q = fp.questions[i];
+  const answers = state.answers;
 
   if (allAnswered || canFullyEvaluateLocal(q, answers, assigned, rangeMasks, i)) {
-    if (!isValid(checkAnswer(fp, { answers, eliminated: EMPTY_ELIMINATED }, i))) return true;
+    if (!isValid(checkAnswer(fp, state, i))) return true;
   }
 
   // Forward checking for counting rules

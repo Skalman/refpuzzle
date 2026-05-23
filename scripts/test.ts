@@ -263,7 +263,7 @@ function testHints() {
     const { answers, eliminated } = blankState(2);
     const fp = flattenPuzzle(contradictionPuzzle);
     setCorrect(answers, eliminated, 0, "C"); // Q1 = C, so Q2 must be C
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     assert(dr.length > 0, "forced hint: deduce returns a result");
     assert(
       dr[0].action.type === "force",
@@ -284,7 +284,7 @@ function testHints() {
     setEliminated(eliminated, 0, "C");
     setEliminated(eliminated, 0, "D");
     // Only E remains for Q1
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     assert(dr.length > 0, "forced-by-elim: deduce returns a result");
     assert(
       dr[0].action.type === "force" && dr[0].action.answer === "E",
@@ -317,7 +317,7 @@ function testHints() {
     const fp = flattenPuzzle(countPuzzle);
     setCorrect(answers, eliminated, 1, "A");
     setCorrect(answers, eliminated, 2, "A");
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     assert(dr.length > 0, "elimination: deduce returns a result");
     assert(
       dr[0].action.type === "eliminate" || dr[0].action.type === "force",
@@ -331,7 +331,7 @@ function testHints() {
     const fp = flattenPuzzle(countPuzzle);
     setCorrect(answers, eliminated, 1, "B");
     setCorrect(answers, eliminated, 2, "C");
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     assert(dr.length > 0, "count forced: deduce returns a result");
   }
 
@@ -355,11 +355,11 @@ function testHints() {
     const { answers, eliminated } = blankState(2);
     const fp = flattenPuzzle(lookaheadPuzzle);
     // No direct deduction possible — should need lookahead
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     if (dr.length > 0) {
       assert(true, "lookahead puzzle: deduce found something directly");
     } else {
-      const lr = lookahead(fp, answers, eliminated);
+      const lr = lookahead(fp, { answers, eliminated });
       assert(lr != null, "lookahead: lookahead returns a result");
     }
   }
@@ -385,9 +385,9 @@ function testHints() {
     const fp = flattenPuzzle(allSelfPuzzle);
     setCorrect(answers, eliminated, 0, "C");
     setCorrect(answers, eliminated, 1, "C");
-    const dr = deduce(fp, answers, eliminated);
+    const dr = deduce(fp, { answers, eliminated });
     assert(dr.length === 0, "solved puzzle: deduce returns empty");
-    const lr = lookahead(fp, answers, eliminated);
+    const lr = lookahead(fp, { answers, eliminated });
     assert(lr == null, "solved puzzle: lookahead returns null");
   }
 
@@ -403,13 +403,13 @@ function testHints() {
     let stuck = false;
 
     while (!answers.every((a) => a != null) && steps < n * 15) {
-      const dr = deduce(fp, answers, eliminated);
+      const dr = deduce(fp, { answers, eliminated });
       if (dr.length > 0) {
         applyAction(dr[0].action, answers, eliminated);
         steps++;
         continue;
       }
-      const lr = lookahead(fp, answers, eliminated);
+      const lr = lookahead(fp, { answers, eliminated });
       if (lr) {
         eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
         steps++;
@@ -744,7 +744,7 @@ function testSharedLookahead() {
       }
     }
 
-    const result = lookahead(fp, answers, eliminated);
+    const result = lookahead(fp, { answers, eliminated });
     const got = result ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}` : null;
     const gotStr = got === null ? "null" : got;
     const expectStr = expect === null ? "null" : expect;
@@ -853,8 +853,8 @@ function testSharedDeduce() {
     if (parsedRule) coveredRules.add(parsedRule);
 
     const results = parsedRule
-      ? deduceWithRule(fp, answers, eliminated, parsedRule)
-      : deduce(fp, answers, eliminated);
+      ? deduceWithRule(fp, { answers, eliminated }, parsedRule)
+      : deduce(fp, { answers, eliminated });
     const got = formatAction(results[0]);
     const expected = expect ?? "null";
     assert(got === expected, `deduce: ${name}: expected ${expected}, got ${got}`);
@@ -877,7 +877,7 @@ function testSharedDeduce() {
 
     // DRY check
     if (parsedRule && results[0] && got === expected) {
-      const without = deduceWithRule(fp, answers, eliminated, null, parsedRule);
+      const without = deduceWithRule(fp, { answers, eliminated }, null, parsedRule);
       const withoutGot = formatAction(without[0]);
       assert(
         withoutGot !== got,

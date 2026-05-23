@@ -67,16 +67,17 @@ export function useHintEngine(
   function computeHint(): { steps: ExplainStep[] } | null {
     const fp = getFlatPuzzle(puzzle);
     const markSets = optsRef.current.questionsRef.current.map((q) => q.marks);
-    const { answers, eliminated } = deriveState(markSets, puzzle.optionCount);
+    const state = deriveState(markSets, puzzle.optionCount);
+    const { answers, eliminated } = state;
 
     const errorSteps = findError(answers, eliminated);
     if (errorSteps) return { steps: errorSteps };
 
-    const drs = deduce(fp, answers, eliminated);
+    const drs = deduce(fp, state);
     if (drs.length > 0) return { steps: explainDeduce(puzzle, fp, answers, eliminated, drs[0]) };
 
     const t0 = performance.now();
-    const lr = lookaheadShortest(fp, answers, eliminated);
+    const lr = lookaheadShortest(fp, state);
     console.log(
       `lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`,
     );

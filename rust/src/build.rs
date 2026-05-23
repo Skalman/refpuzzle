@@ -153,29 +153,28 @@ fn run_hint_engine(
     fp: &FlatPuzzle,
     stats: &mut Stats,
     trace: bool,
-) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+) -> (bool, State) {
     let pm = phantom_mask(fp.option_count);
-    run_hint_engine_from(fp, [None; MAX_N], [pm; MAX_N], stats, trace)
+    run_hint_engine_from(fp, State { answers: [None; MAX_N], eliminated: [pm; MAX_N] }, stats, trace)
 }
 
 fn run_hint_engine_from(
     fp: &FlatPuzzle,
-    mut answers: [Option<Answer>; MAX_N],
-    mut eliminated: [u8; MAX_N],
+    mut state: State,
     stats: &mut Stats,
     trace: bool,
-) -> (bool, [Option<Answer>; MAX_N], [u8; MAX_N]) {
+) -> (bool, State) {
     let n = fp.n;
     let mut batch = 0u32;
 
     for _ in 0..n * 15 {
-        if (0..n).all(|i| answers[i].is_some()) {
-            let valid = check_answers(fp, &answers);
-            return (valid, answers, eliminated);
+        if (0..n).all(|i| state.answers[i].is_some()) {
+            let valid = check_answers(fp, &state.answers);
+            return (valid, state);
         }
 
         stats.deduce_calls += 1;
-        let drs = deduce(fp, &answers, &eliminated);
+        let drs = deduce(fp, &state);
         stats.deduce_results += drs.len() as u32;
         if !drs.is_empty() {
             if trace {
@@ -185,7 +184,7 @@ fn run_hint_engine_from(
             for dr in &drs {
                 match dr.action {
                     DeduceAction::Force { qi, answer } => {
-                        if let Some(existing) = answers[qi] {
+                        if let Some(existing) = state.answers[qi] {
                             assert_eq!(
                                 existing,
                                 answer,
@@ -195,18 +194,18 @@ fn run_hint_engine_from(
                                 answer.as_char()
                             );
                         } else {
-                            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                            answers[qi] = Some(answer);
+                            state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+                            state.answers[qi] = Some(answer);
                         }
                     }
                     DeduceAction::Eliminate { qi, oi } => {
                         assert!(
-                            answers[qi].is_none() || answers[qi] != Some(LETTERS[oi]),
+                            state.answers[qi].is_none() || state.answers[qi] != Some(LETTERS[oi]),
                             "eliminating Q{} option {} but it's already forced to that answer",
                             qi + 1,
                             LETTERS[oi].as_char()
                         );
-                        eliminated[qi] |= 1 << oi;
+                        state.eliminated[qi] |= 1 << oi;
                     }
                     DeduceAction::EliminateMulti {
                         question_mask,
@@ -214,7 +213,7 @@ fn run_hint_engine_from(
                     } => {
                         for i in 0..MAX_N {
                             if (question_mask >> i) & 1 == 1 {
-                                eliminated[i] |= option_mask;
+                                state.eliminated[i] |= option_mask;
                             }
                         }
                     }
@@ -224,25 +223,25 @@ fn run_hint_engine_from(
         }
 
         if fp.option_count < 5 {
-            return (false, answers, eliminated);
+            return (false, state);
         }
 
         stats.lookahead_calls += 1;
         let t_la = std::time::Instant::now();
-        let lr = lookahead(fp, &answers, &eliminated, 6, true);
+        let lr = lookahead(fp, &state, 6, true);
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             stats.lookahead_hits += 1;
             if trace {
                 trace_lookahead(&lr);
             }
-            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
         }
 
-        return (false, answers, eliminated);
+        return (false, state);
     }
-    (false, answers, eliminated)
+    (false, state)
 }
 
 // ── Trace helpers ──
@@ -481,10 +480,10 @@ pub fn validate_and_repair(
         eprintln!("{}", json!({"t": "solve", "label": "initial"}));
     }
     let t0 = std::time::Instant::now();
-    let (ok, stuck_answers, stuck_elim) = run_hint_engine(fp, stats, trace);
+    let (ok, stuck_state) = run_hint_engine(fp, stats, trace);
     stats.hint_us += us(t0);
     if trace {
-        let answered = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
+        let answered = (0..n).filter(|&i| stuck_state.answers[i].is_some()).count();
         eprintln!(
             "{}",
             json!({"t": "hint", "solved": ok, "answered": answered, "n": n})
@@ -509,13 +508,13 @@ pub fn validate_and_repair(
 
     // Step 3: Repair — tweak distractors and retry
     let repair_t0 = std::time::Instant::now();
-    let solved_before = (0..n).filter(|&i| stuck_answers[i].is_some()).count();
+    let solved_before = (0..n).filter(|&i| stuck_state.answers[i].is_some()).count();
     stats.fail_solve += 1;
     if solved_before == 0 {
         stats.fail_solve_zero_progress += 1;
     }
 
-    let candidates = rank_repair_candidates(fp, &stuck_answers);
+    let candidates = rank_repair_candidates(fp, &stuck_state.answers);
     let mut repaired = false;
     let mut any_changed = false;
 
@@ -524,10 +523,10 @@ pub fn validate_and_repair(
 
         let before_nums: [i16; 5] = fp.option_nums[qi];
         let before_answers: [u8; 5] = fp.option_answers[qi];
-        repair_one_question(fp, qi, solution, &stuck_elim, rng);
+        repair_one_question(fp, qi, solution, &stuck_state.eliminated, rng);
         if fp.option_nums[qi] != before_nums || fp.option_answers[qi] != before_answers {
             any_changed = true;
-            let probe = deduce(fp, &stuck_answers, &stuck_elim);
+            let probe = deduce(fp, &stuck_state);
             if trace {
                 if fp.option_nums[qi] != before_nums {
                     trace_repair(
@@ -558,10 +557,10 @@ pub fn validate_and_repair(
             eprintln!("{}", json!({"t": "solve", "label": "after_repair"}));
         }
         let t0 = std::time::Instant::now();
-        let (ok, _, _) = if solved_before == 0 {
+        let (ok, _) = if solved_before == 0 {
             run_hint_engine(fp, stats, trace)
         } else {
-            run_hint_engine_from(fp, stuck_answers, stuck_elim, stats, trace)
+            run_hint_engine_from(fp, stuck_state, stats, trace)
         };
         stats.hint_us += us(t0);
 
@@ -587,7 +586,7 @@ pub fn validate_and_repair(
         eprintln!("{}", json!({"t": "solve", "label": "final"}));
     }
     let t0 = std::time::Instant::now();
-    let (ok, _, _) = run_hint_engine(fp, stats, trace);
+    let (ok, _) = run_hint_engine(fp, stats, trace);
     stats.hint_us += us(t0);
     if !ok {
         return false;

@@ -78,7 +78,7 @@ for (const test of suite.tests) {
   const n = puzzle.questions.length;
   const { answers, eliminated } = applyState(n, t.state);
 
-  const result = lookahead(fp, answers, eliminated);
+  const result = lookahead(fp, { answers, eliminated });
   const got = result ? `${result.eliminateQi + 1}${"abcde"[result.eliminateOi]}` : null;
 
   if (got === t.expect) {

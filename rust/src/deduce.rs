@@ -245,37 +245,23 @@ pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 
 // ── Main functions ──
 
-pub fn deduce(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-) -> DeduceResults {
-    deduce_impl(fp, answers, eliminated, None, None, false)
+pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
+    deduce_impl(fp, state, None, None, false)
 }
 
-pub fn deduce_fast(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-) -> DeduceResults {
-    deduce_impl(fp, answers, eliminated, None, None, true)
+pub fn deduce_fast(fp: &FlatPuzzle, state: &State) -> DeduceResults {
+    deduce_impl(fp, state, None, None, true)
 }
 
 #[cfg(test)]
-pub fn deduce_with_rule(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    rule: DeduceRule,
-) -> DeduceResults {
-    deduce_impl(fp, answers, eliminated, Some(rule), None, false)
+pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
+    deduce_impl(fp, state, Some(rule), None, false)
 }
 
 #[cfg(test)]
 pub fn deduce_with_rule_exclude(
     fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
+    state: &State,
     rule: DeduceRule,
     exclude: Option<DeduceRule>,
 ) -> DeduceResults {
@@ -284,19 +270,20 @@ pub fn deduce_with_rule_exclude(
     } else {
         Some(rule)
     };
-    deduce_impl(fp, answers, eliminated, rule_filter, exclude, false)
+    deduce_impl(fp, state, rule_filter, exclude, false)
 }
 
+#[inline(always)]
 fn deduce_impl(
     fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
+    state: &State,
     rule: Option<DeduceRule>,
     exclude: Option<DeduceRule>,
     fast: bool,
 ) -> DeduceResults {
     let n = fp.n;
-    let state = State { answers: *answers, eliminated: *eliminated };
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
     let run = |r: DeduceRule| (rule.is_none() || rule == Some(r)) && exclude != Some(r);
     let mut results = DeduceResults::new();
     let mut push = |action: DeduceAction, rule: DeduceRule| {
@@ -2034,12 +2021,7 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let v = crate::check_answer::check_claim(
-                    fp,
-                    state,
-                    OptionPos { qi, oi },
-                    *claim,
-                );
+                let v = crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
                 if v == crate::check_answer::Validity::Invalid {
                     push(
                         DeduceAction::Eliminate { qi, oi },
@@ -2068,15 +2050,10 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let mut hyp = state;
+                let mut hyp = *state;
                 hyp.answers[qi] = Some(LETTERS[oi]);
                 hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
-                let v = crate::check_answer::check_claim(
-                    fp,
-                    hyp,
-                    OptionPos { qi, oi },
-                    *claim,
-                );
+                let v = crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, *claim);
                 if v != crate::check_answer::Validity::Invalid {
                     surviving_count += 1;
                     surviving_oi = Some(oi);
@@ -2103,6 +2080,16 @@ fn deduce_impl(
 mod tests {
     use super::*;
     use serde_json::Value;
+
+    fn slow_test_duration() -> Option<std::time::Duration> {
+        if std::env::var("REFPUZZLE_FAST_TESTS").is_ok() {
+            return Some(std::time::Duration::from_millis(200));
+        }
+        if cfg!(debug_assertions) {
+            panic!("slow test — run with --release or set REFPUZZLE_FAST_TESTS=1");
+        }
+        Some(std::time::Duration::from_secs(5))
+    }
 
     // Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
     fn playground_link(puzzle: &Value, states: &[Value], n: usize) -> String {
@@ -2204,9 +2191,13 @@ mod tests {
                 covered_rules.insert(r.to_str());
             }
 
+            let state = State {
+                answers,
+                eliminated,
+            };
             let drs = match parsed_rule {
-                Some(r) => deduce_with_rule(&fp, &answers, &eliminated, r),
-                None => deduce(&fp, &answers, &eliminated),
+                Some(r) => deduce_with_rule(&fp, &state, r),
+                None => deduce(&fp, &state),
             };
             fn format_result(dr: Option<&DeduceResult>) -> String {
                 match dr {
@@ -2249,13 +2240,7 @@ mod tests {
             // DRY check
             if let Some(r) = parsed_rule {
                 if !drs.is_empty() && got == expected {
-                    let without = deduce_with_rule_exclude(
-                        &fp,
-                        &answers,
-                        &eliminated,
-                        DeduceRule::All,
-                        Some(r),
-                    );
+                    let without = deduce_with_rule_exclude(&fp, &state, DeduceRule::All, Some(r));
                     let without_got = format_result(without.first());
                     if without_got == got {
                         dry_failed += 1;
@@ -2371,14 +2356,10 @@ mod tests {
             }
         }
 
-        assert!(
-            cfg!(not(debug_assertions)),
-            "too slow in debug mode — run `cargo test --release`"
-        );
-
+        let Some(duration) = slow_test_duration() else { return; };
         let mut failures = 0;
         let mut puzzles_tested = 0;
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+        let deadline = std::time::Instant::now() + duration;
 
         for seed in 0u32.. {
             if seed % 100 == 0 && std::time::Instant::now() > deadline {
@@ -2455,7 +2436,13 @@ mod tests {
                     }
                 }
 
-                let drs = deduce(&fp, &answers, &eliminated);
+                let drs = deduce(
+                    &fp,
+                    &State {
+                        answers,
+                        eliminated,
+                    },
+                );
                 for dr in &drs {
                     let bad = match dr.action {
                         DeduceAction::Force { qi, answer } => answer != solution[qi],

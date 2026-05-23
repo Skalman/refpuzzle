@@ -466,17 +466,18 @@ export function checkAnswer(fp: FlatPuzzle, state: State, qi: number): Validity 
     const selectedClaim = claims[ai];
     if (!selectedClaim) return V_INVALID;
 
-    const selectedV = checkClaim(fp, { answers, eliminated }, { qi, oi: ai }, selectedClaim);
+    const selectedV = checkClaim(fp, state, { qi, oi: ai }, selectedClaim);
 
     if (selectedV !== V_VALID) return selectedV;
 
-    // Claim is VALID with this answer. Check if it holds for ALL possible answers (PROVEN)
-    // or only this one (CONSISTENT).
+    // Check if claim holds for ALL possible answers (PROVEN) or only this one (CONSISTENT).
+    // Temporarily substitute each alternative answer to test — restored before returning.
+    const savedAnswer = answers[qi];
     for (let oi = 0; oi < 5; oi++) {
       if (oi === ai) continue;
-      const hypAnswers = answers.slice();
-      hypAnswers[qi] = LETTERS[oi];
-      const v = checkClaim(fp, { answers: hypAnswers, eliminated }, { qi, oi }, selectedClaim);
+      answers[qi] = LETTERS[oi];
+      const v = checkClaim(fp, state, { qi, oi }, selectedClaim);
+      answers[qi] = savedAnswer;
       if (v !== V_VALID) return V_CONSISTENT;
     }
     return V_VALID;

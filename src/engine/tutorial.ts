@@ -76,7 +76,7 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.every((a) => a != null)) break;
 
-    const drs = deduce(fp, answers, eliminated);
+    const drs = deduce(fp, { answers, eliminated });
     if (drs.length === 0) break;
 
     const dr = drs[0];

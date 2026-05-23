@@ -24,31 +24,30 @@ pub struct SolveResult {
 pub fn solve(fp: &FlatPuzzle) -> SolveResult {
     let n = fp.n;
     let pm = phantom_mask(fp.option_count);
-    let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-    let mut eliminated = [pm; MAX_N];
+    let mut state = State { answers: [None; MAX_N], eliminated: [pm; MAX_N] };
     let mut steps = Vec::new();
 
     for _ in 0..n * 30 {
-        if (0..n).all(|i| answers[i].is_some()) {
-            let valid = crate::check_answer::check_answers(fp, &answers);
+        if (0..n).all(|i| state.answers[i].is_some()) {
+            let valid = crate::check_answer::check_answers(fp, &state.answers);
             return SolveResult {
                 solved: valid,
-                answers,
+                answers: state.answers,
                 steps,
             };
         }
 
-        let drs = deduce(fp, &answers, &eliminated);
+        let drs = deduce(fp, &state);
         if !drs.is_empty() {
             for dr in &drs {
-                apply_action(&dr.action, &mut answers, &mut eliminated);
+                apply_action(&dr.action, &mut state);
                 steps.push(SolveStep::Deduce(*dr));
             }
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &answers, &eliminated, usize::MAX, false) {
-            eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+        if let Some(lr) = lookahead(fp, &state, usize::MAX, false) {
+            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             steps.push(SolveStep::Lookahead {
                 eliminate_qi: lr.eliminate_qi,
                 eliminate_oi: lr.eliminate_oi,
@@ -61,10 +60,10 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
         break;
     }
 
-    let solved = (0..n).all(|i| answers[i].is_some());
+    let solved = (0..n).all(|i| state.answers[i].is_some());
     SolveResult {
         solved,
-        answers,
+        answers: state.answers,
         steps,
     }
 }
@@ -110,18 +109,14 @@ pub fn format_steps(steps: &[SolveStep]) -> Vec<String> {
     steps.iter().flat_map(format_step).collect()
 }
 
-fn apply_action(
-    action: &DeduceAction,
-    answers: &mut [Option<Answer>; MAX_N],
-    eliminated: &mut [u8; MAX_N],
-) {
+fn apply_action(action: &DeduceAction, state: &mut State) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-            answers[qi] = Some(answer);
+            state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+            state.answers[qi] = Some(answer);
         }
         DeduceAction::Eliminate { qi, oi } => {
-            eliminated[qi] |= 1 << oi;
+            state.eliminated[qi] |= 1 << oi;
         }
         DeduceAction::EliminateMulti {
             question_mask,
@@ -129,7 +124,7 @@ fn apply_action(
         } => {
             for i in 0..MAX_N {
                 if (question_mask >> i) & 1 == 1 {
-                    eliminated[i] |= option_mask;
+                    state.eliminated[i] |= option_mask;
                 }
             }
         }

@@ -19,12 +19,13 @@ pub struct LookaheadResult {
 
 pub fn lookahead(
     fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
+    state: &State,
     stop_deducing_after_n_results: usize,
     fast: bool,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
     for qi in 0..n {
         if answers[qi].is_some() {
             continue;
@@ -34,7 +35,7 @@ pub fn lookahead(
                 continue;
             }
 
-            let mut hyp = State { answers: *answers, eliminated: *eliminated };
+            let mut hyp = *state;
             hyp.answers[qi] = Some(LETTERS[oi]);
             hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
@@ -42,9 +43,9 @@ pub fn lookahead(
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
                 let drs = if fast {
-                    deduce_fast(fp, &hyp.answers, &hyp.eliminated)
+                    deduce_fast(fp, &hyp)
                 } else {
-                    deduce(fp, &hyp.answers, &hyp.eliminated)
+                    deduce(fp, &hyp)
                 };
                 if drs.is_empty() {
                     break;
@@ -200,7 +201,7 @@ mod tests {
                 }
             }
 
-            let result = lookahead(&fp, &answers, &eliminated, usize::MAX, false);
+            let result = lookahead(&fp, &State { answers, eliminated }, usize::MAX, false);
             let got = match result {
                 Some(r) => format!(
                     "{}{}",

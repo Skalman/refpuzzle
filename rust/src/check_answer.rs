@@ -242,7 +242,6 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
 
 // ── Main function ──
 
-#[inline(always)]
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     let qt = &claim.question_type;
     let value = claim.value;
@@ -728,7 +727,6 @@ fn maybe_consistent(result: Validity, t: &QuestionType, qi: usize) -> Validity {
     }
 }
 
-#[inline(always)]
 pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
     let a = match state.answers[qi] {
         Some(a) => a,

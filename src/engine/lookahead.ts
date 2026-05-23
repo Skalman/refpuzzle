@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, State } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import { deduce, deduceFast } from "./deduce.ts";
 import type { DeduceAction, DeduceResult } from "./deduce.ts";
@@ -13,17 +13,17 @@ export interface LookaheadResult {
   contradictionQi: number;
 }
 
-function hasContradiction(action: DeduceAction, answers: (Answer | null)[]): boolean {
+function hasContradiction(action: DeduceAction, hyp: State): boolean {
   if (action.type === "force") {
-    return answers[action.qi] != null && answers[action.qi] !== action.answer;
+    return hyp.answers[action.qi] != null && hyp.answers[action.qi] !== action.answer;
   }
   if (action.type === "eliminate") {
-    return answers[action.qi] === LETTERS[action.oi];
+    return hyp.answers[action.qi] === LETTERS[action.oi];
   }
   if (action.type === "eliminateMulti") {
-    for (let i = 0; i < answers.length; i++) {
+    for (let i = 0; i < hyp.answers.length; i++) {
       if ((action.questionMask >> i) & 1) {
-        const a = answers[i];
+        const a = hyp.answers[i];
         if (a != null && (action.optionMask >> letterIdx(a)) & 1) return true;
       }
     }
@@ -33,18 +33,18 @@ function hasContradiction(action: DeduceAction, answers: (Answer | null)[]): boo
 
 function tryAssumption(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
+  state: State,
+  hyp: State,
   qi: number,
   oi: number,
   stopDeducingAfterNResults: number,
   fast: boolean,
 ): LookaheadResult | null {
   const n = fp.n;
-  const hyp = {
-    answers: answers.slice(0, n),
-    eliminated: eliminated.slice(0, n),
-  };
+  for (let i = 0; i < n; i++) {
+    hyp.answers[i] = state.answers[i];
+    hyp.eliminated[i] = state.eliminated[i];
+  }
   hyp.answers[qi] = LETTERS[oi];
   hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
@@ -52,16 +52,14 @@ function tryAssumption(
   let contradiction = false;
 
   while (chain.length < stopDeducingAfterNResults) {
-    const drs = fast
-      ? deduceFast(fp, hyp.answers, hyp.eliminated)
-      : deduce(fp, hyp.answers, hyp.eliminated);
+    const drs = fast ? deduceFast(fp, hyp) : deduce(fp, hyp);
     if (drs.length === 0) break;
     for (const dr of drs) {
-      if (hasContradiction(dr.action, hyp.answers)) {
+      if (hasContradiction(dr.action, hyp)) {
         contradiction = true;
         break;
       }
-      applyAction(dr, hyp.answers, hyp.eliminated);
+      applyAction(dr, hyp);
       chain.push(dr);
     }
     if (contradiction) break;
@@ -110,25 +108,17 @@ function tryAssumption(
 
 export function lookahead(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
+  state: State,
   stopDeducingAfterNResults = Infinity,
   fast = false,
 ): LookaheadResult | null {
   const n = fp.n;
+  const hyp: State = { answers: new Array(n), eliminated: new Array(n) };
   for (let qi = 0; qi < n; qi++) {
-    if (answers[qi] != null) continue;
+    if (state.answers[qi] != null) continue;
     for (let oi = 0; oi < 5; oi++) {
-      if ((eliminated[qi] >> oi) & 1) continue;
-      const result = tryAssumption(
-        fp,
-        answers,
-        eliminated,
-        qi,
-        oi,
-        stopDeducingAfterNResults,
-        fast,
-      );
+      if ((state.eliminated[qi] >> oi) & 1) continue;
+      const result = tryAssumption(fp, state, hyp, qi, oi, stopDeducingAfterNResults, fast);
       if (result) return result;
     }
   }
@@ -137,25 +127,17 @@ export function lookahead(
 
 export function lookaheadShortest(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
+  state: State,
   stopDeducingAfterNResults = Infinity,
 ): LookaheadResult | null {
   const n = fp.n;
+  const hyp: State = { answers: new Array(n), eliminated: new Array(n) };
   let best: LookaheadResult | null = null;
   for (let qi = 0; qi < n; qi++) {
-    if (answers[qi] != null) continue;
+    if (state.answers[qi] != null) continue;
     for (let oi = 0; oi < 5; oi++) {
-      if ((eliminated[qi] >> oi) & 1) continue;
-      const result = tryAssumption(
-        fp,
-        answers,
-        eliminated,
-        qi,
-        oi,
-        stopDeducingAfterNResults,
-        false,
-      );
+      if ((state.eliminated[qi] >> oi) & 1) continue;
+      const result = tryAssumption(fp, state, hyp, qi, oi, stopDeducingAfterNResults, false);
       if (result && (best == null || result.chain.length < best.chain.length)) {
         best = result;
         if (best.chain.length === 0) return best;
@@ -165,17 +147,17 @@ export function lookaheadShortest(
   return best;
 }
 
-function applyAction(dr: DeduceResult, answers: (Answer | null)[], eliminated: number[]): void {
+function applyAction(dr: DeduceResult, hyp: State): void {
   const a = dr.action;
   if (a.type === "force") {
     const oi = letterIdx(a.answer);
-    eliminated[a.qi] = 0b11111 ^ (1 << oi);
-    answers[a.qi] = a.answer;
+    hyp.eliminated[a.qi] = 0b11111 ^ (1 << oi);
+    hyp.answers[a.qi] = a.answer;
   } else if (a.type === "eliminateMulti") {
-    for (let i = 0; i < eliminated.length; i++) {
-      if ((a.questionMask >> i) & 1) eliminated[i] |= a.optionMask;
+    for (let i = 0; i < hyp.eliminated.length; i++) {
+      if ((a.questionMask >> i) & 1) hyp.eliminated[i] |= a.optionMask;
     }
   } else {
-    eliminated[a.qi] |= 1 << a.oi;
+    hyp.eliminated[a.qi] |= 1 << a.oi;
   }
 }

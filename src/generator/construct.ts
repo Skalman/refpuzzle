@@ -18,6 +18,7 @@ import type {
   StatementOption,
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
+import type { State } from "../engine/types.ts";
 import { checkAnswers, checkClaimFast } from "../engine/check-answer.ts";
 import { deduce } from "../engine/deduce.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
@@ -526,7 +527,7 @@ function validateAndRepair(
     }
 
     const fp2 = flattenPuzzle(puzzle);
-    const probe = deduce(fp2, stuckState.answers, stuckState.eliminated);
+    const probe = deduce(fp2, stuckState);
     if (tracing) {
       const after = puzzle.questions[qi].options.map((o) => o.value);
       traceRepair(qi, before, after, probe.length);
@@ -536,7 +537,7 @@ function validateAndRepair(
     if (tracing) traceSolve("after_repair");
     const solvedAfterRepair =
       answeredBefore > 0
-        ? runHintEngineFrom(puzzle, n, stuckState.answers, stuckState.eliminated, tracing).solved
+        ? runHintEngineFrom(puzzle, n, stuckState, tracing).solved
         : runHintEngine(puzzle, n, tracing).solved;
     if (solvedAfterRepair) break;
   }
@@ -554,11 +555,10 @@ function validateAndRepair(
 function runHintEngineFrom(
   puzzle: Puzzle,
   n: number,
-  initAnswers: (Answer | null)[],
-  initEliminated: number[],
+  initState: State,
   tracing = false,
 ): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
-  return runHintEngineImpl(puzzle, n, initAnswers.slice(0, n), initEliminated.slice(0, n), tracing);
+  return runHintEngineImpl(puzzle, n, initState.answers.slice(0, n), initState.eliminated.slice(0, n), tracing);
 }
 
 function runHintEngine(
@@ -585,26 +585,27 @@ function runHintEngineImpl(
   tracing: boolean,
 ): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
   const fp = flattenPuzzle(puzzle);
+  const state: State = { answers, eliminated };
   let batch = 0;
   for (let step = 0; step < n * 15; step++) {
-    if (answers.every((a) => a != null)) return { solved: true, answers, eliminated };
-    const drs = deduce(fp, answers, eliminated);
+    if (state.answers.every((a) => a != null)) return { solved: true, answers: state.answers, eliminated: state.eliminated };
+    const drs = deduce(fp, state);
     if (drs.length > 0) {
       if (tracing) traceBatch(batch, drs);
       batch++;
-      for (const dr of drs) applyDeduceAction(dr.action, answers, eliminated);
+      for (const dr of drs) applyDeduceAction(dr.action, state.answers, state.eliminated);
       continue;
     }
-    if (fp.optionCount < 5) return { solved: false, answers, eliminated };
-    const lr = lookahead(fp, answers, eliminated, 6, true);
+    if (fp.optionCount < 5) return { solved: false, answers: state.answers, eliminated: state.eliminated };
+    const lr = lookahead(fp, state, 6, true);
     if (lr) {
       if (tracing) traceLookaheadImpl(lr);
-      eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
+      state.eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       continue;
     }
-    return { solved: false, answers, eliminated };
+    return { solved: false, answers: state.answers, eliminated: state.eliminated };
   }
-  return { solved: false, answers, eliminated };
+  return { solved: false, answers: state.answers, eliminated: state.eliminated };
 }
 
 function rankRepairCandidates(

@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, State } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import { deduce } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
@@ -15,25 +15,27 @@ export interface SolveResult {
 export function solvePuzzle(fp: FlatPuzzle): SolveResult {
   const n = fp.n;
   const phantomMask = 0b11111 & ~((1 << fp.optionCount) - 1);
-  const answers: (Answer | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(phantomMask);
+  const state: State = {
+    answers: new Array(n).fill(null),
+    eliminated: new Array(n).fill(phantomMask),
+  };
   const steps: string[] = [];
 
   for (let iter = 0; iter < n * 30; iter++) {
-    if (answers.slice(0, n).every((a) => a != null)) break;
+    if (state.answers.every((a) => a != null)) break;
 
-    const drs = deduce(fp, answers, eliminated);
+    const drs = deduce(fp, state);
     if (drs.length > 0) {
       for (const dr of drs) {
         collectSteps(dr.action, n, steps);
-        applyAction(dr.action, answers, eliminated);
+        applyAction(dr.action, state);
       }
       continue;
     }
 
-    const lr = lookahead(fp, answers, eliminated);
+    const lr = lookahead(fp, state);
     if (lr) {
-      eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
+      state.eliminated[lr.eliminateQi] |= 1 << lr.eliminateOi;
       steps.push(`${lr.eliminateQi + 1}${LETTERS[lr.eliminateOi].toLowerCase()}`);
       continue;
     }
@@ -41,7 +43,7 @@ export function solvePuzzle(fp: FlatPuzzle): SolveResult {
     break;
   }
 
-  return { answers, eliminated, steps };
+  return { answers: state.answers, eliminated: state.eliminated, steps };
 }
 
 export type SolveOutcome = "solved" | "stuck";
@@ -65,17 +67,17 @@ export function checkPuzzleSolved(
   return true;
 }
 
-function applyAction(action: DeduceAction, answers: (Answer | null)[], eliminated: number[]): void {
+function applyAction(action: DeduceAction, state: State): void {
   if (action.type === "force") {
     const oi = letterIdx(action.answer);
-    eliminated[action.qi] = 0b11111 ^ (1 << oi);
-    answers[action.qi] = action.answer;
+    state.eliminated[action.qi] = 0b11111 ^ (1 << oi);
+    state.answers[action.qi] = action.answer;
   } else if (action.type === "eliminateMulti") {
-    for (let i = 0; i < eliminated.length; i++) {
-      if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
+    for (let i = 0; i < state.eliminated.length; i++) {
+      if ((action.questionMask >> i) & 1) state.eliminated[i] |= action.optionMask;
     }
   } else if (action.type === "eliminate") {
-    eliminated[action.qi] |= 1 << action.oi;
+    state.eliminated[action.qi] |= 1 << action.oi;
   }
 }
 

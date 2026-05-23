@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle } from "./types.ts";
+import type { Answer, FlatPuzzle, State } from "./types.ts";
 import {
   LETTERS,
   VOWELS,
@@ -217,40 +217,31 @@ function res(action: DeduceAction, rule: DeduceRule): DeduceResult {
 
 // ── Main functions ──
 
-export function deduce(
-  fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
-): DeduceResult[] {
-  return deduceImpl(fp, answers, eliminated, null, null, false);
+export function deduce(fp: FlatPuzzle, state: State): DeduceResult[] {
+  return deduceImpl(fp, state, null, null, false);
 }
 
-export function deduceFast(
-  fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
-): DeduceResult[] {
-  return deduceImpl(fp, answers, eliminated, null, null, true);
+export function deduceFast(fp: FlatPuzzle, state: State): DeduceResult[] {
+  return deduceImpl(fp, state, null, null, true);
 }
 
 export function deduceWithRule(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
+  state: State,
   rule: DeduceRule | null,
   exclude: DeduceRule | null = null,
 ): DeduceResult[] {
-  return deduceImpl(fp, answers, eliminated, rule, exclude, false);
+  return deduceImpl(fp, state, rule, exclude, false);
 }
 
 function deduceImpl(
   fp: FlatPuzzle,
-  answers: (Answer | null)[],
-  eliminated: number[],
+  state: State,
   rule: DeduceRule | null,
   exclude: DeduceRule | null,
   fast: boolean,
 ): DeduceResult[] {
+  const { answers, eliminated } = state;
   const n = fp.n;
   const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
   const results: DeduceResult[] = [];
