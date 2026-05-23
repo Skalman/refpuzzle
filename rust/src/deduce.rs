@@ -296,6 +296,7 @@ fn deduce_impl(
     fast: bool,
 ) -> DeduceResults {
     let n = fp.n;
+    let state = State { answers: *answers, eliminated: *eliminated };
     let run = |r: DeduceRule| (rule.is_none() || rule == Some(r)) && exclude != Some(r);
     let mut results = DeduceResults::new();
     let mut push = |action: DeduceAction, rule: DeduceRule| {
@@ -2035,10 +2036,7 @@ fn deduce_impl(
                 };
                 let v = crate::check_answer::check_claim(
                     fp,
-                    State {
-                        answers: *answers,
-                        eliminated: *eliminated,
-                    },
+                    state,
                     OptionPos { qi, oi },
                     *claim,
                 );
@@ -2070,16 +2068,12 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let mut hyp_answers = *answers;
-                let mut hyp_elim = *eliminated;
-                hyp_answers[qi] = Some(LETTERS[oi]);
-                hyp_elim[qi] = 0b11111 ^ (1 << oi);
+                let mut hyp = state;
+                hyp.answers[qi] = Some(LETTERS[oi]);
+                hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
                 let v = crate::check_answer::check_claim(
                     fp,
-                    State {
-                        answers: hyp_answers,
-                        eliminated: hyp_elim,
-                    },
+                    hyp,
                     OptionPos { qi, oi },
                     *claim,
                 );

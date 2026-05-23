@@ -41,25 +41,27 @@ function tryAssumption(
   fast: boolean,
 ): LookaheadResult | null {
   const n = fp.n;
-  const hypAnswers: (Answer | null)[] = answers.slice(0, n);
-  const hypEliminated: number[] = eliminated.slice(0, n);
-  hypAnswers[qi] = LETTERS[oi];
-  hypEliminated[qi] = 0b11111 ^ (1 << oi);
+  const hyp = {
+    answers: answers.slice(0, n),
+    eliminated: eliminated.slice(0, n),
+  };
+  hyp.answers[qi] = LETTERS[oi];
+  hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
   const chain: DeduceResult[] = [];
   let contradiction = false;
 
   while (chain.length < stopDeducingAfterNResults) {
     const drs = fast
-      ? deduceFast(fp, hypAnswers, hypEliminated)
-      : deduce(fp, hypAnswers, hypEliminated);
+      ? deduceFast(fp, hyp.answers, hyp.eliminated)
+      : deduce(fp, hyp.answers, hyp.eliminated);
     if (drs.length === 0) break;
     for (const dr of drs) {
-      if (hasContradiction(dr.action, hypAnswers)) {
+      if (hasContradiction(dr.action, hyp.answers)) {
         contradiction = true;
         break;
       }
-      applyAction(dr, hypAnswers, hypEliminated);
+      applyAction(dr, hyp.answers, hyp.eliminated);
       chain.push(dr);
     }
     if (contradiction) break;
@@ -77,9 +79,9 @@ function tryAssumption(
   }
 
   for (let checkQi = 0; checkQi < n; checkQi++) {
-    if (hypAnswers[checkQi] == null) {
+    if (hyp.answers[checkQi] == null) {
       let rem = 0;
-      for (let b = 0; b < 5; b++) if (((hypEliminated[checkQi] >> b) & 1) === 0) rem++;
+      for (let b = 0; b < 5; b++) if (((hyp.eliminated[checkQi] >> b) & 1) === 0) rem++;
       if (rem === 0) {
         return {
           eliminateQi: qi,
@@ -92,9 +94,7 @@ function tryAssumption(
       }
       continue;
     }
-    if (
-      checkAnswer(fp, { answers: hypAnswers, eliminated: hypEliminated }, checkQi) === "invalid"
-    ) {
+    if (checkAnswer(fp, hyp, checkQi) === "invalid") {
       return {
         eliminateQi: qi,
         eliminateOi: oi,

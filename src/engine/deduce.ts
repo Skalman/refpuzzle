@@ -1521,11 +1521,10 @@ function deduceImpl(
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
-        const hypAnswers = answers.slice();
-        hypAnswers[qi] = LETTERS[oi];
-        const hypElim = eliminated.slice();
-        hypElim[qi] = 0b11111 ^ (1 << oi);
-        const v = checkClaim(fp, { answers: hypAnswers, eliminated: hypElim }, { qi, oi }, claim);
+        const hyp = { answers: answers.slice(), eliminated: eliminated.slice() };
+        hyp.answers[qi] = LETTERS[oi];
+        hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+        const v = checkClaim(fp, hyp, { qi, oi }, claim);
         if (v !== V_INVALID) {
           survivingCount++;
           survivingOi = oi;

@@ -34,28 +34,27 @@ pub fn lookahead(
                 continue;
             }
 
-            let mut hyp_answers = *answers;
-            let mut hyp_eliminated = *eliminated;
-            hyp_answers[qi] = Some(LETTERS[oi]);
-            hyp_eliminated[qi] = 0b11111 ^ (1 << oi);
+            let mut hyp = State { answers: *answers, eliminated: *eliminated };
+            hyp.answers[qi] = Some(LETTERS[oi]);
+            hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
             let mut chain = ArrayVec::new();
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
                 let drs = if fast {
-                    deduce_fast(fp, &hyp_answers, &hyp_eliminated)
+                    deduce_fast(fp, &hyp.answers, &hyp.eliminated)
                 } else {
-                    deduce(fp, &hyp_answers, &hyp_eliminated)
+                    deduce(fp, &hyp.answers, &hyp.eliminated)
                 };
                 if drs.is_empty() {
                     break;
                 }
                 for dr in &drs {
-                    if has_contradiction(&dr.action, &hyp_answers) {
+                    if has_contradiction(&dr.action, &hyp) {
                         contradiction = true;
                         break;
                     }
-                    apply_action(&dr.action, &mut hyp_answers, &mut hyp_eliminated);
+                    apply_action(&dr.action, &mut hyp);
                     if !chain.is_full() {
                         chain.push(*dr);
                     }
@@ -77,8 +76,8 @@ pub fn lookahead(
             }
 
             for check_qi in 0..n {
-                if hyp_answers[check_qi].is_none() {
-                    if (!hyp_eliminated[check_qi] & 0b11111u8).count_ones() == 0 {
+                if hyp.answers[check_qi].is_none() {
+                    if (!hyp.eliminated[check_qi] & 0b11111u8).count_ones() == 0 {
                         return Some(LookaheadResult {
                             eliminate_qi: qi,
                             eliminate_oi: oi,
@@ -90,14 +89,7 @@ pub fn lookahead(
                     }
                     continue;
                 }
-                if check_answer(
-                    fp,
-                    State {
-                        answers: hyp_answers,
-                        eliminated: hyp_eliminated,
-                    },
-                    check_qi,
-                ) == Validity::Invalid
+                if check_answer(fp, hyp, check_qi) == Validity::Invalid
                 {
                     return Some(LookaheadResult {
                         eliminate_qi: qi,
@@ -114,17 +106,19 @@ pub fn lookahead(
     None
 }
 
-fn has_contradiction(action: &DeduceAction, answers: &[Option<Answer>; MAX_N]) -> bool {
+fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
     match *action {
-        DeduceAction::Force { qi, answer } => answers[qi].is_some() && answers[qi] != Some(answer),
-        DeduceAction::Eliminate { qi, oi } => answers[qi] == Some(LETTERS[oi]),
+        DeduceAction::Force { qi, answer } => {
+            hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer)
+        }
+        DeduceAction::Eliminate { qi, oi } => hyp.answers[qi] == Some(LETTERS[oi]),
         DeduceAction::EliminateMulti {
             question_mask,
             option_mask,
         } => {
             for i in 0..MAX_N {
                 if (question_mask >> i) & 1 == 1
-                    && let Some(a) = answers[i]
+                    && let Some(a) = hyp.answers[i]
                     && (option_mask >> a.idx()) & 1 == 1
                 {
                     return true;
@@ -135,18 +129,14 @@ fn has_contradiction(action: &DeduceAction, answers: &[Option<Answer>; MAX_N]) -
     }
 }
 
-fn apply_action(
-    action: &DeduceAction,
-    answers: &mut [Option<Answer>; MAX_N],
-    eliminated: &mut [u8; MAX_N],
-) {
+fn apply_action(action: &DeduceAction, hyp: &mut State) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-            answers[qi] = Some(answer);
+            hyp.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+            hyp.answers[qi] = Some(answer);
         }
         DeduceAction::Eliminate { qi, oi } => {
-            eliminated[qi] |= 1 << oi;
+            hyp.eliminated[qi] |= 1 << oi;
         }
         DeduceAction::EliminateMulti {
             question_mask,
@@ -154,7 +144,7 @@ fn apply_action(
         } => {
             for i in 0..MAX_N {
                 if (question_mask >> i) & 1 == 1 {
-                    eliminated[i] |= option_mask;
+                    hyp.eliminated[i] |= option_mask;
                 }
             }
         }
