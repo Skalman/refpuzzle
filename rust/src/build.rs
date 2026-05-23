@@ -956,6 +956,13 @@ pub fn fill_options(
         let correct_oi = solution[qi].idx();
 
         if qt.has_identity_options() {
+            // Can't place NoOtherHasAnswer when another question already shares this answer.
+            if matches!(qt, QuestionType::NoOtherHasAnswer) {
+                let self_ans = solution[qi];
+                if (0..n).any(|j| j != qi && solution[j] == self_ans) {
+                    return None;
+                }
+            }
             for oi in 0..5 {
                 option_answers[qi][oi] = oi as u8;
             }
@@ -1002,11 +1009,16 @@ pub fn fill_options(
             QuestionType::LeastCommon | QuestionType::MostCommon => {
                 // Find the correct letter (least/most common) and build shuffled options
                 let counts = letter_counts(solution, n);
+                let opt_counts: Vec<i32> = letters.iter().map(|l| counts[l.idx()]).collect();
                 let target_count = if matches!(*qt, QuestionType::LeastCommon) {
-                    *counts.iter().min().unwrap()
+                    *opt_counts.iter().min().unwrap()
                 } else {
-                    *counts.iter().max().unwrap()
+                    *opt_counts.iter().max().unwrap()
                 };
+                // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
+                if opt_counts.iter().filter(|&&c| c == target_count).count() != 1 {
+                    return None;
+                }
                 let correct_letter = LETTERS
                     .iter()
                     .find(|&&l| counts[l.idx()] == target_count)
@@ -1046,10 +1058,36 @@ pub fn fill_options(
                 rng.shuffle(&mut pool[..plen]);
                 place_distractors(&pool, &mut option_nums[qi], correct_oi);
             }
-            QuestionType::ConsecIdent
-            | QuestionType::LetterDist { .. }
-            | QuestionType::OnlyOdd { .. }
-            | QuestionType::OnlyEven { .. } => {
+            QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+                let parity = if matches!(*qt, QuestionType::OnlyOdd { .. }) {
+                    1usize
+                } else {
+                    0usize
+                };
+                // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
+                let matches = (0..n)
+                    .filter(|&i| (i + 1) % 2 == parity && solution[i] == answer)
+                    .count();
+                if matches > 1 {
+                    return None;
+                }
+                option_nums[qi][correct_oi] = correct_val;
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
+            QuestionType::ConsecIdent => {
+                // Can't place ConsecIdent when more than one consecutive identical pair exists.
+                let pairs = (0..n.saturating_sub(1))
+                    .filter(|&i| solution[i] == solution[i + 1])
+                    .count();
+                if pairs > 1 {
+                    return None;
+                }
+                option_nums[qi][correct_oi] = correct_val;
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
+            QuestionType::LetterDist { .. } => {
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
@@ -1060,6 +1098,10 @@ pub fn fill_options(
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::SameAsWhich { question_index } => {
+                // Can't place SameAsWhich when no other question shares the referenced answer.
+                if correct_val == NONE_VAL {
+                    return None;
+                }
                 let ref_ans = solution[question_index as usize];
                 option_nums[qi][correct_oi] = correct_val;
                 let mut pool = [0i16; MAX_N];
@@ -1076,6 +1118,10 @@ pub fn fill_options(
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
             QuestionType::SameAs => {
+                // Can't place SameAs when no other question shares this answer.
+                if correct_val == NONE_VAL {
+                    return None;
+                }
                 option_nums[qi][correct_oi] = correct_val;
                 let self_ans = solution[qi];
                 let mut pool = [0i16; MAX_N];
@@ -1094,11 +1140,30 @@ pub fn fill_options(
                 distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
-            _ => {
+            QuestionType::OnlySame => {
+                // Can't place OnlySame when more than one other question shares this answer.
+                let self_ans = solution[qi];
+                let others = (0..n)
+                    .filter(|&j| j != qi && solution[j] == self_ans)
+                    .count();
+                if others > 1 {
+                    return None;
+                }
                 option_nums[qi][correct_oi] = correct_val;
                 let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
                 place_distractors(&distractors, &mut option_nums[qi], correct_oi);
             }
+            QuestionType::ClosestAfter { .. }
+            | QuestionType::ClosestBefore { .. }
+            | QuestionType::FirstWith { .. }
+            | QuestionType::LastWith { .. }
+            | QuestionType::PrevSame
+            | QuestionType::NextSame => {
+                option_nums[qi][correct_oi] = correct_val;
+                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
+            }
+            _ => unreachable!(),
         }
     }
 

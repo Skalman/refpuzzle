@@ -73,6 +73,7 @@ export function generateConstructive(
       continue;
     }
     const puzzle = fillOptions(cr, rng);
+    if (!puzzle) continue;
     if (tracing) {
       traceAttempt(attempt + 1, cr.solution);
       const oc = cr.oc;
@@ -457,11 +458,13 @@ function tryConstruct(
   return { types: finalRules, solution, n, oc, level: profile.level, name: profile.name };
 }
 
-function fillOptions(cr: ConstructResult, rng: RNG): Puzzle {
-  const questions = cr.types.map<QuestionDef>((questionType, i) => ({
-    options: engineerOptions(questionType, i, cr.solution, cr.n, cr.oc, rng),
-    questionType,
-  }));
+function fillOptions(cr: ConstructResult, rng: RNG): Puzzle | null {
+  const questions: QuestionDef[] = [];
+  for (let i = 0; i < cr.types.length; i++) {
+    const options = engineerOptions(cr.types[i], i, cr.solution, cr.n, cr.oc, rng);
+    if (!options) return null;
+    questions.push({ options, questionType: cr.types[i] });
+  }
   return {
     id: `level-${String(cr.level)}`,
     title: cr.name,
@@ -1112,10 +1115,15 @@ function engineerOptions(
   n: number,
   oc: number,
   rng: RNG,
-): OptionDef[] {
+): OptionDef[] | null {
   const correctOi = L2I[solution[qi]];
 
   if (hasIdentityOptions(rule.type)) {
+    // Can't place NoOtherHasAnswer when another question already shares this answer.
+    if (rule.type === "NoOtherHasAnswer") {
+      const selfAns = solution[qi];
+      if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) return null;
+    }
     return Array.from({ length: oc }, (_, i) => ({ value: i }));
   }
 
@@ -1141,6 +1149,8 @@ function engineerOptions(
       rule.type === "LeastCommon"
         ? Math.min(...counts.slice(0, oc))
         : Math.max(...counts.slice(0, oc));
+    // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
+    if (counts.slice(0, oc).filter((c) => c === target).length !== 1) return null;
     const correctLetter = LETTERS.findIndex((_, i) => i < oc && counts[i] === target);
     const pool = rng.shuffle(letters.filter((_, i) => i !== correctLetter));
     const opts: OptionDef[] = new Array(oc);
@@ -1166,7 +1176,9 @@ function engineerOptions(
   }
 
   if (rule.type === "SameAs") {
+    // Can't place SameAs when no other question shares this answer.
     const correct = computeValue(rule, qi, solution);
+    if (correct === null) return null;
     const pool: number[] = [];
     for (let j = 0; j < n; j++) {
       if (j !== qi && j !== correct && solution[j] !== solution[qi]) pool.push(j);
@@ -1180,7 +1192,9 @@ function engineerOptions(
   }
 
   if (rule.type === "SameAsWhich") {
+    // Can't place SameAsWhich when no other question shares the referenced answer.
     const correct = computeValue(rule, qi, solution);
+    if (correct === null) return null;
     const refAns = solution[rule.questionIndex];
     const pool: number[] = [];
     for (let j = 0; j < n; j++) {
@@ -1194,6 +1208,28 @@ function engineerOptions(
     for (let i = 0; i < oc; i++)
       if (i !== correctOi) opts[i] = { value: distractors[di++] ?? null };
     return opts;
+  }
+
+  if (rule.type === "OnlyOdd" || rule.type === "OnlyEven") {
+    // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
+    const parity = rule.type === "OnlyOdd" ? 1 : 0;
+    const matches = solution
+      .slice(0, n)
+      .filter((a, i) => (i + 1) % 2 === parity && a === rule.answer).length;
+    if (matches > 1) return null;
+  }
+
+  if (rule.type === "OnlySame") {
+    // Can't place OnlySame when more than one other question shares this answer.
+    const others = solution.slice(0, n).filter((a, j) => j !== qi && a === solution[qi]).length;
+    if (others > 1) return null;
+  }
+
+  if (rule.type === "ConsecIdent") {
+    // Can't place ConsecIdent when more than one consecutive identical pair exists.
+    let pairs = 0;
+    for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairs++;
+    if (pairs > 1) return null;
   }
 
   const correct = computeValue(rule, qi, solution);
