@@ -87,14 +87,6 @@ function countAnswered(steps: string[]): number {
 
 
 function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
-  const formErrors = checkForm(puzzle);
-  const formWarnings = formErrors
-    .filter((e) => e.severity === "warning")
-    .map((e) => `Q${e.qi + 1}: ${e.message}`);
-  const formErrs = formErrors
-    .filter((e) => e.severity === "error")
-    .map((e) => `Q${e.qi + 1}: ${e.message}`);
-
   const fp = flattenPuzzle(puzzle);
   const n = fp.n;
   const oc = fp.optionCount;
@@ -106,6 +98,15 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
   const bruteSolutions = solve(puzzle, undefined, 10);
   const bruteCount = bruteSolutions.length;
   const bruteStrs = bruteSolutions.map((sol) => sol.join(""));
+
+  const uniqueSolution = bruteSolutions.length === 1 ? bruteSolutions[0] : undefined;
+  const formErrors = checkForm(puzzle, uniqueSolution);
+  const formWarnings = formErrors
+    .filter((e) => e.severity === "warning")
+    .map((e) => `Q${e.qi + 1}: ${e.message}`);
+  const formErrs = formErrors
+    .filter((e) => e.severity === "error")
+    .map((e) => `Q${e.qi + 1}: ${e.message}`);
 
   const hintBruteMatch =
     solveOk && bruteCount === 1

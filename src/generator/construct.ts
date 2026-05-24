@@ -481,7 +481,7 @@ function validateAndRepair(
   rng: RNG,
   tracing = false,
 ): GenerateResult | null {
-  const formErrors = checkForm(puzzle);
+  const formErrors = checkForm(puzzle, solution);
   if (formErrors.length > 0) {
     if (tracing) {
       for (const e of formErrors) console.error(`FORM ERROR Q${String(e.qi + 1)}: ${e.message}`);

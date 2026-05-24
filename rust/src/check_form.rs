@@ -13,7 +13,7 @@ pub struct FormError {
     pub severity: Severity,
 }
 
-pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
+pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError> {
     let mut errors = Vec::new();
     let n = fp.n;
     let oc = fp.option_count;
@@ -116,6 +116,25 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                         ),
                         severity: Severity::Warning,
                     });
+                }
+            }
+        }
+
+        // NoOtherHasAnswer: every other letter must appear in at least one other question
+        if matches!(qt, QuestionType::NoOtherHasAnswer) {
+            if let Some(sol) = solution {
+                let self_ans = sol[qi];
+                for letter in LETTERS.iter().take(oc) {
+                    if *letter != self_ans && !sol.iter().enumerate().any(|(j, &a)| j != qi && a == *letter) {
+                        errors.push(FormError {
+                            qi,
+                            message: format!(
+                                "NoOtherHasAnswer: letter {} also has no other question with that answer, so the correct option is ambiguous",
+                                letter.as_char()
+                            ),
+                            severity: Severity::Warning,
+                        });
+                    }
                 }
             }
         }

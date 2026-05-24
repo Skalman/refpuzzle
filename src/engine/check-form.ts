@@ -1,4 +1,5 @@
-import type { Puzzle } from "./types.ts";
+import type { Answer, Puzzle } from "./types.ts";
+import { LETTERS } from "./types.ts";
 
 export type Severity = "warning" | "error";
 
@@ -8,7 +9,7 @@ export interface FormError {
   severity: Severity;
 }
 
-export function checkForm(puzzle: Puzzle): FormError[] {
+export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] {
   const errors: FormError[] = [];
   const n = puzzle.questions.length;
   const oc = puzzle.optionCount ?? 5;
@@ -79,6 +80,21 @@ export function checkForm(puzzle: Puzzle): FormError[] {
           errors.push({
             qi,
             message: `EqualCount(${qt.answer}) option ${oi} points to ${qt.answer} (self-referencing)`,
+            severity: "warning",
+          });
+        }
+      }
+    }
+
+    // ── NoOtherHasAnswer: every other letter must appear in at least one other question ──
+    if (qt.type === "NoOtherHasAnswer") {
+      const selfAns = solution[qi];
+      const otherAnswers = solution.filter((_, j) => j !== qi);
+      for (const letter of LETTERS.slice(0, oc)) {
+        if (letter !== selfAns && !otherAnswers.includes(letter)) {
+          errors.push({
+            qi,
+            message: `NoOtherHasAnswer: letter ${letter} also has no other question with that answer, so the correct option is ambiguous`,
             severity: "warning",
           });
         }

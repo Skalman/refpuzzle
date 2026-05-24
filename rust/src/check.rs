@@ -145,7 +145,13 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let n = fp.n;
     let oc = fp.option_count;
 
-    let fe = check_form::check_form(fp);
+    let cr = run_check(fp, key);
+    let answered = count_answered(&cr.steps);
+
+    let solutions = solve_brute::solve(fp, None, 10);
+
+    let unique_solution = if solutions.len() == 1 { Some(solutions[0][..n].as_ref()) } else { None };
+    let fe = check_form::check_form(fp, unique_solution);
     let form_warnings: Vec<String> = fe
         .iter()
         .filter(|e| matches!(e.severity, check_form::Severity::Warning))
@@ -156,11 +162,6 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         .filter(|e| matches!(e.severity, check_form::Severity::Error))
         .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
         .collect();
-
-    let cr = run_check(fp, key);
-    let answered = count_answered(&cr.steps);
-
-    let solutions = solve_brute::solve(fp, None, 10);
     let brute_count = solutions.len();
     let brute_solutions: Vec<String> = solutions
         .iter()
