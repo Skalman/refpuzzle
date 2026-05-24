@@ -90,8 +90,7 @@ pub fn lookahead(
                     }
                     continue;
                 }
-                if check_answer(fp, hyp, check_qi) == Validity::Invalid
-                {
+                if check_answer(fp, hyp, check_qi) == Validity::Invalid {
                     return Some(LookaheadResult {
                         eliminate_qi: qi,
                         eliminate_oi: oi,
@@ -201,7 +200,15 @@ mod tests {
                 }
             }
 
-            let result = lookahead(&fp, &State { answers, eliminated }, usize::MAX, false);
+            let result = lookahead(
+                &fp,
+                &State {
+                    answers,
+                    eliminated,
+                },
+                usize::MAX,
+                false,
+            );
             let got = match result {
                 Some(r) => format!(
                     "{}{}",

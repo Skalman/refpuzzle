@@ -2356,7 +2356,9 @@ mod tests {
             }
         }
 
-        let Some(duration) = slow_test_duration() else { return; };
+        let Some(duration) = slow_test_duration() else {
+            return;
+        };
         let mut failures = 0;
         let mut puzzles_tested = 0;
         let deadline = std::time::Instant::now() + duration;

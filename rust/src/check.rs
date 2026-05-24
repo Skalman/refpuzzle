@@ -150,7 +150,11 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
 
     let solutions = solve_brute::solve(fp, None, 10);
 
-    let unique_solution = if solutions.len() == 1 { Some(solutions[0][..n].as_ref()) } else { None };
+    let unique_solution = if solutions.len() == 1 {
+        Some(solutions[0][..n].as_ref())
+    } else {
+        None
+    };
     let fe = check_form::check_form(fp, unique_solution);
     let form_warnings: Vec<String> = fe
         .iter()
@@ -354,7 +358,11 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
                     Some(n) => n.to_string(),
                     None => "none".into(),
                 };
-                if Some(oi) == answer_oi { format!(" {} ", bold(&green(&s))) } else { s }
+                if Some(oi) == answer_oi {
+                    format!(" {} ", bold(&green(&s)))
+                } else {
+                    s
+                }
             })
             .collect();
         writeln!(
@@ -900,7 +908,10 @@ pub struct CheckResult {
 pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let n = fp.n;
     let pm = build::phantom_mask(fp.option_count);
-    let mut state = State { answers: [None; MAX_N], eliminated: [pm; MAX_N] };
+    let mut state = State {
+        answers: [None; MAX_N],
+        eliminated: [pm; MAX_N],
+    };
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
     let mut action_log: Vec<CheckAction> = Vec::new();
     let mut conflict_reported = false;

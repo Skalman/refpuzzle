@@ -474,6 +474,15 @@ function fillOptions(cr: ConstructResult, rng: RNG): Puzzle | null {
   };
 }
 
+function assertAccepted(puzzle: Puzzle, solution: Answer[], bruteCount: number): void {
+  if (bruteCount !== 1) throw new Error(`BUG: expected 1 solution, got ${String(bruteCount)}`);
+  const formErrors = checkForm(puzzle, solution);
+  if (formErrors.length > 0)
+    throw new Error(
+      `BUG: form errors: ${formErrors.map((e) => `Q${e.qi + 1}: ${e.message}`).join(", ")}`,
+    );
+}
+
 function validateAndRepair(
   puzzle: Puzzle,
   solution: Answer[],
@@ -481,14 +490,6 @@ function validateAndRepair(
   rng: RNG,
   tracing = false,
 ): GenerateResult | null {
-  const formErrors = checkForm(puzzle, solution);
-  if (formErrors.length > 0) {
-    if (tracing) {
-      for (const e of formErrors) console.error(`FORM ERROR Q${String(e.qi + 1)}: ${e.message}`);
-    }
-    return null;
-  }
-
   const fp = flattenPuzzle(puzzle);
   if (!checkAnswers(fp, solution)) return null;
 
@@ -502,8 +503,8 @@ function validateAndRepair(
   if (stuckState.solved) {
     const solutions = solve(puzzle, undefined, 2);
     if (tracing) traceUniqueness(solutions.length);
-    if (solutions.length === 1) return { puzzle, solution: solutions[0] };
-    return null;
+    assertAccepted(puzzle, solution, solutions.length);
+    return { puzzle, solution: solutions[0] };
   }
 
   // Step 3: Repair — tweak candidates cumulatively (no revert, matching Rust)
@@ -547,9 +548,8 @@ function validateAndRepair(
 
   const solutions = solve(puzzle, undefined, 2);
   if (tracing) traceUniqueness(solutions.length);
-  if (solutions.length === 1) return { puzzle, solution: solutions[0] };
-
-  return null;
+  assertAccepted(puzzle, solution, solutions.length);
+  return { puzzle, solution: solutions[0] };
 }
 
 function runHintEngineFrom(
@@ -558,7 +558,13 @@ function runHintEngineFrom(
   initState: State,
   tracing = false,
 ): { solved: boolean; answers: (Answer | null)[]; eliminated: number[] } {
-  return runHintEngineImpl(puzzle, n, initState.answers.slice(0, n), initState.eliminated.slice(0, n), tracing);
+  return runHintEngineImpl(
+    puzzle,
+    n,
+    initState.answers.slice(0, n),
+    initState.eliminated.slice(0, n),
+    tracing,
+  );
 }
 
 function runHintEngine(
@@ -588,7 +594,8 @@ function runHintEngineImpl(
   const state: State = { answers, eliminated };
   let batch = 0;
   for (let step = 0; step < n * 15; step++) {
-    if (state.answers.every((a) => a != null)) return { solved: true, answers: state.answers, eliminated: state.eliminated };
+    if (state.answers.every((a) => a != null))
+      return { solved: true, answers: state.answers, eliminated: state.eliminated };
     const drs = deduce(fp, state);
     if (drs.length > 0) {
       if (tracing) traceBatch(batch, drs);
@@ -596,7 +603,8 @@ function runHintEngineImpl(
       for (const dr of drs) applyDeduceAction(dr.action, state.answers, state.eliminated);
       continue;
     }
-    if (fp.optionCount < 5) return { solved: false, answers: state.answers, eliminated: state.eliminated };
+    if (fp.optionCount < 5)
+      return { solved: false, answers: state.answers, eliminated: state.eliminated };
     const lr = lookahead(fp, state, 6, true);
     if (lr) {
       if (tracing) traceLookaheadImpl(lr);
@@ -1032,6 +1040,11 @@ function solutionCompatible(
       if (n <= oc) return false;
       for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
       return false;
+    }
+    case "NoOtherHasAnswer": {
+      const selfAns = solution[qi];
+      if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) return false;
+      return LETTERS.slice(0, oc).every((l) => l === selfAns || solution.slice(0, n).includes(l));
     }
     case "EqualCount":
       return true;

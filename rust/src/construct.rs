@@ -723,7 +723,12 @@ fn solution_fits_type(
         }
         QuestionTypeKind::SameAs => n > oc && (0..n).any(|i| i != qi && sol[i] == sol[qi]),
         QuestionTypeKind::SameAsWhich => true,
-        QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
+        QuestionTypeKind::NoOtherHasAnswer => {
+            count_letter(sol, sol[qi], n) == 1
+                && LETTERS[..oc]
+                    .iter()
+                    .all(|&l| l == sol[qi] || count_letter(sol, l, n) >= 1)
+        }
         QuestionTypeKind::EqualCount => true,
         _ if is_constrained_type(kind) => solution_satisfies_type_for_kind(kind, qi, sol, n),
         _ => true,

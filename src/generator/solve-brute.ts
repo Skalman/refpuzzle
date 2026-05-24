@@ -1,4 +1,11 @@
-import type { Answer, Puzzle, FlatPuzzle, FlatQuestion, QuestionTypeId, State } from "../engine/types.ts";
+import type {
+  Answer,
+  Puzzle,
+  FlatPuzzle,
+  FlatQuestion,
+  QuestionTypeId,
+  State,
+} from "../engine/types.ts";
 import {
   LETTERS,
   MAX_N,

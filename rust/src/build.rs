@@ -2,6 +2,7 @@ use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
 use crate::check_answer::{check_answer, check_answers, check_claim_fast};
+use crate::check_form;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::lookahead::lookahead;
 use crate::rng::Rng;
@@ -149,13 +150,17 @@ pub fn phantom_mask(option_count: usize) -> u8 {
     (0b11111u8) & !((1u8 << option_count) - 1)
 }
 
-fn run_hint_engine(
-    fp: &FlatPuzzle,
-    stats: &mut Stats,
-    trace: bool,
-) -> (bool, State) {
+fn run_hint_engine(fp: &FlatPuzzle, stats: &mut Stats, trace: bool) -> (bool, State) {
     let pm = phantom_mask(fp.option_count);
-    run_hint_engine_from(fp, State { answers: [None; MAX_N], eliminated: [pm; MAX_N] }, stats, trace)
+    run_hint_engine_from(
+        fp,
+        State {
+            answers: [None; MAX_N],
+            eliminated: [pm; MAX_N],
+        },
+        stats,
+        trace,
+    )
 }
 
 fn run_hint_engine_from(
@@ -438,6 +443,22 @@ fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
     out
 }
 
+fn assert_accepted(fp: &FlatPuzzle, solution: &[Answer; MAX_N], n: usize, brute_count: usize) {
+    assert_eq!(
+        brute_count, 1,
+        "BUG: expected 1 solution, got {brute_count}"
+    );
+    let fe = check_form::check_form(fp, Some(&solution[..n]));
+    assert!(
+        fe.is_empty(),
+        "BUG: form errors: {}",
+        fe.iter()
+            .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+}
+
 pub fn validate_and_repair(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
@@ -499,11 +520,8 @@ pub fn validate_and_repair(
                 json!({"t": "uniqueness", "solutions": solutions.len()})
             );
         }
-        if solutions.len() == 1 {
-            return true;
-        }
-        stats.fail_unique += 1;
-        return false;
+        assert_accepted(fp, solution, n, solutions.len());
+        return true;
     }
 
     // Step 3: Repair — tweak distractors and retry
@@ -600,12 +618,9 @@ pub fn validate_and_repair(
     let solutions = solve(fp, None, 2);
     stats.solve_us += us(t0);
     stats.repair_us += us(t0);
-    if solutions.len() == 1 {
-        stats.repair_ok += 1;
-        return true;
-    }
-
-    false
+    assert_accepted(fp, solution, n, solutions.len());
+    stats.repair_ok += 1;
+    true
 }
 
 // ── Distractor repair ──
