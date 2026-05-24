@@ -65,6 +65,7 @@ export function generateConstructive(
   rng: RNG,
   maxAttempts = 500,
   tracing = false,
+  label = "",
 ): GenerateResult | null {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const cr = tryConstruct(profile, rng, tracing);
@@ -87,7 +88,7 @@ export function generateConstructive(
         traceQuestion(i, formatTypeTag(cr.types[i]), vals, claims);
       }
     }
-    const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing);
+    const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing, label);
     if (result) {
       if (tracing) traceSuccess(attempt + 1);
       return result;
@@ -474,12 +475,18 @@ function fillOptions(cr: ConstructResult, rng: RNG): Puzzle | null {
   };
 }
 
-function assertAccepted(puzzle: Puzzle, solution: Answer[], bruteCount: number): void {
-  if (bruteCount !== 1) throw new Error(`BUG: expected 1 solution, got ${String(bruteCount)}`);
+function assertAccepted(
+  puzzle: Puzzle,
+  solution: Answer[],
+  bruteCount: number,
+  label: string,
+): void {
+  if (bruteCount !== 1)
+    throw new Error(`BUG [${label}]: expected 1 solution, got ${String(bruteCount)}`);
   const formErrors = checkForm(puzzle, solution);
   if (formErrors.length > 0)
     throw new Error(
-      `BUG: form errors: ${formErrors.map((e) => `Q${e.qi + 1}: ${e.message}`).join(", ")}`,
+      `BUG [${label}]: form errors: ${formErrors.map((e) => `Q${e.qi + 1}: ${e.message}`).join(", ")}`,
     );
 }
 
@@ -489,6 +496,7 @@ function validateAndRepair(
   n: number,
   rng: RNG,
   tracing = false,
+  label = "",
 ): GenerateResult | null {
   const fp = flattenPuzzle(puzzle);
   if (!checkAnswers(fp, solution)) return null;
@@ -503,7 +511,7 @@ function validateAndRepair(
   if (stuckState.solved) {
     const solutions = solve(puzzle, undefined, 2);
     if (tracing) traceUniqueness(solutions.length);
-    assertAccepted(puzzle, solution, solutions.length);
+    assertAccepted(puzzle, solution, solutions.length, label);
     return { puzzle, solution: solutions[0] };
   }
 
@@ -548,7 +556,7 @@ function validateAndRepair(
 
   const solutions = solve(puzzle, undefined, 2);
   if (tracing) traceUniqueness(solutions.length);
-  assertAccepted(puzzle, solution, solutions.length);
+  assertAccepted(puzzle, solution, solutions.length, label);
   return { puzzle, solution: solutions[0] };
 }
 

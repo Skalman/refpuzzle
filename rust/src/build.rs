@@ -443,15 +443,21 @@ fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
     out
 }
 
-fn assert_accepted(fp: &FlatPuzzle, solution: &[Answer; MAX_N], n: usize, brute_count: usize) {
+fn assert_accepted(
+    fp: &FlatPuzzle,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    brute_count: usize,
+    label: &str,
+) {
     assert_eq!(
         brute_count, 1,
-        "BUG: expected 1 solution, got {brute_count}"
+        "BUG [{label}]: expected 1 solution, got {brute_count}"
     );
     let fe = check_form::check_form(fp, Some(&solution[..n]));
     assert!(
         fe.is_empty(),
-        "BUG: form errors: {}",
+        "BUG [{label}]: form errors: {}",
         fe.iter()
             .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
             .collect::<Vec<_>>()
@@ -467,6 +473,7 @@ pub fn validate_and_repair(
     rng: &mut Rng,
     stats: &mut Stats,
     trace: bool,
+    label: &str,
 ) -> bool {
     stats.attempts += 1;
 
@@ -520,7 +527,7 @@ pub fn validate_and_repair(
                 json!({"t": "uniqueness", "solutions": solutions.len()})
             );
         }
-        assert_accepted(fp, solution, n, solutions.len());
+        assert_accepted(fp, solution, n, solutions.len(), label);
         return true;
     }
 
@@ -618,7 +625,7 @@ pub fn validate_and_repair(
     let solutions = solve(fp, None, 2);
     stats.solve_us += us(t0);
     stats.repair_us += us(t0);
-    assert_accepted(fp, solution, n, solutions.len());
+    assert_accepted(fp, solution, n, solutions.len(), label);
     stats.repair_ok += 1;
     true
 }

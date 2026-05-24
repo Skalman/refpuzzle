@@ -311,13 +311,15 @@ fn main() {
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), seeds)| {
+            let (mm, dd) = days[day_idx];
+            let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
             let mut result = None;
             let mut stats = build::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
                 if let Some(r) =
-                    construct::generate(profile, &mut rng, max_attempts, &mut stats, trace)
+                    construct::generate(profile, &mut rng, max_attempts, &mut stats, trace, &label)
                 {
                     result = Some(r);
                     break;

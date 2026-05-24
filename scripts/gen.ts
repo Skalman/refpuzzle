@@ -282,7 +282,7 @@ for (const [mm, dd] of days) {
     for (const seed of seeds) {
       totalAttempts++;
       const rng = new RNG(seed);
-      result = generate(profile, rng, maxAttempts, tracing);
+      result = generate(profile, rng, maxAttempts, tracing, `${key}-${level}`);
       if (result) break;
     }
 

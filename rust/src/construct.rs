@@ -114,9 +114,10 @@ pub fn generate(
     max_attempts: usize,
     stats: &mut Stats,
     trace: bool,
+    label: &str,
 ) -> Option<GenerateResult> {
     for attempt in 0..max_attempts {
-        if let Some(r) = try_construct(profile, rng, stats, trace, attempt) {
+        if let Some(r) = try_construct(profile, rng, stats, trace, attempt, label) {
             if trace {
                 eprintln!(
                     "{}",
@@ -303,6 +304,7 @@ fn try_construct(
     stats: &mut Stats,
     trace: bool,
     attempt: usize,
+    label: &str,
 ) -> Option<GenerateResult> {
     let n = profile.question_count;
     let oc = profile.option_count;
@@ -593,6 +595,7 @@ fn try_construct(
         rng,
         stats,
         trace,
+        label,
     ) {
         if trace {
             eprintln!(
