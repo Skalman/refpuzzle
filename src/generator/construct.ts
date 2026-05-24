@@ -73,21 +73,9 @@ export function generateConstructive(
       if (tracing) traceConstructFailed(attempt + 1);
       continue;
     }
-    const puzzle = fillOptions(cr, rng);
+    if (tracing) traceAttempt(attempt + 1, cr.solution, rng);
+    const puzzle = fillOptions(cr, rng, tracing);
     if (!puzzle) continue;
-    if (tracing) {
-      traceAttempt(attempt + 1, cr.solution);
-      const oc = cr.oc;
-      for (let i = 0; i < cr.n; i++) {
-        const opts = puzzle.questions[i].options.slice(0, oc);
-        const vals = opts.map((o) => o.value);
-        const claims =
-          cr.types[i].type === "TrueStmt"
-            ? opts.map((o) => ("claim" in o ? o.claim : null))
-            : undefined;
-        traceQuestion(i, formatTypeTag(cr.types[i]), vals, claims);
-      }
-    }
     const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing, label);
     if (result) {
       if (tracing) traceSuccess(attempt + 1);
@@ -325,7 +313,8 @@ function tryConstruct(
 
   function placeFrom(types: QuestionType["type"][]): boolean {
     if (types.length === 0 || assigned.size >= n) return false;
-    return placeRule(rng.pick(types), assigned.size);
+    const picked = rng.pick(types);
+    return placeRule(picked, assigned.size);
   }
 
   function tracePhase(name: string): void {
@@ -459,11 +448,19 @@ function tryConstruct(
   return { types: finalRules, solution, n, oc, level: profile.level, name: profile.name };
 }
 
-function fillOptions(cr: ConstructResult, rng: RNG): Puzzle | null {
+function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle | null {
   const questions: QuestionDef[] = [];
   for (let i = 0; i < cr.types.length; i++) {
     const options = engineerOptions(cr.types[i], i, cr.solution, cr.n, cr.oc, rng);
     if (!options) return null;
+    if (tracing) {
+      const vals = options.map((o) => o.value);
+      const claims =
+        cr.types[i].type === "TrueStmt"
+          ? options.map((o) => ("claim" in o ? o.claim : null))
+          : undefined;
+      traceQuestion(i, formatTypeTag(cr.types[i]), vals, rng, claims);
+    }
     questions.push({ options, questionType: cr.types[i] });
   }
   return {

@@ -20,6 +20,10 @@ export class RNG {
     return arr[this.int(0, arr.length - 1)];
   }
 
+  state(): number {
+    return this.s >>> 0;
+  }
+
   shuffle<T>(arr: readonly T[]): T[] {
     const a = [...arr];
     for (let i = a.length - 1; i > 0; i--) {

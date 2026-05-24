@@ -1,6 +1,7 @@
 import type { Answer } from "../engine/types.ts";
 import type { DeduceAction } from "../engine/deduce.ts";
 import type { LookaheadResult } from "../engine/lookahead.ts";
+import type { RNG } from "./rng.ts";
 
 function emit(obj: Record<string, unknown>) {
   console.error(JSON.stringify(obj));
@@ -10,17 +11,18 @@ export function traceConstructFailed(attempt: number) {
   emit({ t: "construct_failed", attempt });
 }
 
-export function traceAttempt(attempt: number, solution: Answer[]) {
-  emit({ t: "attempt", attempt, solution: solution.join("") });
+export function traceAttempt(attempt: number, solution: Answer[], rng: RNG) {
+  emit({ t: "attempt", attempt, solution: solution.join(""), rng: rng.state() });
 }
 
 export function traceQuestion(
   qi: number,
   type: string,
   options: (number | null)[],
+  rng: RNG,
   claims?: unknown,
 ) {
-  const obj: Record<string, unknown> = { t: "question", qi, type, options };
+  const obj: Record<string, unknown> = { t: "question", qi, type, options, rng: rng.state() };
   if (claims) obj.claims = claims;
   emit(obj);
 }

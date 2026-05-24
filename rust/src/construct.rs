@@ -21,7 +21,7 @@ fn sort_dedup<T: Ord, const N: usize>(v: &mut ArrayVec<T, N>) {
     }
 }
 
-fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
+pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
     let type_name = match qt {
         QuestionType::CountAnswer { .. } => "CountAnswer",
         QuestionType::CountConsonant => "CountConsonant",
@@ -526,12 +526,21 @@ fn try_construct(
 
     trace_phase("p7", &state);
 
+    if trace {
+        let sol_str: String = solution.iter().take(n).map(|a| a.as_char()).collect();
+        eprintln!(
+            "{}",
+            serde_json::json!({"t": "attempt", "attempt": attempt + 1, "solution": sol_str, "rng": rng.state()})
+        );
+    }
+
     let Some(mut fp) = fill_options(
         &state.question_types,
         &solution,
         n,
         profile.option_count,
         rng,
+        trace,
     ) else {
         if trace {
             eprintln!(
@@ -541,51 +550,6 @@ fn try_construct(
         }
         return None;
     };
-
-    if trace {
-        let sol_str: String = solution.iter().take(n).map(|a| a.as_char()).collect();
-        eprintln!(
-            "{}",
-            serde_json::json!({"t": "attempt", "attempt": attempt + 1, "solution": sol_str})
-        );
-        for qi in 0..n {
-            let vals: Vec<serde_json::Value> = (0..oc)
-                .map(|oi| {
-                    let v = fp.option_nums[qi][oi];
-                    if matches!(state.question_types[qi], QuestionType::TrueStmt) || v == NONE_VAL {
-                        serde_json::Value::Null
-                    } else if v == NAN_VAL {
-                        serde_json::json!(fp.option_answers[qi][oi])
-                    } else {
-                        serde_json::json!(v)
-                    }
-                })
-                .collect();
-            let mut obj = serde_json::json!({
-                "t": "question",
-                "qi": qi,
-                "type": format_type_tag(&state.question_types[qi]),
-                "options": vals
-            });
-            if matches!(state.question_types[qi], QuestionType::TrueStmt) {
-                let claims: Vec<serde_json::Value> = (0..oc)
-                    .map(|oi| match &fp.option_claims[qi][oi] {
-                        Some(c) => {
-                            let mut co = serde_json::json!({
-                                "questionType": format!("{:?}", c.question_type),
-                                "value": c.value,
-                            });
-                            co["questionType"] = format_claim_qt(&c.question_type);
-                            co
-                        }
-                        None => serde_json::Value::Null,
-                    })
-                    .collect();
-                obj["claims"] = serde_json::json!(claims);
-            }
-            eprintln!("{}", obj);
-        }
-    }
 
     if !validate_and_repair(
         &state.question_types,

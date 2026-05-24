@@ -27,6 +27,10 @@ impl Rng {
         arr[self.int(0, arr.len() as i32 - 1) as usize]
     }
 
+    pub fn state(&self) -> u32 {
+        self.s
+    }
+
     pub fn shuffle<T>(&mut self, arr: &mut [T]) {
         for i in (1..arr.len()).rev() {
             let j = self.int(0, i as i32) as usize;
