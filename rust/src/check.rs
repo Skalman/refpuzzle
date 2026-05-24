@@ -337,13 +337,24 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         .map(|q| q.type_tag.len())
         .max()
         .unwrap_or(0);
+    let sol_chars: Vec<char> = if r.brute_count == 1 {
+        r.brute_solutions[0].chars().collect()
+    } else {
+        vec![]
+    };
+
     for (qi, q) in r.questions.iter().enumerate() {
+        let answer_oi = sol_chars.get(qi).map(|&ch| (ch as u8 - b'A') as usize);
         let vals: Vec<String> = q
             .options
             .iter()
-            .map(|v| match v {
-                Some(n) => n.to_string(),
-                None => "null".into(),
+            .enumerate()
+            .map(|(oi, v)| {
+                let s = match v {
+                    Some(n) => n.to_string(),
+                    None => "null".into(),
+                };
+                if Some(oi) == answer_oi { bold(&green(&s)) } else { s }
             })
             .collect();
         writeln!(
