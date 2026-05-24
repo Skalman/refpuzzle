@@ -229,7 +229,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
                                     format::format_type_tag(&c.question_type),
                                     c.value
                                 ),
-                                None => "null".into(),
+                                None => "none".into(),
                             };
                             ClaimInfo { label, text }
                         })
@@ -352,9 +352,9 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
             .map(|(oi, v)| {
                 let s = match v {
                     Some(n) => n.to_string(),
-                    None => "null".into(),
+                    None => "none".into(),
                 };
-                if Some(oi) == answer_oi { bold(&green(&s)) } else { s }
+                if Some(oi) == answer_oi { format!(" {} ", bold(&green(&s))) } else { s }
             })
             .collect();
         writeln!(

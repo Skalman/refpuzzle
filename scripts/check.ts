@@ -7,8 +7,9 @@ import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import { solve } from "../src/generator/solve-brute.ts";
 import { parseCompactYear } from "../src/puzzles/daily.ts";
 import { checkForm } from "../src/engine/check-form.ts";
-import { readFileSync } from "node:fs";
-import { basename } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 
 const LETTERS = "ABCDE";
 
@@ -180,39 +181,24 @@ const output: CheckOutput = {
   puzzles,
 };
 
+const json = JSON.stringify(output);
+
 if (jsonOutput) {
-  process.stdout.write(JSON.stringify(output));
+  process.stdout.write(json);
 } else {
-  // Legacy text output for direct use
-  let total = 0;
-  let solved = 0;
-  const failures: string[] = [];
+  const binary = [
+    resolve(import.meta.dirname, "../target/release/refpuzzle"),
+    resolve(import.meta.dirname, "../target/debug/refpuzzle"),
+  ].find(existsSync);
 
-  for (const r of puzzles) {
-    total++;
-    if (r.solve_ok && r.brute_count === 1 && r.hint_brute_match && r.validity_ok) {
-      solved++;
-    } else {
-      const mm = r.key.slice(0, 2);
-      const dd = r.key.slice(2, 4);
-      const lvl = r.key.split("-")[1];
-      failures.push(
-        `${r.key}: ${r.solve_answered}/${r.n} — http://localhost:5173/${year}-${mm}-${dd}/${lvl}?debug`,
-      );
-    }
-  }
-
-  if (!target) {
-    console.error(`${solved}/${total} solved`);
-    for (const f of failures) console.error(`  FAIL: ${f}`);
-  } else if (puzzles.length === 1) {
-    const r = puzzles[0];
-    const status = r.solve_ok ? "solved" : r.solve_answered === r.n ? "INVALID" : "STUCK";
-    console.error(`Hint engine: ${status} ${r.solve_answered}/${r.n} answered`);
-    console.error(`  ${r.solve_steps.join(".")}`);
-    console.error(`Brute-force: ${r.brute_count} solution(s)`);
-    for (let i = 0; i < r.brute_solutions.length; i++) {
-      console.error(`  #${i + 1}: ${r.brute_solutions[i]}`);
-    }
+  if (binary) {
+    const result = spawnSync(binary, ["format-check"], {
+      input: json,
+      stdio: ["pipe", "inherit", "inherit"],
+    });
+    if (result.status != null) process.exit(result.status);
+  } else {
+    console.error("Warning: Rust binary not built (run `cargo build --release`). Outputting JSON.");
+    process.stdout.write(json);
   }
 }
