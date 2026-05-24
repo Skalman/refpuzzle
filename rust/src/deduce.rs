@@ -1149,15 +1149,13 @@ fn deduce_impl(
                                 DeduceRule::LastClosestBeforeRuledOut,
                             );
                         }
-                        if run(DeduceRule::LastClosestBeforeLaterMatch) {
-                            for j in ((pos + 1)..before_idx).rev() {
-                                if answers[j] == Some(answer) {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::LastClosestBeforeLaterMatch,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::LastClosestBeforeLaterMatch)
+                            && ((pos + 1)..before_idx).rev().any(|j| answers[j] == Some(answer))
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeLaterMatch,
+                            );
                         }
                         if run(DeduceRule::LastClosestBeforeSelfRef)
                             && LETTERS[oi] == answer
@@ -1211,15 +1209,13 @@ fn deduce_impl(
                                 DeduceRule::LastClosestBeforeRuledOut,
                             );
                         }
-                        if run(DeduceRule::LastClosestBeforeLaterMatch) {
-                            for j in ((pos + 1)..before_idx).rev() {
-                                if answers[j] == Some(answer) {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::LastClosestBeforeLaterMatch,
-                                    );
-                                }
-                            }
+                        if run(DeduceRule::LastClosestBeforeLaterMatch)
+                            && ((pos + 1)..before_idx).rev().any(|j| answers[j] == Some(answer))
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::LastClosestBeforeLaterMatch,
+                            );
                         }
                         if run(DeduceRule::LastClosestBeforeSelfRef)
                             && LETTERS[oi] == answer
@@ -2379,7 +2375,7 @@ mod tests {
             }
 
             let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed))
+                fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed), false)
             }));
             let Ok(Some(fp)) = fp else { continue };
 

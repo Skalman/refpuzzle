@@ -857,6 +857,7 @@ function deduceImpl(
             for (let j = scanStart; j < n; j++) {
               if (answers[j] === q.answer) {
                 results.push(res({ type: "eliminate", qi, oi }, "FirstClosestAfterNoneMatch"));
+                break;
               }
             }
           }
@@ -886,6 +887,7 @@ function deduceImpl(
               for (let j = beforeIdx - 1; j > v; j--) {
                 if (answers[j] === q.answer) {
                   results.push(res({ type: "eliminate", qi, oi }, "LastClosestBeforeLaterMatch"));
+                  break;
                 }
               }
             }
@@ -900,6 +902,7 @@ function deduceImpl(
             for (let j = 0; j < beforeIdx; j++) {
               if (answers[j] === q.answer) {
                 results.push(res({ type: "eliminate", qi, oi }, "LastClosestBeforeNoneMatch"));
+                break;
               }
             }
           }
@@ -931,6 +934,7 @@ function deduceImpl(
             for (let i = 0; i < n; i++) {
               if ((i + 1) % 2 === parity && answers[i] === q.answer) {
                 results.push(res({ type: "eliminate", qi, oi }, "OnlyOddEvenNoneMatch"));
+                break;
               }
             }
           }
@@ -1040,6 +1044,7 @@ function deduceImpl(
             for (let j = qi - 1; j > v; j--) {
               if (answers[j] === LETTERS[oi]) {
                 results.push(res({ type: "eliminate", qi, oi }, "PrevSameCloser"));
+                break;
               }
             }
           }
@@ -1072,6 +1077,7 @@ function deduceImpl(
             for (let j = qi + 1; j < v; j++) {
               if (answers[j] === LETTERS[oi]) {
                 results.push(res({ type: "eliminate", qi, oi }, "NextSameCloser"));
+                break;
               }
             }
           }
