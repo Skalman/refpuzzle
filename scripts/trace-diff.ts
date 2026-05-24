@@ -18,7 +18,7 @@ if (!dateRange || !level) {
   process.exit(1);
 }
 
-const tsCmd = `pnpm --silent generate ${dateRange} -l ${level} --trace -o /dev/null`;
+const tsCmd = `pnpm --silent gen ${dateRange} -l ${level} --trace -o /dev/null`;
 const rsCmd = `cargo run --release -- gen ${dateRange} -l ${level} --trace -o /dev/null`;
 
 function run(cmd: string): string[] {
@@ -41,11 +41,7 @@ interface Action {
   rule: string;
 }
 
-function applyActions(
-  actions: Action[],
-  answers: (string | null)[],
-  eliminated: number[],
-) {
+function applyActions(actions: Action[], answers: (string | null)[], eliminated: number[]) {
   for (const a of actions) {
     if (a.answer != null) {
       const oi = "ABCDE".indexOf(a.answer);
@@ -133,15 +129,17 @@ console.log(JSON.stringify({ puzzle, state }));
 if (i < tsLines.length) {
   console.log("\n--- TypeScript ---");
   for (let j = i; j < Math.min(i + 15, tsLines.length); j++) console.log(tsLines[j]);
-  if (tsLines.length > i + 15)
+  if (tsLines.length > i + 15) {
     console.log(`... (${String(tsLines.length - i - 15)} more lines)`);
+  }
 }
 
 if (i < rsLines.length) {
   console.log("\n--- Rust ---");
   for (let j = i; j < Math.min(i + 15, rsLines.length); j++) console.log(rsLines[j]);
-  if (rsLines.length > i + 15)
+  if (rsLines.length > i + 15) {
     console.log(`... (${String(rsLines.length - i - 15)} more lines)`);
+  }
 }
 
 process.exit(1);

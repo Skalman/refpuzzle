@@ -3,7 +3,9 @@ use serde_json::{Value, json};
 
 use crate::check_answer::{check_answer, check_answers, check_claim_fast};
 use crate::check_form;
+use crate::construct::format_claim_qt;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
+use crate::format::format_type_tag;
 use crate::lookahead::lookahead;
 use crate::rng::Rng;
 use crate::solve_brute::solve;
@@ -625,6 +627,12 @@ pub fn validate_and_repair(
     let solutions = solve(fp, None, 2);
     stats.solve_us += us(t0);
     stats.repair_us += us(t0);
+    if trace {
+        eprintln!(
+            "{}",
+            json!({"t": "uniqueness", "solutions": solutions.len()})
+        );
+    }
     assert_accepted(fp, solution, n, solutions.len(), label);
     stats.repair_ok += 1;
     true
@@ -962,12 +970,231 @@ pub fn repair_one_question(
 
 // ── Build FlatPuzzle with options ──
 
+fn fill_one_question(
+    qt: &QuestionType,
+    qi: usize,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    option_count: usize,
+    rng: &mut Rng,
+    nums: &mut [i16; 5],
+    answers: &mut [u8; 5],
+    claims: &mut [Option<Claim>; 5],
+) -> bool {
+    let correct_oi = solution[qi].idx();
+
+    if qt.has_identity_options() {
+        // Can't place NoOtherHasAnswer when another question already shares this answer.
+        if matches!(qt, QuestionType::NoOtherHasAnswer) {
+            let self_ans = solution[qi];
+            if (0..n).any(|j| j != qi && solution[j] == self_ans) {
+                return false;
+            }
+        }
+        for oi in 0..5 {
+            answers[oi] = oi as u8;
+        }
+        return true;
+    }
+
+    if matches!(qt, QuestionType::TrueStmt) {
+        build_claims(qi, solution, n, rng, claims, nums, option_count);
+        return true;
+    }
+
+    let correct_val = correct_option_value(qt, qi, solution, n);
+    let val_pool = valid_values(qt, n);
+    let letters = &LETTERS[..option_count];
+
+    match *qt {
+        QuestionType::AnswerOf { question_index } => {
+            answers[correct_oi] = solution[question_index as usize] as u8;
+            let correct_answer = solution[question_index as usize];
+            let mut pool = [Answer::A; 4];
+            let mut plen = 0;
+            for &l in letters {
+                if l != correct_answer {
+                    pool[plen] = l;
+                    plen += 1;
+                }
+            }
+            rng.shuffle(&mut pool[..plen]);
+            let mut di = 0;
+            for oi in 0..5 {
+                if oi != correct_oi {
+                    answers[oi] = pool[di] as u8;
+                    di += 1;
+                }
+            }
+        }
+        QuestionType::LeastCommon | QuestionType::MostCommon => {
+            let counts = letter_counts(solution, n);
+            let opt_counts: Vec<i32> = letters.iter().map(|l| counts[l.idx()]).collect();
+            let target_count = if matches!(*qt, QuestionType::LeastCommon) {
+                *opt_counts.iter().min().unwrap()
+            } else {
+                *opt_counts.iter().max().unwrap()
+            };
+            // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
+            if opt_counts.iter().filter(|&&c| c == target_count).count() != 1 {
+                return false;
+            }
+            let correct_letter = LETTERS
+                .iter()
+                .find(|&&l| counts[l.idx()] == target_count)
+                .unwrap();
+            answers[correct_oi] = *correct_letter as u8;
+            let mut pool = [Answer::A; 4];
+            let mut plen = 0;
+            for &l in letters {
+                if l != *correct_letter {
+                    pool[plen] = l;
+                    plen += 1;
+                }
+            }
+            rng.shuffle(&mut pool[..plen]);
+            let mut di = 0;
+            for oi in 0..5 {
+                if oi != correct_oi {
+                    answers[oi] = pool[di] as u8;
+                    di += 1;
+                }
+            }
+        }
+        QuestionType::EqualCount { answer } => {
+            nums[correct_oi] = correct_val;
+            let mut pool = [0i16; 4];
+            let mut plen = 0;
+            for &l in letters {
+                if l != answer && l.idx() as i16 != correct_val {
+                    pool[plen] = l.idx() as i16;
+                    plen += 1;
+                }
+            }
+            if correct_val != NONE_VAL {
+                pool[plen] = NONE_VAL;
+                plen += 1;
+            }
+            rng.shuffle(&mut pool[..plen]);
+            place_distractors(&pool, nums, correct_oi);
+        }
+        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+            let parity = if matches!(*qt, QuestionType::OnlyOdd { .. }) {
+                1usize
+            } else {
+                0usize
+            };
+            // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
+            let matches = (0..n)
+                .filter(|&i| (i + 1) % 2 == parity && solution[i] == answer)
+                .count();
+            if matches > 1 {
+                return false;
+            }
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::ConsecIdent => {
+            // Can't place ConsecIdent when more than one consecutive identical pair exists.
+            let pairs = (0..n.saturating_sub(1))
+                .filter(|&i| solution[i] == solution[i + 1])
+                .count();
+            if pairs > 1 {
+                return false;
+            }
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::LetterDist { .. } => {
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        _ if is_counting_type(qt) => {
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::SameAsWhich { question_index } => {
+            // Can't place SameAsWhich when no other question shares the referenced answer.
+            if correct_val == NONE_VAL {
+                return false;
+            }
+            let ref_ans = solution[question_index as usize];
+            nums[correct_oi] = correct_val;
+            let mut pool = [0i16; MAX_N];
+            let mut plen = 0;
+            for j in 0..n {
+                if j != qi && j != question_index as usize && solution[j] != ref_ans {
+                    pool[plen] = j as i16;
+                    plen += 1;
+                }
+            }
+            rng.shuffle(&mut pool[..plen]);
+            let mut distractors = [0i16; 4];
+            distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::SameAs => {
+            // Can't place SameAs when no other question shares this answer.
+            if correct_val == NONE_VAL {
+                return false;
+            }
+            nums[correct_oi] = correct_val;
+            let self_ans = solution[qi];
+            let mut pool = [0i16; MAX_N];
+            let mut plen = 0;
+            for j in 0..n {
+                if j != qi && j as i16 != correct_val && solution[j] != self_ans {
+                    pool[plen] = j as i16;
+                    plen += 1;
+                }
+            }
+            if plen < option_count - 1 {
+                return false;
+            }
+            rng.shuffle(&mut pool[..plen]);
+            let mut distractors = [0i16; 4];
+            distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::OnlySame => {
+            // Can't place OnlySame when more than one other question shares this answer.
+            let self_ans = solution[qi];
+            let others = (0..n)
+                .filter(|&j| j != qi && solution[j] == self_ans)
+                .count();
+            if others > 1 {
+                return false;
+            }
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        QuestionType::ClosestAfter { .. }
+        | QuestionType::ClosestBefore { .. }
+        | QuestionType::FirstWith { .. }
+        | QuestionType::LastWith { .. }
+        | QuestionType::PrevSame
+        | QuestionType::NextSame => {
+            nums[correct_oi] = correct_val;
+            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
+            place_distractors(&distractors, nums, correct_oi);
+        }
+        _ => unreachable!(),
+    }
+    true
+}
+
 pub fn fill_options(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
     n: usize,
     option_count: usize,
     rng: &mut Rng,
+    trace: bool,
 ) -> Option<FlatPuzzle> {
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
     let mut option_answers = [[0xFFu8; 5]; MAX_N];
@@ -975,218 +1202,54 @@ pub fn fill_options(
 
     for qi in 0..n {
         let qt = &question_types[qi];
-        let correct_oi = solution[qi].idx();
-
-        if qt.has_identity_options() {
-            // Can't place NoOtherHasAnswer when another question already shares this answer.
-            if matches!(qt, QuestionType::NoOtherHasAnswer) {
-                let self_ans = solution[qi];
-                if (0..n).any(|j| j != qi && solution[j] == self_ans) {
-                    return None;
-                }
-            }
-            for oi in 0..5 {
-                option_answers[qi][oi] = oi as u8;
-            }
-            continue;
+        if !fill_one_question(
+            qt,
+            qi,
+            solution,
+            n,
+            option_count,
+            rng,
+            &mut option_nums[qi],
+            &mut option_answers[qi],
+            &mut option_claims[qi],
+        ) {
+            return None;
         }
 
-        if matches!(qt, QuestionType::TrueStmt) {
-            build_claims(
-                qi,
-                solution,
-                n,
-                rng,
-                &mut option_claims[qi],
-                &mut option_nums[qi],
-                option_count,
-            );
-            continue;
-        }
-
-        let correct_val = correct_option_value(qt, qi, solution, n);
-        let val_pool = valid_values(qt, n);
-        let letters = &LETTERS[..option_count];
-
-        match *qt {
-            QuestionType::AnswerOf { question_index } => {
-                option_answers[qi][correct_oi] = solution[question_index as usize] as u8;
-                let correct_answer = solution[question_index as usize];
-                let mut pool = [Answer::A; 4];
-                let mut plen = 0;
-                for &l in letters {
-                    if l != correct_answer {
-                        pool[plen] = l;
-                        plen += 1;
+        if trace {
+            let vals: Vec<Value> = (0..option_count)
+                .map(|oi| {
+                    let v = option_nums[qi][oi];
+                    if matches!(qt, QuestionType::TrueStmt) || v == NONE_VAL {
+                        Value::Null
+                    } else if v == NAN_VAL {
+                        json!(option_answers[qi][oi])
+                    } else {
+                        json!(v)
                     }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_answers[qi][oi] = pool[di] as u8;
-                        di += 1;
-                    }
-                }
+                })
+                .collect();
+            let mut obj = json!({
+                "t": "question",
+                "qi": qi,
+                "type": format_type_tag(qt),
+                "options": vals,
+                "rng": rng.state(),
+            });
+            if matches!(qt, QuestionType::TrueStmt) {
+                let claims: Vec<Value> = (0..option_count)
+                    .map(|oi| match &option_claims[qi][oi] {
+                        Some(c) => {
+                            let mut co = json!({"questionType": "", "value": c.value});
+                            co["questionType"] = format_claim_qt(&c.question_type);
+                            co
+                        }
+                        None => Value::Null,
+                    })
+                    .collect();
+                obj["claims"] = json!(claims);
             }
-            QuestionType::LeastCommon | QuestionType::MostCommon => {
-                // Find the correct letter (least/most common) and build shuffled options
-                let counts = letter_counts(solution, n);
-                let opt_counts: Vec<i32> = letters.iter().map(|l| counts[l.idx()]).collect();
-                let target_count = if matches!(*qt, QuestionType::LeastCommon) {
-                    *opt_counts.iter().min().unwrap()
-                } else {
-                    *opt_counts.iter().max().unwrap()
-                };
-                // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
-                if opt_counts.iter().filter(|&&c| c == target_count).count() != 1 {
-                    return None;
-                }
-                let correct_letter = LETTERS
-                    .iter()
-                    .find(|&&l| counts[l.idx()] == target_count)
-                    .unwrap();
-                option_answers[qi][correct_oi] = *correct_letter as u8;
-                let mut pool = [Answer::A; 4];
-                let mut plen = 0;
-                for &l in letters {
-                    if l != *correct_letter {
-                        pool[plen] = l;
-                        plen += 1;
-                    }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut di = 0;
-                for oi in 0..5 {
-                    if oi != correct_oi {
-                        option_answers[qi][oi] = pool[di] as u8;
-                        di += 1;
-                    }
-                }
-            }
-            QuestionType::EqualCount { answer } => {
-                option_nums[qi][correct_oi] = correct_val;
-                let mut pool = [0i16; 4];
-                let mut plen = 0;
-                for &l in letters {
-                    if l != answer && l.idx() as i16 != correct_val {
-                        pool[plen] = l.idx() as i16;
-                        plen += 1;
-                    }
-                }
-                if correct_val != NONE_VAL {
-                    pool[plen] = NONE_VAL;
-                    plen += 1;
-                }
-                rng.shuffle(&mut pool[..plen]);
-                place_distractors(&pool, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-                let parity = if matches!(*qt, QuestionType::OnlyOdd { .. }) {
-                    1usize
-                } else {
-                    0usize
-                };
-                // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
-                let matches = (0..n)
-                    .filter(|&i| (i + 1) % 2 == parity && solution[i] == answer)
-                    .count();
-                if matches > 1 {
-                    return None;
-                }
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::ConsecIdent => {
-                // Can't place ConsecIdent when more than one consecutive identical pair exists.
-                let pairs = (0..n.saturating_sub(1))
-                    .filter(|&i| solution[i] == solution[i + 1])
-                    .count();
-                if pairs > 1 {
-                    return None;
-                }
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::LetterDist { .. } => {
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            _ if is_counting_type(qt) => {
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::SameAsWhich { question_index } => {
-                // Can't place SameAsWhich when no other question shares the referenced answer.
-                if correct_val == NONE_VAL {
-                    return None;
-                }
-                let ref_ans = solution[question_index as usize];
-                option_nums[qi][correct_oi] = correct_val;
-                let mut pool = [0i16; MAX_N];
-                let mut plen = 0;
-                for j in 0..n {
-                    if j != qi && j != question_index as usize && solution[j] != ref_ans {
-                        pool[plen] = j as i16;
-                        plen += 1;
-                    }
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut distractors = [0i16; 4];
-                distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::SameAs => {
-                // Can't place SameAs when no other question shares this answer.
-                if correct_val == NONE_VAL {
-                    return None;
-                }
-                option_nums[qi][correct_oi] = correct_val;
-                let self_ans = solution[qi];
-                let mut pool = [0i16; MAX_N];
-                let mut plen = 0;
-                for j in 0..n {
-                    if j != qi && j as i16 != correct_val && solution[j] != self_ans {
-                        pool[plen] = j as i16;
-                        plen += 1;
-                    }
-                }
-                if plen < option_count - 1 {
-                    return None;
-                }
-                rng.shuffle(&mut pool[..plen]);
-                let mut distractors = [0i16; 4];
-                distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::OnlySame => {
-                // Can't place OnlySame when more than one other question shares this answer.
-                let self_ans = solution[qi];
-                let others = (0..n)
-                    .filter(|&j| j != qi && solution[j] == self_ans)
-                    .count();
-                if others > 1 {
-                    return None;
-                }
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            QuestionType::ClosestAfter { .. }
-            | QuestionType::ClosestBefore { .. }
-            | QuestionType::FirstWith { .. }
-            | QuestionType::LastWith { .. }
-            | QuestionType::PrevSame
-            | QuestionType::NextSame => {
-                option_nums[qi][correct_oi] = correct_val;
-                let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-                place_distractors(&distractors, &mut option_nums[qi], correct_oi);
-            }
-            _ => unreachable!(),
+            eprintln!("{}", obj);
         }
     }
 
