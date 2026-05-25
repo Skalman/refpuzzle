@@ -1150,7 +1150,9 @@ fn deduce_impl(
                             );
                         }
                         if run(DeduceRule::LastClosestBeforeLaterMatch)
-                            && ((pos + 1)..before_idx).rev().any(|j| answers[j] == Some(answer))
+                            && ((pos + 1)..before_idx)
+                                .rev()
+                                .any(|j| answers[j] == Some(answer))
                         {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
@@ -1210,7 +1212,9 @@ fn deduce_impl(
                             );
                         }
                         if run(DeduceRule::LastClosestBeforeLaterMatch)
-                            && ((pos + 1)..before_idx).rev().any(|j| answers[j] == Some(answer))
+                            && ((pos + 1)..before_idx)
+                                .rev()
+                                .any(|j| answers[j] == Some(answer))
                         {
                             push(
                                 DeduceAction::Eliminate { qi, oi },

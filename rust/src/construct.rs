@@ -130,6 +130,49 @@ pub fn generate(
     None
 }
 
+pub fn flat_construct(
+    n: usize,
+    oc: usize,
+    rng: &mut Rng,
+) -> Option<([QuestionType; MAX_N], [Answer; MAX_N])> {
+    let letters = &LETTERS[..oc];
+    let solution: [Answer; MAX_N] =
+        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
+
+    let mut types = [QuestionType::AnswerIsSelf; MAX_N];
+    let mut assigned: u16 = 0;
+
+    let all_kinds = QuestionTypeKind::all_flat();
+    let mut kinds: [QuestionTypeKind; 26] = all_kinds.try_into().unwrap();
+
+    for qi in 0..n {
+        rng.shuffle(&mut kinds);
+        let mut placed = false;
+        for &kind in &kinds {
+            if !solution_fits_type(kind, qi, &solution, n, oc) {
+                continue;
+            }
+            for _ in 0..10 {
+                if let Some(qt) = random_type_params(kind, qi, n, oc, &solution, assigned, rng)
+                    && crate::build::solution_satisfies_type(&qt, qi, &solution, n)
+                {
+                    types[qi] = qt;
+                    assigned |= 1 << qi;
+                    placed = true;
+                    break;
+                }
+            }
+            if placed {
+                break;
+            }
+        }
+        if !placed {
+            return None;
+        }
+    }
+    Some((types, solution))
+}
+
 // ── QuestionType type categories ──
 
 const COUNTING_TYPES: &[QuestionTypeKind] = &[
@@ -670,7 +713,7 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
 }
 
 /// Checks whether the solution has the properties needed for this type at this position.
-fn solution_fits_type(
+pub(crate) fn solution_fits_type(
     kind: QuestionTypeKind,
     qi: usize,
     sol: &[Answer; MAX_N],
@@ -748,7 +791,7 @@ fn solution_satisfies_type_for_kind(
     }
 }
 
-fn random_type_params(
+pub(crate) fn random_type_params(
     kind: QuestionTypeKind,
     qi: usize,
     n: usize,
@@ -877,7 +920,12 @@ fn random_type_params(
             Some(QuestionType::EqualCount { answer: ref_letter })
         }
         QuestionTypeKind::AnswerIsSelf => Some(QuestionType::AnswerIsSelf),
-        QuestionTypeKind::TrueStmt => Some(QuestionType::TrueStmt),
+        QuestionTypeKind::TrueStmt => {
+            if option_count < 5 {
+                return None;
+            }
+            Some(QuestionType::TrueStmt)
+        }
         QuestionTypeKind::SameAsWhich => {
             let mut pool = [0u8; MAX_N];
             let mut plen = 0;

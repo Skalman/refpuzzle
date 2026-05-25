@@ -14,6 +14,7 @@ mod serialize;
 mod solve_brute;
 #[allow(dead_code)]
 mod solve_deduce;
+mod type_stats;
 mod types;
 
 use build::GenerateResult;
@@ -127,6 +128,7 @@ fn print_help() {
     eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
+    eprintln!("       refpuzzle type-stats [--attempts N] [--seed S]");
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -o FILE       output file (required, - for stdout)");
@@ -185,9 +187,33 @@ fn main() {
             check::format_check_stdin();
             return;
         }
+        "type-stats" => {
+            let mut attempts: u32 = 10000;
+            let mut seed: u32 = 1;
+            let mut i = 2;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--attempts" | "-a" => {
+                        i += 1;
+                        attempts = args[i].parse().expect("invalid attempts");
+                    }
+                    "--seed" => {
+                        i += 1;
+                        seed = args[i].parse().expect("invalid seed");
+                    }
+                    other => {
+                        eprintln!("Unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            type_stats::type_stats(attempts, seed);
+            return;
+        }
         _ => {
             eprintln!(
-                "Unknown subcommand: {}. Use 'gen', 'check', or 'format-check'.",
+                "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', or 'type-stats'.",
                 args[1]
             );
             std::process::exit(1);
@@ -660,5 +686,26 @@ mod tests {
             puzzles.len()
         );
         assert!(failures.is_empty(), "uniqueness failures: {failures:?}");
+    }
+
+    #[test]
+    fn generated_puzzles_wellformed() {
+        let puzzles = all_puzzles();
+        assert!(!puzzles.is_empty());
+        let mut failures: Vec<String> = Vec::new();
+
+        for (key, fp) in &puzzles {
+            let errors = check_form::check_form(fp, None);
+            for e in &errors {
+                failures.push(format!("{key} Q{}: {:?}: {}", e.qi + 1, e.severity, e.message));
+            }
+        }
+
+        if !failures.is_empty() {
+            for f in &failures {
+                eprintln!("FAIL: {f}");
+            }
+            panic!("{} wellformedness failure(s)", failures.len());
+        }
     }
 }

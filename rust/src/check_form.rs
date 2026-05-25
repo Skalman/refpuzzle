@@ -50,6 +50,32 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             _ => {}
         }
 
+        // Answer letter within option count
+        match qt {
+            QuestionType::CountAnswer { answer }
+            | QuestionType::CountAnswerBefore { answer, .. }
+            | QuestionType::CountAnswerAfter { answer, .. }
+            | QuestionType::ClosestAfter { answer, .. }
+            | QuestionType::ClosestBefore { answer, .. }
+            | QuestionType::FirstWith { answer }
+            | QuestionType::LastWith { answer }
+            | QuestionType::OnlyOdd { answer }
+            | QuestionType::OnlyEven { answer }
+            | QuestionType::EqualCount { answer }
+                if answer.idx() >= oc =>
+            {
+                errors.push(FormError {
+                    qi,
+                    message: format!(
+                        "References answer {} which is outside option count {oc}",
+                        answer.as_char()
+                    ),
+                    severity: Severity::Warning,
+                });
+            }
+            _ => {}
+        }
+
         // SameAs checks
         if matches!(qt, QuestionType::SameAs) {
             let mut targets = Vec::new();
@@ -160,6 +186,26 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             }
         }
 
+        // Letter-valued options stored in option_answers (AnswerOf, LeastCommon, MostCommon)
+        if matches!(
+            qt,
+            QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon
+        ) {
+            for oi in 0..oc {
+                let a = fp.option_answers[qi][oi];
+                if a != 0xFF && a as usize >= oc {
+                    errors.push(FormError {
+                        qi,
+                        message: format!(
+                            "Option {oi} letter {} is outside option count {oc}",
+                            (b'A' + a) as char
+                        ),
+                        severity: Severity::Warning,
+                    });
+                }
+            }
+        }
+
         // Option values in valid range
         for oi in 0..oc {
             let v = fp.option_nums[qi][oi];
@@ -177,13 +223,10 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                 QuestionType::CountAnswerAfter { after_index, .. } => {
                     v < 0 || v > (n as i16 - 1 - *after_index as i16)
                 }
-                QuestionType::AnswerOf { .. }
-                | QuestionType::LeastCommon
-                | QuestionType::MostCommon
-                | QuestionType::NoOtherHasAnswer
+                QuestionType::NoOtherHasAnswer
                 | QuestionType::EqualCount { .. }
                 | QuestionType::AnswerIsSelf
-                | QuestionType::LetterDist { .. } => !(0..=4).contains(&v),
+                | QuestionType::LetterDist { .. } => !(0..oc as i16).contains(&v),
                 QuestionType::FirstWith { .. }
                 | QuestionType::LastWith { .. }
                 | QuestionType::ClosestAfter { .. }

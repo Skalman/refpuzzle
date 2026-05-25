@@ -337,7 +337,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
         for oi in 0..oc {
             if let Some(ref claim) = fp.option_claims[qi][oi] {
                 if claim.value != NONE_VAL {
-                    let pool = valid_values(&claim.question_type, n);
+                    let pool = valid_values(&claim.question_type, n, oc);
                     assert!(
                         pool.contains(&claim.value),
                         "Q{} option {}: claim {:?} value {} not in {:?}",
@@ -354,7 +354,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
             if v == NAN_VAL || v == NONE_VAL {
                 continue;
             }
-            let pool = valid_values(qt, n);
+            let pool = valid_values(qt, n, oc);
             assert!(
                 pool.contains(&v),
                 "Q{} option {}: type {:?} value {} not in {:?}",
@@ -368,7 +368,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
     }
 }
 
-fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
+fn valid_values(qt: &QuestionType, n: usize, oc: usize) -> ArrayVec<i16, 20> {
     let mut out = ArrayVec::new();
     match *qt {
         QuestionType::CountAnswer { .. }
@@ -395,7 +395,7 @@ fn valid_values(qt: &QuestionType, n: usize) -> ArrayVec<i16, 20> {
         | QuestionType::NoOtherHasAnswer
         | QuestionType::LetterDist { .. }
         | QuestionType::EqualCount { .. } => {
-            for v in 0..5i16 {
+            for v in 0..oc as i16 {
                 out.push(v);
             }
         }
@@ -712,7 +712,7 @@ pub fn repair_one_question(
             }
             rng.shuffle(&mut pool[..plen]);
             let mut di = 0;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 && di < plen {
                     fp.option_answers[qi][oi] = pool[di] as u8;
                     di += 1;
@@ -723,7 +723,7 @@ pub fn repair_one_question(
             let correct_val = fp.option_nums[qi][correct_oi];
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
                     let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
@@ -736,7 +736,7 @@ pub fn repair_one_question(
                 let old_val = fp.option_nums[qi][oi];
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
-                for v in 0..5i16 {
+                for v in 0..oc as i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
                         for k in 0..oc {
@@ -760,7 +760,7 @@ pub fn repair_one_question(
             let correct_val = fp.option_answers[qi][correct_oi] as i16;
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
                     let dist = abs_diff(fp.option_answers[qi][oi] as i16, correct_val);
                     if dist < best_dist {
@@ -773,7 +773,7 @@ pub fn repair_one_question(
                 let old_val = fp.option_answers[qi][oi] as i16;
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
-                for v in 0..5i16 {
+                for v in 0..oc as i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
                         for k in 0..oc {
@@ -795,13 +795,13 @@ pub fn repair_one_question(
         }
         _ if is_counting_type(&qt) => {
             let correct_val = fp.option_nums[qi][correct_oi];
-            let vals = valid_values(&qt, n);
+            let vals = valid_values(&qt, n, oc);
             let max = vals.last().copied().unwrap_or(0);
             // Find the non-eliminated wrong option closest to correct — that's
             // the one the hint engine can't distinguish. Replace just that one.
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
                     let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
@@ -840,7 +840,7 @@ pub fn repair_one_question(
             let correct_val = fp.option_nums[qi][correct_oi];
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
                     let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
                     if dist < best_dist {
@@ -885,7 +885,7 @@ pub fn repair_one_question(
             let correct_val = fp.option_nums[qi][correct_oi];
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
-            for oi in 0..5 {
+            for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
                     let v = fp.option_nums[qi][oi];
                     let dist = if v == NONE_VAL || correct_val == NONE_VAL {
@@ -906,7 +906,7 @@ pub fn repair_one_question(
                     QuestionType::NextSame => (qi as i16 + 1, n as i16 - 1, 1),
                     QuestionType::OnlyOdd { .. } => (0, n as i16 - 1, 2),
                     QuestionType::OnlyEven { .. } => (1, n as i16 - 1, 2),
-                    QuestionType::EqualCount { .. } => (0, 4, 1),
+                    QuestionType::EqualCount { .. } => (0, oc as i16 - 1, 1),
                     _ => {
                         let min_p = match qt {
                             QuestionType::ClosestAfter { after_index, .. } => {
@@ -1003,7 +1003,7 @@ fn fill_one_question(
     }
 
     let correct_val = correct_option_value(qt, qi, solution, n);
-    let val_pool = valid_values(qt, n);
+    let val_pool = valid_values(qt, n, option_count);
     let letters = &LETTERS[..option_count];
 
     match *qt {
@@ -1020,7 +1020,7 @@ fn fill_one_question(
             }
             rng.shuffle(&mut pool[..plen]);
             let mut di = 0;
-            for oi in 0..5 {
+            for oi in 0..option_count {
                 if oi != correct_oi {
                     answers[oi] = pool[di] as u8;
                     di += 1;
@@ -1054,7 +1054,7 @@ fn fill_one_question(
             }
             rng.shuffle(&mut pool[..plen]);
             let mut di = 0;
-            for oi in 0..5 {
+            for oi in 0..option_count {
                 if oi != correct_oi {
                     answers[oi] = pool[di] as u8;
                     di += 1;
@@ -1507,7 +1507,7 @@ fn build_claims(
     claims[target_oi] = Some(true_claim);
     nums[target_oi] = NAN_VAL;
 
-    for oi in 0..5 {
+    for oi in 0..option_count {
         if oi == target_oi {
             continue;
         }
@@ -1583,6 +1583,9 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::CountAnswerBefore => {
+            if n < 5 {
+                return None;
+            }
             let a = rng.pick(&LETTERS);
             let bi = rng.int(4, n as i32 - 1) as u8;
             Some(Claim {

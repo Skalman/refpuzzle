@@ -36,6 +36,29 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
       }
     }
 
+    // ── Answer letter within option count ──
+    if (
+      qt.type === "CountAnswer" ||
+      qt.type === "CountAnswerBefore" ||
+      qt.type === "CountAnswerAfter" ||
+      qt.type === "ClosestAfter" ||
+      qt.type === "ClosestBefore" ||
+      qt.type === "FirstWith" ||
+      qt.type === "LastWith" ||
+      qt.type === "OnlyOdd" ||
+      qt.type === "OnlyEven" ||
+      qt.type === "EqualCount"
+    ) {
+      const answerIdx = "ABCDE".indexOf(qt.answer);
+      if (answerIdx >= oc) {
+        errors.push({
+          qi,
+          message: `References answer ${qt.answer} which is outside option count ${oc}`,
+          severity: "warning",
+        });
+      }
+    }
+
     // ── SameAs checks ──
     if (qt.type === "SameAs") {
       for (let oi = 0; oi < oc; oi++) {
@@ -153,7 +176,7 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
         case "EqualCount":
         case "AnswerIsSelf":
         case "LetterDist":
-          if (v < 0 || v > 4) {
+          if (v < 0 || v >= oc) {
             errors.push({
               qi,
               message: `Option ${String(oi)} value ${String(v)} out of range`,

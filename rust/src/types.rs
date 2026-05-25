@@ -157,7 +157,50 @@ pub enum QuestionType {
     },
 }
 
+impl QuestionTypeKind {
+    pub fn all_flat() -> &'static [QuestionTypeKind] {
+        use QuestionTypeKind::*;
+        &[
+            CountAnswer, CountAnswerBefore, CountAnswerAfter, CountVowel, CountConsonant,
+            MostCommonCount, ClosestAfter, ClosestBefore, FirstWith, LastWith, PrevSame, NextSame,
+            OnlySame, SameAs, OnlyOdd, OnlyEven, ConsecIdent, AnswerOf, LeastCommon, MostCommon,
+            NoOtherHasAnswer, EqualCount, AnswerIsSelf, LetterDist, TrueStmt, SameAsWhich,
+        ]
+    }
+}
+
 impl QuestionType {
+    pub fn kind(&self) -> QuestionTypeKind {
+        match self {
+            QuestionType::CountAnswer { .. } => QuestionTypeKind::CountAnswer,
+            QuestionType::CountAnswerBefore { .. } => QuestionTypeKind::CountAnswerBefore,
+            QuestionType::CountAnswerAfter { .. } => QuestionTypeKind::CountAnswerAfter,
+            QuestionType::CountVowel => QuestionTypeKind::CountVowel,
+            QuestionType::CountConsonant => QuestionTypeKind::CountConsonant,
+            QuestionType::MostCommonCount => QuestionTypeKind::MostCommonCount,
+            QuestionType::ClosestAfter { .. } => QuestionTypeKind::ClosestAfter,
+            QuestionType::ClosestBefore { .. } => QuestionTypeKind::ClosestBefore,
+            QuestionType::FirstWith { .. } => QuestionTypeKind::FirstWith,
+            QuestionType::LastWith { .. } => QuestionTypeKind::LastWith,
+            QuestionType::PrevSame => QuestionTypeKind::PrevSame,
+            QuestionType::NextSame => QuestionTypeKind::NextSame,
+            QuestionType::OnlySame => QuestionTypeKind::OnlySame,
+            QuestionType::SameAs => QuestionTypeKind::SameAs,
+            QuestionType::OnlyOdd { .. } => QuestionTypeKind::OnlyOdd,
+            QuestionType::OnlyEven { .. } => QuestionTypeKind::OnlyEven,
+            QuestionType::ConsecIdent => QuestionTypeKind::ConsecIdent,
+            QuestionType::AnswerOf { .. } => QuestionTypeKind::AnswerOf,
+            QuestionType::LeastCommon => QuestionTypeKind::LeastCommon,
+            QuestionType::MostCommon => QuestionTypeKind::MostCommon,
+            QuestionType::NoOtherHasAnswer => QuestionTypeKind::NoOtherHasAnswer,
+            QuestionType::EqualCount { .. } => QuestionTypeKind::EqualCount,
+            QuestionType::AnswerIsSelf => QuestionTypeKind::AnswerIsSelf,
+            QuestionType::LetterDist { .. } => QuestionTypeKind::LetterDist,
+            QuestionType::TrueStmt => QuestionTypeKind::TrueStmt,
+            QuestionType::SameAsWhich { .. } => QuestionTypeKind::SameAsWhich,
+        }
+    }
+
     pub fn has_identity_options(&self) -> bool {
         matches!(
             self,

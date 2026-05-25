@@ -690,12 +690,12 @@ function repairOneQuestion(
     rule.type === "MostCommon" ||
     rule.type === "NoOtherHasAnswer"
   ) {
-    replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, 4);
+    replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, oc - 1);
     return;
   }
 
   if (isCountingType(rule.type)) {
-    const vals = validValues(rule, n);
+    const vals = validValues(rule, n, oc);
     const max = vals.length > 0 ? (vals[vals.length - 1] ?? 0) : 0;
     replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, max);
     return;
@@ -1073,7 +1073,7 @@ function rangeWithNull(len: number, map: (i: number) => number = (i) => i): (num
   return v;
 }
 
-function validValues(rule: QuestionType, n: number): (number | null)[] {
+function validValues(rule: QuestionType, n: number, oc = 5): (number | null)[] {
   switch (rule.type) {
     case "CountAnswer":
     case "CountVowel":
@@ -1090,7 +1090,7 @@ function validValues(rule: QuestionType, n: number): (number | null)[] {
     case "NoOtherHasAnswer":
     case "LetterDist":
     case "EqualCount":
-      return [0, 1, 2, 3, 4];
+      return Array.from({ length: oc }, (_, i) => i);
     case "ClosestAfter":
       return rangeWithNull(n - rule.afterIndex - 1, (i) => i + rule.afterIndex + 1);
     case "ClosestBefore":
@@ -1249,7 +1249,7 @@ function engineerOptions(
   }
 
   const correct = computeValue(rule, qi, solution);
-  const vals = validValues(rule, n);
+  const vals = validValues(rule, n, oc);
   const distractors = pickDistractors(vals, correct, qi, rule, rng);
   const opts: OptionDef[] = new Array(oc);
   opts[correctOi] = { value: correct };
