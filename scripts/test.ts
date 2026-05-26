@@ -107,6 +107,13 @@ function testGeneratedUniqueSolution() {
     const allValid = checkAnswers(fp, sol);
     assert(allValid, `${name}: solution [${sol.join(",")}] validates`);
 
+    const isPast = puzzleIsPast(name);
+    const formErrors = checkForm(puzzle, sol);
+    for (const e of formErrors) {
+      if (e.severity === "warning" && isPast) continue;
+      assert(false, `${name} Q${e.qi + 1}: ${e.severity}: ${e.message}`);
+    }
+
     const ruleKeys = new Set(puzzle.questions.map((q) => JSON.stringify(q.questionType)));
     assert(ruleKeys.size === puzzle.questions.length, `${name}: all question rules are unique`);
 
@@ -126,6 +133,29 @@ function testGeneratedUniqueSolution() {
     }
   }
   console.log(`  ${count}/${allPuzzles.length} puzzles`);
+}
+
+const today = (() => {
+  const now = new Date();
+  return now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate();
+})();
+
+function puzzleIsPast(id: string): boolean {
+  // id format: "YYYY-MMDD-level"
+  const parts = id.split("-");
+  return parseInt(parts[0], 10) * 10000 + parseInt(parts[1], 10) < today;
+}
+
+function testGeneratedWellformed() {
+  for (const puzzle of allPuzzles) {
+    const isPast = puzzleIsPast(puzzle.id);
+    const errors = checkForm(puzzle);
+    for (const e of errors) {
+      if (e.severity === "warning" && isPast) continue;
+      assert(false, `${puzzle.id} Q${e.qi + 1}: ${e.severity}: ${e.message}`);
+    }
+  }
+  console.log(`  ${allPuzzles.length} puzzles`);
 }
 
 function testGeneratedHintSolvable() {
@@ -933,6 +963,7 @@ timed("Solver edge cases", testSolverEdgeCases);
 timed("Share encode/decode tests", testShare);
 
 timed("Check-form tests", testCheckForm);
+timed("Generated puzzles: wellformed", testGeneratedWellformed);
 timed("Hint engine tests", testHints);
 if (slow) {
   timed("Generated puzzles: unique solution", testGeneratedUniqueSolution);

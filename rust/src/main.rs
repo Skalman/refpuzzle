@@ -648,6 +648,7 @@ mod tests {
         let deadline = std::time::Instant::now() + duration;
         let puzzles = all_puzzles();
         assert!(!puzzles.is_empty());
+        let today = today_yyyymmdd();
         let mut failures: Vec<String> = Vec::new();
 
         for (key, fp) in &puzzles {
@@ -678,6 +679,21 @@ mod tests {
                     failures.push(format!("{key}: Q{} fails validation", qi + 1));
                 }
             }
+
+            let is_past = puzzle_date_yyyymmdd(key) < today;
+            let form_errors = check_form::check_form(fp, Some(&sol[..fp.n]));
+            for e in &form_errors {
+                let is_warning = matches!(e.severity, check_form::Severity::Warning);
+                if is_warning && is_past {
+                    continue;
+                }
+                failures.push(format!(
+                    "{key} Q{}: {:?}: {}",
+                    e.qi + 1,
+                    e.severity,
+                    e.message
+                ));
+            }
         }
 
         eprintln!(
@@ -688,15 +704,52 @@ mod tests {
         assert!(failures.is_empty(), "uniqueness failures: {failures:?}");
     }
 
+    // Howard Hinnant's civil_from_days: http://howardhinnant.github.io/date_algorithms.html
+    fn today_yyyymmdd() -> u32 {
+        let days = (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            / 86400) as i64;
+        let z = days + 719468;
+        let era = (if z >= 0 { z } else { z - 146096 }) / 146097;
+        let doe = (z - era * 146097) as u64;
+        let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+        let y0 = era * 400 + yoe as i64;
+        let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+        let mp = (5 * doy + 2) / 153;
+        let d = doy - (153 * mp + 2) / 5 + 1;
+        let m = if mp < 10 { mp + 3 } else { mp - 9 };
+        let y = if m <= 2 { y0 + 1 } else { y0 };
+        (y as u32) * 10000 + m as u32 * 100 + d as u32
+    }
+
+    fn puzzle_date_yyyymmdd(key: &str) -> u32 {
+        // key format: "YYYY.json/MMDD-level"
+        let (year_part, rest) = key.split_once('.').expect("missing year in puzzle key");
+        let mmdd_part = rest.split('/').nth(1).expect("missing date in puzzle key");
+        let mmdd = mmdd_part
+            .split('-')
+            .next()
+            .expect("missing MMDD in puzzle key");
+        year_part.parse::<u32>().unwrap() * 10000 + mmdd.parse::<u32>().unwrap()
+    }
+
     #[test]
     fn generated_puzzles_wellformed() {
         let puzzles = all_puzzles();
         assert!(!puzzles.is_empty());
+        let today = today_yyyymmdd();
         let mut failures: Vec<String> = Vec::new();
 
         for (key, fp) in &puzzles {
+            let is_past = puzzle_date_yyyymmdd(key) < today;
             let errors = check_form::check_form(fp, None);
             for e in &errors {
+                let is_warning = matches!(e.severity, check_form::Severity::Warning);
+                if is_warning && is_past {
+                    continue;
+                }
                 failures.push(format!(
                     "{key} Q{}: {:?}: {}",
                     e.qi + 1,

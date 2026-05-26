@@ -110,7 +110,7 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
     }
 
     // ── NoOtherHasAnswer: every other letter must appear in at least one other question ──
-    if (qt.type === "NoOtherHasAnswer") {
+    if (qt.type === "NoOtherHasAnswer" && solution.length > 0) {
       const selfAns = solution[qi];
       const otherAnswers = solution.filter((_, j) => j !== qi);
       for (const letter of LETTERS.slice(0, oc)) {
