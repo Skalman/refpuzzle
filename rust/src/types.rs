@@ -161,10 +161,32 @@ impl QuestionTypeKind {
     pub fn all_flat() -> &'static [QuestionTypeKind] {
         use QuestionTypeKind::*;
         &[
-            CountAnswer, CountAnswerBefore, CountAnswerAfter, CountVowel, CountConsonant,
-            MostCommonCount, ClosestAfter, ClosestBefore, FirstWith, LastWith, PrevSame, NextSame,
-            OnlySame, SameAs, OnlyOdd, OnlyEven, ConsecIdent, AnswerOf, LeastCommon, MostCommon,
-            NoOtherHasAnswer, EqualCount, AnswerIsSelf, LetterDist, TrueStmt, SameAsWhich,
+            CountAnswer,
+            CountAnswerBefore,
+            CountAnswerAfter,
+            CountVowel,
+            CountConsonant,
+            MostCommonCount,
+            ClosestAfter,
+            ClosestBefore,
+            FirstWith,
+            LastWith,
+            PrevSame,
+            NextSame,
+            OnlySame,
+            SameAs,
+            OnlyOdd,
+            OnlyEven,
+            ConsecIdent,
+            AnswerOf,
+            LeastCommon,
+            MostCommon,
+            NoOtherHasAnswer,
+            EqualCount,
+            AnswerIsSelf,
+            LetterDist,
+            TrueStmt,
+            SameAsWhich,
         ]
     }
 }
@@ -257,6 +279,16 @@ pub struct State {
     pub eliminated: [u8; MAX_N],
 }
 
+impl State {
+    pub fn initial(option_count: usize) -> Self {
+        let pm = 0b11111u8 & !((1u8 << option_count) - 1);
+        State {
+            answers: [None; MAX_N],
+            eliminated: [pm; MAX_N],
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct OptionPos {
     pub qi: usize,
@@ -299,6 +331,7 @@ pub struct FlatPuzzle {
     pub global_indices: SmallList,
     pub n: usize,
     pub option_count: usize,
+    pub initial_state: State,
 }
 
 impl FlatPuzzle {
@@ -350,5 +383,9 @@ impl FlatPuzzle {
         }
 
         (affected_by, global_indices)
+    }
+
+    pub fn phantom_mask(&self) -> u8 {
+        self.initial_state.eliminated[0]
     }
 }

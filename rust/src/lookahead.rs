@@ -185,7 +185,7 @@ mod tests {
 
             let n = fp.n;
             let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-            let mut eliminated = [0u8; MAX_N];
+            let mut eliminated = [fp.phantom_mask(); MAX_N];
             for i in 0..n {
                 let s = states[i].as_str().unwrap_or("");
                 for ch in s.chars() {

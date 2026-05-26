@@ -1,4 +1,3 @@
-use crate::build::phantom_mask;
 use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::lookahead::lookahead;
 use crate::types::*;
@@ -23,11 +22,7 @@ pub struct SolveResult {
 
 pub fn solve(fp: &FlatPuzzle) -> SolveResult {
     let n = fp.n;
-    let pm = phantom_mask(fp.option_count);
-    let mut state = State {
-        answers: [None; MAX_N],
-        eliminated: [pm; MAX_N],
-    };
+    let mut state = fp.initial_state;
     let mut steps = Vec::new();
 
     for _ in 0..n * 30 {

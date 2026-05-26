@@ -817,7 +817,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
 pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
     let state = State {
         answers: *answers,
-        eliminated: [0u8; MAX_N],
+        eliminated: [fp.phantom_mask(); MAX_N],
     };
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }
@@ -1049,7 +1049,7 @@ mod tests {
 
             let n = fp.n;
             let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-            let mut eliminated = [0u8; MAX_N];
+            let mut eliminated = fp.initial_state.eliminated;
             for i in 0..n {
                 let s = states[i].as_str().unwrap_or("");
                 for ch in s.chars() {
@@ -1134,7 +1134,7 @@ mod tests {
                 &fp,
                 State {
                     answers,
-                    eliminated: [0u8; MAX_N],
+                    eliminated: fp.initial_state.eliminated,
                 },
                 qi,
             )

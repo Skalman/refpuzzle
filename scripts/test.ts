@@ -822,10 +822,12 @@ function testSharedDeduce() {
 
   function applyState(
     n: number,
+    optionCount: number,
     state: string[],
   ): { answers: (Answer | null)[]; eliminated: number[] } {
     const answers: (Answer | null)[] = new Array(n).fill(null);
-    const eliminated: number[] = new Array(n).fill(0);
+    const phantomMask = 0b11111 & ~((1 << optionCount) - 1);
+    const eliminated: number[] = new Array(n).fill(phantomMask);
     for (let qi = 0; qi < n; qi++) {
       const s = state[qi] || "";
       for (const ch of s) {
@@ -846,7 +848,7 @@ function testSharedDeduce() {
     const puzzle = parsePuzzle(test.puzzle);
     const fp = flattenPuzzle(puzzle);
     const n = puzzle.questions.length;
-    const { answers, eliminated } = applyState(n, state);
+    const { answers, eliminated } = applyState(n, fp.optionCount, state);
 
     const parsedRule: DeduceRule | null =
       ruleStr && ALL_DEDUCE_RULES.includes(ruleStr) ? ruleStr : null;

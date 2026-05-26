@@ -54,10 +54,12 @@ function isLowerAnswer(ch: string): boolean {
 
 function applyState(
   n: number,
+  optionCount: number,
   state: string[],
 ): { answers: (Answer | null)[]; eliminated: number[] } {
   const answers: (Answer | null)[] = new Array(n).fill(null);
-  const eliminated: number[] = new Array(n).fill(0);
+  const phantomMask = 0b11111 & ~((1 << optionCount) - 1);
+  const eliminated: number[] = new Array(n).fill(phantomMask);
 
   for (let qi = 0; qi < n; qi++) {
     const s = state[qi] || "";
@@ -152,7 +154,7 @@ for (const test of suite.tests) {
   const puzzle = parsePuzzle(t.puzzle);
   const fp: FlatPuzzle = flattenPuzzle(puzzle);
   const n = puzzle.questions.length;
-  const { answers, eliminated } = applyState(n, t.state);
+  const { answers, eliminated } = applyState(n, fp.optionCount, t.state);
 
   const parsedRule = parseRule(t.rule);
   if (isRealRule(parsedRule)) {

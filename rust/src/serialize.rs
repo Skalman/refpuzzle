@@ -48,7 +48,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                     | QuestionType::LeastCommon
                     | QuestionType::MostCommon
             ) {
-                for oi in 0..5 {
+                for oi in 0..option_count {
                     option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
                     {
                         option_nums[qi][oi] as u8
@@ -59,7 +59,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                 }
             }
             if question_types[qi].has_identity_options() {
-                for oi in 0..5 {
+                for oi in 0..option_count {
                     option_answers[qi][oi] = oi as u8;
                     option_nums[qi][oi] = NAN_VAL;
                 }
@@ -77,6 +77,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         global_indices,
         n,
         option_count,
+        initial_state: State::initial(option_count),
     })
 }
 

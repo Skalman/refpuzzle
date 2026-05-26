@@ -148,21 +148,8 @@ pub fn solution_satisfies_type(
     }
 }
 
-pub fn phantom_mask(option_count: usize) -> u8 {
-    (0b11111u8) & !((1u8 << option_count) - 1)
-}
-
 fn run_hint_engine(fp: &FlatPuzzle, stats: &mut Stats, trace: bool) -> (bool, State) {
-    let pm = phantom_mask(fp.option_count);
-    run_hint_engine_from(
-        fp,
-        State {
-            answers: [None; MAX_N],
-            eliminated: [pm; MAX_N],
-        },
-        stats,
-        trace,
-    )
+    run_hint_engine_from(fp, fp.initial_state, stats, trace)
 }
 
 fn run_hint_engine_from(
@@ -467,6 +454,7 @@ fn assert_accepted(
     );
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn validate_and_repair(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
@@ -486,7 +474,7 @@ pub fn validate_and_repair(
             fp,
             State {
                 answers: opt_solution,
-                eliminated: [0u8; MAX_N],
+                eliminated: [fp.phantom_mask(); MAX_N],
             },
             i,
         )
@@ -970,6 +958,7 @@ pub fn repair_one_question(
 
 // ── Build FlatPuzzle with options ──
 
+#[allow(clippy::too_many_arguments)]
 fn fill_one_question(
     qt: &QuestionType,
     qi: usize,
@@ -1264,6 +1253,7 @@ pub fn fill_options(
         global_indices,
         n,
         option_count,
+        initial_state: State::initial(option_count),
     })
 }
 

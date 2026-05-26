@@ -669,7 +669,7 @@ mod tests {
                     fp,
                     State {
                         answers,
-                        eliminated: [0u8; MAX_N],
+                        eliminated: [fp.phantom_mask(); MAX_N],
                     },
                     qi,
                 )
@@ -697,7 +697,12 @@ mod tests {
         for (key, fp) in &puzzles {
             let errors = check_form::check_form(fp, None);
             for e in &errors {
-                failures.push(format!("{key} Q{}: {:?}: {}", e.qi + 1, e.severity, e.message));
+                failures.push(format!(
+                    "{key} Q{}: {:?}: {}",
+                    e.qi + 1,
+                    e.severity,
+                    e.message
+                ));
             }
         }
 

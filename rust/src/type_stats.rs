@@ -44,8 +44,7 @@ pub fn type_stats(attempts: u32, seed: u32) {
             "=== n={n} oc={oc} ({attempts} attempts, {successes} successes, {yield_pct:.1}%) ==="
         );
 
-        let mut indexed: Vec<(QuestionTypeKind, usize)> =
-            kinds.iter().copied().zip(0..).collect();
+        let mut indexed: Vec<(QuestionTypeKind, usize)> = kinds.iter().copied().zip(0..).collect();
         indexed.sort_by_key(|(k, _)| format!("{k:?}"));
 
         for (kind, i) in &indexed {

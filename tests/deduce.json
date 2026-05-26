@@ -1731,6 +1731,21 @@
       "expect": "1a"
     },
     {
+      "name": "LeastCommonElim oc=3: phantom letters D/E must not count as 'less' than claimed letter",
+      "rule": "LeastCommonElim",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null] }
+        ]
+      },
+      "state": ["", "B", "B", "C", "C"],
+      "expect": "1b"
+    },
+    {
       "name": "LeastCommon: claimed letter must be uniquely least → force",
       "rule": "LeastCommonForce",
       "puzzle": {

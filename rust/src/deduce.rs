@@ -1563,9 +1563,9 @@ fn deduce_impl(
                 adj_max[self_letter] += 1;
 
                 let can_be_least =
-                    (0..5).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
+                    (0..fp.option_count).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
                 let must_be_least =
-                    (0..5).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
+                    (0..fp.option_count).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
 
                 can_be_least_opt[oi] = can_be_least;
                 must_be_least_opt[oi] = must_be_least;
@@ -1646,8 +1646,10 @@ fn deduce_impl(
                 adj_min[self_letter] += 1;
                 adj_max[self_letter] += 1;
 
-                let can_be_most = (0..5).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
-                let must_be_most = (0..5).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
+                let can_be_most =
+                    (0..fp.option_count).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
+                let must_be_most =
+                    (0..fp.option_count).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
 
                 can_be_most_opt[oi] = can_be_most;
                 must_be_most_opt[oi] = must_be_most;
@@ -1763,7 +1765,7 @@ fn deduce_impl(
             let ai = ans.idx();
             let selected = fp.option_nums[qi][ai];
             let mut q_mask = 0u16;
-            for oi in 0..5usize {
+            for oi in 0..fp.option_count {
                 if oi == ai {
                     continue;
                 }
@@ -2171,7 +2173,7 @@ mod tests {
 
             let n = fp.n;
             let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-            let mut eliminated = [0u8; MAX_N];
+            let mut eliminated = fp.initial_state.eliminated;
             for i in 0..n {
                 let s = states[i].as_str().unwrap_or("");
                 for ch in s.chars() {
@@ -2420,7 +2422,7 @@ mod tests {
             for state_seed in 0..20u32 {
                 let mut rng = Rng::new(seed.wrapping_mul(1000).wrapping_add(state_seed));
                 let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
-                let mut eliminated = [0u8; MAX_N];
+                let mut eliminated = fp.initial_state.eliminated;
 
                 for qi in 0..n {
                     let r = rng.int(0, 4);

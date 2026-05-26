@@ -243,6 +243,7 @@ function deduceImpl(
 ): DeduceResult[] {
   const { answers, eliminated } = state;
   const n = fp.n;
+  const oc = fp.optionCount;
   const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
   const results: DeduceResult[] = [];
 
@@ -1158,12 +1159,13 @@ function deduceImpl(
         adjMin[selfLetter]++;
         adjMax[selfLetter]++;
 
-        const canBeLeast = [0, 1, 2, 3, 4].every(
-          (li) => li === claimed || adjMax[li] >= adjMin[claimed],
-        );
-        const mustBeLeast = [0, 1, 2, 3, 4].every(
-          (li) => li === claimed || adjMin[li] > adjMax[claimed],
-        );
+        let canBeLeast = true;
+        let mustBeLeast = true;
+        for (let li = 0; li < oc; li++) {
+          if (li === claimed) continue;
+          if (adjMax[li] < adjMin[claimed]) canBeLeast = false;
+          if (adjMin[li] <= adjMax[claimed]) mustBeLeast = false;
+        }
 
         canBeLeastOpt[oi] = canBeLeast;
         mustBeLeastOpt[oi] = mustBeLeast;
@@ -1225,7 +1227,7 @@ function deduceImpl(
 
         let canBeMost = true;
         let mustBeMost = true;
-        for (let li = 0; li < 5; li++) {
+        for (let li = 0; li < oc; li++) {
           if (li === claimed) continue;
           if (adjMin[li] > adjMax[claimed]) canBeMost = false;
           if (adjMax[li] >= adjMin[claimed]) mustBeMost = false;
@@ -1339,7 +1341,7 @@ function deduceImpl(
       const ai = letterIdx(answers[qi]!);
       const selected = fp.optionValues[qi][ai];
       let qMask = 0;
-      for (let oi = 0; oi < 5; oi++) {
+      for (let oi = 0; oi < oc; oi++) {
         if (oi === ai) continue;
         const target = fp.optionValues[qi][oi];
         if (target == null || target < 0 || target >= n || target === qi) continue;

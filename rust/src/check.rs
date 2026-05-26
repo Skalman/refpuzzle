@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::build;
 use crate::check_answer;
 use crate::check_form;
 use crate::deduce;
@@ -907,11 +906,7 @@ pub struct CheckResult {
 
 pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let n = fp.n;
-    let pm = build::phantom_mask(fp.option_count);
-    let mut state = State {
-        answers: [None; MAX_N],
-        eliminated: [pm; MAX_N],
-    };
+    let mut state = fp.initial_state;
     let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
     let mut action_log: Vec<CheckAction> = Vec::new();
     let mut conflict_reported = false;
