@@ -8,14 +8,12 @@ const seeds = 5;
 const times: number[] = [];
 
 for (let s = 0; s < seeds; s++) {
-	const rng = new RNG(42 + s * 7919);
-	const t0 = performance.now();
-	const result = generateConstructive(profile, rng);
-	const elapsed = performance.now() - t0;
-	times.push(elapsed);
-	console.log(
-		`seed ${s}: ${result ? "OK" : "FAIL"} ${elapsed.toFixed(0)}ms`,
-	);
+  const rng = new RNG(42 + s * 7919);
+  const t0 = performance.now();
+  const result = generateConstructive(profile, rng);
+  const elapsed = performance.now() - t0;
+  times.push(elapsed);
+  console.log(`seed ${s}: ${result ? "OK" : "FAIL"} ${elapsed.toFixed(0)}ms`);
 }
 
 const avg = times.reduce((a, b) => a + b, 0) / times.length;

@@ -88,14 +88,6 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 - **test.ts** — `pnpm test` — test runner. Runs JSON test suites (`tests/*.json`) against the TS engine. Tests checkAnswer, deduce (with rule filter), lookahead, solve.
 
-- **test-check-answer.mts** — Standalone runner for `tests/check-answer.json`.
-
-- **test-deduce.mts** — Standalone runner for `tests/deduce.json`.
-
-- **test-lookahead.mts** — Standalone runner for `tests/lookahead.json`.
-
-- **test-solve.mts** — Standalone runner for `tests/solve.json`.
-
 - **bench.ts** — `pnpm bench` — benchmarks `generateConstructive()` across multiple seeds for a given level.
 
 - **regenerate.sh** — Shell script to regenerate puzzle JSON files, preserving days before a cutoff date.

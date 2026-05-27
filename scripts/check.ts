@@ -86,7 +86,6 @@ function countAnswered(steps: string[]): number {
   return set.size;
 }
 
-
 function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
   const fp = flattenPuzzle(puzzle);
   const n = fp.n;
@@ -139,9 +138,7 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
       for (let oi = 0; oi < oc; oi++) {
         const label = LETTERS[oi];
         const claim = fp.optionClaims[qi][oi];
-        const text = claim
-          ? `${formatTypeTag(claim.questionType)} = ${claim.value}`
-          : "null";
+        const text = claim ? `${formatTypeTag(claim.questionType)} = ${claim.value}` : "null";
         claims.push({ label, text });
       }
     } else {
@@ -170,9 +167,7 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
   };
 }
 
-const puzzles: PuzzleCheckResult[] = entries.map((e) =>
-  checkOnePuzzle(e.id, e.puzzle),
-);
+const puzzles: PuzzleCheckResult[] = entries.map((e) => checkOnePuzzle(e.id, e.puzzle));
 
 const output: CheckOutput = {
   path: file,

@@ -9,7 +9,7 @@ import type { Puzzle, QuestionType, Claim } from "../src/engine/types.ts";
 const PROJECT_LAUNCH = "2026-04-19";
 
 function printHelp(): never {
-  console.error(`Usage: pnpm generate <date-range> -o FILE [options]
+  console.error(`Usage: pnpm gen <date-range> -o FILE [options]
 
 Date range formats:
   2051              full year (2051-01-01..2051-12-31)
@@ -213,9 +213,7 @@ function taskSeeds(yr: number, mm: number, dd: number, level: number, count: num
   const dateKey = yr * 10000 + mm * 100 + dd;
   const seeds: number[] = [];
   for (let retry = 0; retry < count; retry++) {
-    seeds.push(
-      (Math.imul(dateKey, 31) + level) * 17 + Math.imul(retry, 0x9e3779b9),
-    );
+    seeds.push((Math.imul(dateKey, 31) + level) * 17 + Math.imul(retry, 0x9e3779b9));
   }
   return seeds;
 }
@@ -305,7 +303,9 @@ console.error(`  Year:    ${year}`);
 console.error(`  Start:   ${start}`);
 console.error(`  Days:    ${days.length}`);
 console.error(`  Puzzles: ${okCount}/${days.length * levels.length} (${failCount} failed)`);
-console.error(`  Time:    ${elapsed.toFixed(1)}s (${((elapsed * 1000) / days.length).toFixed(1)}ms per day)`);
+console.error(
+  `  Time:    ${elapsed.toFixed(1)}s (${((elapsed * 1000) / days.length).toFixed(1)}ms per day)`,
+);
 console.error(`  Output:  ${outputPath}`);
 if (showStats) {
   console.error(`  Attempts: ${totalAttempts}`);
