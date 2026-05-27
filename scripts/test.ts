@@ -9,8 +9,11 @@ import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solve-brute.ts";
 import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
-import { parseCompactYear } from "../src/puzzles/daily.ts";
+import { parseCompactYear, expandQuestion } from "../src/puzzles/daily.ts";
 import { checkForm } from "../src/engine/check-form.ts";
+import { fillOptions } from "../src/generator/construct.ts";
+import type { ConstructResult } from "../src/generator/construct.ts";
+import { RNG } from "../src/generator/rng.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -923,6 +926,89 @@ function testSharedDeduce() {
 }
 
 // ════════════════════════════════════════════════
+// Shared fill-options tests
+// ════════════════════════════════════════════════
+
+function testSharedFillOptions() {
+  const suite = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/fill-options.json"), "utf8"),
+  );
+  const SEEDS = 16;
+
+  for (const t of suite.tests) {
+    if (t.section) continue;
+    const { name, n, oc, types, solution: solStr, expectedCorrect } = t;
+
+    const parsedTypes = (types as { t: string; a?: number; q?: number }[]).map((ct) =>
+      expandQuestion(ct),
+    );
+    const solution: Answer[] = [];
+    for (const ch of solStr as string) solution.push(LETTERS[ch.charCodeAt(0) - 65]);
+
+    const expected = expectedCorrect as (number | null)[];
+    assert(
+      Array.isArray(expected) && expected.length === n,
+      `fill-options: ${name}: expectedCorrect missing or wrong length`,
+    );
+
+    for (let seed = 0; seed < SEEDS; seed++) {
+      const rng = new RNG(Math.imul(seed, 2654435761));
+      const cr: ConstructResult = {
+        types: parsedTypes,
+        solution,
+        n,
+        oc,
+        level: 1,
+        name: "test",
+      };
+      const puzzle = fillOptions(cr, rng, false);
+      if (puzzle == null) {
+        assert(false, `fill-options: ${name} (seed=${seed}): fillOptions returned null`);
+        continue;
+      }
+      const fp = flattenPuzzle(puzzle);
+      assert(
+        checkAnswers(fp, solution),
+        `fill-options: ${name} (seed=${seed}): checkAnswers rejected`,
+      );
+
+      // expectedCorrect cross-check: the value at the correct option must
+      // match the hand-computed expectation.
+      for (let qi = 0; qi < n; qi++) {
+        const exp = expected[qi];
+        if (exp == null) continue;
+        const correctOi = L2I[solution[qi]];
+        const stored = puzzle.questions[qi].options[correctOi].value;
+        assert(
+          stored === exp,
+          `fill-options: ${name} (seed=${seed}) Q${qi + 1}: stored ${String(stored)} != expected ${String(exp)}`,
+        );
+      }
+
+      // Distinctness: distractor option values must differ from the correct
+      // value and from each other. Identity-option / TrueStmt types don't
+      // store numeric values, so skip them.
+      for (let qi = 0; qi < n; qi++) {
+        const qt = puzzle.questions[qi].questionType;
+        if (qt.type === "AnswerIsSelf" || qt.type === "NoOtherHasAnswer" || qt.type === "TrueStmt")
+          continue;
+        const seen = new Set<number>();
+        const opts = puzzle.questions[qi].options;
+        for (let oi = 0; oi < oc; oi++) {
+          const v = opts[oi].value;
+          if (v == null) continue;
+          assert(
+            !seen.has(v),
+            `fill-options: ${name} (seed=${seed}) Q${qi + 1}: duplicate option value ${v}`,
+          );
+          seen.add(v);
+        }
+      }
+    }
+  }
+}
+
+// ════════════════════════════════════════════════
 // Check-form tests
 // ════════════════════════════════════════════════
 
@@ -959,6 +1045,7 @@ timed("Shared deduce tests", testSharedDeduce);
 timed("Shared check-answer tests", testSharedCheckAnswer);
 timed("Shared lookahead tests", testSharedLookahead);
 timed("Shared solve tests", testSharedSolve);
+timed("Shared fill-options tests", testSharedFillOptions);
 timed("Solver edge cases", testSolverEdgeCases);
 timed("Share encode/decode tests", testShare);
 

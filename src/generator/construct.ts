@@ -33,7 +33,7 @@ interface GenerateResult {
   solution: Answer[];
 }
 
-interface ConstructResult {
+export interface ConstructResult {
   types: QuestionType[];
   solution: Answer[];
   n: number;
@@ -448,7 +448,7 @@ function tryConstruct(
   return { types: finalRules, solution, n, oc, level: profile.level, name: profile.name };
 }
 
-function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle | null {
+export function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle | null {
   const questions: QuestionDef[] = [];
   for (let i = 0; i < cr.types.length; i++) {
     const options = engineerOptions(cr.types[i], i, cr.solution, cr.n, cr.oc, rng);

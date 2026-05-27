@@ -2240,15 +2240,16 @@ mod tests {
             }
 
             // DRY check
-            if let Some(r) = parsed_rule {
-                if !drs.is_empty() && got == expected {
-                    let without = deduce_with_rule_exclude(&fp, &state, DeduceRule::All, Some(r));
-                    let without_got = format_result(without.first());
-                    if without_got == got {
-                        dry_failed += 1;
-                        eprintln!("DRY: {name}");
-                        eprintln!("  excluding {} still produces: {got}", r.to_str());
-                    }
+            if let Some(r) = parsed_rule
+                && !drs.is_empty()
+                && got == expected
+            {
+                let without = deduce_with_rule_exclude(&fp, &state, DeduceRule::All, Some(r));
+                let without_got = format_result(without.first());
+                if without_got == got {
+                    dry_failed += 1;
+                    eprintln!("DRY: {name}");
+                    eprintln!("  excluding {} still produces: {got}", r.to_str());
                 }
             }
         }

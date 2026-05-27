@@ -1855,3 +1855,162 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         ..claim
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::Value;
+
+    #[test]
+    fn test_shared_fill_options() {
+        let json_str = std::fs::read_to_string("../tests/fill-options.json")
+            .expect("can't read tests/fill-options.json");
+        let suite: Value = serde_json::from_str(&json_str).unwrap();
+        let tests = suite["tests"].as_array().unwrap();
+
+        const SEEDS: u32 = 16;
+        let mut passed = 0;
+        let mut failed = 0;
+
+        for test in tests {
+            if test.get("section").is_some() {
+                continue;
+            }
+            let name = test["name"].as_str().unwrap();
+            let n = test["n"].as_u64().unwrap() as usize;
+            let oc = test["oc"].as_u64().unwrap() as usize;
+            let sol_str = test["solution"].as_str().unwrap();
+            let types_json = test["types"].as_array().unwrap();
+
+            let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
+            for (qi, t) in types_json.iter().enumerate() {
+                question_types[qi] = serde_json::from_value(t.clone())
+                    .unwrap_or_else(|e| panic!("{name}: parse type Q{}: {e}", qi + 1));
+            }
+
+            let mut solution = [Answer::A; MAX_N];
+            for (i, ch) in sol_str.chars().enumerate() {
+                solution[i] = LETTERS[(ch as u8 - b'A') as usize];
+            }
+
+            let expected_correct: Vec<Option<i16>> = test["expectedCorrect"]
+                .as_array()
+                .unwrap_or_else(|| panic!("{name}: missing expectedCorrect"))
+                .iter()
+                .map(|v| {
+                    if v.is_null() {
+                        None
+                    } else {
+                        Some(
+                            v.as_i64()
+                                .expect("expectedCorrect entry must be int or null")
+                                as i16,
+                        )
+                    }
+                })
+                .collect();
+            assert_eq!(
+                expected_correct.len(),
+                n,
+                "{name}: expectedCorrect length must equal n"
+            );
+
+            let mut case_failed = false;
+            for seed in 0..SEEDS {
+                let mut rng = Rng::new(seed.wrapping_mul(2654435761));
+                let Some(fp) = fill_options(&question_types, &solution, n, oc, &mut rng, false)
+                else {
+                    eprintln!("FAIL: {name} (seed={seed}): fill_options returned None");
+                    case_failed = true;
+                    break;
+                };
+
+                let answers: [Option<Answer>; MAX_N] =
+                    std::array::from_fn(|i| if i < n { Some(solution[i]) } else { None });
+                if !check_answers(&fp, &answers) {
+                    eprintln!("FAIL: {name} (seed={seed}): check_answers rejected");
+                    for qi in 0..n {
+                        let state = State {
+                            answers,
+                            eliminated: [fp.phantom_mask(); MAX_N],
+                        };
+                        let v = check_answer(&fp, state, qi);
+                        eprintln!("  Q{}: {:?}", qi + 1, v);
+                    }
+                    case_failed = true;
+                    break;
+                }
+
+                // expectedCorrect: cross-check that the value stored at the correct option
+                // matches the hand-computed expectation in the fixture. Catches semantic
+                // drift in correct_option_value that check_answer would miss.
+                for qi in 0..n {
+                    let Some(expected) = expected_correct[qi] else {
+                        continue;
+                    };
+                    let qt = &fp.question_types[qi];
+                    let correct_oi = solution[qi].idx();
+                    let stored: i16 = match qt {
+                        QuestionType::AnswerOf { .. }
+                        | QuestionType::LeastCommon
+                        | QuestionType::MostCommon => fp.option_answers[qi][correct_oi] as i16,
+                        _ => fp.option_nums[qi][correct_oi],
+                    };
+                    if stored != expected {
+                        eprintln!(
+                            "FAIL: {name} (seed={seed}) Q{}: stored {stored} != expected {expected}",
+                            qi + 1
+                        );
+                        case_failed = true;
+                        break;
+                    }
+                }
+                if case_failed {
+                    break;
+                }
+
+                // Distinctness: distractor option values must differ from the correct value
+                // and from each other (across the active option count). Identity-option
+                // and TrueStmt types don't store values in option_nums, so skip them.
+                for qi in 0..n {
+                    let qt = &fp.question_types[qi];
+                    if qt.has_identity_options() || matches!(qt, QuestionType::TrueStmt) {
+                        continue;
+                    }
+                    let nums = &fp.option_nums[qi];
+                    let mut seen: Vec<i16> = Vec::new();
+                    for &v in &nums[..oc] {
+                        if v == NAN_VAL || v == NONE_VAL {
+                            continue;
+                        }
+                        if seen.contains(&v) {
+                            eprintln!(
+                                "FAIL: {name} (seed={seed}) Q{}: duplicate option value {v} in {:?}",
+                                qi + 1,
+                                &nums[..oc]
+                            );
+                            case_failed = true;
+                            break;
+                        }
+                        seen.push(v);
+                    }
+                    if case_failed {
+                        break;
+                    }
+                }
+                if case_failed {
+                    break;
+                }
+            }
+
+            if case_failed {
+                failed += 1;
+            } else {
+                passed += 1;
+            }
+        }
+
+        eprintln!("{passed}/{} passed", passed + failed);
+        assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
+}

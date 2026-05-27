@@ -75,7 +75,7 @@ function L(i: number | undefined): Answer {
   return LETTERS[i ?? 0];
 }
 
-function expandQuestion(q: CompactQuestionType): QuestionType {
+export function expandQuestion(q: CompactQuestionType): QuestionType {
   // oxlint-disable-next-line typescript/no-unsafe-type-assertion
   const type = q.t as QuestionType["type"];
   switch (type) {
