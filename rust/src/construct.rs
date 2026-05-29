@@ -883,13 +883,15 @@ pub(crate) fn random_type_params(
             answer: rng.pick(letters),
         }),
         QuestionTypeKind::PrevSame => {
-            if qi < 4 {
+            // Need oc distinct option values; pool size is qi + 1 (positions [0, qi) + null).
+            if qi + 1 < option_count {
                 return None;
             }
             Some(QuestionType::PrevSame)
         }
         QuestionTypeKind::NextSame => {
-            if qi + 5 > n {
+            // Need oc distinct option values; pool size is n - qi (positions (qi, n) + null).
+            if n - qi < option_count {
                 return None;
             }
             Some(QuestionType::NextSame)

@@ -30,7 +30,7 @@ import {
   QT_SAME_AS_WHICH,
 } from "./types.ts";
 import { checkClaim } from "./check-answer.ts";
-import { V_INVALID } from "./state.ts";
+import { V_INVALID, V_VALID } from "./state.ts";
 
 const ALL_DEDUCE_RULES_INTERNAL = [
   "CountSaturated",
@@ -106,6 +106,7 @@ const ALL_DEDUCE_RULES_INTERNAL = [
   "TrueStatementSelfRef",
   "TrueStatementClaimInvalid",
   "TrueStatementClaimValid",
+  "TrueStatementClaimKnownTrue",
   "SameAsWhichForward",
   "SameAsWhichReverse",
 ] as const;
@@ -1533,6 +1534,31 @@ function deduceImpl(
         results.push(
           res({ type: "force", qi, answer: LETTERS[survivingOi] }, "TrueStatementClaimValid"),
         );
+      }
+    }
+  }
+
+  // TrueStatement claim known-true: if any non-eliminated option's claim is
+  // already provably true (in the current state, without hypothesizing the
+  // answer), force the question's answer to that option. Checking against
+  // the current state avoids the circularity where a self-referencing claim
+  // like AnswerOf { q = this_qi, value = oi } would appear Valid only because
+  // we'd hypothesized Q[qi] = LETTERS[oi].
+  if (!fast && run("TrueStatementClaimKnownTrue")) {
+    for (let qi = 0; qi < n; qi++) {
+      if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
+      if (answers[qi] != null) continue;
+      for (let oi = 0; oi < 5; oi++) {
+        if (isElim(eliminated, qi, oi)) continue;
+        const claim = fp.optionClaims[qi][oi];
+        if (!claim) continue;
+        const v = checkClaim(fp, { answers, eliminated }, { qi, oi }, claim);
+        if (v === V_VALID) {
+          results.push(
+            res({ type: "force", qi, answer: LETTERS[oi] }, "TrueStatementClaimKnownTrue"),
+          );
+          break;
+        }
       }
     }
   }

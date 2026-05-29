@@ -41,7 +41,7 @@ import {
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
 } from "./types.ts";
-import type { DeduceResult } from "./deduce.ts";
+import type { DeduceResult, DeduceRule } from "./deduce.ts";
 import type { LookaheadResult } from "./lookahead.ts";
 
 // ── Formatting helpers ──
@@ -203,7 +203,7 @@ function explainForce(
   eliminated: number[],
   qi: number,
   letter: Answer,
-  rule: string,
+  rule: DeduceRule,
 ): ExplainStep[] {
   const steps: ExplainStep[] = [simple(`Try looking at ${Q(qi)}.`)];
   const q = fp.questions[qi];
@@ -438,6 +438,13 @@ function explainForce(
     return [
       simple(`Try looking at ${Q(qi)}.`),
       simple(`Only one of ${Q(qi)}'s claims is still possible, so it must be the answer.`),
+    ];
+  }
+
+  if (rule === "TrueStatementClaimKnownTrue") {
+    return [
+      simple(`Try looking at ${Q(qi)}.`),
+      simple(`Option ${letter}'s claim is already known to be true, so it must be the answer.`),
     ];
   }
 

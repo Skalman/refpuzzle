@@ -2230,6 +2230,52 @@
       },
       "state": ["", "C", "C", "B", "D"],
       "expect": "1A"
+    },
+    {
+      "name": "TrueStatementClaimKnownTrue: one claim is already provably true → force",
+      "rule": "TrueStatementClaimKnownTrue",
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "a": 2, "t": "FirstWith", "v": 1 },
+              { "a": 3, "t": "CountAnswer", "v": 4 },
+              { "a": 3, "t": "CountAnswer", "v": 3 },
+              { "a": 3, "t": "CountAnswer", "v": 2 },
+              { "a": 3, "t": "CountAnswer", "v": 1 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["c", "C", "C", "", ""],
+      "expect": "1A"
+    },
+    {
+      "name": "TrueStatementClaimKnownTrue: self-referencing AnswerOf must NOT trigger force",
+      "rule": "TrueStatementClaimKnownTrue",
+      "puzzle": {
+        "q": [
+          {
+            "t": { "t": "TrueStmt" },
+            "c": [
+              { "q": 0, "t": "AnswerOf", "v": 0 },
+              { "q": 0, "t": "AnswerOf", "v": 1 },
+              { "q": 0, "t": "AnswerOf", "v": 2 },
+              { "q": 0, "t": "AnswerOf", "v": 3 },
+              { "q": 0, "t": "AnswerOf", "v": 4 }
+            ]
+          },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+        ]
+      },
+      "state": ["", "", ""],
+      "expect": null
     }
   ]
 }

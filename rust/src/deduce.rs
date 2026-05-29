@@ -100,6 +100,7 @@ deduce_rules! {
     TrueStatementSelfRef,
     TrueStatementClaimInvalid,
     TrueStatementClaimValid,
+    TrueStatementClaimKnownTrue,
     ConsecIdentForwardForce,
     ConsecIdentForwardElim,
     ConsecIdentForwardBothForce,
@@ -2071,6 +2072,42 @@ fn deduce_impl(
                     },
                     DeduceRule::TrueStatementClaimValid,
                 );
+            }
+        }
+    }
+
+    // TrueStatement claim known-true: if any non-eliminated option's claim is
+    // already provably true (in the current state, without hypothesizing the
+    // answer), force the question's answer to that option. Checking against
+    // the current state avoids the circularity where a self-referencing claim
+    // like AnswerOf { q = this_qi, value = oi } would appear Valid only because
+    // we'd hypothesized Q[qi] = LETTERS[oi].
+    if !fast && run(DeduceRule::TrueStatementClaimKnownTrue) {
+        for qi in 0..n {
+            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
+                continue;
+            }
+            if answers[qi].is_some() {
+                continue;
+            }
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let Some(claim) = &fp.option_claims[qi][oi] else {
+                    continue;
+                };
+                let v = crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
+                if v == crate::check_answer::Validity::Valid {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::TrueStatementClaimKnownTrue,
+                    );
+                    break;
+                }
             }
         }
     }

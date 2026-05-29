@@ -49,13 +49,24 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
                     | QuestionType::MostCommon
             ) {
                 for oi in 0..option_count {
+                    // Bound is `<= 4` (max letter index, E) not `< option_count`: we want values
+                    // 0..=4 to round-trip even on oc<5 puzzles so check_form can flag them as
+                    // "letter outside option count". Tightening to oc would silently drop them.
                     option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
                     {
                         option_nums[qi][oi] as u8
                     } else {
                         0xFF
                     };
-                    option_nums[qi][oi] = NAN_VAL;
+                    // The letter index lives in option_answers; option_nums only needs to
+                    // distinguish "was null" (NONE_VAL, so check_form can flag it) from
+                    // everything else (NAN_VAL). Decide based on the original JSON so a
+                    // literal -1 doesn't collide with the NONE_VAL sentinel.
+                    option_nums[qi][oi] = if opts.get(oi).is_some_and(|o| o.is_null()) {
+                        NONE_VAL
+                    } else {
+                        NAN_VAL
+                    };
                 }
             }
             if question_types[qi].has_identity_options() {

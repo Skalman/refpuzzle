@@ -1,17 +1,17 @@
-import type { Answer, Puzzle, Marks } from "../src/engine/types.ts";
-import { LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
+import type { Answer, Puzzle, Marks, QuestionTypeName } from "../src/engine/types.ts";
+import { ALL_QUESTION_TYPE_NAMES, LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { checkAnswer, checkAnswers } from "../src/engine/check-answer.ts";
 import { isValid } from "../src/engine/state.ts";
 import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
-import { explainDeduce } from "../src/engine/explain.ts";
+import { explainDeduce, explainLookahead } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
 import { solve } from "../src/generator/solve-brute.ts";
 import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import type { SolveOutcome } from "../src/engine/solve-deduce.ts";
 import { parseCompactYear, expandQuestion } from "../src/puzzles/daily.ts";
 import { checkForm } from "../src/engine/check-form.ts";
-import { fillOptions } from "../src/generator/construct.ts";
+import { fillOptions, validValues } from "../src/generator/construct.ts";
 import type { ConstructResult } from "../src/generator/construct.ts";
 import { RNG } from "../src/generator/rng.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -754,7 +754,6 @@ function testSharedLookahead() {
     if ("section" in t) continue;
     const { name, puzzle: compact, state, expect } = t;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON fixture
     const wrapped = { "0101": { "1": compact } } as any;
     const parsed = parseCompactYear(wrapped);
     const puzzle = parsed["0101"]["1"];
@@ -782,6 +781,15 @@ function testSharedLookahead() {
     const gotStr = got === null ? "null" : got;
     const expectStr = expect === null ? "null" : expect;
     assert(gotStr === expectStr, `shared lookahead: ${name}: expected ${expectStr}, got ${gotStr}`);
+
+    // Explain check: every lookahead result should produce a complete explanation
+    if (result && gotStr === expectStr) {
+      try {
+        explainLookahead(puzzle, fp, answers, eliminated, result);
+      } catch (e) {
+        assert(false, `shared lookahead explain threw: ${name}: ${String(e)}`);
+      }
+    }
   }
 }
 
@@ -807,7 +815,6 @@ function testSharedSolve() {
     if ("section" in t) continue;
     const { name, puzzle: compact, expect, solution } = t;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- JSON fixture
     const wrapped = { "0101": { "1": compact } } as any;
     const parsed = parseCompactYear(wrapped);
     const puzzle = parsed["0101"]["1"];
@@ -1009,6 +1016,91 @@ function testSharedFillOptions() {
 }
 
 // ════════════════════════════════════════════════
+// Shared valid-values tests (validValues ⟷ checkForm cross-check)
+// ════════════════════════════════════════════════
+
+// Exempt: types whose option.value field isn't a user-chosen pool member.
+// NoOtherHasAnswer / AnswerIsSelf use identity options (value is always the
+// letter index); TrueStmt uses claims instead of values.
+const VALUE_TYPED_EXEMPT: ReadonlySet<QuestionTypeName> = new Set([
+  "NoOtherHasAnswer",
+  "AnswerIsSelf",
+  "TrueStmt",
+]);
+const VALUE_TYPED_QUESTION_TYPES: readonly QuestionTypeName[] = ALL_QUESTION_TYPE_NAMES.filter(
+  (t) => !VALUE_TYPED_EXEMPT.has(t),
+);
+
+function buildSinglePuzzle(
+  qt: ReturnType<typeof expandQuestion>,
+  qi: number,
+  n: number,
+  oc: number,
+  v: number | null,
+): Puzzle {
+  const questions: Puzzle["questions"] = [];
+  for (let i = 0; i < n; i++) {
+    const opts: { value: number | null }[] = [];
+    if (i === qi) {
+      opts.push({ value: v });
+      for (let j = 1; j < oc; j++) opts.push({ value: null });
+      questions.push({ options: opts, questionType: qt });
+    } else {
+      for (let j = 0; j < oc; j++) opts.push({ value: null });
+      questions.push({ options: opts, questionType: { type: "AnswerIsSelf" } });
+    }
+  }
+  return { id: "test", title: "T", difficulty: "1", optionCount: oc, questions };
+}
+
+function testSharedValidValues() {
+  const suite = JSON.parse(
+    readFileSync(resolve(import.meta.dirname, "../tests/valid-values.json"), "utf8"),
+  );
+  const covered = new Set<string>();
+
+  for (const t of suite.tests) {
+    if (t.section) continue;
+    const { name, qi, n, oc } = t as { name: string; qi: number; n: number; oc: number };
+    const type = expandQuestion(t.type);
+    covered.add(type.type);
+
+    // 1) validValues function output matches fixture spec
+    const got = validValues(type, qi, n, oc);
+    const gotSet = new Set(got.map((v) => (v === null ? "null" : String(v))));
+    const expSet = new Set(
+      (t.valid as (number | null)[]).map((v) => (v === null ? "null" : String(v))),
+    );
+    assertEq([...gotSet].sort(), [...expSet].sort(), `valid-values: ${name}: pool`);
+
+    // 2) & 3) Cross-check checkForm: any message at qi mentioning "option 0"
+    // (the slot we vary) must fire iff the value isn't in the pool. The "option 0"
+    // scope filters out incidental errors on the other (null-filled) options.
+    // Skip negatives: JSON -1 collides with Rust's NONE_VAL sentinel, so the
+    // two parsers can't represent it portably.
+    const maxV = Math.max(n, oc) + 1;
+    const candidates: (number | null)[] = [];
+    for (let i = 0; i <= maxV; i++) candidates.push(i);
+    candidates.push(null);
+    for (const v of candidates) {
+      const inPool = gotSet.has(v === null ? "null" : String(v));
+      const puzzle = buildSinglePuzzle(type, qi, n, oc, v);
+      const errors = checkForm(puzzle);
+      const flagged = errors.some((e) => e.qi === qi && /\boption 0\b/i.test(e.message));
+      assert(
+        flagged === !inPool,
+        `valid-values: ${name} v=${v === null ? "null" : v}: pool=${inPool ? "in" : "out"}, checkForm=${flagged ? "flagged" : "ok"} (disagree)`,
+      );
+    }
+  }
+
+  // 4) Coverage: every value-typed QuestionType has at least one fixture entry
+  for (const ty of VALUE_TYPED_QUESTION_TYPES) {
+    assert(covered.has(ty), `valid-values: missing fixture coverage for ${ty}`);
+  }
+}
+
+// ════════════════════════════════════════════════
 // Check-form tests
 // ════════════════════════════════════════════════
 
@@ -1046,6 +1138,7 @@ timed("Shared check-answer tests", testSharedCheckAnswer);
 timed("Shared lookahead tests", testSharedLookahead);
 timed("Shared solve tests", testSharedSolve);
 timed("Shared fill-options tests", testSharedFillOptions);
+timed("Shared valid-values tests", testSharedValidValues);
 timed("Solver edge cases", testSolverEdgeCases);
 timed("Share encode/decode tests", testShare);
 

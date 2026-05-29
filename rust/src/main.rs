@@ -135,6 +135,7 @@ fn print_help() {
     eprintln!("  -m            merge into existing file");
     eprintln!("  -l, --level   generate only this level (1-6)");
     eprintln!("  -a, --attempts  max attempts per seed (default 100)");
+    eprintln!("  -t, --threads N  worker threads (default: all cores)");
     eprintln!("  --stats       show generation statistics");
     eprintln!("  --trace       show trace output");
     eprintln!("  --json        output check results as JSON");
@@ -228,6 +229,7 @@ fn main() {
     let mut trace = false;
     let mut output_path: Option<String> = None;
     let mut merge = false;
+    let mut threads: Option<usize> = None;
 
     let mut i = 2;
     while i < args.len() {
@@ -248,6 +250,10 @@ fn main() {
             }
             "--merge" | "-m" => {
                 merge = true;
+            }
+            "--threads" | "-t" => {
+                i += 1;
+                threads = Some(args[i].parse().expect("invalid thread count"));
             }
             "--stats" => {
                 show_stats = true;
@@ -287,6 +293,13 @@ fn main() {
         eprintln!("Error: -o/--output is required (use -o - for stdout)");
         std::process::exit(1);
     });
+
+    if let Some(t) = threads {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(t)
+            .build_global()
+            .expect("failed to configure thread pool");
+    }
 
     let days = dates_in_year(year, start_mm, start_dd, end_mm, end_dd);
     let day_count = days.len();

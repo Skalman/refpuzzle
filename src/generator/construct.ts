@@ -695,7 +695,7 @@ function repairOneQuestion(
   }
 
   if (isCountingType(rule.type)) {
-    const vals = validValues(rule, n, oc);
+    const vals = validValues(rule, qi, n, oc);
     const max = vals.length > 0 ? (vals[vals.length - 1] ?? 0) : 0;
     replaceClosestWithFurthest(opts, correctOi, correctVal, elim, oc, 0, max);
     return;
@@ -920,10 +920,12 @@ function makeRule(
     case "LastWith":
       return { type, answer: rng.pick(validLetters) };
     case "PrevSame":
-      if (qi < 4) return null;
+      // Need oc distinct option values; pool size is qi + 1 (positions [0, qi) + null).
+      if (qi + 1 < oc) return null;
       return { type };
     case "NextSame":
-      if (qi + 5 > n) return null;
+      // Need oc distinct option values; pool size is n - qi (positions (qi, n) + null).
+      if (n - qi < oc) return null;
       return { type };
     case "OnlySame":
     case "SameAs":
@@ -1073,7 +1075,7 @@ function rangeWithNull(len: number, map: (i: number) => number = (i) => i): (num
   return v;
 }
 
-function validValues(rule: QuestionType, n: number, oc = 5): (number | null)[] {
+export function validValues(rule: QuestionType, qi: number, n: number, oc = 5): (number | null)[] {
   switch (rule.type) {
     case "CountAnswer":
     case "CountVowel":
@@ -1089,20 +1091,39 @@ function validValues(rule: QuestionType, n: number, oc = 5): (number | null)[] {
     case "MostCommon":
     case "NoOtherHasAnswer":
     case "LetterDist":
-    case "EqualCount":
       return Array.from({ length: oc }, (_, i) => i);
+    case "EqualCount": {
+      const refIdx = L2I[rule.answer];
+      const out: (number | null)[] = [];
+      for (let i = 0; i < oc; i++) if (i !== refIdx) out.push(i);
+      out.push(null);
+      return out;
+    }
     case "ClosestAfter":
       return rangeWithNull(n - rule.afterIndex - 1, (i) => i + rule.afterIndex + 1);
     case "ClosestBefore":
       return rangeWithNull(rule.beforeIndex);
+    case "NextSame":
+      return rangeWithNull(n - qi - 1, (i) => i + qi + 1);
+    case "PrevSame":
+      return rangeWithNull(qi);
     case "OnlyOdd":
       return rangeWithNull(Math.ceil(n / 2), (i) => i * 2);
     case "OnlyEven":
       return rangeWithNull(Math.floor(n / 2), (i) => i * 2 + 1);
     case "ConsecIdent":
       return rangeWithNull(n - 1);
-    case "SameAs":
-      return Array.from({ length: n }, (_, i) => i);
+    case "SameAs": {
+      const out: number[] = [];
+      for (let i = 0; i < n; i++) if (i !== qi) out.push(i);
+      return out;
+    }
+    case "OnlySame": {
+      const out: (number | null)[] = [];
+      for (let i = 0; i < n; i++) if (i !== qi) out.push(i);
+      out.push(null);
+      return out;
+    }
     default:
       return rangeWithNull(n);
   }
@@ -1249,7 +1270,7 @@ function engineerOptions(
   }
 
   const correct = computeValue(rule, qi, solution);
-  const vals = validValues(rule, n, oc);
+  const vals = validValues(rule, qi, n, oc);
   const distractors = pickDistractors(vals, correct, qi, rule, rng);
   const opts: OptionDef[] = new Array(oc);
   opts[correctOi] = { value: correct };

@@ -1,7 +1,23 @@
-import type { Answer, Puzzle } from "./types.ts";
+import type { Answer, Puzzle, QuestionTypeName } from "./types.ts";
 import { LETTERS } from "./types.ts";
 
 export type Severity = "warning" | "error";
+
+// Types whose correct option value is always defined (null option is never the answer).
+// SameAs has its own explicit null-error check; identity-option types (AnswerIsSelf,
+// NoOtherHasAnswer) and TrueStmt are special-cased elsewhere.
+const NULL_NOT_ALLOWED: ReadonlySet<QuestionTypeName> = new Set([
+  "CountAnswer",
+  "CountAnswerBefore",
+  "CountAnswerAfter",
+  "CountVowel",
+  "CountConsonant",
+  "MostCommonCount",
+  "AnswerOf",
+  "LeastCommon",
+  "MostCommon",
+  "LetterDist",
+]);
 
 export interface FormError {
   qi: number;
@@ -133,6 +149,19 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
       }
     }
 
+    // ── Null disallowed for types whose value is always defined ──
+    if (NULL_NOT_ALLOWED.has(qt.type)) {
+      for (let oi = 0; oi < oc; oi++) {
+        if (vals[oi] == null) {
+          errors.push({
+            qi,
+            message: `Option ${String(oi)} is null but ${qt.type} requires a value`,
+            severity: "warning",
+          });
+        }
+      }
+    }
+
     // ── Option values in valid range ──
     for (let oi = 0; oi < oc; oi++) {
       const v = vals[oi];
@@ -186,17 +215,73 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
           break;
         case "FirstWith":
         case "LastWith":
-        case "ClosestAfter":
-        case "ClosestBefore":
-        case "PrevSame":
-        case "NextSame":
         case "OnlySame":
         case "SameAs":
-        case "ConsecIdent":
-        case "OnlyOdd":
-        case "OnlyEven":
         case "SameAsWhich":
           if (v < 0 || v >= n) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "NextSame":
+          if (v <= qi || v >= n) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "PrevSame":
+          if (v < 0 || v >= qi) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "ClosestAfter":
+          if (v <= qt.afterIndex || v >= n) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "ClosestBefore":
+          if (v < 0 || v >= qt.beforeIndex) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "OnlyOdd":
+          if (v < 0 || v >= n || v % 2 !== 0) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "OnlyEven":
+          if (v < 0 || v >= n || v % 2 !== 1) {
+            errors.push({
+              qi,
+              message: `Option ${String(oi)} value ${String(v)} out of range`,
+              severity: "warning",
+            });
+          }
+          break;
+        case "ConsecIdent":
+          if (v < 0 || v >= n - 1) {
             errors.push({
               qi,
               message: `Option ${String(oi)} value ${String(v)} out of range`,

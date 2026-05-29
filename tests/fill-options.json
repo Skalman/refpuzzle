@@ -84,18 +84,23 @@
     },
     { "section": "=== relational types ===" },
     {
-      "name": "n=5 PrevSame + NextSame",
-      "n": 5,
+      "name": "n=10 PrevSame + NextSame",
+      "n": 10,
       "oc": 5,
       "types": [
         { "t": "NextSame" },
         { "t": "NextSame" },
+        { "t": "AnswerIsSelf" },
+        { "t": "AnswerIsSelf" },
+        { "t": "AnswerIsSelf" },
+        { "t": "AnswerIsSelf" },
+        { "t": "AnswerIsSelf" },
+        { "t": "AnswerIsSelf" },
         { "t": "PrevSame" },
-        { "t": "PrevSame" },
-        { "t": "AnswerIsSelf" }
+        { "t": "PrevSame" }
       ],
-      "solution": "ABABC",
-      "expectedCorrect": [2, 3, 0, 1, null]
+      "solution": "ABCDEABCDE",
+      "expectedCorrect": [5, 6, null, null, null, null, null, null, 3, 4]
     },
     {
       "name": "n=5 OnlySame (exactly 1 partner)",

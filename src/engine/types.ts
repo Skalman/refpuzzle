@@ -129,6 +129,45 @@ export const QT_SAME_AS_WHICH = rtCounter++;
 
 export type QuestionTypeId = number;
 
+export type QuestionTypeName = QuestionType["type"];
+
+export const ALL_QUESTION_TYPE_NAMES = [
+  "CountAnswer",
+  "CountAnswerBefore",
+  "CountAnswerAfter",
+  "CountVowel",
+  "CountConsonant",
+  "MostCommonCount",
+  "ClosestAfter",
+  "ClosestBefore",
+  "FirstWith",
+  "LastWith",
+  "PrevSame",
+  "NextSame",
+  "OnlySame",
+  "SameAs",
+  "OnlyOdd",
+  "OnlyEven",
+  "ConsecIdent",
+  "AnswerOf",
+  "LeastCommon",
+  "MostCommon",
+  "NoOtherHasAnswer",
+  "EqualCount",
+  "AnswerIsSelf",
+  "LetterDist",
+  "TrueStmt",
+  "SameAsWhich",
+] as const satisfies readonly QuestionTypeName[];
+
+// Compile-time exhaustiveness: if QuestionType grows a new variant, this errors
+// until the new name is added to ALL_QUESTION_TYPE_NAMES.
+type ExhaustiveQuestionTypeNames =
+  Exclude<QuestionTypeName, (typeof ALL_QUESTION_TYPE_NAMES)[number]> extends never ? true : false;
+// @ts-expect-error
+// oxlint-disable-next-line no-unused-vars
+const ALL_QUESTION_TYPE_NAMES_EXHAUSTIVE: ExhaustiveQuestionTypeNames = true;
+
 export function isQuestionTypeWithIdentityOptions(t: QuestionTypeId): boolean {
   return t === QT_NO_OTHER_HAS_ANSWER || t === QT_ANSWER_IS_SELF;
 }

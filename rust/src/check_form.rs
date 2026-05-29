@@ -206,6 +206,34 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             }
         }
 
+        let null_not_allowed = matches!(
+            qt,
+            QuestionType::CountAnswer { .. }
+                | QuestionType::CountAnswerBefore { .. }
+                | QuestionType::CountAnswerAfter { .. }
+                | QuestionType::CountVowel
+                | QuestionType::CountConsonant
+                | QuestionType::MostCommonCount
+                | QuestionType::AnswerOf { .. }
+                | QuestionType::LeastCommon
+                | QuestionType::MostCommon
+                | QuestionType::LetterDist { .. }
+        );
+        if null_not_allowed {
+            for oi in 0..oc {
+                if fp.option_nums[qi][oi] == NONE_VAL {
+                    errors.push(FormError {
+                        qi,
+                        message: format!(
+                            "Option {oi} is null but {:?} requires a value",
+                            qt.kind()
+                        ),
+                        severity: Severity::Warning,
+                    });
+                }
+            }
+        }
+
         // Option values in valid range
         for oi in 0..oc {
             let v = fp.option_nums[qi][oi];
@@ -229,16 +257,20 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                 | QuestionType::LetterDist { .. } => !(0..oc as i16).contains(&v),
                 QuestionType::FirstWith { .. }
                 | QuestionType::LastWith { .. }
-                | QuestionType::ClosestAfter { .. }
-                | QuestionType::ClosestBefore { .. }
-                | QuestionType::PrevSame
-                | QuestionType::NextSame
                 | QuestionType::OnlySame
                 | QuestionType::SameAs
-                | QuestionType::ConsecIdent
-                | QuestionType::OnlyOdd { .. }
-                | QuestionType::OnlyEven { .. }
                 | QuestionType::SameAsWhich { .. } => v < 0 || v >= n as i16,
+                QuestionType::NextSame => v <= qi as i16 || v >= n as i16,
+                QuestionType::PrevSame => v < 0 || v >= qi as i16,
+                QuestionType::ClosestAfter { after_index, .. } => {
+                    v <= *after_index as i16 || v >= n as i16
+                }
+                QuestionType::ClosestBefore { before_index, .. } => {
+                    v < 0 || v >= *before_index as i16
+                }
+                QuestionType::OnlyOdd { .. } => v < 0 || v >= n as i16 || v % 2 != 0,
+                QuestionType::OnlyEven { .. } => v < 0 || v >= n as i16 || v % 2 != 1,
+                QuestionType::ConsecIdent => v < 0 || v >= n as i16 - 1,
                 _ => false,
             };
             if out_of_range {

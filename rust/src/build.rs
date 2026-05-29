@@ -324,7 +324,11 @@ fn validate_option_values(fp: &FlatPuzzle) {
         for oi in 0..oc {
             if let Some(ref claim) = fp.option_claims[qi][oi] {
                 if claim.value != NONE_VAL {
-                    let pool = valid_values(&claim.question_type, n, oc);
+                    // qi here is the TrueStmt's qi, which would be the wrong reference
+                    // for position-dependent types. CLAIM_TYPES enforces (at compile
+                    // time, below) that claims can't carry NextSame/PrevSame, so this
+                    // qi is irrelevant for every kind that actually reaches here.
+                    let pool = valid_values(&claim.question_type, qi, n, oc);
                     assert!(
                         pool.contains(&claim.value),
                         "Q{} option {}: claim {:?} value {} not in {:?}",
@@ -341,7 +345,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
             if v == NAN_VAL || v == NONE_VAL {
                 continue;
             }
-            let pool = valid_values(qt, n, oc);
+            let pool = valid_values(qt, qi, n, oc);
             assert!(
                 pool.contains(&v),
                 "Q{} option {}: type {:?} value {} not in {:?}",
@@ -355,7 +359,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
     }
 }
 
-fn valid_values(qt: &QuestionType, n: usize, oc: usize) -> ArrayVec<i16, 20> {
+fn valid_values(qt: &QuestionType, qi: usize, n: usize, oc: usize) -> ArrayVec<i16, 20> {
     let mut out = ArrayVec::new();
     match *qt {
         QuestionType::CountAnswer { .. }
@@ -380,11 +384,19 @@ fn valid_values(qt: &QuestionType, n: usize, oc: usize) -> ArrayVec<i16, 20> {
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
         | QuestionType::NoOtherHasAnswer
-        | QuestionType::LetterDist { .. }
-        | QuestionType::EqualCount { .. } => {
+        | QuestionType::LetterDist { .. } => {
             for v in 0..oc as i16 {
                 out.push(v);
             }
+        }
+        QuestionType::EqualCount { answer } => {
+            let ref_idx = answer.idx() as i16;
+            for v in 0..oc as i16 {
+                if v != ref_idx {
+                    out.push(v);
+                }
+            }
+            out.push(NONE_VAL);
         }
         QuestionType::ClosestAfter { after_index, .. } => {
             for v in (after_index as i16 + 1)..n as i16 {
@@ -394,6 +406,18 @@ fn valid_values(qt: &QuestionType, n: usize, oc: usize) -> ArrayVec<i16, 20> {
         }
         QuestionType::ClosestBefore { before_index, .. } => {
             for v in 0..before_index as i16 {
+                out.push(v);
+            }
+            out.push(NONE_VAL);
+        }
+        QuestionType::NextSame => {
+            for v in (qi as i16 + 1)..n as i16 {
+                out.push(v);
+            }
+            out.push(NONE_VAL);
+        }
+        QuestionType::PrevSame => {
+            for v in 0..qi as i16 {
                 out.push(v);
             }
             out.push(NONE_VAL);
@@ -419,8 +443,18 @@ fn valid_values(qt: &QuestionType, n: usize, oc: usize) -> ArrayVec<i16, 20> {
         QuestionType::TrueStmt | QuestionType::AnswerIsSelf => {}
         QuestionType::SameAs => {
             for v in 0..n as i16 {
-                out.push(v);
+                if v != qi as i16 {
+                    out.push(v);
+                }
             }
+        }
+        QuestionType::OnlySame => {
+            for v in 0..n as i16 {
+                if v != qi as i16 {
+                    out.push(v);
+                }
+            }
+            out.push(NONE_VAL);
         }
         _ => {
             for v in 0..n as i16 {
@@ -783,7 +817,7 @@ pub fn repair_one_question(
         }
         _ if is_counting_type(&qt) => {
             let correct_val = fp.option_nums[qi][correct_oi];
-            let vals = valid_values(&qt, n, oc);
+            let vals = valid_values(&qt, qi, n, oc);
             let max = vals.last().copied().unwrap_or(0);
             // Find the non-eliminated wrong option closest to correct — that's
             // the one the hint engine can't distinguish. Replace just that one.
@@ -992,7 +1026,7 @@ fn fill_one_question(
     }
 
     let correct_val = correct_option_value(qt, qi, solution, n);
-    let val_pool = valid_values(qt, n, option_count);
+    let val_pool = valid_values(qt, qi, n, option_count);
     let letters = &LETTERS[..option_count];
 
     match *qt {
@@ -1522,6 +1556,9 @@ fn build_claims(
     }
 }
 
+// Position-dependent kinds (NextSame, PrevSame) must NOT appear here: a claim
+// has no qi of its own, so valid_values can't compute the right pool for them.
+// The const block below enforces this at compile time.
 const CLAIM_TYPES: &[QuestionTypeKind] = &[
     QuestionTypeKind::CountAnswer,
     QuestionTypeKind::CountConsonant,
@@ -1542,6 +1579,19 @@ const CLAIM_TYPES: &[QuestionTypeKind] = &[
     QuestionTypeKind::OnlyEven,
     QuestionTypeKind::SameAsWhich,
 ];
+
+const _: () = {
+    let mut i = 0;
+    while i < CLAIM_TYPES.len() {
+        match CLAIM_TYPES[i] {
+            QuestionTypeKind::NextSame | QuestionTypeKind::PrevSame => {
+                panic!("CLAIM_TYPES must not contain position-dependent kinds");
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+};
 
 fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> Option<Claim> {
     let kind = rng.pick(CLAIM_TYPES);
@@ -2012,5 +2062,151 @@ mod tests {
 
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
+
+    #[test]
+    fn test_shared_valid_values() {
+        use crate::check_form::check_form;
+        use crate::serialize::parse_puzzle;
+        use serde_json::json;
+
+        let json_str = std::fs::read_to_string("../tests/valid-values.json")
+            .expect("can't read tests/valid-values.json");
+        let suite: Value = serde_json::from_str(&json_str).unwrap();
+        let tests = suite["tests"].as_array().unwrap();
+
+        // NoOtherHasAnswer / AnswerIsSelf use identity options, TrueStmt uses claims;
+        // the parser overrides input, so checkForm's range warning is unobservable.
+        let exempt = [
+            QuestionTypeKind::NoOtherHasAnswer,
+            QuestionTypeKind::AnswerIsSelf,
+            QuestionTypeKind::TrueStmt,
+        ];
+        let value_typed: Vec<QuestionTypeKind> = QuestionTypeKind::all_flat()
+            .iter()
+            .copied()
+            .filter(|k| !exempt.contains(k))
+            .collect();
+        let mut covered: std::collections::HashSet<QuestionTypeKind> =
+            std::collections::HashSet::new();
+
+        let build_puzzle =
+            |type_json: &Value, qi: usize, n: usize, oc: usize, v: Option<i64>| -> Value {
+                let mut qs = Vec::with_capacity(n);
+                for i in 0..n {
+                    if i == qi {
+                        let mut o: Vec<Value> = Vec::with_capacity(oc);
+                        o.push(match v {
+                            Some(x) => json!(x),
+                            None => Value::Null,
+                        });
+                        for _ in 1..oc {
+                            o.push(Value::Null);
+                        }
+                        qs.push(json!({ "o": o, "t": type_json }));
+                    } else {
+                        let mut o: Vec<Value> = Vec::with_capacity(oc);
+                        for _ in 0..oc {
+                            o.push(Value::Null);
+                        }
+                        qs.push(json!({ "o": o, "t": { "t": "AnswerIsSelf" } }));
+                    }
+                }
+                json!({ "q": qs })
+            };
+
+        for test in tests {
+            if test.get("section").is_some() {
+                continue;
+            }
+            let name = test["name"].as_str().unwrap();
+            let qi = test["qi"].as_u64().unwrap() as usize;
+            let n = test["n"].as_u64().unwrap() as usize;
+            let oc = test["oc"].as_u64().unwrap() as usize;
+            let type_json = &test["type"];
+
+            let qt: QuestionType = serde_json::from_value(type_json.clone())
+                .unwrap_or_else(|e| panic!("{name}: parse type: {e}"));
+            covered.insert(qt.kind());
+
+            // 1) validValues output matches fixture
+            let got = valid_values(&qt, qi, n, oc);
+            let mut got_set: Vec<String> = got
+                .iter()
+                .map(|&v| {
+                    if v == NONE_VAL {
+                        "null".into()
+                    } else {
+                        v.to_string()
+                    }
+                })
+                .collect();
+            got_set.sort();
+            let mut exp_set: Vec<String> = test["valid"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|v| {
+                    if v.is_null() {
+                        "null".into()
+                    } else {
+                        v.to_string()
+                    }
+                })
+                .collect();
+            exp_set.sort();
+            assert_eq!(got_set, exp_set, "{name}: pool mismatch");
+
+            // 2) & 3) Cross-check checkForm: any message at qi mentioning
+            // "option 0" (the slot we vary) must fire iff the value isn't in
+            // the pool. The "option 0" scope filters out incidental errors on
+            // the other (null-filled) options.
+            // Skip negatives: JSON -1 collides with NONE_VAL sentinel via parse_puzzle.
+            let pool_ints: std::collections::HashSet<i64> = test["valid"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_i64())
+                .collect();
+            let null_in_pool = test["valid"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|v| v.is_null());
+            let max_v = n.max(oc) as i64 + 1;
+            let mut candidates: Vec<Option<i64>> = (0..=max_v).map(Some).collect();
+            candidates.push(None);
+            for v in candidates {
+                let in_pool = match v {
+                    Some(x) => pool_ints.contains(&x),
+                    None => null_in_pool,
+                };
+                let puzzle = build_puzzle(type_json, qi, n, oc, v);
+                let fp = parse_puzzle(&puzzle).expect("parse_puzzle failed");
+                let errors = check_form(&fp, None);
+                let flagged = errors.iter().any(|e| {
+                    e.qi == qi && (e.message.contains("option 0") || e.message.contains("Option 0"))
+                });
+                let v_str = match v {
+                    Some(x) => x.to_string(),
+                    None => "null".to_string(),
+                };
+                assert_eq!(
+                    flagged,
+                    !in_pool,
+                    "{name} v={v_str}: pool={}, checkForm={} (disagree)",
+                    if in_pool { "in" } else { "out" },
+                    if flagged { "flagged" } else { "ok" }
+                );
+            }
+        }
+
+        // 4) Coverage
+        for ty in &value_typed {
+            assert!(
+                covered.contains(ty),
+                "valid-values: missing fixture coverage for {ty:?}"
+            );
+        }
     }
 }
