@@ -806,21 +806,23 @@ pub(crate) fn random_type_params(
             answer: rng.pick(letters),
         }),
         QuestionTypeKind::CountAnswerBefore => {
-            if n < 6 {
+            // Need before_index with at least oc distinct count values (0..=before_index).
+            if n < option_count {
                 return None;
             }
             Some(QuestionType::CountAnswerBefore {
                 answer: rng.pick(letters),
-                before_index: rng.int(4, n as i32 - 1) as u8,
+                before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
             })
         }
         QuestionTypeKind::CountAnswerAfter => {
-            if n < 6 {
+            // Need after_index with at least oc distinct count values (0..=n-1-after_index).
+            if n < option_count {
                 return None;
             }
             Some(QuestionType::CountAnswerAfter {
                 answer: rng.pick(letters),
-                after_index: rng.int(0, (n as i32 - 5).max(0)) as u8,
+                after_index: rng.int(0, n as i32 - option_count as i32) as u8,
             })
         }
         QuestionTypeKind::CountVowel => Some(QuestionType::CountVowel),

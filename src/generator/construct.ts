@@ -872,18 +872,20 @@ function makeRule(
     case "CountAnswer":
       return { type, answer: rng.pick(validLetters) };
     case "CountAnswerBefore":
-      if (n < 6) return null;
+      // Need beforeIndex with at least oc distinct count values (0..=beforeIndex).
+      if (n < oc) return null;
       return {
         type,
         answer: rng.pick(validLetters),
-        beforeIndex: rng.int(4, n - 1),
+        beforeIndex: rng.int(oc - 1, n - 1),
       };
     case "CountAnswerAfter":
-      if (n < 6) return null;
+      // Need afterIndex with at least oc distinct count values (0..=n-1-afterIndex).
+      if (n < oc) return null;
       return {
         type,
         answer: rng.pick(validLetters),
-        afterIndex: rng.int(0, Math.max(0, n - 5)),
+        afterIndex: rng.int(0, n - oc),
       };
     case "CountVowel":
     case "CountConsonant":

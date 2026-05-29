@@ -16,6 +16,8 @@ export const profiles: DifficultyProfile[] = [
     optionCount: 3,
     allowedTypes: [
       "CountAnswer",
+      "CountAnswerBefore",
+      "CountAnswerAfter",
       "AnswerOf",
       "FirstWith",
       "LastWith",
@@ -41,6 +43,8 @@ export const profiles: DifficultyProfile[] = [
     optionCount: 5,
     allowedTypes: [
       "CountAnswer",
+      "CountAnswerBefore",
+      "CountAnswerAfter",
       "AnswerOf",
       "AnswerIsSelf",
       "ClosestAfter",

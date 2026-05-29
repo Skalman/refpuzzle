@@ -14,6 +14,8 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 3,
         allowed_types: &[
             CountAnswer,
+            CountAnswerBefore,
+            CountAnswerAfter,
             AnswerOf,
             FirstWith,
             LastWith,
@@ -36,6 +38,8 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         allowed_types: &[
             CountAnswer,
+            CountAnswerBefore,
+            CountAnswerAfter,
             AnswerOf,
             AnswerIsSelf,
             ClosestAfter,
