@@ -218,12 +218,32 @@ function res(action: DeduceAction, rule: DeduceRule): DeduceResult {
 
 // ── Main functions ──
 
+/**
+ * Sound-only deduction. Safe to use during generation: every conclusion is
+ * true in any valid extension of the current state, regardless of whether the
+ * puzzle has a unique solution.
+ */
 export function deduce(fp: FlatPuzzle, state: State): DeduceResult[] {
-  return deduceImpl(fp, state, null, null, false);
+  return deduceImpl(fp, state, null, null, false, false);
 }
 
+/**
+ * Deduction that may apply uniqueness-assuming rules (e.g. "TrueStmt has
+ * exactly one true claim, so the known-true one must be it"). Only sound
+ * when the puzzle is known to have a unique solution — use for play, check,
+ * or tests; NOT during generation.
+ */
+export function deduceAssumingUnique(fp: FlatPuzzle, state: State): DeduceResult[] {
+  return deduceImpl(fp, state, null, null, false, true);
+}
+
+/**
+ * Fast-path variant of `deduce`: skips expensive non-fast rules. Sound-only
+ * (does NOT apply uniqueness-assuming rules); used by lookahead's
+ * hypothesis-testing where the hypothesis may be inconsistent.
+ */
 export function deduceFast(fp: FlatPuzzle, state: State): DeduceResult[] {
-  return deduceImpl(fp, state, null, null, true);
+  return deduceImpl(fp, state, null, null, true, false);
 }
 
 export function deduceWithRule(
@@ -232,7 +252,7 @@ export function deduceWithRule(
   rule: DeduceRule | null,
   exclude: DeduceRule | null = null,
 ): DeduceResult[] {
-  return deduceImpl(fp, state, rule, exclude, false);
+  return deduceImpl(fp, state, rule, exclude, false, true);
 }
 
 function deduceImpl(
@@ -241,6 +261,7 @@ function deduceImpl(
   rule: DeduceRule | null,
   exclude: DeduceRule | null,
   fast: boolean,
+  assumeUnique: boolean,
 ): DeduceResult[] {
   const { answers, eliminated } = state;
   const n = fp.n;
@@ -1538,27 +1559,36 @@ function deduceImpl(
     }
   }
 
-  // TrueStatement claim known-true: if any non-eliminated option's claim is
-  // already provably true (in the current state, without hypothesizing the
-  // answer), force the question's answer to that option. Checking against
-  // the current state avoids the circularity where a self-referencing claim
-  // like AnswerOf { q = this_qi, value = oi } would appear Valid only because
-  // we'd hypothesized Q[qi] = LETTERS[oi].
-  if (!fast && run("TrueStatementClaimKnownTrue")) {
+  // TrueStatement claim known-true: if exactly one non-eliminated option's
+  // claim is already provably true (in the current state, without hypothesizing
+  // the answer), force the question's answer to that option.
+  //
+  // This is a uniqueness-assuming rule: it relies on "TrueStmt has exactly
+  // one true claim" — but the current check_answer doesn't enforce that an
+  // unselected option's claim must be false, so a puzzle can have multiple
+  // simultaneously-Valid claims, in which case the brute-force solver will
+  // find multiple solutions. Gated on assumeUnique so it never fires during
+  // generation.
+  if (!fast && assumeUnique && run("TrueStatementClaimKnownTrue")) {
     for (let qi = 0; qi < n; qi++) {
       if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       if (answers[qi] != null) continue;
+      let validOi = -1;
+      let validCount = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
         const claim = fp.optionClaims[qi][oi];
         if (!claim) continue;
         const v = checkClaim(fp, { answers, eliminated }, { qi, oi }, claim);
         if (v === V_VALID) {
-          results.push(
-            res({ type: "force", qi, answer: LETTERS[oi] }, "TrueStatementClaimKnownTrue"),
-          );
-          break;
+          validCount++;
+          validOi = oi;
         }
+      }
+      if (validCount === 1) {
+        results.push(
+          res({ type: "force", qi, answer: LETTERS[validOi] }, "TrueStatementClaimKnownTrue"),
+        );
       }
     }
   }

@@ -1,6 +1,6 @@
 import type { Answer, FlatPuzzle, State } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import { deduce } from "./deduce.ts";
+import { deduceAssumingUnique } from "./deduce.ts";
 import type { DeduceAction } from "./deduce.ts";
 import { lookahead } from "./lookahead.ts";
 import { checkAnswer } from "./check-answer.ts";
@@ -24,7 +24,7 @@ export function solvePuzzle(fp: FlatPuzzle): SolveResult {
   for (let iter = 0; iter < n * 30; iter++) {
     if (state.answers.every((a) => a != null)) break;
 
-    const drs = deduce(fp, state);
+    const drs = deduceAssumingUnique(fp, state);
     if (drs.length > 0) {
       for (const dr of drs) {
         collectSteps(dr.action, n, steps);

@@ -1,4 +1,4 @@
-use crate::deduce::{DeduceAction, DeduceResult, deduce};
+use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
 use crate::lookahead::lookahead;
 use crate::types::*;
 
@@ -35,7 +35,7 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
             };
         }
 
-        let drs = deduce(fp, &state);
+        let drs = deduce_assuming_unique(fp, &state);
         if !drs.is_empty() {
             for dr in &drs {
                 apply_action(&dr.action, &mut state);

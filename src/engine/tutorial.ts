@@ -1,6 +1,6 @@
 import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import { deduce } from "./deduce.ts";
+import { deduceAssumingUnique } from "./deduce.ts";
 import type { DeduceResult } from "./deduce.ts";
 import { explainDeduce } from "./explain.ts";
 import type { ExplainStep } from "./explain.ts";
@@ -76,7 +76,7 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.every((a) => a != null)) break;
 
-    const drs = deduce(fp, { answers, eliminated });
+    const drs = deduceAssumingUnique(fp, { answers, eliminated });
     if (drs.length === 0) break;
 
     const dr = drs[0];

@@ -246,17 +246,31 @@ pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 
 // ── Main functions ──
 
+/// Sound-only deduction. Safe to use during generation: every conclusion is
+/// true in any valid extension of the current state, regardless of whether the
+/// puzzle has a unique solution.
 pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, false)
+    deduce_impl(fp, state, None, None, false, false)
 }
 
+/// Deduction that may apply uniqueness-assuming rules (e.g. "TrueStmt has
+/// exactly one true claim, so the known-true one must be it"). Only sound
+/// when the puzzle is known to have a unique solution — use for play, check,
+/// or tests; NOT during generation.
+pub fn deduce_assuming_unique(fp: &FlatPuzzle, state: &State) -> DeduceResults {
+    deduce_impl(fp, state, None, None, false, true)
+}
+
+/// Fast-path variant of `deduce`: skips expensive non-fast rules. Sound-only
+/// (does NOT apply uniqueness-assuming rules); used by lookahead's
+/// hypothesis-testing where the hypothesis may be inconsistent.
 pub fn deduce_fast(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, true)
+    deduce_impl(fp, state, None, None, true, false)
 }
 
 #[cfg(test)]
 pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
-    deduce_impl(fp, state, Some(rule), None, false)
+    deduce_impl(fp, state, Some(rule), None, false, true)
 }
 
 #[cfg(test)]
@@ -271,7 +285,7 @@ pub fn deduce_with_rule_exclude(
     } else {
         Some(rule)
     };
-    deduce_impl(fp, state, rule_filter, exclude, false)
+    deduce_impl(fp, state, rule_filter, exclude, false, true)
 }
 
 #[inline(always)]
@@ -281,6 +295,7 @@ fn deduce_impl(
     rule: Option<DeduceRule>,
     exclude: Option<DeduceRule>,
     fast: bool,
+    assume_unique: bool,
 ) -> DeduceResults {
     let n = fp.n;
     let answers = &state.answers;
@@ -2076,13 +2091,17 @@ fn deduce_impl(
         }
     }
 
-    // TrueStatement claim known-true: if any non-eliminated option's claim is
-    // already provably true (in the current state, without hypothesizing the
-    // answer), force the question's answer to that option. Checking against
-    // the current state avoids the circularity where a self-referencing claim
-    // like AnswerOf { q = this_qi, value = oi } would appear Valid only because
-    // we'd hypothesized Q[qi] = LETTERS[oi].
-    if !fast && run(DeduceRule::TrueStatementClaimKnownTrue) {
+    // TrueStatement claim known-true: if exactly one non-eliminated option's
+    // claim is already provably true (in the current state, without hypothesizing
+    // the answer), force the question's answer to that option.
+    //
+    // This is a uniqueness-assuming rule: it relies on "TrueStmt has exactly
+    // one true claim" — but the current check_answer doesn't enforce that an
+    // unselected option's claim must be false, so a puzzle can have multiple
+    // simultaneously-Valid claims, in which case the brute-force solver will
+    // find multiple solutions. Gated on assume_unique so it never fires
+    // during generation.
+    if !fast && assume_unique && run(DeduceRule::TrueStatementClaimKnownTrue) {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
                 continue;
@@ -2090,6 +2109,8 @@ fn deduce_impl(
             if answers[qi].is_some() {
                 continue;
             }
+            let mut valid_oi: Option<usize> = None;
+            let mut valid_count = 0usize;
             for oi in 0..5usize {
                 if is_elim(eliminated, qi, oi) {
                     continue;
@@ -2099,15 +2120,20 @@ fn deduce_impl(
                 };
                 let v = crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
                 if v == crate::check_answer::Validity::Valid {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::TrueStatementClaimKnownTrue,
-                    );
-                    break;
+                    valid_count += 1;
+                    valid_oi = Some(oi);
                 }
+            }
+            if valid_count == 1
+                && let Some(oi) = valid_oi
+            {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: LETTERS[oi],
+                    },
+                    DeduceRule::TrueStatementClaimKnownTrue,
+                );
             }
         }
     }
@@ -2236,7 +2262,7 @@ mod tests {
             };
             let drs = match parsed_rule {
                 Some(r) => deduce_with_rule(&fp, &state, r),
-                None => deduce(&fp, &state),
+                None => deduce_assuming_unique(&fp, &state),
             };
             fn format_result(dr: Option<&DeduceResult>) -> String {
                 match dr {

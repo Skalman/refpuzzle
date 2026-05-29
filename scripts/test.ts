@@ -2,7 +2,7 @@ import type { Answer, Puzzle, Marks, QuestionTypeName } from "../src/engine/type
 import { ALL_QUESTION_TYPE_NAMES, LETTERS, L2I, flattenPuzzle } from "../src/engine/types.ts";
 import { checkAnswer, checkAnswers } from "../src/engine/check-answer.ts";
 import { isValid } from "../src/engine/state.ts";
-import { deduce, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
+import { deduceAssumingUnique, deduceWithRule, ALL_DEDUCE_RULES } from "../src/engine/deduce.ts";
 import type { DeduceResult, DeduceRule } from "../src/engine/deduce.ts";
 import { explainDeduce, explainLookahead } from "../src/engine/explain.ts";
 import { lookahead } from "../src/engine/lookahead.ts";
@@ -296,7 +296,7 @@ function testHints() {
     const { answers, eliminated } = blankState(2);
     const fp = flattenPuzzle(contradictionPuzzle);
     setCorrect(answers, eliminated, 0, "C"); // Q1 = C, so Q2 must be C
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length > 0, "forced hint: deduce returns a result");
     assert(
       dr[0].action.type === "force",
@@ -317,7 +317,7 @@ function testHints() {
     setEliminated(eliminated, 0, "C");
     setEliminated(eliminated, 0, "D");
     // Only E remains for Q1
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length > 0, "forced-by-elim: deduce returns a result");
     assert(
       dr[0].action.type === "force" && dr[0].action.answer === "E",
@@ -350,7 +350,7 @@ function testHints() {
     const fp = flattenPuzzle(countPuzzle);
     setCorrect(answers, eliminated, 1, "A");
     setCorrect(answers, eliminated, 2, "A");
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length > 0, "elimination: deduce returns a result");
     assert(
       dr[0].action.type === "eliminate" || dr[0].action.type === "force",
@@ -364,7 +364,7 @@ function testHints() {
     const fp = flattenPuzzle(countPuzzle);
     setCorrect(answers, eliminated, 1, "B");
     setCorrect(answers, eliminated, 2, "C");
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length > 0, "count forced: deduce returns a result");
   }
 
@@ -388,7 +388,7 @@ function testHints() {
     const { answers, eliminated } = blankState(2);
     const fp = flattenPuzzle(lookaheadPuzzle);
     // No direct deduction possible — should need lookahead
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     if (dr.length > 0) {
       assert(true, "lookahead puzzle: deduce found something directly");
     } else {
@@ -418,7 +418,7 @@ function testHints() {
     const fp = flattenPuzzle(allSelfPuzzle);
     setCorrect(answers, eliminated, 0, "C");
     setCorrect(answers, eliminated, 1, "C");
-    const dr = deduce(fp, { answers, eliminated });
+    const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length === 0, "solved puzzle: deduce returns empty");
     const lr = lookahead(fp, { answers, eliminated });
     assert(lr == null, "solved puzzle: lookahead returns null");
@@ -436,7 +436,7 @@ function testHints() {
     let stuck = false;
 
     while (!answers.every((a) => a != null) && steps < n * 15) {
-      const dr = deduce(fp, { answers, eliminated });
+      const dr = deduceAssumingUnique(fp, { answers, eliminated });
       if (dr.length > 0) {
         applyAction(dr[0].action, answers, eliminated);
         steps++;
@@ -896,7 +896,7 @@ function testSharedDeduce() {
 
     const results = parsedRule
       ? deduceWithRule(fp, { answers, eliminated }, parsedRule)
-      : deduce(fp, { answers, eliminated });
+      : deduceAssumingUnique(fp, { answers, eliminated });
     const got = formatAction(results[0]);
     const expected = expect ?? "null";
     assert(got === expected, `deduce: ${name}: expected ${expected}, got ${got}`);

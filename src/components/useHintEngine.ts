@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "preact/hooks";
 import type { Answer, Puzzle } from "../engine/types.ts";
 import { letterIdx, getFlatPuzzle } from "../engine/types.ts";
-import { deduce } from "../engine/deduce.ts";
+import { deduceAssumingUnique } from "../engine/deduce.ts";
 import { lookaheadShortest } from "../engine/lookahead.ts";
 import { solvePuzzle } from "../engine/solve-deduce.ts";
 import { explainDeduce, explainLookahead } from "../engine/explain.ts";
@@ -73,7 +73,7 @@ export function useHintEngine(
     const errorSteps = findError(answers, eliminated);
     if (errorSteps) return { steps: errorSteps };
 
-    const drs = deduce(fp, state);
+    const drs = deduceAssumingUnique(fp, state);
     if (drs.length > 0) return { steps: explainDeduce(puzzle, fp, answers, eliminated, drs[0]) };
 
     const t0 = performance.now();

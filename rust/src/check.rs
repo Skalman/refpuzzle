@@ -924,7 +924,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                 eliminated: state.eliminated,
             };
         }
-        let drs = deduce::deduce(fp, &state);
+        let drs = deduce::deduce_assuming_unique(fp, &state);
         if !drs.is_empty() {
             for dr in &drs {
                 match dr.action {
