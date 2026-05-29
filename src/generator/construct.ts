@@ -935,12 +935,18 @@ function makeRule(
       if (n - qi < oc) return null;
       return { type };
     case "OnlySame":
-    case "SameAs":
     case "ConsecIdent":
     case "LeastCommon":
     case "MostCommon":
     case "NoOtherHasAnswer":
       return { type };
+    case "SameAs": {
+      // Structural: another question must share qi's answer.
+      // Capacity: distractor pool excludes qi, so n-1 must hold oc distinct values.
+      if (n <= oc) return null;
+      if (!solution.some((a, j) => j !== qi && a === solution[qi])) return null;
+      return { type };
+    }
     case "EqualCount": {
       const refLetter = rng.pick(validLetters);
       const refCount = solution.filter((a) => a === refLetter).length;
@@ -962,11 +968,20 @@ function makeRule(
       if (targets.length === 0) return null;
       const ref = rng.pick(targets);
       if (solution[ref] === solution[qi]) return null;
+      // Structural: another question must share ref's answer.
+      // Capacity: need at least oc-1 questions whose answer differs from ref (distractors).
+      let hasMatch = false;
+      let distractorCount = 0;
       for (let j = 0; j < n; j++) {
-        if (j !== qi && j !== ref && solution[j] === solution[ref])
-          return { type, questionIndex: ref };
+        if (j === qi) continue;
+        if (solution[j] === solution[ref]) {
+          if (j !== ref) hasMatch = true;
+        } else {
+          distractorCount++;
+        }
       }
-      return null;
+      if (!hasMatch || distractorCount < oc - 1) return null;
+      return { type, questionIndex: ref };
     }
   }
   return null;

@@ -102,6 +102,7 @@ pub fn solution_satisfies_type(
     qi: usize,
     sol: &[Answer; MAX_N],
     n: usize,
+    option_count: usize,
 ) -> bool {
     match *qt {
         QuestionType::OnlySame => {
@@ -142,7 +143,7 @@ pub fn solution_satisfies_type(
             let has_match =
                 (0..n).any(|j| j != qi && j != question_index as usize && sol[j] == ref_ans);
             let distractor_count = (0..n).filter(|&j| j != qi && sol[j] != ref_ans).count();
-            has_match && distractor_count >= 4
+            has_match && distractor_count >= option_count - 1
         }
         _ => true,
     }

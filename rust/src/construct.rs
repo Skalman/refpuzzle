@@ -154,7 +154,7 @@ pub fn flat_construct(
             }
             for _ in 0..10 {
                 if let Some(qt) = random_type_params(kind, qi, n, oc, &solution, assigned, rng)
-                    && crate::build::solution_satisfies_type(&qt, qi, &solution, n)
+                    && crate::build::solution_satisfies_type(&qt, qi, &solution, n, oc)
                 {
                     types[qi] = qt;
                     assigned |= 1 << qi;
@@ -302,7 +302,7 @@ impl PlacementState {
                 if types_contain(&self.used_types, self.used_count, &qt) {
                     continue;
                 }
-                if !solution_satisfies_type(&qt, qi, solution, n) {
+                if !solution_satisfies_type(&qt, qi, solution, n, oc) {
                     continue;
                 }
 
