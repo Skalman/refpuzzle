@@ -17,6 +17,8 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             CountAnswerBefore,
             CountAnswerAfter,
             AnswerOf,
+            ClosestAfter,
+            ClosestBefore,
             FirstWith,
             LastWith,
             SameAs,

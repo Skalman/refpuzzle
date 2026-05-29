@@ -19,6 +19,8 @@ export const profiles: DifficultyProfile[] = [
       "CountAnswerBefore",
       "CountAnswerAfter",
       "AnswerOf",
+      "ClosestAfter",
+      "ClosestBefore",
       "FirstWith",
       "LastWith",
       "SameAs",

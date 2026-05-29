@@ -906,16 +906,21 @@ function makeRule(
       return { type, questionIndex: rng.pick(targets) };
     }
     case "ClosestAfter":
+      // Need afterIndex with at least oc distinct option values
+      // (positions afterIndex+1..n, plus null).
+      if (n < oc) return null;
       return {
         type,
-        afterIndex: rng.int(0, Math.max(0, n - 5)),
+        afterIndex: rng.int(0, n - oc),
         answer: rng.pick(validLetters),
       };
     case "ClosestBefore":
-      if (n < 5) return null;
+      // Need beforeIndex with at least oc distinct option values
+      // (positions 0..beforeIndex, plus null).
+      if (n < oc) return null;
       return {
         type,
-        beforeIndex: rng.int(4, n - 1),
+        beforeIndex: rng.int(oc - 1, n - 1),
         answer: rng.pick(validLetters),
       };
     case "FirstWith":

@@ -865,16 +865,25 @@ pub(crate) fn random_type_params(
                 question_index: rng.pick(&pool[..plen]),
             })
         }
-        QuestionTypeKind::ClosestAfter => Some(QuestionType::ClosestAfter {
-            after_index: rng.int(0, (n as i32 - 5).max(0)) as u8,
-            answer: rng.pick(letters),
-        }),
+        QuestionTypeKind::ClosestAfter => {
+            // Need after_index with at least oc distinct option values
+            // (positions after_index+1..n, plus null).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::ClosestAfter {
+                after_index: rng.int(0, n as i32 - option_count as i32) as u8,
+                answer: rng.pick(letters),
+            })
+        }
         QuestionTypeKind::ClosestBefore => {
-            if n < 5 {
+            // Need before_index with at least oc distinct option values
+            // (positions 0..before_index, plus null).
+            if n < option_count {
                 return None;
             }
             Some(QuestionType::ClosestBefore {
-                before_index: rng.int(4, n as i32 - 1) as u8,
+                before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
                 answer: rng.pick(letters),
             })
         }
