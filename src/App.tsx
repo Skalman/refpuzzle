@@ -13,13 +13,13 @@ import type { Puzzle } from "./engine/types.ts";
 import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./engine/render.ts";
 import {
   fetchDaily,
-  todayDateStr,
   dayNumber,
   isValidDate,
   dateStrFromOffset,
   puzzleId,
   parseCompactPuzzle,
 } from "./puzzles/daily.ts";
+import { useToday } from "./lib/today.ts";
 import { decodePlaygroundHash } from "./lib/playground.ts";
 import { hasState } from "./lib/store.ts";
 import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
@@ -211,7 +211,7 @@ function BackupDialogs({
 }
 
 function DailyPage() {
-  const dateStr = todayDateStr();
+  const dateStr = useToday();
   return <DayView dateStr={dateStr} />;
 }
 
@@ -337,7 +337,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     if (activeLevel < 6) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
-  const isToday = dateStr === todayDateStr();
+  const isToday = dateStr === useToday();
 
   return (
     <>
@@ -544,7 +544,7 @@ function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
 function PastPuzzlesPage() {
   const s = t();
   const backup = useBackupFlow();
-  const today = todayDateStr();
+  const today = useToday();
   const currentMonth = today.slice(0, 7);
 
   const allDates: string[] = [];
