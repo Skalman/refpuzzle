@@ -154,6 +154,7 @@ export function PuzzleView({
   const focusedOptionRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<HTMLElement>(null);
+  const puzzleCompleteRef = useRef<HTMLDivElement>(null);
   const numberBuf = useRef({ digits: "", timer: 0 });
   const controlsRef = useRef<HTMLDivElement>(null);
   const historyStripRef = useRef<HTMLDivElement>(null);
@@ -460,13 +461,11 @@ export function PuzzleView({
     });
     clearMeta(puzzle.id);
     confetti();
-    const timer = setTimeout(() => {
-      const btn = nextPuzzleRef.current;
-      if (!btn) return;
-      btn.scrollIntoView({ behavior: "smooth", block: "nearest" });
-      btn.focus({ preventScroll: true });
-    }, 1800);
-    return () => clearTimeout(timer);
+    // Scroll the whole completion banner into view right as the confetti starts — the
+    // celebration overlay masks the viewport motion, so it reads smoother than scrolling after.
+    puzzleCompleteRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    nextPuzzleRef.current?.focus({ preventScroll: true });
+    return undefined;
   }, [completed, level, puzzle.id, tutorial.active, analytics.meta, analytics.wasCompleted]);
 
   // Init roving tabindex on controls toolbar
@@ -791,7 +790,7 @@ export function PuzzleView({
 
         {/* Completion banner */}
         {completed && !tutorial.active && (
-          <div class="puzzle-complete">
+          <div ref={puzzleCompleteRef} class="puzzle-complete">
             <span>{s.puzzle.solved}</span>
             {level < 6 ? (
               <button
