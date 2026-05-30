@@ -132,7 +132,8 @@ fn print_help() {
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -o FILE       output file (required, - for stdout)");
-    eprintln!("  -m            merge into existing file");
+    eprintln!("  -m, --merge   merge into existing file");
+    eprintln!("  --overwrite   overwrite existing output file");
     eprintln!("  -l, --level   generate only this level (1-6)");
     eprintln!("  -a, --attempts  max attempts per seed (default 100)");
     eprintln!("  -t, --threads N  worker threads (default: all cores)");
@@ -229,6 +230,7 @@ fn main() {
     let mut trace = false;
     let mut output_path: Option<String> = None;
     let mut merge = false;
+    let mut overwrite = false;
     let mut threads: Option<usize> = None;
 
     let mut i = 2;
@@ -250,6 +252,9 @@ fn main() {
             }
             "--merge" | "-m" => {
                 merge = true;
+            }
+            "--overwrite" => {
+                overwrite = true;
             }
             "--threads" | "-t" => {
                 i += 1;
@@ -293,6 +298,17 @@ fn main() {
         eprintln!("Error: -o/--output is required (use -o - for stdout)");
         std::process::exit(1);
     });
+
+    if merge && overwrite {
+        eprintln!("Error: --merge and --overwrite are mutually exclusive");
+        std::process::exit(1);
+    }
+    if output_path != "-" && !merge && !overwrite && std::path::Path::new(&output_path).exists() {
+        eprintln!(
+            "Error: output file {output_path} already exists. Pass --merge to add to it, or --overwrite to replace it."
+        );
+        std::process::exit(1);
+    }
 
     if let Some(t) = threads {
         rayon::ThreadPoolBuilder::new()

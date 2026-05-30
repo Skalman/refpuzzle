@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync } from "node:fs";
+import { writeFileSync, readFileSync, existsSync } from "node:fs";
 import { generateConstructive as generate } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
@@ -20,7 +20,8 @@ Date range formats:
 
 Options:
   -o FILE           output file (required, - for stdout)
-  -m                merge into existing file
+  -m, --merge       merge into existing file
+  --overwrite       overwrite existing output file
   -l, --level       generate only this level (1-6)
   -a, --attempts    max attempts per seed (default 100)
   --stats           show generation statistics
@@ -109,6 +110,7 @@ const args = process.argv.slice(2);
 let dateRangeArg: string | null = null;
 let outputPath: string | null = null;
 let merge = false;
+let overwrite = false;
 let levelFilter: number | null = null;
 let maxAttempts = 100;
 let showStats = false;
@@ -123,6 +125,9 @@ for (let i = 0; i < args.length; i++) {
     case "--merge":
     case "-m":
       merge = true;
+      break;
+    case "--overwrite":
+      overwrite = true;
       break;
     case "--level":
     case "-l": {
@@ -168,6 +173,16 @@ if (!dateRangeArg) {
 }
 if (!outputPath) {
   console.error("Error: -o/--output is required (use -o - for stdout)");
+  process.exit(1);
+}
+if (merge && overwrite) {
+  console.error("Error: --merge and --overwrite are mutually exclusive");
+  process.exit(1);
+}
+if (outputPath !== "-" && !merge && !overwrite && existsSync(outputPath)) {
+  console.error(
+    `Error: output file ${outputPath} already exists. Pass --merge to add to it, or --overwrite to replace it.`,
+  );
   process.exit(1);
 }
 
