@@ -21,9 +21,7 @@ pub fn type_stats(attempts: u32, seed: u32) {
             let Some((types, solution)) = flat_construct(n, oc, &mut rng) else {
                 continue;
             };
-            let Some(fp) = fill_options(&types, &solution, n, oc, &mut rng, false) else {
-                continue;
-            };
+            let fp = fill_options(&types, &solution, n, oc, &mut rng, false);
             if solve(&fp, None, 2).len() != 1 {
                 continue;
             }

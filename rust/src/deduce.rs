@@ -2460,7 +2460,7 @@ mod tests {
             let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed), false)
             }));
-            let Ok(Some(fp)) = fp else { continue };
+            let Ok(fp) = fp else { continue };
 
             let solutions = solve(&fp, None, 2);
             if solutions.len() != 1 {

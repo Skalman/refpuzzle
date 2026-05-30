@@ -577,22 +577,14 @@ fn try_construct(
         );
     }
 
-    let Some(mut fp) = fill_options(
+    let mut fp = fill_options(
         &state.question_types,
         &solution,
         n,
         profile.option_count,
         rng,
         trace,
-    ) else {
-        if trace {
-            eprintln!(
-                "{}",
-                serde_json::json!({"t": "construct_failed", "attempt": attempt + 1})
-            );
-        }
-        return None;
-    };
+    );
 
     if !validate_and_repair(
         &state.question_types,
@@ -731,9 +723,19 @@ pub(crate) fn solution_fits_type(
             let max = *counts[..oc].iter().max().unwrap_or(&0);
             counts[..oc].iter().filter(|&&c| c == max).count() == 1
         }
-        // "none" (no other question shares this answer) is a valid answer, so no structural
-        // requirement; with "none" as a value, oc distinct options need n >= oc.
-        QuestionTypeKind::SameAs => n >= oc,
+        QuestionTypeKind::SameAs => {
+            // Pool capacity for SameAs at qi depends on how many questions share qi's answer:
+            //   same_count == 1 (qi is unique): correct = null, pool = n-1 other Qs, no null.
+            //   same_count >= 2: correct = a same-answer Q, pool = (n - same_count) differing-Q + 1 null.
+            // We need pool >= oc - 1 (one distractor per non-correct option).
+            let same_count = count_letter(sol, sol[qi], n) as usize;
+            let pool = if same_count == 1 {
+                n - 1
+            } else {
+                n - same_count + 1
+            };
+            pool >= oc - 1
+        }
         QuestionTypeKind::SameAsWhich => true,
         QuestionTypeKind::NoOtherHasAnswer => {
             count_letter(sol, sol[qi], n) == 1

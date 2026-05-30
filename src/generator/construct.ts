@@ -75,7 +75,6 @@ export function generateConstructive(
     }
     if (tracing) traceAttempt(attempt + 1, cr.solution, rng);
     const puzzle = fillOptions(cr, rng, tracing);
-    if (!puzzle) continue;
     const result = validateAndRepair(puzzle, cr.solution, cr.n, rng, tracing, label);
     if (result) {
       if (tracing) traceSuccess(attempt + 1);
@@ -448,11 +447,10 @@ function tryConstruct(
   return { types: finalRules, solution, n, oc, level: profile.level, name: profile.name };
 }
 
-export function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle | null {
+export function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle {
   const questions: QuestionDef[] = [];
   for (let i = 0; i < cr.types.length; i++) {
     const options = engineerOptions(cr.types[i], i, cr.solution, cr.n, cr.oc, rng);
-    if (!options) return null;
     if (tracing) {
       const vals = options.map((o) => o.value);
       const claims =
@@ -1069,10 +1067,15 @@ function solutionCompatible(
       const c = letterCounts(solution.slice(0, n)).slice(0, oc);
       return c.filter((v) => v === Math.max(...c)).length === 1;
     }
-    case "SameAs":
-      // "none" (no other question shares this answer) is a valid answer, so no structural
-      // requirement; with "none" as a value, oc distinct options need n >= oc.
-      return n >= oc;
+    case "SameAs": {
+      // Pool capacity for SameAs at qi depends on how many questions share qi's answer:
+      //   sameCount === 1 (qi is unique): correct = null, pool = n-1 other Qs, no null.
+      //   sameCount >= 2: correct = a same-answer Q, pool = (n - sameCount) differing-Q + 1 null.
+      // We need pool >= oc - 1.
+      const sameCount = solution.slice(0, n).filter((a) => a === solution[qi]).length;
+      const pool = sameCount === 1 ? n - 1 : n - sameCount + 1;
+      return pool >= oc - 1;
+    }
     case "NoOtherHasAnswer": {
       const selfAns = solution[qi];
       if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) return false;
@@ -1178,14 +1181,17 @@ function engineerOptions(
   n: number,
   oc: number,
   rng: RNG,
-): OptionDef[] | null {
+): OptionDef[] {
   const correctOi = L2I[solution[qi]];
 
   if (hasIdentityOptions(rule.type)) {
-    // Can't place NoOtherHasAnswer when another question already shares this answer.
     if (rule.type === "NoOtherHasAnswer") {
       const selfAns = solution[qi];
-      if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) return null;
+      if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) {
+        throw new Error(
+          `engineerOptions: NoOtherHasAnswer at qi=${qi} but another question shares answer ${selfAns} — missing upstream guard`,
+        );
+      }
     }
     return Array.from({ length: oc }, (_, i) => ({ value: i }));
   }
@@ -1212,8 +1218,11 @@ function engineerOptions(
       rule.type === "LeastCommon"
         ? Math.min(...counts.slice(0, oc))
         : Math.max(...counts.slice(0, oc));
-    // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
-    if (counts.slice(0, oc).filter((c) => c === target).length !== 1) return null;
+    if (counts.slice(0, oc).filter((c) => c === target).length !== 1) {
+      throw new Error(
+        `engineerOptions: ${rule.type} at qi=${qi} but two letters tie for the extreme count — missing upstream guard`,
+      );
+    }
     const correctLetter = LETTERS.findIndex((_, i) => i < oc && counts[i] === target);
     const pool = rng.shuffle(letters.filter((_, i) => i !== correctLetter));
     const opts: OptionDef[] = new Array(oc);
@@ -1252,7 +1261,11 @@ function engineerOptions(
       }
       pool.push(null);
     }
-    if (pool.length < oc - 1) return null;
+    if (pool.length < oc - 1) {
+      throw new Error(
+        `engineerOptions: SameAs at qi=${qi} pool too small (${pool.length} < ${oc - 1}) — missing upstream guard`,
+      );
+    }
     const shuffled = rng.shuffle(pool);
     const opts: OptionDef[] = new Array(oc);
     opts[correctOi] = { value: correct };
@@ -1262,9 +1275,12 @@ function engineerOptions(
   }
 
   if (rule.type === "SameAsWhich") {
-    // Can't place SameAsWhich when no other question shares the referenced answer.
     const correct = computeValue(rule, qi, solution);
-    if (correct === null) return null;
+    if (correct === null) {
+      throw new Error(
+        `engineerOptions: SameAsWhich at qi=${qi} ref=${rule.questionIndex} but no other question shares the referenced answer — missing upstream guard`,
+      );
+    }
     const refAns = solution[rule.questionIndex];
     const pool: number[] = [];
     for (let j = 0; j < n; j++) {
@@ -1281,25 +1297,34 @@ function engineerOptions(
   }
 
   if (rule.type === "OnlyOdd" || rule.type === "OnlyEven") {
-    // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
     const parity = rule.type === "OnlyOdd" ? 1 : 0;
     const matches = solution
       .slice(0, n)
       .filter((a, i) => (i + 1) % 2 === parity && a === rule.answer).length;
-    if (matches > 1) return null;
+    if (matches > 1) {
+      throw new Error(
+        `engineerOptions: ${rule.type} at qi=${qi} but more than one same-parity question has answer ${rule.answer} — missing upstream guard`,
+      );
+    }
   }
 
   if (rule.type === "OnlySame") {
-    // Can't place OnlySame when more than one other question shares this answer.
     const others = solution.slice(0, n).filter((a, j) => j !== qi && a === solution[qi]).length;
-    if (others > 1) return null;
+    if (others > 1) {
+      throw new Error(
+        `engineerOptions: OnlySame at qi=${qi} but ${others} other questions share answer ${solution[qi]} — missing upstream guard`,
+      );
+    }
   }
 
   if (rule.type === "ConsecIdent") {
-    // Can't place ConsecIdent when more than one consecutive identical pair exists.
     let pairs = 0;
     for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairs++;
-    if (pairs > 1) return null;
+    if (pairs > 1) {
+      throw new Error(
+        `engineerOptions: ConsecIdent at qi=${qi} but more than one consecutive identical pair exists — missing upstream guard`,
+      );
+    }
   }
 
   const correct = computeValue(rule, qi, solution);

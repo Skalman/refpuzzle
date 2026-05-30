@@ -971,10 +971,6 @@ function testSharedFillOptions() {
         name: "test",
       };
       const puzzle = fillOptions(cr, rng, false);
-      if (puzzle == null) {
-        assert(false, `fill-options: ${name} (seed=${seed}): fillOptions returned null`);
-        continue;
-      }
       const fp = flattenPuzzle(puzzle);
       assert(
         checkAnswers(fp, solution),

@@ -1012,26 +1012,27 @@ fn fill_one_question(
     nums: &mut [i16; 5],
     answers: &mut [u8; 5],
     claims: &mut [Option<Claim>; 5],
-) -> bool {
+) {
     let correct_oi = solution[qi].idx();
 
     if qt.has_identity_options() {
-        // Can't place NoOtherHasAnswer when another question already shares this answer.
         if matches!(qt, QuestionType::NoOtherHasAnswer) {
             let self_ans = solution[qi];
             if (0..n).any(|j| j != qi && solution[j] == self_ans) {
-                return false;
+                panic!(
+                    "fill_one_question: NoOtherHasAnswer at qi={qi} but another question shares answer {self_ans:?} — missing upstream guard"
+                );
             }
         }
         for oi in 0..5 {
             answers[oi] = oi as u8;
         }
-        return true;
+        return;
     }
 
     if matches!(qt, QuestionType::TrueStmt) {
         build_claims(qi, solution, n, rng, claims, nums, option_count);
-        return true;
+        return;
     }
 
     let correct_val = correct_option_value(qt, qi, solution, n);
@@ -1067,9 +1068,10 @@ fn fill_one_question(
             } else {
                 *opt_counts.iter().max().unwrap()
             };
-            // Can't place MostCommon/LeastCommon when two letters tie for the extreme count.
             if opt_counts.iter().filter(|&&c| c == target_count).count() != 1 {
-                return false;
+                panic!(
+                    "fill_one_question: {qt:?} at qi={qi} but two letters tie for the extreme count — missing upstream guard"
+                );
             }
             let correct_letter = LETTERS
                 .iter()
@@ -1116,24 +1118,26 @@ fn fill_one_question(
             } else {
                 0usize
             };
-            // Can't place OnlyOdd/OnlyEven when more than one same-parity question has this answer.
             let matches = (0..n)
                 .filter(|&i| (i + 1) % 2 == parity && solution[i] == answer)
                 .count();
             if matches > 1 {
-                return false;
+                panic!(
+                    "fill_one_question: {qt:?} at qi={qi} but more than one same-parity question has answer {answer:?} — missing upstream guard"
+                );
             }
             nums[correct_oi] = correct_val;
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
             place_distractors(&distractors, nums, correct_oi);
         }
         QuestionType::ConsecIdent => {
-            // Can't place ConsecIdent when more than one consecutive identical pair exists.
             let pairs = (0..n.saturating_sub(1))
                 .filter(|&i| solution[i] == solution[i + 1])
                 .count();
             if pairs > 1 {
-                return false;
+                panic!(
+                    "fill_one_question: ConsecIdent at qi={qi} but more than one consecutive identical pair exists — missing upstream guard"
+                );
             }
             nums[correct_oi] = correct_val;
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
@@ -1150,9 +1154,10 @@ fn fill_one_question(
             place_distractors(&distractors, nums, correct_oi);
         }
         QuestionType::SameAsWhich { question_index } => {
-            // Can't place SameAsWhich when no other question shares the referenced answer.
             if correct_val == NONE_VAL {
-                return false;
+                panic!(
+                    "fill_one_question: SameAsWhich at qi={qi} ref={question_index} but no other question shares the referenced answer — missing upstream guard"
+                );
             }
             let ref_ans = solution[question_index as usize];
             nums[correct_oi] = correct_val;
@@ -1194,7 +1199,10 @@ fn fill_one_question(
                 plen += 1;
             }
             if plen < option_count - 1 {
-                return false;
+                panic!(
+                    "fill_one_question: SameAs at qi={qi} pool too small ({plen} < {}) — missing upstream guard",
+                    option_count - 1
+                );
             }
             nums[correct_oi] = correct_val;
             rng.shuffle(&mut pool[..plen]);
@@ -1203,13 +1211,14 @@ fn fill_one_question(
             place_distractors(&distractors, nums, correct_oi);
         }
         QuestionType::OnlySame => {
-            // Can't place OnlySame when more than one other question shares this answer.
             let self_ans = solution[qi];
             let others = (0..n)
                 .filter(|&j| j != qi && solution[j] == self_ans)
                 .count();
             if others > 1 {
-                return false;
+                panic!(
+                    "fill_one_question: OnlySame at qi={qi} but {others} other questions share answer {self_ans:?} — missing upstream guard"
+                );
             }
             nums[correct_oi] = correct_val;
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
@@ -1227,7 +1236,6 @@ fn fill_one_question(
         }
         _ => unreachable!(),
     }
-    true
 }
 
 pub fn fill_options(
@@ -1237,14 +1245,14 @@ pub fn fill_options(
     option_count: usize,
     rng: &mut Rng,
     trace: bool,
-) -> Option<FlatPuzzle> {
+) -> FlatPuzzle {
     let mut option_nums = [[NAN_VAL; 5]; MAX_N];
     let mut option_answers = [[0xFFu8; 5]; MAX_N];
     let mut option_claims: [[Option<Claim>; 5]; MAX_N] = [[None; 5]; MAX_N];
 
     for qi in 0..n {
         let qt = &question_types[qi];
-        if !fill_one_question(
+        fill_one_question(
             qt,
             qi,
             solution,
@@ -1254,9 +1262,7 @@ pub fn fill_options(
             &mut option_nums[qi],
             &mut option_answers[qi],
             &mut option_claims[qi],
-        ) {
-            return None;
-        }
+        );
 
         if trace {
             let vals: Vec<Value> = (0..option_count)
@@ -1297,7 +1303,7 @@ pub fn fill_options(
 
     let (affected_by, global_indices) = FlatPuzzle::build_deps(question_types, n);
 
-    Some(FlatPuzzle {
+    FlatPuzzle {
         question_types: *question_types,
         option_nums,
         option_answers,
@@ -1307,7 +1313,7 @@ pub fn fill_options(
         n,
         option_count,
         initial_state: State::initial(option_count),
-    })
+    }
 }
 
 fn place_distractors(distractors: &[i16; 4], nums: &mut [i16; 5], correct_oi: usize) {
@@ -1987,12 +1993,7 @@ mod tests {
             let mut case_failed = false;
             for seed in 0..SEEDS {
                 let mut rng = Rng::new(seed.wrapping_mul(2654435761));
-                let Some(fp) = fill_options(&question_types, &solution, n, oc, &mut rng, false)
-                else {
-                    eprintln!("FAIL: {name} (seed={seed}): fill_options returned None");
-                    case_failed = true;
-                    break;
-                };
+                let fp = fill_options(&question_types, &solution, n, oc, &mut rng, false);
 
                 let answers: [Option<Answer>; MAX_N] =
                     std::array::from_fn(|i| if i < n { Some(solution[i]) } else { None });
