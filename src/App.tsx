@@ -261,7 +261,13 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     if (!container) return;
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const tab = container.children[activeLevel - 1] as HTMLElement | undefined;
-    if (tab) tab.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+    if (!tab) return;
+    // Center the tab horizontally without affecting vertical scroll (scrollIntoView would
+    // also scroll the page vertically when the tab isn't fully in view).
+    const tabRect = tab.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const delta = tabRect.left + tabRect.width / 2 - (containerRect.left + containerRect.width / 2);
+    container.scrollTo({ left: container.scrollLeft + delta, behavior: "smooth" });
   }, [activeLevel, activeTabIcon]);
 
   // Page-level keyboard shortcuts
