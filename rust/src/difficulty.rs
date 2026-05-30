@@ -50,6 +50,7 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             LastWith,
             NextSame,
             PrevSame,
+            SameAs,
         ],
     },
     DifficultyProfile {
@@ -73,6 +74,7 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             CountConsonant,
             NoOtherHasAnswer,
             OnlySame,
+            SameAs,
         ],
     },
     DifficultyProfile {
@@ -97,6 +99,7 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             CountConsonant,
             NoOtherHasAnswer,
             OnlySame,
+            SameAs,
             LetterDist,
             EqualCount,
             ConsecIdent,
@@ -127,6 +130,7 @@ pub static PROFILES: [DifficultyProfile; 6] = [
             CountConsonant,
             NoOtherHasAnswer,
             OnlySame,
+            SameAs,
             LetterDist,
             EqualCount,
             ConsecIdent,

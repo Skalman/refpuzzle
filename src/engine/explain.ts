@@ -807,6 +807,9 @@ function explainMultiElim(
   if (rule === "SameAsNegative") {
     for (let src = 0; src < n; src++) {
       if (src === qi || fp.questions[src].t !== QT_SAME_AS || answers[src] == null) continue;
+      // Mirror the deduce-side guard: a "none" answer triggers no negative inference.
+      const sel = fp.optionValues[src][letterIdx(answers[src]!)];
+      if (sel == null || sel < 0) continue;
       return {
         text: `${Q(src)} identifies which question shares its answer, so the other listed questions cannot have the same answer.`,
         otherQi: src,

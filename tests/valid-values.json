@@ -178,7 +178,7 @@
       "qi": 0,
       "n": 5,
       "oc": 5,
-      "valid": [1, 2, 3, 4]
+      "valid": [1, 2, 3, 4, null]
     },
     {
       "name": "SameAsWhich n=5",

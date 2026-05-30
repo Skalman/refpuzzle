@@ -767,6 +767,8 @@ function repairOneQuestion(
     if (v === correctVal || v === oldVal) continue;
     if (excludeSelf && v === qi) continue;
     if (v === excludeRef) continue;
+    // SameAs: a same-answer question would be an alternate correct answer, not a distractor.
+    if (rule.type === "SameAs" && v != null && solution[v] === solution[qi]) continue;
     if (isInUse(opts, bestOi, v, oc)) continue;
     let d: number;
     if (v == null || correctVal == null) {
@@ -941,10 +943,10 @@ function makeRule(
     case "NoOtherHasAnswer":
       return { type };
     case "SameAs": {
-      // Structural: another question must share qi's answer.
-      // Capacity: distractor pool excludes qi, so n-1 must hold oc distinct values.
-      if (n <= oc) return null;
-      if (!solution.some((a, j) => j !== qi && a === solution[qi])) return null;
+      // "none" (no other question shares this answer) is a valid answer, so there is no
+      // structural requirement. Capacity: with "none" as a value, oc distinct options
+      // need n >= oc (none case: oc-1 index distractors from the n-1 other questions).
+      if (n < oc) return null;
       return { type };
     }
     case "EqualCount": {
@@ -1065,11 +1067,10 @@ function solutionCompatible(
       const c = letterCounts(solution.slice(0, n)).slice(0, oc);
       return c.filter((v) => v === Math.max(...c)).length === 1;
     }
-    case "SameAs": {
-      if (n <= oc) return false;
-      for (let i = 0; i < n; i++) if (i !== qi && solution[i] === solution[qi]) return true;
-      return false;
-    }
+    case "SameAs":
+      // "none" (no other question shares this answer) is a valid answer, so no structural
+      // requirement; with "none" as a value, oc distinct options need n >= oc.
+      return n >= oc;
     case "NoOtherHasAnswer": {
       const selfAns = solution[qi];
       if (solution.slice(0, n).some((a, j) => j !== qi && a === selfAns)) return false;
@@ -1136,8 +1137,9 @@ export function validValues(rule: QuestionType, qi: number, n: number, oc = 5): 
     case "ConsecIdent":
       return rangeWithNull(n - 1);
     case "SameAs": {
-      const out: number[] = [];
+      const out: (number | null)[] = [];
       for (let i = 0; i < n; i++) if (i !== qi) out.push(i);
+      out.push(null);
       return out;
     }
     case "OnlySame": {
@@ -1235,18 +1237,25 @@ function engineerOptions(
   }
 
   if (rule.type === "SameAs") {
-    // Can't place SameAs when no other question shares this answer.
-    const correct = computeValue(rule, qi, solution);
-    if (correct === null) return null;
-    const pool: number[] = [];
-    for (let j = 0; j < n; j++) {
-      if (j !== qi && j !== correct && solution[j] !== solution[qi]) pool.push(j);
+    const correct = computeValue(rule, qi, solution); // index, or null = "none"
+    const pool: (number | null)[] = [];
+    if (correct === null) {
+      // "none" is correct (qi's answer is unique): every other question is a valid distractor.
+      for (let j = 0; j < n; j++) if (j !== qi) pool.push(j);
+    } else {
+      // A match exists: distractors are differing-answer questions plus "none".
+      // Same-answer questions are excluded — they'd be alternate correct answers.
+      for (let j = 0; j < n; j++) {
+        if (j !== qi && j !== correct && solution[j] !== solution[qi]) pool.push(j);
+      }
+      pool.push(null);
     }
+    if (pool.length < oc - 1) return null;
     const shuffled = rng.shuffle(pool);
     const opts: OptionDef[] = new Array(oc);
     opts[correctOi] = { value: correct };
     let di = 0;
-    for (let i = 0; i < oc; i++) if (i !== correctOi) opts[i] = { value: shuffled[di++] ?? null };
+    for (let i = 0; i < oc; i++) if (i !== correctOi) opts[i] = { value: shuffled[di++] };
     return opts;
   }
 

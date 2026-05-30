@@ -1464,7 +1464,7 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::OnlySame
+                QuestionType::OnlySame | QuestionType::SameAs
                     if on == NONE_VAL
                         && run(DeduceRule::OnlySameNoneMatch)
                         && (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi])) =>
@@ -1746,10 +1746,15 @@ fn deduce_impl(
         }
     }
 
-    // ── OnlySame None forward ──
+    // ── OnlySame/SameAs None forward ──
+    // An answered None means qi's answer is unique, so no other question can have that
+    // letter. Sound (follows from the answer), so ungated.
     if !fast && run(DeduceRule::OnlySameNoneForward) {
         for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::OnlySame) {
+            if !matches!(
+                fp.question_types[qi],
+                QuestionType::OnlySame | QuestionType::SameAs
+            ) {
                 continue;
             }
             let Some(a) = answers[qi] else { continue };
@@ -1771,8 +1776,11 @@ fn deduce_impl(
         }
     }
 
-    // SameAs negative: non-selected option targets cannot share this question's answer
-    if run(DeduceRule::SameAsNegative) {
+    // SameAs negative: non-selected option targets cannot share this question's answer.
+    // Uniqueness-assuming: it relies on "exactly one option is correct" — another target
+    // sharing qi's answer would be a second valid answer. Gated so it never fires during
+    // generation (which must reject genuinely ambiguous puzzles).
+    if assume_unique && run(DeduceRule::SameAsNegative) {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::SameAs) {
                 continue;
@@ -1780,6 +1788,11 @@ fn deduce_impl(
             let Some(ans) = answers[qi] else { continue };
             let ai = ans.idx();
             let selected = fp.option_nums[qi][ai];
+            // The "none" answer's sound inference (qi's letter is unique) is handled by
+            // OnlySameNoneForward; this gated, uniqueness-assuming rule is for the index case.
+            if selected < 0 {
+                continue;
+            }
             let mut q_mask = 0u16;
             for oi in 0..fp.option_count {
                 if oi == ai {

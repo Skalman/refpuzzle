@@ -4,8 +4,8 @@ import { LETTERS } from "./types.ts";
 export type Severity = "warning" | "error";
 
 // Types whose correct option value is always defined (null option is never the answer).
-// SameAs has its own explicit null-error check; identity-option types (AnswerIsSelf,
-// NoOtherHasAnswer) and TrueStmt are special-cased elsewhere.
+// SameAs allows null ("none" = no other question shares this answer); identity-option
+// types (AnswerIsSelf, NoOtherHasAnswer) and TrueStmt are special-cased elsewhere.
 const NULL_NOT_ALLOWED: ReadonlySet<QuestionTypeName> = new Set([
   "CountAnswer",
   "CountAnswerBefore",
@@ -77,11 +77,12 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
 
     // ── SameAs checks ──
     if (qt.type === "SameAs") {
+      // "none" is a legitimate option; duplicate targets/nulls are caught by the
+      // general distinct-option-values check below.
       for (let oi = 0; oi < oc; oi++) {
         const v = vals[oi];
-        if (v == null) {
-          errors.push({ qi, message: `SameAs option ${oi} is null`, severity: "error" });
-        } else if (v === qi) {
+        if (v == null) continue;
+        if (v === qi) {
           errors.push({ qi, message: `SameAs option ${oi} references itself`, severity: "error" });
         } else if (v < 0 || v >= n) {
           errors.push({
@@ -90,11 +91,6 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
             severity: "error",
           });
         }
-      }
-      const targets = vals.filter((v) => v != null);
-      const unique = new Set(targets);
-      if (unique.size < targets.length) {
-        errors.push({ qi, message: "SameAs has duplicate option targets", severity: "error" });
       }
     }
 
@@ -140,11 +136,10 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
       }
     }
 
-    // ── No duplicate option values (for types where values should be unique) ──
+    // ── No duplicate option values (incl. at most one "none") ──
     if (qt.type !== "TrueStmt" && qt.type !== "AnswerIsSelf" && qt.type !== "NoOtherHasAnswer") {
-      const nonNull = vals.filter((v): v is number => v != null);
-      const unique = new Set(nonNull);
-      if (unique.size < nonNull.length) {
+      const unique = new Set(vals);
+      if (unique.size < vals.length) {
         errors.push({ qi, message: "Duplicate option values", severity: "warning" });
       }
     }

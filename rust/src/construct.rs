@@ -731,7 +731,9 @@ pub(crate) fn solution_fits_type(
             let max = *counts[..oc].iter().max().unwrap_or(&0);
             counts[..oc].iter().filter(|&&c| c == max).count() == 1
         }
-        QuestionTypeKind::SameAs => n > oc && (0..n).any(|i| i != qi && sol[i] == sol[qi]),
+        // "none" (no other question shares this answer) is a valid answer, so no structural
+        // requirement; with "none" as a value, oc distinct options need n >= oc.
+        QuestionTypeKind::SameAs => n >= oc,
         QuestionTypeKind::SameAsWhich => true,
         QuestionTypeKind::NoOtherHasAnswer => {
             count_letter(sol, sol[qi], n) == 1

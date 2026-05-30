@@ -214,7 +214,18 @@ function checkValueValidityInner(
   }
 
   if (q.t === QT_SAME_AS) {
-    if (v == null || v < 0 || v >= n || v === qi) return V_INVALID;
+    if (v == null) {
+      // "none": valid iff no other question shares qi's (candidate) answer a.
+      const amask = 1 << ai;
+      let couldExist = false;
+      for (let j = 0; j < n; j++) {
+        if (j === qi) continue;
+        if (answers[j] === a) return V_INVALID;
+        if (answers[j] == null && (eliminated[j] & amask) === 0) couldExist = true;
+      }
+      return couldExist ? V_PENDING : V_VALID;
+    }
+    if (v < 0 || v >= n || v === qi) return V_INVALID;
     const ta = answers[v];
     if (ta == null) return V_PENDING;
     return ta === a ? V_VALID : V_INVALID;
@@ -631,8 +642,12 @@ export function checkClaimFast(
       if (count === 0) return value === -1;
       return count === 1 && found === value;
     }
-    case "SameAs":
-      return value >= 0 && value < n && value !== qi && answers[value] === answers[qi];
+    case "SameAs": {
+      const selfAns = answers[qi];
+      const anyMatch = answers.some((x, i) => i !== qi && x === selfAns);
+      if (!anyMatch) return value === -1;
+      return value >= 0 && value < n && value !== qi && answers[value] === selfAns;
+    }
     case "SameAsWhich": {
       const refAns = answers[qt.questionIndex];
       return (

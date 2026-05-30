@@ -1107,7 +1107,7 @@ function deduceImpl(
         }
       }
 
-      if (q.t === QT_ONLY_SAME && v == null) {
+      if ((q.t === QT_ONLY_SAME || q.t === QT_SAME_AS) && v == null) {
         if (run("OnlySameNoneMatch")) {
           for (let j = 0; j < n; j++) {
             if (j !== qi && answers[j] === LETTERS[oi]) {
@@ -1338,10 +1338,11 @@ function deduceImpl(
     }
   }
 
-  // OnlySame None forward: answered None means no other question can have this letter
+  // OnlySame/SameAs None forward: an answered None means qi's answer is unique, so no
+  // other question can have that letter. Sound (follows from the answer), so ungated.
   if (!fast && run("OnlySameNoneForward")) {
     for (let qi = 0; qi < n; qi++) {
-      if (fp.questions[qi].t !== QT_ONLY_SAME) continue;
+      if (fp.questions[qi].t !== QT_ONLY_SAME && fp.questions[qi].t !== QT_SAME_AS) continue;
       if (answers[qi] == null) continue;
       const ai = letterIdx(answers[qi]!);
       const v = fp.optionValues[qi][ai];
@@ -1355,13 +1356,19 @@ function deduceImpl(
     }
   }
 
-  // SameAs negative: non-selected option targets cannot share this question's answer
-  if (run("SameAsNegative")) {
+  // SameAs negative: non-selected option targets cannot share this question's answer.
+  // Uniqueness-assuming: it relies on "exactly one option is correct" — another target
+  // sharing qi's answer would be a second valid answer. Gated so it never fires during
+  // generation (which must reject genuinely ambiguous puzzles).
+  if (assumeUnique && run("SameAsNegative")) {
     for (let qi = 0; qi < n; qi++) {
       if (fp.questions[qi].t !== QT_SAME_AS) continue;
       if (answers[qi] == null) continue;
       const ai = letterIdx(answers[qi]!);
       const selected = fp.optionValues[qi][ai];
+      // The "none" answer's sound inference (qi's letter is unique) is handled by
+      // OnlySameNoneForward; this gated, uniqueness-assuming rule is for the index case.
+      if (selected == null || selected < 0) continue;
       let qMask = 0;
       for (let oi = 0; oi < oc; oi++) {
         if (oi === ai) continue;

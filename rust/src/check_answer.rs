@@ -346,6 +346,27 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         },
 
         QuestionType::SameAs => {
+            if value == NONE_VAL {
+                // "none": valid iff no other question shares qi's (candidate) answer.
+                let amask = 1u8 << self_letter.idx();
+                let mut could_exist = false;
+                for j in 0..n {
+                    if j == qi {
+                        continue;
+                    }
+                    if answers[j] == Some(self_letter) {
+                        return Validity::Invalid;
+                    }
+                    if answers[j].is_none() && eliminated[j] & amask == 0 {
+                        could_exist = true;
+                    }
+                }
+                return if could_exist {
+                    Validity::Pending
+                } else {
+                    Validity::Valid
+                };
+            }
             if value < 0 || value as usize >= n || value as usize == qi {
                 return Validity::Invalid;
             }
@@ -993,10 +1014,15 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
         }
         QuestionType::SameAs => {
             let self_ans = answers[qi];
-            value >= 0
-                && (value as usize) < n
-                && value as usize != qi
-                && answers[value as usize] == self_ans
+            let any_match = (0..n).any(|i| i != qi && answers[i] == self_ans);
+            if !any_match {
+                value == NONE_VAL
+            } else {
+                value >= 0
+                    && (value as usize) < n
+                    && value as usize != qi
+                    && answers[value as usize] == self_ans
+            }
         }
         QuestionType::SameAsWhich { question_index } => {
             let ref_ans = answers[question_index as usize];

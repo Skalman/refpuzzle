@@ -55,6 +55,7 @@ export const profiles: DifficultyProfile[] = [
       "LastWith",
       "NextSame",
       "PrevSame",
+      "SameAs",
     ],
   },
   {
@@ -80,6 +81,7 @@ export const profiles: DifficultyProfile[] = [
       "CountConsonant",
       "NoOtherHasAnswer",
       "OnlySame",
+      "SameAs",
     ],
   },
   {
@@ -106,6 +108,7 @@ export const profiles: DifficultyProfile[] = [
       "CountConsonant",
       "NoOtherHasAnswer",
       "OnlySame",
+      "SameAs",
       "LetterDist",
       "EqualCount",
       "ConsecIdent",
@@ -138,6 +141,7 @@ export const profiles: DifficultyProfile[] = [
       "CountConsonant",
       "NoOtherHasAnswer",
       "OnlySame",
+      "SameAs",
       "LetterDist",
       "EqualCount",
       "ConsecIdent",

@@ -76,17 +76,13 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             _ => {}
         }
 
-        // SameAs checks
+        // SameAs checks. "none" is a legitimate option; duplicate targets/nulls are
+        // caught by the general distinct-option-values check below.
         if matches!(qt, QuestionType::SameAs) {
-            let mut targets = Vec::new();
             for oi in 0..oc {
                 let v = fp.option_nums[qi][oi];
                 if v == NONE_VAL {
-                    errors.push(FormError {
-                        qi,
-                        message: format!("SameAs option {oi} is null"),
-                        severity: Severity::Error,
-                    });
+                    continue;
                 } else if v as usize == qi {
                     errors.push(FormError {
                         qi,
@@ -100,19 +96,6 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                         severity: Severity::Error,
                     });
                 }
-                targets.push(v);
-            }
-            let unique: std::collections::HashSet<i16> = targets
-                .iter()
-                .filter(|&&v| v != NONE_VAL)
-                .copied()
-                .collect();
-            if unique.len() < targets.iter().filter(|&&v| v != NONE_VAL).count() {
-                errors.push(FormError {
-                    qi,
-                    message: "SameAs has duplicate option targets".into(),
-                    severity: Severity::Error,
-                });
             }
         }
 
@@ -170,11 +153,20 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             }
         }
 
-        // Duplicate option values
+        // Duplicate option values (incl. at most one "none"). Letter-valued slots
+        // (AnswerOf/LeastCommon/MostCommon) carry NAN_VAL in option_nums and store the
+        // letter in option_answers, so compare on the unified value. TrueStmt (claims)
+        // and identity-option types have no comparable value and are excluded.
         if !qt.has_identity_options() && !matches!(qt, QuestionType::TrueStmt) {
             let vals: Vec<i16> = (0..oc)
-                .map(|oi| fp.option_nums[qi][oi])
-                .filter(|&v| v != NONE_VAL && v != NAN_VAL)
+                .map(|oi| {
+                    let v = fp.option_nums[qi][oi];
+                    if v == NAN_VAL {
+                        fp.option_answers[qi][oi] as i16
+                    } else {
+                        v
+                    }
+                })
                 .collect();
             let unique: std::collections::HashSet<i16> = vals.iter().copied().collect();
             if unique.len() < vals.len() {

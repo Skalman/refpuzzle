@@ -448,6 +448,7 @@ fn valid_values(qt: &QuestionType, qi: usize, n: usize, oc: usize) -> ArrayVec<i
                     out.push(v);
                 }
             }
+            out.push(NONE_VAL);
         }
         QuestionType::OnlySame => {
             for v in 0..n as i16 {
@@ -966,6 +967,13 @@ pub fn repair_one_question(
                     {
                         continue;
                     }
+                    // SameAs: a same-answer question would be an alternate correct answer.
+                    if matches!(qt, QuestionType::SameAs)
+                        && v != NONE_VAL
+                        && solution[v as usize] == solution[qi]
+                    {
+                        continue;
+                    }
                     let mut in_use = false;
                     for k in 0..oc {
                         if k != oi && fp.option_nums[qi][k] == v {
@@ -1162,23 +1170,33 @@ fn fill_one_question(
             place_distractors(&distractors, nums, correct_oi);
         }
         QuestionType::SameAs => {
-            // Can't place SameAs when no other question shares this answer.
-            if correct_val == NONE_VAL {
-                return false;
-            }
-            nums[correct_oi] = correct_val;
             let self_ans = solution[qi];
             let mut pool = [0i16; MAX_N];
             let mut plen = 0;
-            for j in 0..n {
-                if j != qi && j as i16 != correct_val && solution[j] != self_ans {
-                    pool[plen] = j as i16;
-                    plen += 1;
+            if correct_val == NONE_VAL {
+                // "none" is correct (qi's answer is unique): every other question is a distractor.
+                for j in 0..n {
+                    if j != qi {
+                        pool[plen] = j as i16;
+                        plen += 1;
+                    }
                 }
+            } else {
+                // A match exists: distractors are differing-answer questions plus "none".
+                // Same-answer questions are excluded — they'd be alternate correct answers.
+                for j in 0..n {
+                    if j != qi && j as i16 != correct_val && solution[j] != self_ans {
+                        pool[plen] = j as i16;
+                        plen += 1;
+                    }
+                }
+                pool[plen] = NONE_VAL;
+                plen += 1;
             }
             if plen < option_count - 1 {
                 return false;
             }
+            nums[correct_oi] = correct_val;
             rng.shuffle(&mut pool[..plen]);
             let mut distractors = [0i16; 4];
             distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);

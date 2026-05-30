@@ -2,10 +2,24 @@
   "tests": [
     { "section": "=== SameAs ===" },
     {
-      "name": "SameAs: null option",
+      "name": "SameAs: single none option",
       "puzzle": {
         "q": [
           { "t": { "t": "SameAs" }, "o": [1, null, 3, 4, 5] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
+          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+        ]
+      },
+      "expectError": false
+    },
+    {
+      "name": "SameAs: duplicate none options",
+      "puzzle": {
+        "q": [
+          { "t": { "t": "SameAs" }, "o": [1, null, 3, null, 5] },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
           { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
