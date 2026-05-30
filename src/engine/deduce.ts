@@ -160,6 +160,7 @@ function countMatching(
   from: number,
   to: number,
 ): CountResult {
+  const nonMask = ~matchMask & 0b11111;
   let count = 0;
   let guaranteed = 0;
   let possible = 0;
@@ -169,11 +170,10 @@ function countMatching(
       if (pred(a)) count++;
     } else {
       const remaining = ~eliminated[i] & 0b11111;
-      if (remaining === 0) continue;
       const matching = remaining & matchMask;
-      const nonMatching = remaining & (~matchMask & 0b11111);
-      if (matching !== 0 && nonMatching === 0) guaranteed++;
-      else if (matching !== 0) possible++;
+      if (matching === 0) continue;
+      if ((remaining & nonMask) === 0) guaranteed++;
+      else possible++;
     }
   }
   return { count, guaranteed, possible };
@@ -269,6 +269,19 @@ function deduceImpl(
   const run = (r: DeduceRule) => (rule === null || rule === r) && exclude !== r;
   const results: DeduceResult[] = [];
 
+  // Precompute countMatching once per count-typed qi. Used by CountSaturated
+  // (answered qis), CountAllAnswered, and the Eliminations count-family arms
+  // (both unanswered) — the latter two previously called countMatching
+  // independently with identical args for the same qi.
+  const countResults: (CountResult | null)[] = new Array(n).fill(null);
+  for (let qi = 0; qi < n; qi++) {
+    const cp = countPred(fp.questions[qi]);
+    if (cp) {
+      const [from, to] = countRange(fp.questions[qi], n);
+      countResults[qi] = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
+    }
+  }
+
   // ── Count saturation ──
   for (let qi = 0; qi < n; qi++) {
     if (answers[qi] == null) continue;
@@ -279,7 +292,7 @@ function deduceImpl(
     const v = fp.optionValues[qi][ai];
     if (v == null) continue;
     const [from, to] = countRange(q, n);
-    const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
+    const cr = countResults[qi]!;
 
     if (run("CountSaturated")) {
       if (crMin(cr) === v && cr.possible > 0) {
@@ -504,17 +517,20 @@ function deduceImpl(
     }
 
     if (!fast && run("CountAllAnswered")) {
-      const cp = countPred(q);
-      if (cp) {
-        const [from, to] = countRange(q, n);
-        const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
-        if (cr.possible === 0) {
-          for (let oi = 0; oi < 5; oi++) {
-            if (isElim(eliminated, qi, oi)) continue;
-            if (fp.optionValues[qi][oi] === crMin(cr)) {
-              results.push(res({ type: "force", qi, answer: LETTERS[oi] }, "CountAllAnswered"));
-            }
+      const cr = countResults[qi];
+      if (cr != null && cr.possible === 0) {
+        const target = crMin(cr);
+        let matchOi: number | null = null;
+        let matchCount = 0;
+        for (let oi = 0; oi < oc; oi++) {
+          if (isElim(eliminated, qi, oi)) continue;
+          if (fp.optionValues[qi][oi] === target) {
+            matchOi = oi;
+            matchCount++;
           }
+        }
+        if (matchCount === 1 && matchOi !== null) {
+          results.push(res({ type: "force", qi, answer: LETTERS[matchOi] }, "CountAllAnswered"));
         }
       }
     }
@@ -738,46 +754,42 @@ function deduceImpl(
     if (answers[qi] != null) continue;
     const q = fp.questions[qi];
 
+    // Precompute per-question state used by multiple oi iterations.
+    const countCr = countResults[qi];
+    let mccBounds: { maxKnown: number; maxPossible: number } | null = null;
+    if (q.t === QT_MOST_COMMON_COUNT && run("MostCommonCountElim")) {
+      let maxKnown = 0;
+      let maxPossible = 0;
+      for (const letter of LETTERS.slice(0, fp.optionCount)) {
+        const cr = countMatching(
+          answers,
+          eliminated,
+          (a) => a === letter,
+          1 << letterIdx(letter),
+          0,
+          n,
+        );
+        if (crMin(cr) > maxKnown) maxKnown = crMin(cr);
+        if (crMax(cr) > maxPossible) maxPossible = crMax(cr);
+      }
+      mccBounds = { maxKnown, maxPossible };
+    }
+
     for (let oi = 0; oi < 5; oi++) {
       if (isElim(eliminated, qi, oi)) continue;
       const v = fp.optionValues[qi][oi];
 
-      const cp = countPred(q);
-      if (cp && q.t !== QT_MOST_COMMON_COUNT) {
-        const [from, to] = countRange(q, n);
-        const cr = countMatching(answers, eliminated, cp.pred, cp.mask, from, to);
-        if (run("CountExceeded")) {
-          if (v == null || crMin(cr) > v) {
-            results.push(res({ type: "eliminate", qi, oi }, "CountExceeded"));
-          }
+      if (countCr != null && q.t !== QT_MOST_COMMON_COUNT && v != null) {
+        if (run("CountExceeded") && crMin(countCr) > v) {
+          results.push(res({ type: "eliminate", qi, oi }, "CountExceeded"));
         }
-        if (run("CountImpossible")) {
-          if (v != null && crMax(cr) < v) {
-            results.push(res({ type: "eliminate", qi, oi }, "CountImpossible"));
-          }
+        if (run("CountImpossible") && crMax(countCr) < v) {
+          results.push(res({ type: "eliminate", qi, oi }, "CountImpossible"));
         }
       }
 
-      if (q.t === QT_MOST_COMMON_COUNT && run("MostCommonCountElim")) {
-        if (v == null) {
-          results.push(res({ type: "eliminate", qi, oi }, "MostCommonCountElim"));
-          continue;
-        }
-        let maxKnown = 0;
-        let maxPossible = 0;
-        for (const letter of LETTERS.slice(0, fp.optionCount)) {
-          const cr = countMatching(
-            answers,
-            eliminated,
-            (a) => a === letter,
-            1 << letterIdx(letter),
-            0,
-            n,
-          );
-          if (crMin(cr) > maxKnown) maxKnown = crMin(cr);
-          if (crMax(cr) > maxPossible) maxPossible = crMax(cr);
-        }
-        if (v < maxKnown || v > maxPossible) {
+      if (q.t === QT_MOST_COMMON_COUNT && mccBounds != null && v != null) {
+        if (v < mccBounds.maxKnown || v > mccBounds.maxPossible) {
           results.push(res({ type: "eliminate", qi, oi }, "MostCommonCountElim"));
         }
       }
