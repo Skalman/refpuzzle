@@ -456,16 +456,41 @@ fn main() {
                 }
             }
         }
-        let out = serde_json::to_string(&Value::Object(existing)).unwrap();
+        let out = format_year(&existing);
         std::fs::write(&output_path, out).expect("failed to write output file");
     } else {
-        let out = serde_json::to_string(&Value::Object(year_map)).unwrap();
+        let out = format_year(&year_map);
         if output_path == "-" {
-            println!("{out}");
+            print!("{out}");
         } else {
             std::fs::write(&output_path, out).expect("failed to write output file");
         }
     }
+}
+
+// Indent the date and level keys for readable git diffs; keep each puzzle on
+// one compact line. Iteration order is sorted (MMDD dates → chronological).
+fn format_year(year: &serde_json::Map<String, Value>) -> String {
+    let mut out = String::from("{\n");
+    let n = year.len();
+    for (i, (date, levels)) in year.iter().enumerate() {
+        out.push_str("  ");
+        out.push_str(&serde_json::to_string(date).unwrap());
+        out.push_str(": {\n");
+        let levels_obj = levels.as_object().expect("levels must be object");
+        let m = levels_obj.len();
+        for (j, (lvl, puzzle)) in levels_obj.iter().enumerate() {
+            out.push_str("    ");
+            out.push_str(&serde_json::to_string(lvl).unwrap());
+            out.push_str(": ");
+            out.push_str(&serde_json::to_string(puzzle).unwrap());
+            out.push_str(if j + 1 < m { ",\n" } else { "\n" });
+        }
+        out.push_str("  }");
+        out.push_str(if i + 1 < n { ",\n" } else { "\n" });
+    }
+    out.push_str("}\n");
+    out
 }
 
 fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
@@ -693,7 +718,7 @@ mod tests {
                 }
             }
 
-            let is_past = puzzle_date_yyyymmdd(key) < today;
+            let is_past = puzzle_is_past(key, today);
             let form_errors = check_form::check_form(fp, Some(&sol[..fp.n]));
             for e in &form_errors {
                 let is_warning = matches!(e.severity, check_form::Severity::Warning);
@@ -737,15 +762,19 @@ mod tests {
         (y as u32) * 10000 + m as u32 * 100 + d as u32
     }
 
-    fn puzzle_date_yyyymmdd(key: &str) -> u32 {
-        // key format: "YYYY.json/MMDD-level"
-        let (year_part, rest) = key.split_once('.').expect("missing year in puzzle key");
-        let mmdd_part = rest.split('/').nth(1).expect("missing date in puzzle key");
-        let mmdd = mmdd_part
-            .split('-')
-            .next()
-            .expect("missing MMDD in puzzle key");
-        year_part.parse::<u32>().unwrap() * 10000 + mmdd.parse::<u32>().unwrap()
+    // key format: "YYYY.json/MMDD-level". Returns false (treat as not-past)
+    // when the year isn't a 4-digit number.
+    fn puzzle_is_past(key: &str, today: u32) -> bool {
+        let Some((year_part, rest)) = key.split_once('.') else {
+            return false;
+        };
+        let Some(mmdd) = rest.split('/').nth(1).and_then(|s| s.split('-').next()) else {
+            return false;
+        };
+        let (Ok(y), Ok(m)) = (year_part.parse::<u32>(), mmdd.parse::<u32>()) else {
+            return false;
+        };
+        y * 10000 + m < today
     }
 
     #[test]
@@ -756,7 +785,7 @@ mod tests {
         let mut failures: Vec<String> = Vec::new();
 
         for (key, fp) in &puzzles {
-            let is_past = puzzle_date_yyyymmdd(key) < today;
+            let is_past = puzzle_is_past(key, today);
             let errors = check_form::check_form(fp, None);
             for e in &errors {
                 let is_warning = matches!(e.severity, check_form::Severity::Warning);

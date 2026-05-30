@@ -144,8 +144,10 @@ const today = (() => {
 })();
 
 function puzzleIsPast(id: string): boolean {
-  // id format: "YYYY-MMDD-level"
+  // id format: "YYYY-MMDD-level". Returns false (treat as not-past) when
+  // the year isn't a 4-digit number.
   const parts = id.split("-");
+  if (parts.length !== 3 || !/^\d{4}$/.test(parts[0])) return false;
   return parseInt(parts[0], 10) * 10000 + parseInt(parts[1], 10) < today;
 }
 

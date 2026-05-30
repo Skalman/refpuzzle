@@ -313,6 +313,25 @@ if (showStats) {
 
 // ── Output ──
 
+// Indent the date and level keys for readable git diffs; keep each puzzle on
+// one compact line.
+function formatYear(year: Record<string, Record<string, unknown>>): string {
+  const dates = Object.keys(year).sort();
+  let out = "{\n";
+  dates.forEach((date, i) => {
+    const levels = Object.keys(year[date]).sort();
+    out += `  ${JSON.stringify(date)}: {\n`;
+    levels.forEach((lvl, j) => {
+      out += `    ${JSON.stringify(lvl)}: ${JSON.stringify(year[date][lvl])}`;
+      out += j + 1 < levels.length ? ",\n" : "\n";
+    });
+    out += "  }";
+    out += i + 1 < dates.length ? ",\n" : "\n";
+  });
+  out += "}\n";
+  return out;
+}
+
 if (merge) {
   if (outputPath === "-") {
     console.error("--merge requires -o FILE (cannot merge to stdout)");
@@ -330,11 +349,11 @@ if (merge) {
       existing[date][lvl] = puzzle;
     }
   }
-  writeFileSync(outputPath, JSON.stringify(existing));
+  writeFileSync(outputPath, formatYear(existing));
 } else {
-  const out = JSON.stringify(yearMap);
+  const out = formatYear(yearMap);
   if (outputPath === "-") {
-    process.stdout.write(out + "\n");
+    process.stdout.write(out);
   } else {
     writeFileSync(outputPath, out);
   }
