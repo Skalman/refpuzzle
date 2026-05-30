@@ -964,6 +964,8 @@ function makeRule(
     case "AnswerIsSelf":
       return { type };
     case "TrueStmt":
+      // TrueStmt requires 5 options (one true claim + four false claims).
+      if (oc < 5) return null;
       return { type };
     case "SameAsWhich": {
       const targets = [...assigned].filter((j) => j !== qi).sort((a, b) => a - b);

@@ -910,7 +910,15 @@ pub(crate) fn random_type_params(
             Some(QuestionType::NextSame)
         }
         QuestionTypeKind::OnlySame => Some(QuestionType::OnlySame),
-        QuestionTypeKind::SameAs => Some(QuestionType::SameAs),
+        QuestionTypeKind::SameAs => {
+            // "none" (no other question shares this answer) is a valid answer, so there is no
+            // structural requirement. Capacity: with "none" as a value, oc distinct options
+            // need n >= oc (none case: oc-1 index distractors from the n-1 other questions).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::SameAs)
+        }
         QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
             let answer = rng.pick(letters);
@@ -957,7 +965,23 @@ pub(crate) fn random_type_params(
             if solution[ref_qi] == solution[qi] {
                 return None;
             }
-            if !(0..n).any(|j| j != qi && j != ref_qi && solution[j] == solution[ref_qi]) {
+            // Structural: another question must share ref's answer.
+            // Capacity: need at least oc-1 questions whose answer differs from ref (distractors).
+            let mut has_match = false;
+            let mut distractor_count = 0usize;
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if solution[j] == solution[ref_qi] {
+                    if j != ref_qi {
+                        has_match = true;
+                    }
+                } else {
+                    distractor_count += 1;
+                }
+            }
+            if !has_match || distractor_count < option_count - 1 {
                 return None;
             }
             Some(QuestionType::SameAsWhich {
