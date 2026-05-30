@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, existsSync } from "node:fs";
+import { writeFileSync, readFileSync, statSync } from "node:fs";
 import { generateConstructive as generate } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
@@ -179,7 +179,12 @@ if (merge && overwrite) {
   console.error("Error: --merge and --overwrite are mutually exclusive");
   process.exit(1);
 }
-if (outputPath !== "-" && !merge && !overwrite && existsSync(outputPath)) {
+if (
+  outputPath !== "-" &&
+  !merge &&
+  !overwrite &&
+  statSync(outputPath, { throwIfNoEntry: false })?.isFile()
+) {
   console.error(
     `Error: output file ${outputPath} already exists. Pass --merge to add to it, or --overwrite to replace it.`,
   );

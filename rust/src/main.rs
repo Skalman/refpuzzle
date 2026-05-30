@@ -303,7 +303,7 @@ fn main() {
         eprintln!("Error: --merge and --overwrite are mutually exclusive");
         std::process::exit(1);
     }
-    if output_path != "-" && !merge && !overwrite && std::path::Path::new(&output_path).exists() {
+    if output_path != "-" && !merge && !overwrite && std::path::Path::new(&output_path).is_file() {
         eprintln!(
             "Error: output file {output_path} already exists. Pass --merge to add to it, or --overwrite to replace it."
         );
