@@ -243,6 +243,24 @@ fn can_still_match(pred: CountPred, eliminated: u8) -> bool {
     eliminated & pred.mask() != pred.mask()
 }
 
+/// Return Some(i) if exactly one i in the range satisfies the predicate; None otherwise.
+/// Used by rules that fire only when a single candidate remains.
+fn exactly_one(
+    range: impl IntoIterator<Item = usize>,
+    mut f: impl FnMut(usize) -> bool,
+) -> Option<usize> {
+    let mut found = None;
+    for i in range {
+        if f(i) {
+            if found.is_some() {
+                return None;
+            }
+            found = Some(i);
+        }
+    }
+    found
+}
+
 pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 
 // ── Main functions ──
@@ -320,310 +338,149 @@ fn deduce_impl(
         }
     }
 
-    // ── Count saturation ──
+    // ── Count-family rules (per-question dispatch) ──
+    // Consolidates what used to live in three separate loops: CountSaturated
+    // family (answered count qis), CountAllAnswered (unanswered count qis),
+    // and the count-family + MostCommonCount Eliminations arms (per option).
     for qi in 0..n {
-        let Some(a) = answers[qi] else { continue };
         let t = &fp.question_types[qi];
-        let Some(pred) = count_pred(t) else { continue };
-        let on = fp.option_nums[qi][a.idx()];
-        if on == NAN_VAL || on < 0 {
-            continue;
-        }
-        let (from, to) = count_range(t, n);
-        let cr = count_results[qi].unwrap();
 
-        if run(DeduceRule::CountSaturated) && cr.min() == on && cr.possible > 0 {
-            let mask = pred.mask();
-            for j in from..to {
-                if answers[j].is_none() {
-                    let remaining_bits = !eliminated[j] & 0b11111u8;
-                    if remaining_bits & (!mask & 0b11111u8) == 0 {
-                        continue;
-                    }
-                    for oi in 0..5usize {
-                        if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
-                            push(
-                                DeduceAction::Eliminate { qi: j, oi },
-                                DeduceRule::CountSaturated,
-                            );
-                        }
-                    }
+        if let Some(pred) = count_pred(t) {
+            let Some(cr) = count_results[qi] else {
+                continue;
+            };
+            let (from, to) = count_range(t, n);
+
+            if let Some(a) = answers[qi] {
+                // Answered count qi: CountSaturated / CountMustMatch{Force,Elim}.
+                let on = fp.option_nums[qi][a.idx()];
+                if on == NAN_VAL || on < 0 {
+                    continue;
                 }
-            }
-        }
 
-        if cr.max() == on && cr.possible > 0 {
-            if run(DeduceRule::CountMustMatchForce) && cr.possible == 1 {
-                for j in from..to {
-                    if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
-                        let mut match_count = 0;
-                        let mut match_oi = 0;
-                        for oi in 0..5usize {
-                            if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
-                                match_count += 1;
-                                match_oi = oi;
+                if run(DeduceRule::CountSaturated) && cr.min() == on && cr.possible > 0 {
+                    let mask = pred.mask();
+                    for j in from..to {
+                        if answers[j].is_none() {
+                            let remaining_bits = !eliminated[j] & 0b11111u8;
+                            if remaining_bits & (!mask & 0b11111u8) == 0 {
+                                continue;
+                            }
+                            for oi in 0..5usize {
+                                if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
+                                    push(
+                                        DeduceAction::Eliminate { qi: j, oi },
+                                        DeduceRule::CountSaturated,
+                                    );
+                                }
                             }
                         }
-                        if match_count == 1 {
-                            push(
-                                DeduceAction::Force {
-                                    qi: j,
-                                    answer: LETTERS[match_oi],
-                                },
-                                DeduceRule::CountMustMatchForce,
-                            );
-                        }
                     }
                 }
-            }
 
-            if run(DeduceRule::CountMustMatchElim) {
-                for j in from..to {
-                    if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
-                        for oi in 0..5usize {
-                            if !is_elim(eliminated, j, oi) && !pred.matches(LETTERS[oi]) {
+                if cr.max() == on && cr.possible > 0 {
+                    if run(DeduceRule::CountMustMatchForce) && cr.possible == 1 {
+                        for j in from..to {
+                            if answers[j].is_none()
+                                && can_still_match(pred, eliminated[j])
+                                && let Some(oi) = exactly_one(0..5, |oi| {
+                                    !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi])
+                                })
+                            {
                                 push(
-                                    DeduceAction::Eliminate { qi: j, oi },
-                                    DeduceRule::CountMustMatchElim,
+                                    DeduceAction::Force {
+                                        qi: j,
+                                        answer: LETTERS[oi],
+                                    },
+                                    DeduceRule::CountMustMatchForce,
                                 );
                             }
                         }
                     }
-                }
-            }
-        }
-    }
 
-    // ── Forced values ──
-    for qi in 0..n {
-        if answers[qi].is_some() {
-            continue;
-        }
-        let t = &fp.question_types[qi];
-
-        if run(DeduceRule::OnlyOptionLeft) && remaining_count(eliminated[qi]) == 1 {
-            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
-            push(
-                DeduceAction::Force {
-                    qi,
-                    answer: LETTERS[oi as usize],
-                },
-                DeduceRule::OnlyOptionLeft,
-            );
-        }
-
-        if run(DeduceRule::AnswerOfForward)
-            && let QuestionType::AnswerOf { question_index } = *t
-            && let Some(target) = answers[question_index as usize]
-        {
-            let mut best: Option<usize> = None;
-            for oi in 0..5usize {
-                if fp.option_answers[qi][oi] == target as u8 {
-                    if !is_elim(eliminated, qi, oi) {
-                        best = Some(oi);
-                        break;
-                    }
-                    if best.is_none() {
-                        best = Some(oi);
-                    }
-                }
-            }
-            if let Some(oi) = best {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::AnswerOfForward,
-                );
-            }
-        }
-
-        for other in 0..n {
-            let Some(other_ans) = answers[other] else {
-                continue;
-            };
-
-            if run(DeduceRule::AnswerOfReverse)
-                && let QuestionType::AnswerOf { question_index } = fp.question_types[other]
-                && question_index as usize == qi
-            {
-                let implied = fp.option_answers[other][other_ans.idx()];
-                if implied <= 4 {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: LETTERS[implied as usize],
-                        },
-                        DeduceRule::AnswerOfReverse,
-                    );
-                }
-            }
-
-            if run(DeduceRule::SameAsReverse)
-                && let QuestionType::SameAs = fp.question_types[other]
-            {
-                let target_q = fp.option_nums[other][other_ans.idx()];
-                if target_q >= 0 && target_q as usize == qi {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: other_ans,
-                        },
-                        DeduceRule::SameAsReverse,
-                    );
-                }
-            }
-
-            if run(DeduceRule::PrevNextOnlySameReverse)
-                && matches!(
-                    fp.question_types[other],
-                    QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame
-                )
-            {
-                let target_q = fp.option_nums[other][other_ans.idx()];
-                if target_q >= 0 && target_q as usize == qi {
-                    push(
-                        DeduceAction::Force {
-                            qi,
-                            answer: other_ans,
-                        },
-                        DeduceRule::PrevNextOnlySameReverse,
-                    );
-                }
-            }
-        }
-
-        if run(DeduceRule::LetterDistForward)
-            && let QuestionType::LetterDist { question_index } = *t
-            && let Some(other_ans) = answers[question_index as usize]
-        {
-            let other_idx = other_ans.idx();
-            let mut valid_count = 0u8;
-            let mut valid_letter = Answer::A;
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let dist = (oi as i16 - other_idx as i16).abs();
-                if dist == fp.option_nums[qi][oi] {
-                    valid_count += 1;
-                    valid_letter = LETTERS[oi];
-                }
-            }
-            if valid_count == 1 {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: valid_letter,
-                    },
-                    DeduceRule::LetterDistForward,
-                );
-            }
-        }
-
-        // Reverse LetterDist: other questions' LetterDist rules constrain qi
-        for src in 0..n {
-            if src == qi {
-                continue;
-            }
-            if let QuestionType::LetterDist { question_index } = fp.question_types[src] {
-                if question_index as usize != qi {
-                    continue;
-                }
-                let mut elim_mask = 0u8;
-                if let Some(src_ans) = answers[src] {
-                    let dist = fp.option_nums[src][src_ans.idx()];
-                    if dist == NAN_VAL {
-                        continue;
-                    }
-                    let mut valid_count = 0u8;
-                    let mut valid_oi = 0usize;
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        if (oi as i16 - src_ans.idx() as i16).abs() == dist {
-                            valid_count += 1;
-                            valid_oi = oi;
-                        } else {
-                            elim_mask |= 1 << oi;
+                    if run(DeduceRule::CountMustMatchElim) {
+                        for j in from..to {
+                            if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
+                                for oi in 0..5usize {
+                                    if !is_elim(eliminated, j, oi) && !pred.matches(LETTERS[oi]) {
+                                        push(
+                                            DeduceAction::Eliminate { qi: j, oi },
+                                            DeduceRule::CountMustMatchElim,
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
-                    if run(DeduceRule::LetterDistReverseForce) && valid_count == 1 && elim_mask != 0
-                    {
+                }
+            } else {
+                // Unanswered count qi: CountAllAnswered + per-option CountExceeded/Impossible.
+                if !fast && run(DeduceRule::CountAllAnswered) && cr.possible == 0 {
+                    let target = cr.min();
+                    if let Some(oi) = exactly_one(0..fp.option_count, |oi| {
+                        !is_elim(eliminated, qi, oi) && fp.option_nums[qi][oi] == target
+                    }) {
                         push(
                             DeduceAction::Force {
                                 qi,
-                                answer: LETTERS[valid_oi],
+                                answer: LETTERS[oi],
                             },
-                            DeduceRule::LetterDistReverseForce,
+                            DeduceRule::CountAllAnswered,
                         );
                     }
-                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 && valid_count != 1
-                    {
+                }
+
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
+                    if on == NAN_VAL {
+                        continue;
+                    }
+                    if run(DeduceRule::CountExceeded) && cr.min() > on {
                         push(
-                            DeduceAction::EliminateMulti {
-                                question_mask: 1 << qi,
-                                option_mask: elim_mask,
-                            },
-                            DeduceRule::LetterDistReverseElim,
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountExceeded,
                         );
                     }
-                } else {
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let compatible = (0..5usize).any(|si| {
-                            !is_elim(eliminated, src, si)
-                                && fp.option_nums[src][si] != NAN_VAL
-                                && (oi as i16 - si as i16).abs() == fp.option_nums[src][si]
-                        });
-                        if !compatible {
-                            elim_mask |= 1 << oi;
-                        }
-                    }
-                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 {
+                    if run(DeduceRule::CountImpossible) && cr.max() < on {
                         push(
-                            DeduceAction::EliminateMulti {
-                                question_mask: 1 << qi,
-                                option_mask: elim_mask,
-                            },
-                            DeduceRule::LetterDistReverseElim,
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::CountImpossible,
                         );
                     }
                 }
             }
-        }
-
-        if !fast
-            && run(DeduceRule::CountAllAnswered)
-            && let Some(cr) = count_results[qi]
-            && cr.possible == 0
+        } else if matches!(*t, QuestionType::MostCommonCount)
+            && answers[qi].is_none()
+            && run(DeduceRule::MostCommonCountElim)
         {
-            let target = cr.min();
-            let mut match_oi = None;
-            let mut match_count = 0;
-            for oi in 0..fp.option_count {
+            let mut max_known: i16 = 0;
+            let mut max_possible: i16 = 0;
+            for &letter in &LETTERS[..fp.option_count] {
+                let cr = count_matching(answers, eliminated, CountPred::IsAnswer(letter), 0, n);
+                if cr.min() > max_known {
+                    max_known = cr.min();
+                }
+                if cr.max() > max_possible {
+                    max_possible = cr.max();
+                }
+            }
+            for oi in 0..5usize {
                 if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                if fp.option_nums[qi][oi] == target {
-                    match_oi = Some(oi);
-                    match_count += 1;
+                let on = fp.option_nums[qi][oi];
+                if on == NAN_VAL {
+                    continue;
                 }
-            }
-            if match_count == 1
-                && let Some(oi) = match_oi
-            {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::CountAllAnswered,
-                );
+                if on < max_known || on > max_possible {
+                    push(
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::MostCommonCountElim,
+                    );
+                }
             }
         }
     }
@@ -821,132 +678,259 @@ fn deduce_impl(
         }
     }
 
-    // ── Vowel/consonant cross-elimination ──
-    if !fast {
-        let mut vowel_qi = None;
-        let mut consonant_qi = None;
-        for i in 0..n {
-            if answers[i].is_some() {
-                continue;
-            }
-            match fp.question_types[i] {
-                QuestionType::CountVowel => vowel_qi = Some(i),
-                QuestionType::CountConsonant => consonant_qi = Some(i),
-                _ => {}
-            }
+    // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
+    // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
+    // fires exactly once per deduce call regardless of how many of each type
+    // exist in the puzzle.
+    let mut vowel_qi: Option<usize> = None;
+    let mut consonant_qi: Option<usize> = None;
+    for i in 0..n {
+        if answers[i].is_some() {
+            continue;
         }
-        if let (Some(vq), Some(cq)) = (vowel_qi, consonant_qi) {
-            let nn = n as i16;
-            if run(DeduceRule::VowelCrossElim) {
-                for oi in 0..5usize {
-                    if is_elim(eliminated, vq, oi) {
-                        continue;
-                    }
-                    let v = fp.option_nums[vq][oi];
-                    if v == NAN_VAL {
-                        continue;
-                    }
-                    let need = nn - v;
-                    let has = (0..5).any(|coi| {
-                        !is_elim(eliminated, cq, coi) && fp.option_nums[cq][coi] == need
-                    });
-                    if !has {
-                        push(
-                            DeduceAction::Eliminate { qi: vq, oi },
-                            DeduceRule::VowelCrossElim,
-                        );
-                    }
-                }
-            }
-            if run(DeduceRule::ConsonantCrossElim) {
-                for oi in 0..5usize {
-                    if is_elim(eliminated, cq, oi) {
-                        continue;
-                    }
-                    let v = fp.option_nums[cq][oi];
-                    if v == NAN_VAL {
-                        continue;
-                    }
-                    let need = nn - v;
-                    let has = (0..5).any(|voi| {
-                        !is_elim(eliminated, vq, voi) && fp.option_nums[vq][voi] == need
-                    });
-                    if !has {
-                        push(
-                            DeduceAction::Eliminate { qi: cq, oi },
-                            DeduceRule::ConsonantCrossElim,
-                        );
-                    }
-                }
-            }
+        match fp.question_types[i] {
+            QuestionType::CountVowel => vowel_qi = Some(i),
+            QuestionType::CountConsonant => consonant_qi = Some(i),
+            _ => {}
         }
     }
 
-    // ── Eliminations ──
+    // ── Per-question rules (forward force + cross-question reverse + per-option elim) ──
     for qi in 0..n {
         if answers[qi].is_some() {
             continue;
         }
         let t = &fp.question_types[qi];
 
-        // Per-question count state precomputed at the top of deduce_impl.
-        let count_cr = count_results[qi];
-        let mcc_bounds = (matches!(*t, QuestionType::MostCommonCount)
-            && run(DeduceRule::MostCommonCountElim))
-        .then(|| {
-            let mut max_known: i16 = 0;
-            let mut max_possible: i16 = 0;
-            for &letter in &LETTERS[..fp.option_count] {
-                let cr = count_matching(answers, eliminated, CountPred::IsAnswer(letter), 0, n);
-                if cr.min() > max_known {
-                    max_known = cr.min();
-                }
-                if cr.max() > max_possible {
-                    max_possible = cr.max();
-                }
-            }
-            (max_known, max_possible)
-        });
+        if run(DeduceRule::OnlyOptionLeft) && remaining_count(eliminated[qi]) == 1 {
+            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
+            push(
+                DeduceAction::Force {
+                    qi,
+                    answer: LETTERS[oi as usize],
+                },
+                DeduceRule::OnlyOptionLeft,
+            );
+        }
 
-        for oi in 0..5usize {
-            if is_elim(eliminated, qi, oi) {
+        for other in 0..n {
+            let Some(other_ans) = answers[other] else {
+                continue;
+            };
+
+            match fp.question_types[other] {
+                QuestionType::AnswerOf { question_index }
+                    if question_index as usize == qi && run(DeduceRule::AnswerOfReverse) =>
+                {
+                    let implied = fp.option_answers[other][other_ans.idx()];
+                    if implied <= 4 {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[implied as usize],
+                            },
+                            DeduceRule::AnswerOfReverse,
+                        );
+                    }
+                }
+                QuestionType::SameAs if run(DeduceRule::SameAsReverse) => {
+                    let target_q = fp.option_nums[other][other_ans.idx()];
+                    if target_q >= 0 && target_q as usize == qi {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: other_ans,
+                            },
+                            DeduceRule::SameAsReverse,
+                        );
+                    }
+                }
+                QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame
+                    if run(DeduceRule::PrevNextOnlySameReverse) =>
+                {
+                    let target_q = fp.option_nums[other][other_ans.idx()];
+                    if target_q >= 0 && target_q as usize == qi {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: other_ans,
+                            },
+                            DeduceRule::PrevNextOnlySameReverse,
+                        );
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        // Reverse LetterDist: other questions' LetterDist rules constrain qi
+        for src in 0..n {
+            if src == qi {
                 continue;
             }
-            let on = fp.option_nums[qi][oi];
-
-            match *t {
-                QuestionType::CountAnswer { .. }
-                | QuestionType::CountAnswerBefore { .. }
-                | QuestionType::CountAnswerAfter { .. }
-                | QuestionType::CountVowel
-                | QuestionType::CountConsonant
-                    if on != NAN_VAL =>
-                {
-                    let cr = count_cr.unwrap();
-                    if run(DeduceRule::CountExceeded) && cr.min() > on {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::CountExceeded,
-                        );
-                    }
-                    if run(DeduceRule::CountImpossible) && cr.max() < on {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::CountImpossible,
-                        );
-                    }
+            if let QuestionType::LetterDist { question_index } = fp.question_types[src] {
+                if question_index as usize != qi {
+                    continue;
                 }
-                QuestionType::MostCommonCount if on != NAN_VAL => {
-                    if let Some((max_known, max_possible)) = mcc_bounds
-                        && (on < max_known || on > max_possible)
+                let mut elim_mask = 0u8;
+                if let Some(src_ans) = answers[src] {
+                    let dist = fp.option_nums[src][src_ans.idx()];
+                    if dist == NAN_VAL {
+                        continue;
+                    }
+                    let mut valid_count = 0u8;
+                    let mut valid_oi = 0usize;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        if (oi as i16 - src_ans.idx() as i16).abs() == dist {
+                            valid_count += 1;
+                            valid_oi = oi;
+                        } else {
+                            elim_mask |= 1 << oi;
+                        }
+                    }
+                    if run(DeduceRule::LetterDistReverseForce) && valid_count == 1 && elim_mask != 0
                     {
                         push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::MostCommonCountElim,
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[valid_oi],
+                            },
+                            DeduceRule::LetterDistReverseForce,
+                        );
+                    }
+                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 && valid_count != 1
+                    {
+                        push(
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << qi,
+                                option_mask: elim_mask,
+                            },
+                            DeduceRule::LetterDistReverseElim,
+                        );
+                    }
+                } else {
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let compatible = (0..5usize).any(|si| {
+                            !is_elim(eliminated, src, si)
+                                && fp.option_nums[src][si] != NAN_VAL
+                                && (oi as i16 - si as i16).abs() == fp.option_nums[src][si]
+                        });
+                        if !compatible {
+                            elim_mask |= 1 << oi;
+                        }
+                    }
+                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 {
+                        push(
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << qi,
+                                option_mask: elim_mask,
+                            },
+                            DeduceRule::LetterDistReverseElim,
                         );
                     }
                 }
-                QuestionType::AnswerOf { question_index } => {
+            }
+        }
+
+        match *t {
+            QuestionType::CountVowel if !fast && Some(qi) == vowel_qi => {
+                // vowel + consonant = n. Run the 5×5 cross-product once,
+                // emitting eliminations on both qi (vowel) and cq (consonant).
+                // Only the canonical (last) CountVowel question fires this; the
+                // CountConsonant arm would compute the same pairings from the
+                // other side.
+                if let Some(cq) = consonant_qi {
+                    let nn = n as i16;
+                    let mut vowel_valid = 0u8;
+                    let mut consonant_valid = 0u8;
+                    for voi in 0..5 {
+                        if !is_elim(eliminated, qi, voi) && fp.option_nums[qi][voi] != NAN_VAL {
+                            vowel_valid |= 1 << voi;
+                        }
+                    }
+                    for coi in 0..5 {
+                        if !is_elim(eliminated, cq, coi) && fp.option_nums[cq][coi] != NAN_VAL {
+                            consonant_valid |= 1 << coi;
+                        }
+                    }
+                    let mut vowel_has_partner = 0u8;
+                    let mut consonant_has_partner = 0u8;
+                    for voi in 0..5 {
+                        if (vowel_valid >> voi) & 1 == 0 {
+                            continue;
+                        }
+                        let v = fp.option_nums[qi][voi];
+                        for coi in 0..5 {
+                            if (consonant_valid >> coi) & 1 == 0 {
+                                continue;
+                            }
+                            if v + fp.option_nums[cq][coi] == nn {
+                                vowel_has_partner |= 1 << voi;
+                                consonant_has_partner |= 1 << coi;
+                            }
+                        }
+                    }
+                    if run(DeduceRule::VowelCrossElim) {
+                        for voi in 0..5 {
+                            if (vowel_valid >> voi) & 1 == 1 && (vowel_has_partner >> voi) & 1 == 0
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi: voi },
+                                    DeduceRule::VowelCrossElim,
+                                );
+                            }
+                        }
+                    }
+                    if run(DeduceRule::ConsonantCrossElim) {
+                        for coi in 0..5 {
+                            if (consonant_valid >> coi) & 1 == 1
+                                && (consonant_has_partner >> coi) & 1 == 0
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi: cq, oi: coi },
+                                    DeduceRule::ConsonantCrossElim,
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            QuestionType::AnswerOf { question_index } => {
+                if run(DeduceRule::AnswerOfForward)
+                    && let Some(target) = answers[question_index as usize]
+                {
+                    let mut best: Option<usize> = None;
+                    for oi in 0..5usize {
+                        if fp.option_answers[qi][oi] == target as u8 {
+                            if !is_elim(eliminated, qi, oi) {
+                                best = Some(oi);
+                                break;
+                            }
+                            if best.is_none() {
+                                best = Some(oi);
+                            }
+                        }
+                    }
+                    if let Some(oi) = best {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[oi],
+                            },
+                            DeduceRule::AnswerOfForward,
+                        );
+                    }
+                }
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
                     let ov = fp.option_answers[qi][oi];
                     if ov <= 4 && run(DeduceRule::AnswerOfTargetRuledOut) {
                         if let Some(target) = answers[question_index as usize] {
@@ -964,7 +948,30 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::LetterDist { question_index } => {
+            }
+            QuestionType::LetterDist { question_index } => {
+                if run(DeduceRule::LetterDistForward)
+                    && let Some(other_ans) = answers[question_index as usize]
+                {
+                    let other_idx = other_ans.idx() as i16;
+                    if let Some(oi) = exactly_one(0..5, |oi| {
+                        !is_elim(eliminated, qi, oi)
+                            && (oi as i16 - other_idx).abs() == fp.option_nums[qi][oi]
+                    }) {
+                        push(
+                            DeduceAction::Force {
+                                qi,
+                                answer: LETTERS[oi],
+                            },
+                            DeduceRule::LetterDistForward,
+                        );
+                    }
+                }
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
                     let max_dist = oi.max(4 - oi) as i16;
                     if run(DeduceRule::LetterDistImpossible) && on != NAN_VAL && on > max_dist {
                         push(
@@ -1002,11 +1009,17 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::ClosestAfter {
-                    answer,
-                    after_index,
-                } => {
-                    let scan_start = after_index as usize + 1;
+            }
+            QuestionType::ClosestAfter { answer, .. } | QuestionType::FirstWith { answer } => {
+                let scan_start = match *t {
+                    QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
+                    _ => 0,
+                };
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
                     if run(DeduceRule::FirstClosestAfterOutOfRange)
                         && on != NONE_VAL
                         && ((on as usize) < scan_start || (on as usize) >= n)
@@ -1067,73 +1080,17 @@ fn deduce_impl(
                         );
                     }
                 }
-                QuestionType::FirstWith { answer } => {
-                    let scan_start = 0usize;
-                    if run(DeduceRule::FirstClosestAfterOutOfRange)
-                        && on != NONE_VAL
-                        && ((on as usize) < scan_start || (on as usize) >= n)
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::FirstClosestAfterOutOfRange,
-                        );
+            }
+            QuestionType::ClosestBefore { answer, .. } | QuestionType::LastWith { answer } => {
+                let before_idx = match *t {
+                    QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
+                    _ => n,
+                };
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
                     }
-                    if on != NONE_VAL && (on as usize) < n {
-                        let pos = on as usize;
-                        if run(DeduceRule::FirstClosestAfterWrongAnswer)
-                            && let Some(pa) = answers[pos]
-                            && pa != answer
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterWrongAnswer,
-                            );
-                        }
-                        if run(DeduceRule::FirstClosestAfterRuledOut)
-                            && answers[pos].is_none()
-                            && is_elim(eliminated, pos, answer.idx())
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterRuledOut,
-                            );
-                        }
-                        if run(DeduceRule::FirstClosestAfterEarlierMatch) {
-                            for j in scan_start..pos {
-                                if answers[j] == Some(answer) {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::FirstClosestAfterEarlierMatch,
-                                    );
-                                }
-                            }
-                        }
-                        if run(DeduceRule::FirstClosestAfterSelfRef)
-                            && LETTERS[oi] == answer
-                            && qi >= scan_start
-                            && qi < pos
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::FirstClosestAfterSelfRef,
-                            );
-                        }
-                    }
-                    if run(DeduceRule::FirstClosestAfterNoneMatch)
-                        && on == NONE_VAL
-                        && (scan_start..n).any(|j| answers[j] == Some(answer))
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::FirstClosestAfterNoneMatch,
-                        );
-                    }
-                }
-                QuestionType::ClosestBefore {
-                    answer,
-                    before_index,
-                } => {
-                    let before_idx = before_index as usize;
+                    let on = fp.option_nums[qi][oi];
                     if run(DeduceRule::LastClosestBeforeOutOfRange)
                         && on != NONE_VAL
                         && (on < 0 || (on as usize) >= before_idx)
@@ -1194,73 +1151,17 @@ fn deduce_impl(
                         );
                     }
                 }
-                QuestionType::LastWith { answer } => {
-                    let before_idx = n;
-                    if run(DeduceRule::LastClosestBeforeOutOfRange)
-                        && on != NONE_VAL
-                        && (on < 0 || (on as usize) >= before_idx)
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::LastClosestBeforeOutOfRange,
-                        );
+            }
+            QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+                let parity = match t {
+                    QuestionType::OnlyOdd { .. } => 1,
+                    _ => 0,
+                };
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
                     }
-                    if on != NONE_VAL && on >= 0 && (on as usize) < before_idx {
-                        let pos = on as usize;
-                        if run(DeduceRule::LastClosestBeforeWrongAnswer)
-                            && let Some(pa) = answers[pos]
-                            && pa != answer
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeWrongAnswer,
-                            );
-                        }
-                        if run(DeduceRule::LastClosestBeforeRuledOut)
-                            && answers[pos].is_none()
-                            && is_elim(eliminated, pos, answer.idx())
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeRuledOut,
-                            );
-                        }
-                        if run(DeduceRule::LastClosestBeforeLaterMatch)
-                            && ((pos + 1)..before_idx)
-                                .rev()
-                                .any(|j| answers[j] == Some(answer))
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeLaterMatch,
-                            );
-                        }
-                        if run(DeduceRule::LastClosestBeforeSelfRef)
-                            && LETTERS[oi] == answer
-                            && qi > pos
-                            && qi < before_idx
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::LastClosestBeforeSelfRef,
-                            );
-                        }
-                    }
-                    if run(DeduceRule::LastClosestBeforeNoneMatch)
-                        && on == NONE_VAL
-                        && (0..before_idx).any(|j| answers[j] == Some(answer))
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::LastClosestBeforeNoneMatch,
-                        );
-                    }
-                }
-                QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-                    let parity = match t {
-                        QuestionType::OnlyOdd { .. } => 1,
-                        _ => 0,
-                    };
+                    let on = fp.option_nums[qi][oi];
                     if on != NONE_VAL {
                         let pos = on as usize;
                         if run(DeduceRule::OnlyOddEvenWrongParity) && (pos + 1) % 2 != parity {
@@ -1300,7 +1201,13 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::ConsecIdent => {
+            }
+            QuestionType::ConsecIdent => {
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
                     if on != NONE_VAL {
                         let pos = on as usize;
                         if run(DeduceRule::ConsecIdentOutOfRange) && pos + 1 >= n {
@@ -1348,7 +1255,16 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::EqualCount { answer } if on != NONE_VAL => {
+            }
+            QuestionType::EqualCount { answer } => {
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
+                    if on == NONE_VAL {
+                        continue;
+                    }
                     if run(DeduceRule::EqualCountSelfRef) && LETTERS[on as usize] == answer {
                         push(
                             DeduceAction::Eliminate { qi, oi },
@@ -1390,523 +1306,483 @@ fn deduce_impl(
                         }
                     }
                 }
-                QuestionType::PrevSame
-                    if on == NONE_VAL
-                        && run(DeduceRule::PrevSameNoneMatch)
-                        && (0..qi).any(|j| answers[j] == Some(LETTERS[oi])) =>
-                {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
+            }
+            QuestionType::PrevSame | QuestionType::NextSame => {
+                let is_prev = matches!(*t, QuestionType::PrevSame);
+                let range = if is_prev { 0..qi } else { (qi + 1)..n };
+                let (none_rule, out_rule, ruled_out_rule, closer_rule) = if is_prev {
+                    (
                         DeduceRule::PrevSameNoneMatch,
-                    );
-                }
-                QuestionType::PrevSame if on != NONE_VAL => {
-                    let pos = on as usize;
-                    if run(DeduceRule::PrevSameNotBefore) && pos >= qi {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::PrevSameNotBefore,
-                        );
-                    }
-                    if pos < qi {
-                        if run(DeduceRule::PrevSameRuledOut) && is_elim(eliminated, pos, oi) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::PrevSameRuledOut,
-                            );
-                        }
-                        if run(DeduceRule::PrevSameCloser)
-                            && ((pos + 1)..qi)
-                                .rev()
-                                .any(|j| answers[j] == Some(LETTERS[oi]))
-                        {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::PrevSameCloser,
-                            );
-                        }
-                    }
-                }
-                QuestionType::NextSame
-                    if on == NONE_VAL
-                        && run(DeduceRule::NextSameNoneMatch)
-                        && ((qi + 1)..n).any(|j| answers[j] == Some(LETTERS[oi])) =>
-                {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
+                        DeduceRule::PrevSameNotBefore,
+                        DeduceRule::PrevSameRuledOut,
+                        DeduceRule::PrevSameCloser,
+                    )
+                } else {
+                    (
                         DeduceRule::NextSameNoneMatch,
-                    );
-                }
-                QuestionType::NextSame if on != NONE_VAL => {
-                    let pos = on as usize;
-                    if run(DeduceRule::NextSameNotAfter) && (pos <= qi || pos >= n) {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::NextSameNotAfter,
-                        );
+                        DeduceRule::NextSameNotAfter,
+                        DeduceRule::NextSameRuledOut,
+                        DeduceRule::NextSameCloser,
+                    )
+                };
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
                     }
-                    if pos > qi && pos < n {
-                        if run(DeduceRule::NextSameRuledOut) && is_elim(eliminated, pos, oi) {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::NextSameRuledOut,
-                            );
-                        }
-                        if run(DeduceRule::NextSameCloser)
-                            && ((qi + 1)..pos).any(|j| answers[j] == Some(LETTERS[oi]))
+                    let on = fp.option_nums[qi][oi];
+                    if on == NONE_VAL {
+                        if run(none_rule) && range.clone().any(|j| answers[j] == Some(LETTERS[oi]))
                         {
-                            push(
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceRule::NextSameCloser,
-                            );
+                            push(DeduceAction::Eliminate { qi, oi }, none_rule);
+                        }
+                    } else {
+                        let pos = on as usize;
+                        if run(out_rule) && !range.contains(&pos) {
+                            push(DeduceAction::Eliminate { qi, oi }, out_rule);
+                        }
+                        if range.contains(&pos) {
+                            if run(ruled_out_rule) && is_elim(eliminated, pos, oi) {
+                                push(DeduceAction::Eliminate { qi, oi }, ruled_out_rule);
+                            }
+                            let mut closer_range = if is_prev {
+                                (pos + 1)..qi
+                            } else {
+                                (qi + 1)..pos
+                            };
+                            if run(closer_rule)
+                                && closer_range.any(|j| answers[j] == Some(LETTERS[oi]))
+                            {
+                                push(DeduceAction::Eliminate { qi, oi }, closer_rule);
+                            }
                         }
                     }
                 }
-                QuestionType::OnlySame | QuestionType::SameAs
-                    if on == NONE_VAL
-                        && run(DeduceRule::OnlySameNoneMatch)
-                        && (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi])) =>
-                {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::OnlySameNoneMatch,
-                    );
-                }
-                QuestionType::SameAsWhich { question_index }
+            }
+            QuestionType::SameAsWhich { question_index } => {
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let on = fp.option_nums[qi][oi];
                     if run(DeduceRule::SameAsWhichForward)
                         && let Some(ref_ans) = answers[question_index as usize]
                         && on >= 0
                         && (on as usize) < n
                         && on as usize != qi
-                        && on as usize != question_index as usize =>
-                {
-                    let j = on as usize;
-                    let wrong = match answers[j] {
-                        Some(ja) => ja != ref_ans,
-                        None => is_elim(eliminated, j, ref_ans.idx()),
-                    };
-                    if wrong {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::SameAsWhichForward,
-                        );
-                    }
-                }
-                QuestionType::OnlySame | QuestionType::SameAs if on != NONE_VAL => {
-                    let pos = on as usize;
-                    if run(DeduceRule::OnlySameSelfRef) && pos == qi {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::OnlySameSelfRef,
-                        );
-                    }
-                    if run(DeduceRule::OnlySameRuledOut) && pos < n && is_elim(eliminated, pos, oi)
+                        && on as usize != question_index as usize
                     {
-                        push(
-                            DeduceAction::Eliminate { qi, oi },
-                            DeduceRule::OnlySameRuledOut,
-                        );
-                    }
-                    if run(DeduceRule::OnlySameOtherMatch)
-                        && matches!(*t, QuestionType::OnlySame)
-                        && pos < n
-                        && pos != qi
-                    {
-                        let letter = LETTERS[oi];
-                        for j in 0..n {
-                            if j != qi && j != pos && answers[j] == Some(letter) {
-                                push(
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceRule::OnlySameOtherMatch,
-                                );
-                                break;
-                            }
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // ── LeastCommon ──
-    if !fast {
-        for qi in 0..n {
-            if answers[qi].is_some() {
-                continue;
-            }
-            if !matches!(fp.question_types[qi], QuestionType::LeastCommon) {
-                continue;
-            }
-
-            let mut min_count = [0i16; 5];
-            let mut max_count = [0i16; 5];
-            for j in 0..n {
-                if j == qi {
-                    continue;
-                }
-                if let Some(a) = answers[j] {
-                    min_count[a.idx()] += 1;
-                    max_count[a.idx()] += 1;
-                } else {
-                    for li in 0..5usize {
-                        if !is_elim(eliminated, j, li) {
-                            max_count[li] += 1;
-                        }
-                    }
-                }
-            }
-
-            let mut can_be_least_opt = [false; 5];
-            let mut must_be_least_opt = [false; 5];
-
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let v = fp.option_answers[qi][oi];
-                if v >= 5 {
-                    continue;
-                }
-                let claimed = v as usize;
-                let self_letter = oi;
-
-                let mut adj_min = min_count;
-                let mut adj_max = max_count;
-                adj_min[self_letter] += 1;
-                adj_max[self_letter] += 1;
-
-                let can_be_least =
-                    (0..fp.option_count).all(|li| li == claimed || adj_max[li] >= adj_min[claimed]);
-                let must_be_least =
-                    (0..fp.option_count).all(|li| li == claimed || adj_min[li] > adj_max[claimed]);
-
-                can_be_least_opt[oi] = can_be_least;
-                must_be_least_opt[oi] = must_be_least;
-
-                if run(DeduceRule::LeastCommonElim) && !can_be_least {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::LeastCommonElim,
-                    );
-                }
-            }
-
-            if run(DeduceRule::LeastCommonForce) {
-                for oi in 0..5usize {
-                    if !must_be_least_opt[oi] {
-                        continue;
-                    }
-                    let only_viable = (0..5usize)
-                        .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_least_opt[oj]);
-                    if only_viable {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[oi],
-                            },
-                            DeduceRule::LeastCommonForce,
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // ── MostCommon ──
-    if !fast {
-        for qi in 0..n {
-            if answers[qi].is_some() {
-                continue;
-            }
-            if !matches!(fp.question_types[qi], QuestionType::MostCommon) {
-                continue;
-            }
-
-            let mut min_count = [0i16; 5];
-            let mut max_count = [0i16; 5];
-            for j in 0..n {
-                if j == qi {
-                    continue;
-                }
-                if let Some(a) = answers[j] {
-                    min_count[a.idx()] += 1;
-                    max_count[a.idx()] += 1;
-                } else {
-                    for li in 0..5usize {
-                        if !is_elim(eliminated, j, li) {
-                            max_count[li] += 1;
-                        }
-                    }
-                }
-            }
-
-            let mut can_be_most_opt = [false; 5];
-            let mut must_be_most_opt = [false; 5];
-
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let v = fp.option_answers[qi][oi];
-                if v >= 5 {
-                    continue;
-                }
-                let claimed = v as usize;
-                let self_letter = oi;
-
-                let mut adj_min = min_count;
-                let mut adj_max = max_count;
-                adj_min[self_letter] += 1;
-                adj_max[self_letter] += 1;
-
-                let can_be_most =
-                    (0..fp.option_count).all(|li| li == claimed || adj_min[li] <= adj_max[claimed]);
-                let must_be_most =
-                    (0..fp.option_count).all(|li| li == claimed || adj_max[li] < adj_min[claimed]);
-
-                can_be_most_opt[oi] = can_be_most;
-                must_be_most_opt[oi] = must_be_most;
-
-                if run(DeduceRule::MostCommonElim) && !can_be_most {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::MostCommonElim,
-                    );
-                }
-            }
-
-            if run(DeduceRule::MostCommonForce) {
-                for oi in 0..5usize {
-                    if !must_be_most_opt[oi] {
-                        continue;
-                    }
-                    let only_viable = (0..5usize)
-                        .all(|oj| oj == oi || is_elim(eliminated, qi, oj) || !can_be_most_opt[oj]);
-                    if only_viable {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[oi],
-                            },
-                            DeduceRule::MostCommonForce,
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    // ── TrueStatement forward ──
-    if !fast && run(DeduceRule::TrueStatementForward) {
-        for qi in 0..n {
-            let Some(a) = answers[qi] else { continue };
-            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
-                continue;
-            }
-            let Some(claim) = &fp.option_claims[qi][a.idx()] else {
-                continue;
-            };
-            match claim.question_type {
-                QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
-                    let tqi = claim.value;
-                    if tqi >= 0
-                        && (tqi as usize) < n
-                        && answers[tqi as usize].is_none()
-                        && !is_elim(eliminated, tqi as usize, answer.idx())
-                    {
-                        push(
-                            DeduceAction::Force {
-                                qi: tqi as usize,
-                                answer,
-                            },
-                            DeduceRule::TrueStatementForward,
-                        );
-                    }
-                }
-                QuestionType::AnswerOf { question_index } => {
-                    let tqi = question_index as usize;
-                    if claim.value >= 0 && claim.value <= 4 && tqi < n && answers[tqi].is_none() {
-                        let letter = LETTERS[claim.value as usize];
-                        if !is_elim(eliminated, tqi, letter.idx()) {
+                        let j = on as usize;
+                        let wrong = match answers[j] {
+                            Some(ja) => ja != ref_ans,
+                            None => is_elim(eliminated, j, ref_ans.idx()),
+                        };
+                        if wrong {
                             push(
-                                DeduceAction::Force {
-                                    qi: tqi,
-                                    answer: letter,
-                                },
-                                DeduceRule::TrueStatementForward,
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::SameAsWhichForward,
                             );
                         }
                     }
                 }
-                _ => {}
             }
-        }
-    }
-
-    // ── OnlySame/SameAs None forward ──
-    // An answered None means qi's answer is unique, so no other question can have that
-    // letter. Sound (follows from the answer), so ungated.
-    if !fast && run(DeduceRule::OnlySameNoneForward) {
-        for qi in 0..n {
-            if !matches!(
-                fp.question_types[qi],
-                QuestionType::OnlySame | QuestionType::SameAs
-            ) {
-                continue;
-            }
-            let Some(a) = answers[qi] else { continue };
-            let v = fp.option_nums[qi][a.idx()];
-            if v != NONE_VAL {
-                continue;
-            }
-            for j in 0..n {
-                if j == qi {
-                    continue;
-                }
-                if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
-                    push(
-                        DeduceAction::Eliminate { qi: j, oi: a.idx() },
-                        DeduceRule::OnlySameNoneForward,
-                    );
-                }
-            }
-        }
-    }
-
-    // SameAs negative: non-selected option targets cannot share this question's answer.
-    // Uniqueness-assuming: it relies on "exactly one option is correct" — another target
-    // sharing qi's answer would be a second valid answer. Gated so it never fires during
-    // generation (which must reject genuinely ambiguous puzzles).
-    if assume_unique && run(DeduceRule::SameAsNegative) {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::SameAs) {
-                continue;
-            }
-            let Some(ans) = answers[qi] else { continue };
-            let ai = ans.idx();
-            let selected = fp.option_nums[qi][ai];
-            // The "none" answer's sound inference (qi's letter is unique) is handled by
-            // OnlySameNoneForward; this gated, uniqueness-assuming rule is for the index case.
-            if selected < 0 {
-                continue;
-            }
-            let mut q_mask = 0u16;
-            for oi in 0..fp.option_count {
-                if oi == ai {
-                    continue;
-                }
-                let target = fp.option_nums[qi][oi];
-                if target < 0 || target as usize >= n || target as usize == qi {
-                    continue;
-                }
-                if target != selected
-                    && answers[target as usize].is_none()
-                    && !is_elim(eliminated, target as usize, ai)
-                {
-                    q_mask |= 1 << target;
-                }
-            }
-            if q_mask != 0 {
-                push(
-                    DeduceAction::EliminateMulti {
-                        question_mask: q_mask,
-                        option_mask: 1 << ai,
-                    },
-                    DeduceRule::SameAsNegative,
-                );
-            }
-        }
-    }
-
-    // ── ConsecIdent forward ──
-    if !fast {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::ConsecIdent) {
-                continue;
-            }
-            let Some(a) = answers[qi] else { continue };
-            let v = fp.option_nums[qi][a.idx()];
-            if v == NONE_VAL || v < 0 || (v as usize) + 1 >= n {
-                continue;
-            }
-            let p = v as usize;
-            let poss_a = !eliminated[p] & 0b11111u8;
-            let poss_b = !eliminated[p + 1] & 0b11111u8;
-
-            if run(DeduceRule::ConsecIdentForwardForce) {
-                if answers[p].is_some() && answers[p + 1].is_none() {
-                    let letter = answers[p].unwrap();
-                    if !is_elim(eliminated, p + 1, letter.idx()) {
-                        push(
-                            DeduceAction::Force {
-                                qi: p + 1,
-                                answer: letter,
-                            },
-                            DeduceRule::ConsecIdentForwardForce,
-                        );
-                    }
-                }
-                if answers[p + 1].is_some() && answers[p].is_none() {
-                    let letter = answers[p + 1].unwrap();
-                    if !is_elim(eliminated, p, letter.idx()) {
-                        push(
-                            DeduceAction::Force {
-                                qi: p,
-                                answer: letter,
-                            },
-                            DeduceRule::ConsecIdentForwardForce,
-                        );
-                    }
-                }
-            }
-
-            if run(DeduceRule::ConsecIdentForwardElim) {
+            QuestionType::OnlySame | QuestionType::SameAs => {
                 for oi in 0..5usize {
-                    if answers[p].is_none()
-                        && !is_elim(eliminated, p, oi)
-                        && (poss_b & (1 << oi)) == 0
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi: p, oi },
-                            DeduceRule::ConsecIdentForwardElim,
-                        );
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
                     }
-                    if answers[p + 1].is_none()
-                        && !is_elim(eliminated, p + 1, oi)
-                        && (poss_a & (1 << oi)) == 0
-                    {
-                        push(
-                            DeduceAction::Eliminate { qi: p + 1, oi },
-                            DeduceRule::ConsecIdentForwardElim,
-                        );
+                    let on = fp.option_nums[qi][oi];
+                    if on == NONE_VAL {
+                        if run(DeduceRule::OnlySameNoneMatch)
+                            && (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi]))
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlySameNoneMatch,
+                            );
+                        }
+                    } else {
+                        let pos = on as usize;
+                        if run(DeduceRule::OnlySameSelfRef) && pos == qi {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlySameSelfRef,
+                            );
+                        }
+                        if run(DeduceRule::OnlySameRuledOut)
+                            && pos < n
+                            && is_elim(eliminated, pos, oi)
+                        {
+                            push(
+                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::OnlySameRuledOut,
+                            );
+                        }
+                        if run(DeduceRule::OnlySameOtherMatch)
+                            && matches!(*t, QuestionType::OnlySame)
+                            && pos < n
+                            && pos != qi
+                        {
+                            let letter = LETTERS[oi];
+                            for j in 0..n {
+                                if j != qi && j != pos && answers[j] == Some(letter) {
+                                    push(
+                                        DeduceAction::Eliminate { qi, oi },
+                                        DeduceRule::OnlySameOtherMatch,
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            QuestionType::LeastCommon | QuestionType::MostCommon if !fast => {
+                let is_least = matches!(*t, QuestionType::LeastCommon);
+                let (elim_rule, force_rule) = if is_least {
+                    (DeduceRule::LeastCommonElim, DeduceRule::LeastCommonForce)
+                } else {
+                    (DeduceRule::MostCommonElim, DeduceRule::MostCommonForce)
+                };
+
+                let mut min_count = [0i16; 5];
+                let mut max_count = [0i16; 5];
+                for j in 0..n {
+                    if j == qi {
+                        continue;
+                    }
+                    if let Some(a) = answers[j] {
+                        min_count[a.idx()] += 1;
+                        max_count[a.idx()] += 1;
+                    } else {
+                        for li in 0..5usize {
+                            if !is_elim(eliminated, j, li) {
+                                max_count[li] += 1;
+                            }
+                        }
+                    }
+                }
+
+                let mut can_be_extreme_opt = [false; 5];
+                let mut must_be_extreme_opt = [false; 5];
+
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let v = fp.option_answers[qi][oi];
+                    if v >= 5 {
+                        continue;
+                    }
+                    let claimed = v as usize;
+                    let self_letter = oi;
+
+                    let mut adj_min = min_count;
+                    let mut adj_max = max_count;
+                    adj_min[self_letter] += 1;
+                    adj_max[self_letter] += 1;
+
+                    // For least: claimed could/must be ≤ every other letter.
+                    // For most: claimed could/must be ≥ every other letter.
+                    let can_be_extreme = (0..fp.option_count).all(|li| {
+                        li == claimed
+                            || if is_least {
+                                adj_max[li] >= adj_min[claimed]
+                            } else {
+                                adj_max[claimed] >= adj_min[li]
+                            }
+                    });
+                    let must_be_extreme = (0..fp.option_count).all(|li| {
+                        li == claimed
+                            || if is_least {
+                                adj_min[li] > adj_max[claimed]
+                            } else {
+                                adj_min[claimed] > adj_max[li]
+                            }
+                    });
+
+                    can_be_extreme_opt[oi] = can_be_extreme;
+                    must_be_extreme_opt[oi] = must_be_extreme;
+
+                    if run(elim_rule) && !can_be_extreme {
+                        push(DeduceAction::Eliminate { qi, oi }, elim_rule);
+                    }
+                }
+
+                if run(force_rule) {
+                    for oi in 0..5usize {
+                        if !must_be_extreme_opt[oi] {
+                            continue;
+                        }
+                        let only_viable = (0..5usize).all(|oj| {
+                            oj == oi || is_elim(eliminated, qi, oj) || !can_be_extreme_opt[oj]
+                        });
+                        if only_viable {
+                            push(
+                                DeduceAction::Force {
+                                    qi,
+                                    answer: LETTERS[oi],
+                                },
+                                force_rule,
+                            );
+                        }
+                    }
+                }
+            }
+            QuestionType::TrueStmt if !fast => {
+                // TrueStatement claim valid: if exactly one non-eliminated claim is
+                // not provably false, force it.
+                if run(DeduceRule::TrueStatementClaimValid)
+                    && let Some(oi) = exactly_one(0..5, |oi| {
+                        if is_elim(eliminated, qi, oi) {
+                            return false;
+                        }
+                        let Some(claim) = &fp.option_claims[qi][oi] else {
+                            return false;
+                        };
+                        let mut hyp = *state;
+                        hyp.answers[qi] = Some(LETTERS[oi]);
+                        hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+                        crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, *claim)
+                            != crate::check_answer::Validity::Invalid
+                    })
+                {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::TrueStatementClaimValid,
+                    );
+                }
+
+                // TrueStatement claim known-true: if exactly one non-eliminated
+                // option's claim is already provably true (in the current state,
+                // without hypothesizing the answer), force the question's answer
+                // to that option. Uniqueness-assuming: gated so it never fires
+                // during generation.
+                if assume_unique
+                    && run(DeduceRule::TrueStatementClaimKnownTrue)
+                    && let Some(oi) = exactly_one(0..5, |oi| {
+                        if is_elim(eliminated, qi, oi) {
+                            return false;
+                        }
+                        let Some(claim) = &fp.option_claims[qi][oi] else {
+                            return false;
+                        };
+                        crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim)
+                            == crate::check_answer::Validity::Valid
+                    })
+                {
+                    push(
+                        DeduceAction::Force {
+                            qi,
+                            answer: LETTERS[oi],
+                        },
+                        DeduceRule::TrueStatementClaimKnownTrue,
+                    );
+                }
+            }
+            _ => {}
+        }
+    }
+
+    // ── Per-question rules for ANSWERED qis ──
+    for qi in 0..n {
+        let Some(a) = answers[qi] else { continue };
+        let t = &fp.question_types[qi];
+
+        match *t {
+            QuestionType::TrueStmt => {
+                if !fast
+                    && run(DeduceRule::TrueStatementForward)
+                    && let Some(claim) = &fp.option_claims[qi][a.idx()]
+                {
+                    match claim.question_type {
+                        QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                            let tqi = claim.value;
+                            if tqi >= 0
+                                && (tqi as usize) < n
+                                && answers[tqi as usize].is_none()
+                                && !is_elim(eliminated, tqi as usize, answer.idx())
+                            {
+                                push(
+                                    DeduceAction::Force {
+                                        qi: tqi as usize,
+                                        answer,
+                                    },
+                                    DeduceRule::TrueStatementForward,
+                                );
+                            }
+                        }
+                        QuestionType::AnswerOf { question_index } => {
+                            let tqi = question_index as usize;
+                            if claim.value >= 0
+                                && claim.value <= 4
+                                && tqi < n
+                                && answers[tqi].is_none()
+                            {
+                                let letter = LETTERS[claim.value as usize];
+                                if !is_elim(eliminated, tqi, letter.idx()) {
+                                    push(
+                                        DeduceAction::Force {
+                                            qi: tqi,
+                                            answer: letter,
+                                        },
+                                        DeduceRule::TrueStatementForward,
+                                    );
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
             }
 
-            if run(DeduceRule::ConsecIdentForwardBothForce)
-                && answers[p].is_none()
-                && answers[p + 1].is_none()
-            {
-                let common = poss_a & poss_b;
-                if common.count_ones() == 1 {
-                    let oi = common.trailing_zeros() as usize;
-                    push(
-                        DeduceAction::Force {
-                            qi: p,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::ConsecIdentForwardBothForce,
-                    );
-                    push(
-                        DeduceAction::Force {
-                            qi: p + 1,
-                            answer: LETTERS[oi],
-                        },
-                        DeduceRule::ConsecIdentForwardBothForce,
-                    );
+            QuestionType::OnlySame | QuestionType::SameAs => {
+                // OnlySame/SameAs None forward: an answered None means qi's
+                // answer is unique, so no other question can have that letter.
+                // Sound, ungated.
+                if !fast
+                    && run(DeduceRule::OnlySameNoneForward)
+                    && fp.option_nums[qi][a.idx()] == NONE_VAL
+                {
+                    for j in 0..n {
+                        if j == qi {
+                            continue;
+                        }
+                        if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
+                            push(
+                                DeduceAction::Eliminate { qi: j, oi: a.idx() },
+                                DeduceRule::OnlySameNoneForward,
+                            );
+                        }
+                    }
+                }
+
+                // SameAs negative (SameAs only): non-selected option targets
+                // cannot share qi's answer. Uniqueness-assuming.
+                if assume_unique
+                    && run(DeduceRule::SameAsNegative)
+                    && matches!(*t, QuestionType::SameAs)
+                {
+                    let ai = a.idx();
+                    let selected = fp.option_nums[qi][ai];
+                    // The "none" answer's sound inference is handled above; this
+                    // rule is for the index case.
+                    if selected >= 0 {
+                        let mut q_mask = 0u16;
+                        for oi in 0..fp.option_count {
+                            if oi == ai {
+                                continue;
+                            }
+                            let target = fp.option_nums[qi][oi];
+                            if target < 0 || target as usize >= n || target as usize == qi {
+                                continue;
+                            }
+                            if target != selected
+                                && answers[target as usize].is_none()
+                                && !is_elim(eliminated, target as usize, ai)
+                            {
+                                q_mask |= 1 << target;
+                            }
+                        }
+                        if q_mask != 0 {
+                            push(
+                                DeduceAction::EliminateMulti {
+                                    question_mask: q_mask,
+                                    option_mask: 1 << ai,
+                                },
+                                DeduceRule::SameAsNegative,
+                            );
+                        }
+                    }
                 }
             }
+
+            QuestionType::ConsecIdent if !fast => {
+                let v = fp.option_nums[qi][a.idx()];
+                if v != NONE_VAL && v >= 0 && (v as usize) + 1 < n {
+                    let p = v as usize;
+                    let poss_a = !eliminated[p] & 0b11111u8;
+                    let poss_b = !eliminated[p + 1] & 0b11111u8;
+
+                    if run(DeduceRule::ConsecIdentForwardForce) {
+                        if answers[p].is_some() && answers[p + 1].is_none() {
+                            let letter = answers[p].unwrap();
+                            if !is_elim(eliminated, p + 1, letter.idx()) {
+                                push(
+                                    DeduceAction::Force {
+                                        qi: p + 1,
+                                        answer: letter,
+                                    },
+                                    DeduceRule::ConsecIdentForwardForce,
+                                );
+                            }
+                        }
+                        if answers[p + 1].is_some() && answers[p].is_none() {
+                            let letter = answers[p + 1].unwrap();
+                            if !is_elim(eliminated, p, letter.idx()) {
+                                push(
+                                    DeduceAction::Force {
+                                        qi: p,
+                                        answer: letter,
+                                    },
+                                    DeduceRule::ConsecIdentForwardForce,
+                                );
+                            }
+                        }
+                    }
+
+                    if run(DeduceRule::ConsecIdentForwardElim) {
+                        for oi in 0..5usize {
+                            if answers[p].is_none()
+                                && !is_elim(eliminated, p, oi)
+                                && (poss_b & (1 << oi)) == 0
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi: p, oi },
+                                    DeduceRule::ConsecIdentForwardElim,
+                                );
+                            }
+                            if answers[p + 1].is_none()
+                                && !is_elim(eliminated, p + 1, oi)
+                                && (poss_a & (1 << oi)) == 0
+                            {
+                                push(
+                                    DeduceAction::Eliminate { qi: p + 1, oi },
+                                    DeduceRule::ConsecIdentForwardElim,
+                                );
+                            }
+                        }
+                    }
+
+                    if run(DeduceRule::ConsecIdentForwardBothForce)
+                        && answers[p].is_none()
+                        && answers[p + 1].is_none()
+                    {
+                        let common = poss_a & poss_b;
+                        if common.count_ones() == 1 {
+                            let oi = common.trailing_zeros() as usize;
+                            push(
+                                DeduceAction::Force {
+                                    qi: p,
+                                    answer: LETTERS[oi],
+                                },
+                                DeduceRule::ConsecIdentForwardBothForce,
+                            );
+                            push(
+                                DeduceAction::Force {
+                                    qi: p + 1,
+                                    answer: LETTERS[oi],
+                                },
+                                DeduceRule::ConsecIdentForwardBothForce,
+                            );
+                        }
+                    }
+                }
+            }
+
+            _ => {}
         }
     }
 
@@ -2002,8 +1878,12 @@ fn deduce_impl(
         }
     }
 
-    // ── TrueStatement self-reference ──
-    if !fast && run(DeduceRule::TrueStatementSelfRef) {
+    // ── TrueStatement claim-checking (any-state) ──
+    // SelfRef and ClaimInvalid both iterate TrueStmt qis and check each claim
+    // regardless of qi's answered state.
+    if !fast
+        && (run(DeduceRule::TrueStatementSelfRef) || run(DeduceRule::TrueStatementClaimInvalid))
+    {
         for qi in 0..n {
             if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
                 continue;
@@ -2015,136 +1895,38 @@ fn deduce_impl(
                 let Some(claim) = &fp.option_claims[qi][oi] else {
                     continue;
                 };
-                let contradicts = match claim.question_type {
-                    QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
-                        claim.value as usize == qi && answer != LETTERS[oi]
+
+                if run(DeduceRule::TrueStatementSelfRef) {
+                    let contradicts = match claim.question_type {
+                        QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                            claim.value as usize == qi && answer != LETTERS[oi]
+                        }
+                        QuestionType::AnswerOf { question_index } => {
+                            question_index as usize == qi
+                                && claim.value >= 0
+                                && claim.value <= 4
+                                && LETTERS[claim.value as usize] != LETTERS[oi]
+                        }
+                        _ => false,
+                    };
+                    if contradicts {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::TrueStatementSelfRef,
+                        );
                     }
-                    QuestionType::AnswerOf { question_index } => {
-                        question_index as usize == qi
-                            && claim.value >= 0
-                            && claim.value <= 4
-                            && LETTERS[claim.value as usize] != LETTERS[oi]
+                }
+
+                if run(DeduceRule::TrueStatementClaimInvalid) {
+                    let v =
+                        crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
+                    if v == crate::check_answer::Validity::Invalid {
+                        push(
+                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::TrueStatementClaimInvalid,
+                        );
                     }
-                    _ => false,
-                };
-                if contradicts {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::TrueStatementSelfRef,
-                    );
                 }
-            }
-        }
-    }
-
-    // ── TrueStatement claim invalid ──
-    if !fast && run(DeduceRule::TrueStatementClaimInvalid) {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
-                continue;
-            }
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let Some(claim) = &fp.option_claims[qi][oi] else {
-                    continue;
-                };
-                let v = crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
-                if v == crate::check_answer::Validity::Invalid {
-                    push(
-                        DeduceAction::Eliminate { qi, oi },
-                        DeduceRule::TrueStatementClaimInvalid,
-                    );
-                }
-            }
-        }
-    }
-
-    // TrueStatement claim valid: if exactly one non-eliminated claim is not provably false, force it
-    if !fast && run(DeduceRule::TrueStatementClaimValid) {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
-                continue;
-            }
-            if answers[qi].is_some() {
-                continue;
-            }
-            let mut surviving_oi: Option<usize> = None;
-            let mut surviving_count = 0;
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let Some(claim) = &fp.option_claims[qi][oi] else {
-                    continue;
-                };
-                let mut hyp = *state;
-                hyp.answers[qi] = Some(LETTERS[oi]);
-                hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
-                let v = crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, *claim);
-                if v != crate::check_answer::Validity::Invalid {
-                    surviving_count += 1;
-                    surviving_oi = Some(oi);
-                }
-            }
-            if surviving_count == 1
-                && let Some(oi) = surviving_oi
-            {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::TrueStatementClaimValid,
-                );
-            }
-        }
-    }
-
-    // TrueStatement claim known-true: if exactly one non-eliminated option's
-    // claim is already provably true (in the current state, without hypothesizing
-    // the answer), force the question's answer to that option.
-    //
-    // This is a uniqueness-assuming rule: it relies on "TrueStmt has exactly
-    // one true claim" — but the current check_answer doesn't enforce that an
-    // unselected option's claim must be false, so a puzzle can have multiple
-    // simultaneously-Valid claims, in which case the brute-force solver will
-    // find multiple solutions. Gated on assume_unique so it never fires
-    // during generation.
-    if !fast && assume_unique && run(DeduceRule::TrueStatementClaimKnownTrue) {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
-                continue;
-            }
-            if answers[qi].is_some() {
-                continue;
-            }
-            let mut valid_oi: Option<usize> = None;
-            let mut valid_count = 0usize;
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let Some(claim) = &fp.option_claims[qi][oi] else {
-                    continue;
-                };
-                let v = crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, *claim);
-                if v == crate::check_answer::Validity::Valid {
-                    valid_count += 1;
-                    valid_oi = Some(oi);
-                }
-            }
-            if valid_count == 1
-                && let Some(oi) = valid_oi
-            {
-                push(
-                    DeduceAction::Force {
-                        qi,
-                        answer: LETTERS[oi],
-                    },
-                    DeduceRule::TrueStatementClaimKnownTrue,
-                );
             }
         }
     }
