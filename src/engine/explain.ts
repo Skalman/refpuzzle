@@ -1371,6 +1371,15 @@ export function explainLookahead(
       for (const q of qis) hypEliminated[q] |= a.optionMask;
     } else {
       involvedQis.add(a.qi);
+      if (dr.rule === "CountSaturated" || dr.rule === "CountMustMatchElim") {
+        const sat = explainCountSaturation(fp, hypAnswers, hypEliminated, a.qi, a.oi);
+        if (sat) {
+          involvedQis.add(sat.srcQi);
+          lines.push(`Eliminate ${Q(a.qi)} option ${LETTERS[a.oi]}: ${sat.text}`);
+          hypEliminated[a.qi] |= 1 << a.oi;
+          continue;
+        }
+      }
       const elimDetail = explainElimDetail(
         fp.questions[a.qi],
         a.qi,
