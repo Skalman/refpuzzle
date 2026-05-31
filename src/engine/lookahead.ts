@@ -15,7 +15,8 @@ export interface LookaheadResult {
 
 function hasContradiction(action: DeduceAction, hyp: State): boolean {
   if (action.type === "force") {
-    return hyp.answers[action.qi] != null && hyp.answers[action.qi] !== action.answer;
+    if (hyp.answers[action.qi] != null && hyp.answers[action.qi] !== action.answer) return true;
+    return ((hyp.eliminated[action.qi] >> letterIdx(action.answer)) & 1) === 1;
   }
   if (action.type === "eliminate") {
     return hyp.answers[action.qi] === LETTERS[action.oi];

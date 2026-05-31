@@ -109,7 +109,8 @@ pub fn lookahead(
 fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer)
+            (hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer))
+                || (hyp.eliminated[qi] >> answer.idx()) & 1 == 1
         }
         DeduceAction::Eliminate { qi, oi } => hyp.answers[qi] == Some(LETTERS[oi]),
         DeduceAction::EliminateMulti {
