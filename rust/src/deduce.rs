@@ -695,7 +695,132 @@ fn deduce_impl(
         }
     }
 
-    // ── Per-question rules (forward force + cross-question reverse + per-option elim) ──
+    // ── Cross-question reverse forces ──
+    // For each ANSWERED `other`, dispatch on its type and emit a Force on its
+    // target qi (if that target is still unanswered). Replaces an O(m·n) inner
+    // loop (per unanswered qi, rescan all answered) with one O(n) sweep.
+    for other in 0..n {
+        let Some(other_ans) = answers[other] else {
+            continue;
+        };
+        let (target_qi, letter, rule) = match fp.question_types[other] {
+            QuestionType::AnswerOf { question_index } => {
+                let implied = fp.option_answers[other][other_ans.idx()];
+                if implied > 4 {
+                    continue;
+                }
+                (
+                    question_index as usize,
+                    LETTERS[implied as usize],
+                    DeduceRule::AnswerOfReverse,
+                )
+            }
+            QuestionType::SameAs => {
+                let target_q = fp.option_nums[other][other_ans.idx()];
+                if target_q < 0 {
+                    continue;
+                }
+                (target_q as usize, other_ans, DeduceRule::SameAsReverse)
+            }
+            QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame => {
+                let target_q = fp.option_nums[other][other_ans.idx()];
+                if target_q < 0 {
+                    continue;
+                }
+                (
+                    target_q as usize,
+                    other_ans,
+                    DeduceRule::PrevNextOnlySameReverse,
+                )
+            }
+            _ => continue,
+        };
+        if target_qi >= n || answers[target_qi].is_some() || !run(rule) {
+            continue;
+        }
+        push(
+            DeduceAction::Force {
+                qi: target_qi,
+                answer: letter,
+            },
+            rule,
+        );
+    }
+
+    // ── LetterDist reverse: each LetterDist src constrains its target qi ──
+    // One pass per LetterDist src; the target qi is derived from src's type.
+    for src in 0..n {
+        let QuestionType::LetterDist { question_index } = fp.question_types[src] else {
+            continue;
+        };
+        let qi = question_index as usize;
+        if qi >= n || src == qi || answers[qi].is_some() {
+            continue;
+        }
+        let mut elim_mask = 0u8;
+        if let Some(src_ans) = answers[src] {
+            let dist = fp.option_nums[src][src_ans.idx()];
+            if dist == NAN_VAL {
+                continue;
+            }
+            let mut valid_count = 0u8;
+            let mut valid_oi = 0usize;
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                if (oi as i16 - src_ans.idx() as i16).abs() == dist {
+                    valid_count += 1;
+                    valid_oi = oi;
+                } else {
+                    elim_mask |= 1 << oi;
+                }
+            }
+            if run(DeduceRule::LetterDistReverseForce) && valid_count == 1 && elim_mask != 0 {
+                push(
+                    DeduceAction::Force {
+                        qi,
+                        answer: LETTERS[valid_oi],
+                    },
+                    DeduceRule::LetterDistReverseForce,
+                );
+            }
+            if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 && valid_count != 1 {
+                push(
+                    DeduceAction::EliminateMulti {
+                        question_mask: 1 << qi,
+                        option_mask: elim_mask,
+                    },
+                    DeduceRule::LetterDistReverseElim,
+                );
+            }
+        } else {
+            for oi in 0..5usize {
+                if is_elim(eliminated, qi, oi) {
+                    continue;
+                }
+                let compatible = (0..5usize).any(|si| {
+                    !is_elim(eliminated, src, si)
+                        && fp.option_nums[src][si] != NAN_VAL
+                        && (oi as i16 - si as i16).abs() == fp.option_nums[src][si]
+                });
+                if !compatible {
+                    elim_mask |= 1 << oi;
+                }
+            }
+            if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 {
+                push(
+                    DeduceAction::EliminateMulti {
+                        question_mask: 1 << qi,
+                        option_mask: elim_mask,
+                    },
+                    DeduceRule::LetterDistReverseElim,
+                );
+            }
+        }
+    }
+
+    // ── Per-question rules (forward force + per-option elim) ──
     for qi in 0..n {
         if answers[qi].is_some() {
             continue;
@@ -711,131 +836,6 @@ fn deduce_impl(
                 },
                 DeduceRule::OnlyOptionLeft,
             );
-        }
-
-        for other in 0..n {
-            let Some(other_ans) = answers[other] else {
-                continue;
-            };
-
-            match fp.question_types[other] {
-                QuestionType::AnswerOf { question_index }
-                    if question_index as usize == qi && run(DeduceRule::AnswerOfReverse) =>
-                {
-                    let implied = fp.option_answers[other][other_ans.idx()];
-                    if implied <= 4 {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[implied as usize],
-                            },
-                            DeduceRule::AnswerOfReverse,
-                        );
-                    }
-                }
-                QuestionType::SameAs if run(DeduceRule::SameAsReverse) => {
-                    let target_q = fp.option_nums[other][other_ans.idx()];
-                    if target_q >= 0 && target_q as usize == qi {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: other_ans,
-                            },
-                            DeduceRule::SameAsReverse,
-                        );
-                    }
-                }
-                QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame
-                    if run(DeduceRule::PrevNextOnlySameReverse) =>
-                {
-                    let target_q = fp.option_nums[other][other_ans.idx()];
-                    if target_q >= 0 && target_q as usize == qi {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: other_ans,
-                            },
-                            DeduceRule::PrevNextOnlySameReverse,
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-
-        // Reverse LetterDist: other questions' LetterDist rules constrain qi
-        for src in 0..n {
-            if src == qi {
-                continue;
-            }
-            if let QuestionType::LetterDist { question_index } = fp.question_types[src] {
-                if question_index as usize != qi {
-                    continue;
-                }
-                let mut elim_mask = 0u8;
-                if let Some(src_ans) = answers[src] {
-                    let dist = fp.option_nums[src][src_ans.idx()];
-                    if dist == NAN_VAL {
-                        continue;
-                    }
-                    let mut valid_count = 0u8;
-                    let mut valid_oi = 0usize;
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        if (oi as i16 - src_ans.idx() as i16).abs() == dist {
-                            valid_count += 1;
-                            valid_oi = oi;
-                        } else {
-                            elim_mask |= 1 << oi;
-                        }
-                    }
-                    if run(DeduceRule::LetterDistReverseForce) && valid_count == 1 && elim_mask != 0
-                    {
-                        push(
-                            DeduceAction::Force {
-                                qi,
-                                answer: LETTERS[valid_oi],
-                            },
-                            DeduceRule::LetterDistReverseForce,
-                        );
-                    }
-                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 && valid_count != 1
-                    {
-                        push(
-                            DeduceAction::EliminateMulti {
-                                question_mask: 1 << qi,
-                                option_mask: elim_mask,
-                            },
-                            DeduceRule::LetterDistReverseElim,
-                        );
-                    }
-                } else {
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let compatible = (0..5usize).any(|si| {
-                            !is_elim(eliminated, src, si)
-                                && fp.option_nums[src][si] != NAN_VAL
-                                && (oi as i16 - si as i16).abs() == fp.option_nums[src][si]
-                        });
-                        if !compatible {
-                            elim_mask |= 1 << oi;
-                        }
-                    }
-                    if run(DeduceRule::LetterDistReverseElim) && elim_mask != 0 {
-                        push(
-                            DeduceAction::EliminateMulti {
-                                question_mask: 1 << qi,
-                                option_mask: elim_mask,
-                            },
-                            DeduceRule::LetterDistReverseElim,
-                        );
-                    }
-                }
-            }
         }
 
         match *t {
