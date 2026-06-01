@@ -261,6 +261,55 @@ fn exactly_one(
     found
 }
 
+/// Compute-once, read-many cache. The closure is called on the first `get()`
+/// and the result memoised for subsequent calls. Useful when a value is
+/// derived from the input state and would otherwise be recomputed redundantly
+/// across match arms — but cheap to skip entirely when no arm needs it.
+struct Lazy<T, F> {
+    cache: Option<T>,
+    init: F,
+}
+
+impl<T: Copy, F: Fn() -> T> Lazy<T, F> {
+    fn new(init: F) -> Self {
+        Self { cache: None, init }
+    }
+
+    fn get(&mut self) -> T {
+        if let Some(v) = self.cache {
+            return v;
+        }
+        let v = (self.init)();
+        self.cache = Some(v);
+        v
+    }
+}
+
+/// Whole-puzzle per-letter counts. `known[i]` = number of qi answered with
+/// letter i; `max[i]` = `known[i]` + number of unanswered qi where letter i
+/// is still possible.
+fn compute_letter_counts(
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    n: usize,
+) -> ([i16; 5], [i16; 5]) {
+    let mut known = [0i16; 5];
+    let mut max = [0i16; 5];
+    for j in 0..n {
+        if let Some(a) = answers[j] {
+            known[a.idx()] += 1;
+            max[a.idx()] += 1;
+        } else {
+            for li in 0..5usize {
+                if !is_elim(eliminated, j, li) {
+                    max[li] += 1;
+                }
+            }
+        }
+    }
+    (known, max)
+}
+
 pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 
 // ── Main functions ──
@@ -337,6 +386,8 @@ fn deduce_impl(
             count_results[qi] = Some(count_matching(answers, eliminated, pred, from, to));
         }
     }
+
+    let mut letter_counts = Lazy::new(|| compute_letter_counts(answers, eliminated, n));
 
     // ── Count-family rules (per-question dispatch) ──
     // Consolidates what used to live in three separate loops: CountSaturated
@@ -1274,30 +1325,13 @@ fn deduce_impl(
                     if run(DeduceRule::EqualCountRangeElim) {
                         let claimed = LETTERS[on as usize];
                         if claimed != answer {
-                            let ref_mask = 1u8 << answer.idx();
-                            let claimed_mask = 1u8 << claimed.idx();
-                            let mut rc = 0i16;
-                            let mut rr = 0i16;
-                            let mut sc = 0i16;
-                            let mut sr = 0i16;
-                            for j in 0..n {
-                                if let Some(a) = answers[j] {
-                                    if a == answer {
-                                        rc += 1;
-                                    }
-                                    if a == claimed {
-                                        sc += 1;
-                                    }
-                                } else {
-                                    if eliminated[j] & ref_mask == 0 {
-                                        rr += 1;
-                                    }
-                                    if eliminated[j] & claimed_mask == 0 {
-                                        sr += 1;
-                                    }
-                                }
-                            }
-                            if rc + rr < sc || sc + sr < rc {
+                            // Impossible iff max-possible for one letter is below
+                            // known for the other. (rc+rr == letter_max[answer],
+                            // sc+sr == letter_max[claimed].)
+                            let (letter_known, letter_max) = letter_counts.get();
+                            if letter_max[answer.idx()] < letter_known[claimed.idx()]
+                                || letter_max[claimed.idx()] < letter_known[answer.idx()]
+                            {
                                 push(
                                     DeduceAction::Eliminate { qi, oi },
                                     DeduceRule::EqualCountRangeElim,
@@ -1422,15 +1456,16 @@ fn deduce_impl(
                             && pos < n
                             && pos != qi
                         {
+                            // qi is unanswered, so it doesn't contribute to letter_known.
+                            // Subtract pos's contribution to check for any OTHER match.
                             let letter = LETTERS[oi];
-                            for j in 0..n {
-                                if j != qi && j != pos && answers[j] == Some(letter) {
-                                    push(
-                                        DeduceAction::Eliminate { qi, oi },
-                                        DeduceRule::OnlySameOtherMatch,
-                                    );
-                                    break;
-                                }
+                            let (letter_known, _) = letter_counts.get();
+                            let pos_contrib = i16::from(answers[pos] == Some(letter));
+                            if letter_known[oi] - pos_contrib > 0 {
+                                push(
+                                    DeduceAction::Eliminate { qi, oi },
+                                    DeduceRule::OnlySameOtherMatch,
+                                );
                             }
                         }
                     }
@@ -1444,21 +1479,13 @@ fn deduce_impl(
                     (DeduceRule::MostCommonElim, DeduceRule::MostCommonForce)
                 };
 
-                let mut min_count = [0i16; 5];
-                let mut max_count = [0i16; 5];
-                for j in 0..n {
-                    if j == qi {
-                        continue;
-                    }
-                    if let Some(a) = answers[j] {
-                        min_count[a.idx()] += 1;
-                        max_count[a.idx()] += 1;
-                    } else {
-                        for li in 0..5usize {
-                            if !is_elim(eliminated, j, li) {
-                                max_count[li] += 1;
-                            }
-                        }
+                // qi is unanswered here; remove its contribution to letter_max.
+                let (letter_known, letter_max) = letter_counts.get();
+                let min_count = letter_known;
+                let mut max_count = letter_max;
+                for li in 0..5usize {
+                    if !is_elim(eliminated, qi, li) {
+                        max_count[li] -= 1;
                     }
                 }
 
