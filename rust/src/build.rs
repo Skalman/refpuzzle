@@ -1917,8 +1917,14 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         }
         QuestionType::FirstWith { .. }
         | QuestionType::LastWith { .. }
-        | QuestionType::ConsecIdent
         | QuestionType::SameAsWhich { .. } => rng.int(0, n as i32 - 1) as i16,
+        QuestionType::ConsecIdent => {
+            // Valid pool: [0, n-1) — pair (v, v+1) requires v+1 < n.
+            if n < 2 {
+                return None;
+            }
+            rng.int(0, n as i32 - 2) as i16
+        }
         QuestionType::OnlyOdd { .. } => {
             // Valid pool: 0-indexed even positions {0, 2, 4, …} (= 1-indexed odd).
             if n == 0 {

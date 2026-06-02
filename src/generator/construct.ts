@@ -1645,9 +1645,13 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     }
     case "FirstWith":
     case "LastWith":
-    case "ConsecIdent":
     case "SameAsWhich":
       return { ...claim, value: rng.int(0, n - 1) };
+    case "ConsecIdent": {
+      // Valid pool: [0, n-1) — pair (v, v+1) requires v+1 < n.
+      if (n < 2) return null;
+      return { ...claim, value: rng.int(0, n - 2) };
+    }
     case "OnlyOdd": {
       // Valid pool: 0-indexed even positions {0, 2, 4, …} (= 1-indexed odd).
       if (n === 0) return null;
