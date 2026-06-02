@@ -242,6 +242,14 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
 
 // ── Main function ──
 
+/// Evaluate the **semantic truth** of a claim against the current puzzle state.
+/// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`.
+///
+/// This is NOT a wellformedness check. Although it incidentally short-circuits
+/// on some structural issues (parity mismatch, value out of [0..=4] for letter
+/// types), it assumes the claim is already well-formed and behaves unpredictably
+/// otherwise (e.g. AnswerOf with an out-of-range `question_index` panics on
+/// `answers[...]`). For form checks, see `check_form::check_claim_form`.
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     let qt = &claim.question_type;
     let value = claim.value;
@@ -843,8 +851,10 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }
 
+/// Like `check_claim`, but assumes `answers` is fully populated; returns bool.
+/// Same caveat applies: this is a **semantic** check (does the claim hold given
+/// these answers?), not a wellformedness check.
 #[inline(always)]
-/// Like check_claim, but assumes answers is fully populated; returns bool.
 pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
     let n = answers.len();
     let value = claim.value;
