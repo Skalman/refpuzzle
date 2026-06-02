@@ -1,11 +1,186 @@
-import type { Answer, Puzzle, QuestionTypeName } from "./types.ts";
+import type { Answer, OptionPos, Puzzle, QuestionType, QuestionTypeName } from "./types.ts";
 import { LETTERS } from "./types.ts";
 
 export type Severity = "warning" | "error";
 
-// Types whose correct option value is always defined (null option is never the answer).
-// SameAs allows null ("none" = no other question shares this answer); identity-option
-// types (AnswerIsSelf, NoOtherHasAnswer) and TrueStmt are special-cased elsewhere.
+export interface FormError {
+  qi: number;
+  message: string;
+  severity: Severity;
+}
+
+// ── Internal form-check helpers ──
+//
+// Each returns `[message, severity] | null`. The caller wraps into a FormError
+// and supplies the `qi` (which differs for top-level options vs claims nested
+// in TrueStmt). All three are wellformedness checks — for the **semantic**
+// "is this claim true?" check see `check-answer.ts`'s `checkClaim`.
+
+function warning(msg: string): [string, Severity] {
+  return [msg, "warning"];
+}
+function error(msg: string): [string, Severity] {
+  return [msg, "error"];
+}
+
+/** Per-qt structural checks (value-independent): question_index references in
+ *  range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer letter
+ *  within option count for types that carry an `answer` field. `qi` is the
+ *  OWNER (top-level qi or TrueStmt's container qi for a claim). */
+function checkQuestionForm(
+  n: number,
+  oc: number,
+  qi: number,
+  qt: QuestionType,
+): [string, Severity] | null {
+  // Reference checks (AnswerOf/LetterDist/SameAsWhich).
+  if (qt.type === "AnswerOf" || qt.type === "LetterDist" || qt.type === "SameAsWhich") {
+    const refQi = qt.questionIndex;
+    if (refQi < 0 || refQi >= n) {
+      return error(`${qt.type} references out-of-range question ${String(refQi)}`);
+    }
+    if (refQi === qi) {
+      return error(`${qt.type} references itself`);
+    }
+  }
+
+  // Answer letter within option count (for types with an `answer` field).
+  if ("answer" in qt && LETTERS.indexOf(qt.answer) >= oc) {
+    return warning(`answer ${qt.answer} outside option count ${String(oc)}`);
+  }
+
+  return null;
+}
+
+/** Per-(qt, value) wellformedness. Answer-letter and reference checks live in
+ *  `checkQuestionForm`; this function focuses on value-level checks (range,
+ *  parity, EqualCount self-reference, per-option self-reference for SameAs /
+ *  OnlySame). Returns the first error found. */
+function checkClaimForm(
+  n: number,
+  oc: number,
+  opt: OptionPos,
+  qt: QuestionType,
+  value: number | null,
+): [string, Severity] | null {
+  // Null short-circuits the value-range check. Whether null is *disallowed*
+  // for the type is enforced separately in `checkForm`'s main loop.
+  if (value == null) return null;
+
+  const qi = opt.qi;
+
+  switch (qt.type) {
+    case "CountAnswer":
+    case "CountVowel":
+    case "CountConsonant":
+    case "MostCommonCount":
+      if (value < 0 || value > n) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "CountAnswerBefore":
+      if (value < 0 || value > qt.beforeIndex)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "CountAnswerAfter":
+      if (value < 0 || value > n - qt.afterIndex - 1)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "FirstWith":
+    case "LastWith":
+      if (value < 0 || value >= n) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "ClosestAfter":
+      if (value <= qt.afterIndex || value >= n)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "ClosestBefore":
+      if (value < 0 || value >= qt.beforeIndex)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "NextSame":
+      if (value <= qi || value >= n) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "PrevSame":
+      if (value < 0 || value >= qi) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "SameAs":
+      if (value === qi) return error(`SameAs option ${String(opt.oi)} references itself`);
+      if (value < 0 || value >= n)
+        return error(
+          `SameAs option ${String(opt.oi)} references out-of-range question ${String(value)}`,
+        );
+      return null;
+    case "OnlySame":
+      if (value === qi) return warning(`OnlySame option ${String(opt.oi)} references itself`);
+      if (value < 0 || value >= n) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "SameAsWhich":
+      if (value < 0 || value >= n) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "AnswerOf":
+    case "LeastCommon":
+    case "MostCommon":
+    case "NoOtherHasAnswer":
+      if (value < 0 || value >= oc)
+        return warning(`letter index ${String(value)} outside option count ${String(oc)}`);
+      return null;
+    case "EqualCount":
+      if (value === LETTERS.indexOf(qt.answer))
+        return warning(`EqualCount(${qt.answer}) points to ${qt.answer} (self-referencing)`);
+      if (value < 0 || value >= oc) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "OnlyOdd":
+      if (value < 0 || value >= n || value % 2 !== 0)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "OnlyEven":
+      if (value < 0 || value >= n || value % 2 !== 1)
+        return warning(`value ${String(value)} out of range`);
+      return null;
+    case "ConsecIdent":
+      if (value < 0 || value >= n - 1) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "AnswerIsSelf":
+    case "LetterDist":
+      if (value < 0 || value >= oc) return warning(`value ${String(value)} out of range`);
+      return null;
+    case "TrueStmt":
+      // Claims cannot be TrueStmt — nesting is not allowed.
+      return error("TrueStmt is not a valid claim type");
+  }
+  return null;
+}
+
+/** Per-(qt, value) checks that depend on the puzzle's solution. Currently only
+ *  `NoOtherHasAnswer` ambiguity. */
+function checkCorrectClaimForm(
+  oc: number,
+  solution: Answer[],
+  opt: OptionPos,
+  qt: QuestionType,
+  value: number | null,
+): [string, Severity] | null {
+  if (qt.type !== "NoOtherHasAnswer") return null;
+  if (value == null || value < 0 || value >= oc) return null;
+  const selfAns = LETTERS[value];
+  for (let li = 0; li < oc; li++) {
+    const letter = LETTERS[li];
+    if (letter === selfAns) continue;
+    let hasOther = false;
+    for (let j = 0; j < solution.length; j++) {
+      if (j !== opt.qi && solution[j] === letter) {
+        hasOther = true;
+        break;
+      }
+    }
+    if (!hasOther) {
+      return warning(
+        `NoOtherHasAnswer: letter ${letter} also has no other question with that answer, so the correct option is ambiguous`,
+      );
+    }
+  }
+  return null;
+}
+
 const NULL_NOT_ALLOWED: ReadonlySet<QuestionTypeName> = new Set([
   "CountAnswer",
   "CountAnswerBefore",
@@ -19,135 +194,79 @@ const NULL_NOT_ALLOWED: ReadonlySet<QuestionTypeName> = new Set([
   "LetterDist",
 ]);
 
-export interface FormError {
-  qi: number;
-  message: string;
-  severity: Severity;
-}
+const IDENTITY_OPTION: ReadonlySet<QuestionTypeName> = new Set([
+  "AnswerIsSelf",
+  "NoOtherHasAnswer",
+]);
 
 export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] {
   const errors: FormError[] = [];
   const n = puzzle.questions.length;
   const oc = puzzle.optionCount ?? 5;
+  const haveSolution = solution.length > 0;
 
   for (let qi = 0; qi < n; qi++) {
     const q = puzzle.questions[qi];
     const qt = q.questionType;
-    const opts = q.options.slice(0, oc);
 
-    // Collect numeric values (null for TrueStmt/identity options)
-    const vals = opts.map((o) => o.value);
+    // Per-qt structural checks.
+    const qErr = checkQuestionForm(n, oc, qi, qt);
+    if (qErr) errors.push({ qi, message: qErr[0], severity: qErr[1] });
 
-    // ── Type-specific reference checks ──
-    if (qt.type === "AnswerOf" || qt.type === "LetterDist" || qt.type === "SameAsWhich") {
-      const ref = qt.questionIndex;
-      if (ref < 0 || ref >= n) {
-        errors.push({
-          qi,
-          message: `${qt.type} references out-of-range question ${String(ref)}`,
-          severity: "error",
-        });
-      } else if (ref === qi) {
-        errors.push({ qi, message: `${qt.type} references itself`, severity: "error" });
-      }
-    }
-
-    // ── Answer letter within option count ──
-    if (
-      qt.type === "CountAnswer" ||
-      qt.type === "CountAnswerBefore" ||
-      qt.type === "CountAnswerAfter" ||
-      qt.type === "ClosestAfter" ||
-      qt.type === "ClosestBefore" ||
-      qt.type === "FirstWith" ||
-      qt.type === "LastWith" ||
-      qt.type === "OnlyOdd" ||
-      qt.type === "OnlyEven" ||
-      qt.type === "EqualCount"
-    ) {
-      const answerIdx = "ABCDE".indexOf(qt.answer);
-      if (answerIdx >= oc) {
-        errors.push({
-          qi,
-          message: `References answer ${qt.answer} which is outside option count ${oc}`,
-          severity: "warning",
-        });
-      }
-    }
-
-    // ── SameAs checks ──
-    if (qt.type === "SameAs") {
-      // "none" is a legitimate option; duplicate targets/nulls are caught by the
-      // general distinct-option-values check below.
+    if (qt.type === "TrueStmt") {
+      // TrueStmt: each option is a Claim. Run form checks per claim.
       for (let oi = 0; oi < oc; oi++) {
-        const v = vals[oi];
-        if (v == null) continue;
-        if (v === qi) {
-          errors.push({ qi, message: `SameAs option ${oi} references itself`, severity: "error" });
-        } else if (v < 0 || v >= n) {
+        const o = q.options[oi];
+        if (!("claim" in o)) continue;
+        const claim = o.claim;
+        const opt: OptionPos = { qi, oi };
+        const cqt = claim.questionType;
+        // Claims encode null as the sentinel -1; normalise for the form helpers.
+        const cv = claim.value === -1 ? null : claim.value;
+
+        const cQErr = checkQuestionForm(n, oc, qi, cqt);
+        if (cQErr) {
           errors.push({
             qi,
-            message: `SameAs option ${oi} references out-of-range question ${String(v)}`,
-            severity: "error",
+            message: `TrueStmt option ${String(oi)}: ${cQErr[0]}`,
+            severity: cQErr[1],
           });
         }
-      }
-    }
-
-    // ── OnlySame: no self-references ──
-    if (qt.type === "OnlySame") {
-      for (let oi = 0; oi < oc; oi++) {
-        if (vals[oi] === qi) {
+        const cErr = checkClaimForm(n, oc, opt, cqt, cv);
+        if (cErr) {
           errors.push({
             qi,
-            message: `OnlySame option ${oi} references itself`,
-            severity: "warning",
+            message: `TrueStmt option ${String(oi)}: ${cErr[0]}`,
+            severity: cErr[1],
           });
         }
-      }
-    }
-
-    // ── EqualCount: option value must not point to the reference letter ──
-    if (qt.type === "EqualCount") {
-      const refIdx = "ABCDE".indexOf(qt.answer);
-      for (let oi = 0; oi < oc; oi++) {
-        if (vals[oi] === refIdx) {
-          errors.push({
-            qi,
-            message: `EqualCount(${qt.answer}) option ${oi} points to ${qt.answer} (self-referencing)`,
-            severity: "warning",
-          });
+        if (haveSolution) {
+          const ccErr = checkCorrectClaimForm(oc, solution, opt, cqt, cv);
+          if (ccErr) {
+            errors.push({
+              qi,
+              message: `TrueStmt option ${String(oi)}: ${ccErr[0]}`,
+              severity: ccErr[1],
+            });
+          }
         }
       }
+      continue;
     }
 
-    // ── NoOtherHasAnswer: every other letter must appear in at least one other question ──
-    if (qt.type === "NoOtherHasAnswer" && solution.length > 0) {
-      const selfAns = solution[qi];
-      const otherAnswers = solution.filter((_, j) => j !== qi);
-      for (const letter of LETTERS.slice(0, oc)) {
-        if (letter !== selfAns && !otherAnswers.includes(letter)) {
-          errors.push({
-            qi,
-            message: `NoOtherHasAnswer: letter ${letter} also has no other question with that answer, so the correct option is ambiguous`,
-            severity: "warning",
-          });
-        }
-      }
-    }
-
-    // ── No duplicate option values (incl. at most one "none") ──
-    if (qt.type !== "TrueStmt" && qt.type !== "AnswerIsSelf" && qt.type !== "NoOtherHasAnswer") {
+    // Per-qi: duplicate option values. Identity-option types excluded.
+    if (!IDENTITY_OPTION.has(qt.type)) {
+      const vals = q.options.slice(0, oc).map((o) => o.value);
       const unique = new Set(vals);
       if (unique.size < vals.length) {
         errors.push({ qi, message: "Duplicate option values", severity: "warning" });
       }
     }
 
-    // ── Null disallowed for types whose value is always defined ──
+    // Per-qi: null disallowed for types whose value is always defined.
     if (NULL_NOT_ALLOWED.has(qt.type)) {
       for (let oi = 0; oi < oc; oi++) {
-        if (vals[oi] == null) {
+        if (q.options[oi].value == null) {
           errors.push({
             qi,
             message: `Option ${String(oi)} is null but ${qt.type} requires a value`,
@@ -157,151 +276,26 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
       }
     }
 
-    // ── Option values in valid range ──
+    // Per-oi: pass the option's (qt, value) to check_claim_form.
     for (let oi = 0; oi < oc; oi++) {
-      const v = vals[oi];
-      if (v == null) continue;
-
-      switch (qt.type) {
-        case "CountAnswer":
-        case "CountVowel":
-        case "CountConsonant":
-        case "MostCommonCount":
-          if (v < 0 || v > n) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "CountAnswerBefore":
-          if (v < 0 || v > qt.beforeIndex) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "CountAnswerAfter":
-          if (v < 0 || v > n - qt.afterIndex - 1) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "AnswerOf":
-        case "LeastCommon":
-        case "MostCommon":
-        case "NoOtherHasAnswer":
-        case "EqualCount":
-        case "AnswerIsSelf":
-        case "LetterDist":
-          if (v < 0 || v >= oc) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "FirstWith":
-        case "LastWith":
-        case "OnlySame":
-        case "SameAs":
-        case "SameAsWhich":
-          if (v < 0 || v >= n) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "NextSame":
-          if (v <= qi || v >= n) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "PrevSame":
-          if (v < 0 || v >= qi) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "ClosestAfter":
-          if (v <= qt.afterIndex || v >= n) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "ClosestBefore":
-          if (v < 0 || v >= qt.beforeIndex) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "OnlyOdd":
-          if (v < 0 || v >= n || v % 2 !== 0) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "OnlyEven":
-          if (v < 0 || v >= n || v % 2 !== 1) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
-        case "ConsecIdent":
-          if (v < 0 || v >= n - 1) {
-            errors.push({
-              qi,
-              message: `Option ${String(oi)} value ${String(v)} out of range`,
-              severity: "warning",
-            });
-          }
-          break;
+      const value = q.options[oi].value;
+      if (value == null) continue;
+      const cErr = checkClaimForm(n, oc, { qi, oi }, qt, value);
+      if (cErr) {
+        errors.push({
+          qi,
+          message: `Option ${String(oi)}: ${cErr[0]}`,
+          severity: cErr[1],
+        });
       }
     }
 
-    // ── TrueStmt claim checks ──
-    if (qt.type === "TrueStmt") {
-      for (let oi = 0; oi < oc; oi++) {
-        const opt = opts[oi];
-        if (!("claim" in opt)) continue;
-        const c = opt.claim;
-        const cqt = c.questionType;
-        if (cqt.type === "EqualCount" && c.value === "ABCDE".indexOf(cqt.answer)) {
-          errors.push({
-            qi,
-            message: `TrueStmt option ${oi} has EqualCount(${cqt.answer}) pointing to ${cqt.answer} (self-referencing)`,
-            severity: "warning",
-          });
-        }
-      }
+    // Per-qi solution-dependent (currently NoOtherHasAnswer ambiguity).
+    // For NoOtherHasAnswer, the asserted letter is the solution at qi.
+    if (haveSolution) {
+      const value = qt.type === "NoOtherHasAnswer" ? LETTERS.indexOf(solution[qi]) : 0;
+      const ccErr = checkCorrectClaimForm(oc, solution, { qi, oi: 0 }, qt, value);
+      if (ccErr) errors.push({ qi, message: ccErr[0], severity: ccErr[1] });
     }
   }
 
