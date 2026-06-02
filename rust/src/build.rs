@@ -1662,12 +1662,19 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::AnswerOf => {
-            let target = rng.int(0, n as i32 - 1) as u8;
+            // Pick a target qi != qi (the TrueStmt's own position).
+            if n < 2 {
+                return None;
+            }
+            let mut target = rng.int(0, n as i32 - 2) as usize;
+            if target >= qi {
+                target += 1;
+            }
             Some(Claim {
                 question_type: QuestionType::AnswerOf {
-                    question_index: target,
+                    question_index: target as u8,
                 },
-                value: sol[target as usize].idx() as i16,
+                value: sol[target].idx() as i16,
             })
         }
         QuestionTypeKind::FirstWith => {
@@ -1820,11 +1827,18 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::SameAsWhich => {
-            let ref_qi = rng.int(0, n as i32 - 1) as u8;
-            let ref_ans = sol[ref_qi as usize];
+            // Pick a ref_qi != qi (the TrueStmt's own position).
+            if n < 2 {
+                return None;
+            }
+            let mut ref_qi = rng.int(0, n as i32 - 2) as usize;
+            if ref_qi >= qi {
+                ref_qi += 1;
+            }
+            let ref_ans = sol[ref_qi];
             let mut matches = ArrayVec::<usize, MAX_N>::new();
             for i in 0..n {
-                if i != ref_qi as usize && i != qi && sol[i] == ref_ans {
+                if i != ref_qi && i != qi && sol[i] == ref_ans {
                     matches.push(i);
                 }
             }
@@ -1834,7 +1848,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let target = rng.pick(&matches);
             Some(Claim {
                 question_type: QuestionType::SameAsWhich {
-                    question_index: ref_qi,
+                    question_index: ref_qi as u8,
                 },
                 value: target as i16,
             })

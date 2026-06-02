@@ -1471,8 +1471,11 @@ const CLAIM_GENS: ClaimGen[] = [
       value: sol.slice(0, bi).filter((x) => x === a).length,
     };
   },
-  (sol, _qi, n, rng) => {
-    const target = rng.int(0, n - 1);
+  (sol, qi, n, rng) => {
+    // Pick a target qi != qi (the TrueStmt's own position).
+    if (n < 2) return null;
+    let target = rng.int(0, n - 2);
+    if (target >= qi) target += 1;
     return {
       questionType: { type: "AnswerOf", questionIndex: target },
       value: L2I[sol[target]],
@@ -1596,7 +1599,10 @@ const CLAIM_GENS: ClaimGen[] = [
     return { questionType: { type: "OnlyEven", answer: a }, value: found };
   },
   (sol, qi, n, rng) => {
-    const ref = rng.int(0, n - 1);
+    // Pick a ref qi != qi (the TrueStmt's own position).
+    if (n < 2) return null;
+    let ref = rng.int(0, n - 2);
+    if (ref >= qi) ref += 1;
     const refAns = sol[ref];
     const matches: number[] = [];
     for (let i = 0; i < n; i++) {
