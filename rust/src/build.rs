@@ -1904,13 +1904,30 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::CountAnswer { .. }
         | QuestionType::CountConsonant
         | QuestionType::CountVowel
-        | QuestionType::CountAnswerAfter { .. }
-        | QuestionType::CountAnswerBefore { .. }
         | QuestionType::MostCommonCount => {
             let offsets: [i16; 4] = [-2, -1, 1, 2];
             let offset = rng.pick(&offsets);
             let v = claim.value + offset;
             if v < 0 || v > n as i16 {
+                return None;
+            }
+            v
+        }
+        QuestionType::CountAnswerAfter { after_index, .. } => {
+            let offsets: [i16; 4] = [-2, -1, 1, 2];
+            let offset = rng.pick(&offsets);
+            let v = claim.value + offset;
+            let max = n as i16 - after_index as i16 - 1;
+            if v < 0 || v > max {
+                return None;
+            }
+            v
+        }
+        QuestionType::CountAnswerBefore { before_index, .. } => {
+            let offsets: [i16; 4] = [-2, -1, 1, 2];
+            let offset = rng.pick(&offsets);
+            let v = claim.value + offset;
+            if v < 0 || v > before_index as i16 {
                 return None;
             }
             v

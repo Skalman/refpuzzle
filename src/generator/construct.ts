@@ -1635,12 +1635,23 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     case "CountAnswer":
     case "CountConsonant":
     case "CountVowel":
-    case "CountAnswerAfter":
-    case "CountAnswerBefore":
     case "MostCommonCount": {
       const offset = rng.pick([-2, -1, 1, 2]);
       const newVal = claim.value + offset;
       if (newVal < 0 || newVal > n) return null;
+      return { ...claim, value: newVal };
+    }
+    case "CountAnswerAfter": {
+      const offset = rng.pick([-2, -1, 1, 2]);
+      const newVal = claim.value + offset;
+      const max = n - claim.questionType.afterIndex - 1;
+      if (newVal < 0 || newVal > max) return null;
+      return { ...claim, value: newVal };
+    }
+    case "CountAnswerBefore": {
+      const offset = rng.pick([-2, -1, 1, 2]);
+      const newVal = claim.value + offset;
+      if (newVal < 0 || newVal > claim.questionType.beforeIndex) return null;
       return { ...claim, value: newVal };
     }
     case "FirstWith":
