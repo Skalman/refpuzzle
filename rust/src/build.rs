@@ -1903,12 +1903,24 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         }
         QuestionType::FirstWith { .. }
         | QuestionType::LastWith { .. }
-        | QuestionType::ClosestAfter { .. }
-        | QuestionType::ClosestBefore { .. }
         | QuestionType::ConsecIdent
         | QuestionType::OnlyOdd { .. }
         | QuestionType::OnlyEven { .. }
         | QuestionType::SameAsWhich { .. } => rng.int(0, n as i32 - 1) as i16,
+        QuestionType::ClosestAfter { after_index, .. } => {
+            // Valid pool: (after_index, n).
+            if (after_index as usize) + 1 >= n {
+                return None;
+            }
+            rng.int(after_index as i32 + 1, n as i32 - 1) as i16
+        }
+        QuestionType::ClosestBefore { before_index, .. } => {
+            // Valid pool: [0, before_index).
+            if before_index == 0 {
+                return None;
+            }
+            rng.int(0, before_index as i32 - 1) as i16
+        }
         QuestionType::AnswerOf { .. }
         | QuestionType::MostCommon
         | QuestionType::LeastCommon

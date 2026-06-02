@@ -1639,13 +1639,23 @@ function perturbClaim(claim: Claim, n: number, rng: RNG): Claim | null {
     }
     case "FirstWith":
     case "LastWith":
-    case "ClosestAfter":
-    case "ClosestBefore":
     case "ConsecIdent":
     case "OnlyOdd":
     case "OnlyEven":
     case "SameAsWhich":
       return { ...claim, value: rng.int(0, n - 1) };
+    case "ClosestAfter": {
+      // Valid pool: (after_index, n).
+      const afterIdx = claim.questionType.afterIndex;
+      if (afterIdx + 1 >= n) return null;
+      return { ...claim, value: rng.int(afterIdx + 1, n - 1) };
+    }
+    case "ClosestBefore": {
+      // Valid pool: [0, before_index).
+      const beforeIdx = claim.questionType.beforeIndex;
+      if (beforeIdx === 0) return null;
+      return { ...claim, value: rng.int(0, beforeIdx - 1) };
+    }
     case "AnswerOf":
     case "MostCommon":
     case "LeastCommon":
