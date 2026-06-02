@@ -116,8 +116,17 @@ pub fn generate(
     trace: bool,
     label: &str,
 ) -> Option<GenerateResult> {
+    let n = profile.question_count;
+    let oc = profile.option_count;
+    let letters = &LETTERS[..oc];
+
+    // Solution is fixed across retries; only the rule-placement attempts vary.
+    let mut solution: [Answer; MAX_N] =
+        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
+    bias_consecutive_pair(&mut solution, n, profile, rng);
+
     for attempt in 0..max_attempts {
-        if let Some(r) = try_construct(profile, rng, stats, trace, attempt, label) {
+        if let Some(r) = try_construct(profile, rng, stats, trace, attempt, label, &solution) {
             if trace {
                 eprintln!(
                     "{}",
@@ -348,15 +357,10 @@ fn try_construct(
     trace: bool,
     attempt: usize,
     label: &str,
+    solution: &[Answer; MAX_N],
 ) -> Option<GenerateResult> {
     let n = profile.question_count;
     let oc = profile.option_count;
-    let letters = &LETTERS[..oc];
-
-    let mut solution: [Answer; MAX_N] =
-        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
-
-    bias_consecutive_pair(&mut solution, n, profile, rng);
 
     let mut state = PlacementState::new(n, rng);
 

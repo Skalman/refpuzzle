@@ -67,8 +67,16 @@ export function generateConstructive(
   tracing = false,
   label = "",
 ): GenerateResult | null {
+  const n = profile.questionCount;
+  const oc = profile.optionCount;
+  const validLetters = LETTERS.slice(0, oc);
+
+  // Solution is fixed across retries; only the rule-placement attempts vary.
+  const solution: Answer[] = Array.from({ length: n }, () => rng.pick(validLetters));
+  biasConsecutivePair(solution, n, profile, rng);
+
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const cr = tryConstruct(profile, rng, tracing);
+    const cr = tryConstruct(profile, solution, rng, tracing);
     if (!cr) {
       if (tracing) traceConstructFailed(attempt + 1);
       continue;
@@ -205,40 +213,44 @@ function allowed(
   return types.filter((t) => profile.allowedTypes.includes(t));
 }
 
+function biasConsecutivePair(
+  solution: Answer[],
+  n: number,
+  profile: DifficultyProfile,
+  rng: RNG,
+): void {
+  // Bias toward exactly 1 consecutive pair for levels that allow ConsecIdent.
+  if (!profile.allowedTypes.includes("ConsecIdent") || rng.int(0, 1) !== 0) return;
+  const validLetters = LETTERS.slice(0, profile.optionCount);
+  const pairPositions: number[] = [];
+  for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairPositions.push(i);
+  if (pairPositions.length === 0) {
+    const pos = rng.int(0, n - 2);
+    solution[pos + 1] = solution[pos];
+  } else if (pairPositions.length > 1) {
+    const keep = rng.int(0, pairPositions.length - 1);
+    for (let k = 0; k < pairPositions.length; k++) {
+      if (k === keep) continue;
+      const pos = pairPositions[k] + 1;
+      for (;;) {
+        const nl = rng.pick(validLetters);
+        if (nl !== solution[pos - 1] && (pos + 1 >= n || nl !== solution[pos + 1])) {
+          solution[pos] = nl;
+          break;
+        }
+      }
+    }
+  }
+}
+
 function tryConstruct(
   profile: DifficultyProfile,
+  solution: Answer[],
   rng: RNG,
   tracing = false,
 ): ConstructResult | null {
   const n = profile.questionCount;
   const oc = profile.optionCount;
-  const validLetters = LETTERS.slice(0, oc);
-
-  // 1. Random solution
-  const solution: Answer[] = Array.from({ length: n }, () => rng.pick(validLetters));
-
-  // Bias toward exactly 1 consecutive pair for levels that allow consecutive_identical
-  if (profile.allowedTypes.includes("ConsecIdent") && rng.int(0, 1) === 0) {
-    const pairPositions: number[] = [];
-    for (let i = 0; i < n - 1; i++) if (solution[i] === solution[i + 1]) pairPositions.push(i);
-    if (pairPositions.length === 0) {
-      const pos = rng.int(0, n - 2);
-      solution[pos + 1] = solution[pos];
-    } else if (pairPositions.length > 1) {
-      const keep = rng.int(0, pairPositions.length - 1);
-      for (let k = 0; k < pairPositions.length; k++) {
-        if (k === keep) continue;
-        const pos = pairPositions[k] + 1;
-        for (;;) {
-          const nl = rng.pick(validLetters);
-          if (nl !== solution[pos - 1] && (pos + 1 >= n || nl !== solution[pos + 1])) {
-            solution[pos] = nl;
-            break;
-          }
-        }
-      }
-    }
-  }
 
   // 2. Shuffle question indices — we'll assign rules in this order
   const slots = rng.shuffle(Array.from({ length: n }, (_, i) => i));
