@@ -720,7 +720,7 @@ function deduceImpl(
           if (!has) results.push(res({ type: "eliminate", qi: vowelQi, oi }, "VowelCrossElim"));
         }
       }
-      if (run("ConsonantCrossElim")) {
+      if (!fast && run("ConsonantCrossElim")) {
         for (let oi = 0; oi < 5; oi++) {
           if (isElim(eliminated, consonantQi, oi)) continue;
           const vv = fp.optionValues[consonantQi][oi];
