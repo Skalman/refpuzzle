@@ -395,7 +395,7 @@ fn try_construct(
     let skip_counting = n <= 3 && rng.int(0, 1) == 0;
     if !skip_counting
         && (av_counting.is_empty()
-            || !state.try_place(rng.pick(&av_counting), &solution, n, oc, rng))
+            || !state.try_place(rng.pick(&av_counting), solution, n, oc, rng))
     {
         {
             if trace {
@@ -422,7 +422,7 @@ fn try_construct(
     }
     .min(n - state.assigned_count);
     for _ in 0..chain_count {
-        if !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng) {
+        if !state.try_place(QuestionTypeKind::AnswerOf, solution, n, oc, rng) {
             if trace {
                 eprintln!(
                     "{}",
@@ -446,7 +446,7 @@ fn try_construct(
         let (kind, needed_qi) = candidates[cand_idx];
         if profile.allowed_types.contains(&kind) && (state.assigned & (1 << needed_qi)) == 0 {
             state.swap_slot_to_front(needed_qi);
-            state.try_place(kind, &solution, n, oc, rng);
+            state.try_place(kind, solution, n, oc, rng);
         }
     }
 
@@ -460,7 +460,7 @@ fn try_construct(
     };
     for _ in 0..pos_count {
         if !av_positional.is_empty() && state.assigned_count < n {
-            state.try_place(rng.pick(&av_positional), &solution, n, oc, rng);
+            state.try_place(rng.pick(&av_positional), solution, n, oc, rng);
         }
     }
 
@@ -477,7 +477,7 @@ fn try_construct(
             break;
         }
         if profile.allowed_types.contains(&kind) {
-            state.try_place(kind, &solution, n, oc, rng);
+            state.try_place(kind, solution, n, oc, rng);
         }
     }
 
@@ -506,15 +506,15 @@ fn try_construct(
     while state.assigned_count < fill_target {
         let mut placed = false;
         for _ in 0..20 {
-            if !fill_pool.is_empty() && state.try_place(rng.pick(&fill_pool), &solution, n, oc, rng)
+            if !fill_pool.is_empty() && state.try_place(rng.pick(&fill_pool), solution, n, oc, rng)
             {
                 placed = true;
                 break;
             }
         }
         if !placed
-            && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
-            && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
+            && !state.try_place(QuestionTypeKind::AnswerOf, solution, n, oc, rng)
+            && !state.try_place(QuestionTypeKind::AnswerIsSelf, solution, n, oc, rng)
         {
             if trace {
                 eprintln!(
@@ -537,12 +537,12 @@ fn try_construct(
         let mut fitting: ArrayVec<QuestionTypeKind, 32> = av_constrained
             .iter()
             .copied()
-            .filter(|&k| solution_fits_type(k, qi, &solution, n, oc))
+            .filter(|&k| solution_fits_type(k, qi, solution, n, oc))
             .collect();
         rng.shuffle(&mut fitting);
         let mut placed = false;
         for &kind in &fitting {
-            if state.try_place(kind, &solution, n, oc, rng) {
+            if state.try_place(kind, solution, n, oc, rng) {
                 placed = true;
                 break;
             }
@@ -550,15 +550,15 @@ fn try_construct(
         if !placed {
             for _ in 0..20 {
                 if !fill_pool.is_empty()
-                    && state.try_place(rng.pick(&fill_pool), &solution, n, oc, rng)
+                    && state.try_place(rng.pick(&fill_pool), solution, n, oc, rng)
                 {
                     placed = true;
                     break;
                 }
             }
             if !placed
-                && !state.try_place(QuestionTypeKind::AnswerOf, &solution, n, oc, rng)
-                && !state.try_place(QuestionTypeKind::AnswerIsSelf, &solution, n, oc, rng)
+                && !state.try_place(QuestionTypeKind::AnswerOf, solution, n, oc, rng)
+                && !state.try_place(QuestionTypeKind::AnswerIsSelf, solution, n, oc, rng)
             {
                 if trace {
                     eprintln!(
@@ -583,7 +583,7 @@ fn try_construct(
 
     let mut fp = fill_options(
         &state.question_types,
-        &solution,
+        solution,
         n,
         profile.option_count,
         rng,
@@ -592,7 +592,7 @@ fn try_construct(
 
     if !validate_and_repair(
         &state.question_types,
-        &solution,
+        solution,
         &mut fp,
         n,
         rng,
