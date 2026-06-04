@@ -28,6 +28,7 @@ import {
   QT_LETTER_DIST,
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
+  claimAt,
 } from "./types.ts";
 import { checkClaim } from "./check-answer.ts";
 import { V_INVALID, V_VALID } from "./state.ts";
@@ -1300,7 +1301,7 @@ function deduceImpl(
       if (a == null) continue;
       const q = fp.questions[qi];
       if (q.t !== QT_TRUE_STMT) continue;
-      const claim = fp.optionClaims[qi][letterIdx(a)];
+      const claim = claimAt(fp, qi, letterIdx(a));
       if (!claim) continue;
 
       const cqt = claim.questionType;
@@ -1509,7 +1510,7 @@ function deduceImpl(
       if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
-        const claim = fp.optionClaims[qi][oi];
+        const claim = claimAt(fp, qi, oi);
         if (!claim) continue;
         const cqt = claim.questionType;
         let contradicts = false;
@@ -1540,7 +1541,7 @@ function deduceImpl(
       if (fp.questions[qi].t !== QT_TRUE_STMT) continue;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
-        const claim = fp.optionClaims[qi][oi];
+        const claim = claimAt(fp, qi, oi);
         if (!claim) continue;
         const v = checkClaim(fp, { answers, eliminated }, { qi, oi }, claim);
         if (v === V_INVALID) {
@@ -1559,7 +1560,7 @@ function deduceImpl(
       let survivingCount = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
-        const claim = fp.optionClaims[qi][oi];
+        const claim = claimAt(fp, qi, oi);
         if (!claim) continue;
         const hyp = { answers: answers.slice(), eliminated: eliminated.slice() };
         hyp.answers[qi] = LETTERS[oi];
@@ -1596,7 +1597,7 @@ function deduceImpl(
       let validCount = 0;
       for (let oi = 0; oi < 5; oi++) {
         if (isElim(eliminated, qi, oi)) continue;
-        const claim = fp.optionClaims[qi][oi];
+        const claim = claimAt(fp, qi, oi);
         if (!claim) continue;
         const v = checkClaim(fp, { answers, eliminated }, { qi, oi }, claim);
         if (v === V_VALID) {

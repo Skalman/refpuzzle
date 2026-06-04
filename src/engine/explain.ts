@@ -40,6 +40,7 @@ import {
   QT_LETTER_DIST,
   QT_TRUE_STMT,
   QT_SAME_AS_WHICH,
+  claimAt,
 } from "./types.ts";
 import type { DeduceResult, DeduceRule } from "./deduce.ts";
 import type { LookaheadResult } from "./lookahead.ts";
@@ -410,7 +411,7 @@ function explainForce(
       const srcAns = answers[src];
       if (srcAns == null) continue;
       if (fp.questions[src].t !== QT_TRUE_STMT) continue;
-      const claim = fp.optionClaims[src][letterIdx(srcAns)];
+      const claim = claimAt(fp, src, letterIdx(srcAns));
       if (!claim) continue;
       const cqt = claim.questionType;
       if (cqt.type === "AnswerOf" && cqt.questionIndex === qi) {
@@ -516,7 +517,7 @@ function explainElimination(
   }
 
   if (rule === "TrueStatementClaimInvalid") {
-    const claim = fp.optionClaims[qi][oi];
+    const claim = claimAt(fp, qi, oi);
     const cqt = claim?.questionType;
     if (
       claim &&
@@ -558,7 +559,7 @@ function explainElimination(
   }
 
   if (rule === "TrueStatementSelfRef") {
-    const claim = fp.optionClaims[qi][oi];
+    const claim = claimAt(fp, qi, oi);
     const cqt = claim?.questionType;
     if (
       claim &&

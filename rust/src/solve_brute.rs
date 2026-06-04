@@ -107,7 +107,7 @@ fn get_force(
     let t = &fp.question_types[qi];
     match *t {
         QuestionType::AnswerOf { question_index } => {
-            let claimed = fp.option_answers[qi][ai];
+            let claimed = fp.options[qi][ai].value();
             if claimed < 5 {
                 Some((question_index as usize, LETTERS[claimed as usize]))
             } else {
@@ -120,7 +120,7 @@ fn get_force(
         | QuestionType::ClosestBefore { answer, .. }
         | QuestionType::OnlyOdd { answer }
         | QuestionType::OnlyEven { answer } => {
-            let v = fp.option_nums[qi][ai];
+            let v = fp.options[qi][ai].to_i16();
             if v >= 0 && (v as usize) < fp.n {
                 Some((v as usize, answer))
             } else {
@@ -131,7 +131,7 @@ fn get_force(
         | QuestionType::OnlySame
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            let v = fp.option_nums[qi][ai];
+            let v = fp.options[qi][ai].to_i16();
             if v >= 0 && (v as usize) < fp.n {
                 Some((v as usize, letter))
             } else {
@@ -139,7 +139,7 @@ fn get_force(
             }
         }
         QuestionType::SameAsWhich { question_index } => {
-            let v = fp.option_nums[qi][ai];
+            let v = fp.options[qi][ai].to_i16();
             if v >= 0 && (v as usize) < fp.n {
                 current[question_index as usize].map(|ref_ans| (v as usize, ref_ans))
             } else {
@@ -192,7 +192,7 @@ fn propagate_forces(
                 let target_oi = current[qi].unwrap().idx() as u8;
                 let mut found: Option<usize> = None;
                 for oi in 0..5usize {
-                    if fp.option_answers[j][oi] == target_oi {
+                    if fp.options[j][oi].value() == target_oi {
                         if found.is_some() {
                             found = None;
                             break;
@@ -399,7 +399,7 @@ fn check_rule(
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
-            let opt_val = fp.option_nums[i][answer_i.idx()];
+            let opt_val = fp.options[i][answer_i.idx()].to_i16();
             if opt_val == NAN_VAL {
                 return false;
             }
@@ -425,7 +425,7 @@ fn check_rule(
             }
         }
         QuestionType::CountVowel | QuestionType::CountConsonant => {
-            let opt_val = fp.option_nums[i][answer_i.idx()];
+            let opt_val = fp.options[i][answer_i.idx()].to_i16();
             if opt_val == NAN_VAL {
                 return false;
             }

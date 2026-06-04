@@ -224,12 +224,31 @@ export function flattenQuestion(t: QuestionType): FlatQuestion {
 // Pre-flattened puzzle for solver/evaluator
 export interface FlatPuzzle {
   questions: FlatQuestion[];
-  optionValues: (number | null)[][]; // [questionIdx][optionIdx] → semantic value
-  optionClaims: (Claim | null)[][]; // for only_true_statement
+  /// [questionIdx][optionIdx] → semantic value. For TrueStmt rows this stores
+  /// the per-claim values; the matching claim question types live in
+  /// `trueStmtQuestionTypes`.
+  optionValues: (number | null)[][];
+  /// Question types for the TrueStmt's claims, indexed by option. `null` if the
+  /// puzzle has no TrueStmt question.
+  trueStmtQuestionTypes: QuestionType[] | null;
   affectedBy: number[][]; // affectedBy[j] = question indices to re-check when Q_j changes
   globalIndices: number[]; // indices of questions with global rules (need all answers)
   n: number;
   optionCount: number;
+}
+
+/// Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if `qi`
+/// is not the TrueStmt question, if the puzzle has no TrueStmt, or if the
+/// option slot has no claim (e.g. `oi` outside the active option count).
+export function claimAt(fp: FlatPuzzle, qi: number, oi: number): Claim | null {
+  if (fp.questions[qi].t !== QT_TRUE_STMT) return null;
+  const types = fp.trueStmtQuestionTypes;
+  if (!types) return null;
+  const value = fp.optionValues[qi][oi];
+  // `null` (absent) vs `-1` (NONE sentinel) are distinct: only the former
+  // means "no claim at this slot".
+  if (value == null) return null;
+  return { questionType: types[oi], value };
 }
 
 const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
@@ -292,12 +311,41 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
     affectedBy[i].push(i);
   }
 
+  // For TrueStmt rows the claim's value goes into optionValues (kept verbatim,
+  // including the -1 = NONE sentinel) and claim types into the puzzle-level
+  // `trueStmtQuestionTypes` array. Slots with no claim use null so claimAt can
+  // distinguish present-but-NONE (-1) from absent (null).
+  let trueStmtQuestionTypes: QuestionType[] | null = null;
+  const optionValues: (number | null)[][] = puzzle.questions.map((q, qi) => {
+    if (q.questionType.type === "TrueStmt") {
+      const types: QuestionType[] = new Array(5);
+      const vals: (number | null)[] = new Array(q.options.length);
+      for (let oi = 0; oi < q.options.length; oi++) {
+        const o = q.options[oi];
+        if ("claim" in o) {
+          types[oi] = o.claim.questionType;
+          vals[oi] = o.claim.value;
+        } else {
+          types[oi] = { type: "AnswerIsSelf" };
+          vals[oi] = null;
+        }
+      }
+      // Pad type array to length 5 with a placeholder for stable shape; the
+      // matching optionValues entries stay implicit (undefined → no claim).
+      for (let oi = q.options.length; oi < 5; oi++) {
+        types[oi] = { type: "AnswerIsSelf" };
+      }
+      trueStmtQuestionTypes = types;
+      void qi;
+      return vals;
+    }
+    return q.options.map((o) => o.value);
+  });
+
   return {
     questions,
-    optionValues: puzzle.questions.map((q) => q.options.map((o) => o.value)),
-    optionClaims: puzzle.questions.map((q) =>
-      q.options.map((o) => ("claim" in o ? o.claim : null)),
-    ),
+    optionValues,
+    trueStmtQuestionTypes,
     affectedBy,
     globalIndices,
     n,

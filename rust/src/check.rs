@@ -211,11 +211,11 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
             let type_tag = format::format_type_tag(&fp.question_types[qi]);
             let options: Vec<Option<i64>> = (0..oc)
                 .map(|oi| {
-                    let v = fp.option_nums[qi][oi];
+                    let v = fp.options[qi][oi].to_i16();
                     if matches!(fp.question_types[qi], QuestionType::TrueStmt) || v == NONE_VAL {
                         None
                     } else if v == NAN_VAL {
-                        Some(fp.option_answers[qi][oi] as i64)
+                        Some(fp.options[qi][oi].value() as i64)
                     } else {
                         Some(v as i64)
                     }
@@ -226,11 +226,11 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
                     (0..oc)
                         .map(|oi| {
                             let label = ['A', 'B', 'C', 'D', 'E'][oi].to_string();
-                            let text = match &fp.option_claims[qi][oi] {
+                            let text = match fp.claim_at(qi, oi) {
                                 Some(c) => format!(
                                     "{} = {}",
                                     format::format_type_tag(&c.question_type),
-                                    c.value
+                                    c.value.to_i16()
                                 ),
                                 None => "none".into(),
                             };

@@ -515,7 +515,7 @@ fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -
         qt,
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon
     ) {
-        let a = fp.option_answers[qi][oi];
+        let a = fp.options[qi][oi].value();
         if a > 4 {
             return Value::Null;
         }
@@ -525,7 +525,7 @@ fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -
     if qt.has_identity_options() {
         return json!(oi);
     }
-    let v = fp.option_nums[qi][oi];
+    let v = fp.options[qi][oi].to_i16();
     if v == NONE_VAL || v == NAN_VAL {
         return Value::Null;
     }
@@ -541,7 +541,7 @@ fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
             let mut q = serde_json::Map::new();
             if let QuestionType::TrueStmt = qt {
                 let claims: Vec<Value> = (0..oc)
-                    .map(|oi| serialize::claim_to_json(&result.fp.option_claims[qi][oi]))
+                    .map(|oi| serialize::claim_to_json(&result.fp.claim_at(qi, oi)))
                     .collect();
                 q.insert("c".into(), json!(claims));
             } else {

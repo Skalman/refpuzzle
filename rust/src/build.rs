@@ -293,15 +293,21 @@ fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
 
 #[cold]
 #[inline(never)]
-fn trace_repair(qi: usize, before: &[i16; 5], after: &[i16; 5], oc: usize, probe_len: usize) {
-    let to_json = |v: &[i16; 5]| -> Vec<Value> {
+fn trace_repair(
+    qi: usize,
+    before: &[OptionValue; 5],
+    after: &[OptionValue; 5],
+    oc: usize,
+    probe_len: usize,
+) {
+    let to_json = |v: &[OptionValue; 5]| -> Vec<Value> {
         v[..oc]
             .iter()
-            .map(|&x| {
-                if x == NONE_VAL || x == NAN_VAL {
+            .map(|&s| {
+                if s.is_none() || s.is_unused() {
                     Value::Null
                 } else {
-                    json!(x)
+                    json!(s.value())
                 }
             })
             .collect()
@@ -316,6 +322,26 @@ fn abs_diff(a: i16, b: i16) -> u16 {
     (a as i32 - b as i32).unsigned_abs() as u16
 }
 
+fn to_slot(v: i16) -> OptionValue {
+    if v == NONE_VAL {
+        OptionValue::NONE
+    } else if v == NAN_VAL {
+        OptionValue::UNUSED
+    } else {
+        OptionValue::num(v as u8)
+    }
+}
+
+fn slot_to_i16(s: OptionValue) -> i16 {
+    if s.is_none() {
+        NONE_VAL
+    } else if s.is_unused() {
+        NAN_VAL
+    } else {
+        s.value() as i16
+    }
+}
+
 #[cfg(debug_assertions)]
 fn validate_option_values(fp: &FlatPuzzle) {
     let n = fp.n;
@@ -323,29 +349,41 @@ fn validate_option_values(fp: &FlatPuzzle) {
     for qi in 0..n {
         let qt = &fp.question_types[qi];
         for oi in 0..oc {
-            if let Some(ref claim) = fp.option_claims[qi][oi] {
-                if claim.value != NONE_VAL {
+            if let Some(claim) = fp.claim_at(qi, oi) {
+                if claim.value.to_i16() != NONE_VAL {
                     // qi here is the TrueStmt's qi, which would be the wrong reference
                     // for position-dependent types. CLAIM_TYPES enforces (at compile
                     // time, below) that claims can't carry NextSame/PrevSame, so this
                     // qi is irrelevant for every kind that actually reaches here.
                     let pool = valid_values(&claim.question_type, qi, n, oc);
                     assert!(
-                        pool.contains(&claim.value),
+                        pool.contains(&claim.value.to_i16()),
                         "Q{} option {}: claim {:?} value {} not in {:?}",
                         qi + 1,
                         LETTERS[oi].as_char(),
                         claim.question_type,
-                        claim.value,
+                        claim.value.to_i16(),
                         &*pool
                     );
                 }
                 continue;
             }
-            let v = fp.option_nums[qi][oi];
-            if v == NAN_VAL || v == NONE_VAL {
+            let s = fp.options[qi][oi];
+            if s.is_unused() || s.is_none() {
                 continue;
             }
+            // Letter-typed and identity-options qts store letter/option indices, not
+            // values from valid_values — skip them here.
+            if matches!(
+                qt,
+                QuestionType::AnswerOf { .. }
+                    | QuestionType::LeastCommon
+                    | QuestionType::MostCommon
+            ) || qt.has_identity_options()
+            {
+                continue;
+            }
+            let v = s.value() as i16;
             let pool = valid_values(qt, qi, n, oc);
             assert!(
                 pool.contains(&v),
@@ -572,26 +610,13 @@ pub fn validate_and_repair(
     for &qi in &candidates {
         stats.repair_attempts += 1;
 
-        let before_nums: [i16; 5] = fp.option_nums[qi];
-        let before_answers: [u8; 5] = fp.option_answers[qi];
+        let before: [OptionValue; 5] = fp.options[qi];
         repair_one_question(fp, qi, solution, &stuck_state.eliminated, rng);
-        if fp.option_nums[qi] != before_nums || fp.option_answers[qi] != before_answers {
+        if fp.options[qi] != before {
             any_changed = true;
             let probe = deduce(fp, &stuck_state);
             if trace {
-                if fp.option_nums[qi] != before_nums {
-                    trace_repair(
-                        qi,
-                        &before_nums,
-                        &fp.option_nums[qi],
-                        fp.option_count,
-                        probe.len(),
-                    );
-                } else {
-                    let ba: [i16; 5] = before_answers.map(|v| v as i16);
-                    let aa: [i16; 5] = fp.option_answers[qi].map(|v| v as i16);
-                    trace_repair(qi, &ba, &aa, fp.option_count, probe.len());
-                }
+                trace_repair(qi, &before, &fp.options[qi], fp.option_count, probe.len());
             }
             if probe.is_empty() {
                 continue;
@@ -738,18 +763,18 @@ pub fn repair_one_question(
             let mut di = 0;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 && di < plen {
-                    fp.option_answers[qi][oi] = pool[di] as u8;
+                    fp.options[qi][oi] = OptionValue::num(pool[di] as u8);
                     di += 1;
                 }
             }
         }
         QuestionType::LetterDist { .. } | QuestionType::NoOtherHasAnswer => {
-            let correct_val = fp.option_nums[qi][correct_oi];
+            let correct_val = slot_to_i16(fp.options[qi][correct_oi]);
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
+                    let dist = abs_diff(slot_to_i16(fp.options[qi][oi]), correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -757,14 +782,14 @@ pub fn repair_one_question(
                 }
             }
             if let Some(oi) = best_oi {
-                let old_val = fp.option_nums[qi][oi];
+                let old_val = slot_to_i16(fp.options[qi][oi]);
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 for v in 0..oc as i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
                         for k in 0..oc {
-                            if k != oi && fp.option_nums[qi][k] == v {
+                            if k != oi && fp.options[qi][k] == to_slot(v) {
                                 in_use = true;
                             }
                         }
@@ -777,16 +802,16 @@ pub fn repair_one_question(
                         }
                     }
                 }
-                fp.option_nums[qi][oi] = best_new;
+                fp.options[qi][oi] = to_slot(best_new);
             }
         }
         QuestionType::LeastCommon | QuestionType::MostCommon => {
-            let correct_val = fp.option_answers[qi][correct_oi] as i16;
+            let correct_val = fp.options[qi][correct_oi].value() as i16;
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = abs_diff(fp.option_answers[qi][oi] as i16, correct_val);
+                    let dist = abs_diff(fp.options[qi][oi].value() as i16, correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -794,14 +819,14 @@ pub fn repair_one_question(
                 }
             }
             if let Some(oi) = best_oi {
-                let old_val = fp.option_answers[qi][oi] as i16;
+                let old_val = fp.options[qi][oi].value() as i16;
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 for v in 0..oc as i16 {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
                         for k in 0..oc {
-                            if k != oi && fp.option_answers[qi][k] as i16 == v {
+                            if k != oi && fp.options[qi][k].value() as i16 == v {
                                 in_use = true;
                             }
                         }
@@ -814,11 +839,11 @@ pub fn repair_one_question(
                         }
                     }
                 }
-                fp.option_answers[qi][oi] = best_new as u8;
+                fp.options[qi][oi] = OptionValue::num(best_new as u8);
             }
         }
         _ if is_counting_type(&qt) => {
-            let correct_val = fp.option_nums[qi][correct_oi];
+            let correct_val = slot_to_i16(fp.options[qi][correct_oi]);
             let vals = valid_values(&qt, qi, n, oc);
             let max = vals.last().copied().unwrap_or(0);
             // Find the non-eliminated wrong option closest to correct — that's
@@ -827,7 +852,7 @@ pub fn repair_one_question(
             let mut best_dist = u16::MAX;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
+                    let dist = abs_diff(slot_to_i16(fp.options[qi][oi]), correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -836,14 +861,14 @@ pub fn repair_one_question(
             }
             if let Some(oi) = best_oi {
                 // Replace with the furthest available value from correct
-                let old_val = fp.option_nums[qi][oi];
+                let old_val = slot_to_i16(fp.options[qi][oi]);
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 for v in 0..=max {
                     if v != correct_val && v != old_val {
                         let mut in_use = false;
                         for k in 0..oc {
-                            if k != oi && fp.option_nums[qi][k] == v {
+                            if k != oi && fp.options[qi][k] == to_slot(v) {
                                 in_use = true;
                             }
                         }
@@ -856,17 +881,17 @@ pub fn repair_one_question(
                         }
                     }
                 }
-                fp.option_nums[qi][oi] = best_new;
+                fp.options[qi][oi] = to_slot(best_new);
             }
         }
         QuestionType::SameAsWhich { question_index } => {
             let ref_ans = solution[question_index as usize];
-            let correct_val = fp.option_nums[qi][correct_oi];
+            let correct_val = slot_to_i16(fp.options[qi][correct_oi]);
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let dist = abs_diff(fp.option_nums[qi][oi], correct_val);
+                    let dist = abs_diff(slot_to_i16(fp.options[qi][oi]), correct_val);
                     if dist < best_dist {
                         best_dist = dist;
                         best_oi = Some(oi);
@@ -874,7 +899,7 @@ pub fn repair_one_question(
                 }
             }
             if let Some(oi) = best_oi {
-                let old_val = fp.option_nums[qi][oi];
+                let old_val = slot_to_i16(fp.options[qi][oi]);
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 for j in 0..n as i16 {
@@ -887,7 +912,7 @@ pub fn repair_one_question(
                     }
                     let mut in_use = false;
                     for k in 0..oc {
-                        if k != oi && fp.option_nums[qi][k] == j {
+                        if k != oi && fp.options[qi][k] == to_slot(j) {
                             in_use = true;
                         }
                     }
@@ -900,18 +925,18 @@ pub fn repair_one_question(
                         best_new = j;
                     }
                 }
-                fp.option_nums[qi][oi] = best_new;
+                fp.options[qi][oi] = to_slot(best_new);
             }
         }
         _ => {
             // Positional, ConsecIdent, OnlyOdd, etc.: same strategy — find closest-to-correct
             // non-eliminated wrong option, replace with furthest available value.
-            let correct_val = fp.option_nums[qi][correct_oi];
+            let correct_val = slot_to_i16(fp.options[qi][correct_oi]);
             let mut best_oi = None;
             let mut best_dist = u16::MAX;
             for oi in 0..oc {
                 if oi != correct_oi && (elim >> oi) & 1 == 0 {
-                    let v = fp.option_nums[qi][oi];
+                    let v = slot_to_i16(fp.options[qi][oi]);
                     let dist = if v == NONE_VAL || correct_val == NONE_VAL {
                         1 // treat None as close (hard to distinguish)
                     } else {
@@ -952,7 +977,7 @@ pub fn repair_one_question(
                     QuestionType::EqualCount { answer } => answer.idx() as i16,
                     _ => -2,
                 };
-                let old_val = fp.option_nums[qi][oi];
+                let old_val = slot_to_i16(fp.options[qi][oi]);
                 let mut best_new = old_val;
                 let mut best_new_dist = 0u16;
                 // Try all values in range + NONE_VAL
@@ -976,7 +1001,7 @@ pub fn repair_one_question(
                     }
                     let mut in_use = false;
                     for k in 0..oc {
-                        if k != oi && fp.option_nums[qi][k] == v {
+                        if k != oi && fp.options[qi][k] == to_slot(v) {
                             in_use = true;
                         }
                     }
@@ -993,7 +1018,7 @@ pub fn repair_one_question(
                         best_new = v;
                     }
                 }
-                fp.option_nums[qi][oi] = best_new;
+                fp.options[qi][oi] = to_slot(best_new);
             }
         }
     }
@@ -1009,9 +1034,8 @@ fn fill_one_question(
     n: usize,
     option_count: usize,
     rng: &mut Rng,
-    nums: &mut [i16; 5],
-    answers: &mut [u8; 5],
-    claims: &mut [Option<Claim>; 5],
+    slots: &mut [OptionValue; 5],
+    claim_types: &mut Option<[QuestionType; 5]>,
 ) {
     let correct_oi = solution[qi].idx();
 
@@ -1025,13 +1049,13 @@ fn fill_one_question(
             }
         }
         for oi in 0..5 {
-            answers[oi] = oi as u8;
+            slots[oi] = OptionValue::num(oi as u8);
         }
         return;
     }
 
     if matches!(qt, QuestionType::TrueStmt) {
-        build_claims(qi, solution, n, rng, claims, nums, option_count);
+        build_claims(qi, solution, n, rng, slots, claim_types, option_count);
         return;
     }
 
@@ -1041,7 +1065,7 @@ fn fill_one_question(
 
     match *qt {
         QuestionType::AnswerOf { question_index } => {
-            answers[correct_oi] = solution[question_index as usize] as u8;
+            slots[correct_oi] = OptionValue::num(solution[question_index as usize] as u8);
             let correct_answer = solution[question_index as usize];
             let mut pool = [Answer::A; 4];
             let mut plen = 0;
@@ -1055,7 +1079,7 @@ fn fill_one_question(
             let mut di = 0;
             for oi in 0..option_count {
                 if oi != correct_oi {
-                    answers[oi] = pool[di] as u8;
+                    slots[oi] = OptionValue::num(pool[di] as u8);
                     di += 1;
                 }
             }
@@ -1077,7 +1101,7 @@ fn fill_one_question(
                 .iter()
                 .find(|&&l| counts[l.idx()] == target_count)
                 .unwrap();
-            answers[correct_oi] = *correct_letter as u8;
+            slots[correct_oi] = OptionValue::num(*correct_letter as u8);
             let mut pool = [Answer::A; 4];
             let mut plen = 0;
             for &l in letters {
@@ -1090,13 +1114,13 @@ fn fill_one_question(
             let mut di = 0;
             for oi in 0..option_count {
                 if oi != correct_oi {
-                    answers[oi] = pool[di] as u8;
+                    slots[oi] = OptionValue::num(pool[di] as u8);
                     di += 1;
                 }
             }
         }
         QuestionType::EqualCount { answer } => {
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let mut pool = [0i16; 4];
             let mut plen = 0;
             for &l in letters {
@@ -1110,7 +1134,7 @@ fn fill_one_question(
                 plen += 1;
             }
             rng.shuffle(&mut pool[..plen]);
-            place_distractors(&pool, nums, correct_oi);
+            place_distractors(&pool, slots, correct_oi);
         }
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = if matches!(*qt, QuestionType::OnlyOdd { .. }) {
@@ -1126,9 +1150,9 @@ fn fill_one_question(
                     "fill_one_question: {qt:?} at qi={qi} but more than one same-parity question has answer {answer:?} — missing upstream guard"
                 );
             }
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::ConsecIdent => {
             let pairs = (0..n.saturating_sub(1))
@@ -1139,19 +1163,19 @@ fn fill_one_question(
                     "fill_one_question: ConsecIdent at qi={qi} but more than one consecutive identical pair exists — missing upstream guard"
                 );
             }
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::LetterDist { .. } => {
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         _ if is_counting_type(qt) => {
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::SameAsWhich { question_index } => {
             if correct_val == NONE_VAL {
@@ -1160,7 +1184,7 @@ fn fill_one_question(
                 );
             }
             let ref_ans = solution[question_index as usize];
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let mut pool = [0i16; MAX_N];
             let mut plen = 0;
             for j in 0..n {
@@ -1172,7 +1196,7 @@ fn fill_one_question(
             rng.shuffle(&mut pool[..plen]);
             let mut distractors = [0i16; 4];
             distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::SameAs => {
             let self_ans = solution[qi];
@@ -1204,11 +1228,11 @@ fn fill_one_question(
                     option_count - 1
                 );
             }
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             rng.shuffle(&mut pool[..plen]);
             let mut distractors = [0i16; 4];
             distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::OnlySame => {
             let self_ans = solution[qi];
@@ -1220,9 +1244,9 @@ fn fill_one_question(
                     "fill_one_question: OnlySame at qi={qi} but {others} other questions share answer {self_ans:?} — missing upstream guard"
                 );
             }
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         QuestionType::ClosestAfter { .. }
         | QuestionType::ClosestBefore { .. }
@@ -1230,9 +1254,9 @@ fn fill_one_question(
         | QuestionType::LastWith { .. }
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            nums[correct_oi] = correct_val;
+            slots[correct_oi] = to_slot(correct_val);
             let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, nums, correct_oi);
+            place_distractors(&distractors, slots, correct_oi);
         }
         _ => unreachable!(),
     }
@@ -1246,12 +1270,12 @@ pub fn fill_options(
     rng: &mut Rng,
     trace: bool,
 ) -> FlatPuzzle {
-    let mut option_nums = [[NAN_VAL; 5]; MAX_N];
-    let mut option_answers = [[0xFFu8; 5]; MAX_N];
-    let mut option_claims: [[Option<Claim>; 5]; MAX_N] = [[None; 5]; MAX_N];
+    let mut options = [[OptionValue::UNUSED; 5]; MAX_N];
+    let mut true_stmt_question_types: Option<[QuestionType; 5]> = None;
 
     for qi in 0..n {
         let qt = &question_types[qi];
+        let mut local_claim_types: Option<[QuestionType; 5]> = None;
         fill_one_question(
             qt,
             qi,
@@ -1259,21 +1283,21 @@ pub fn fill_options(
             n,
             option_count,
             rng,
-            &mut option_nums[qi],
-            &mut option_answers[qi],
-            &mut option_claims[qi],
+            &mut options[qi],
+            &mut local_claim_types,
         );
+        if let Some(types) = local_claim_types {
+            true_stmt_question_types = Some(types);
+        }
 
         if trace {
             let vals: Vec<Value> = (0..option_count)
                 .map(|oi| {
-                    let v = option_nums[qi][oi];
-                    if matches!(qt, QuestionType::TrueStmt) || v == NONE_VAL {
+                    let s = options[qi][oi];
+                    if matches!(qt, QuestionType::TrueStmt) || s.is_none() || s.is_unused() {
                         Value::Null
-                    } else if v == NAN_VAL {
-                        json!(option_answers[qi][oi])
                     } else {
-                        json!(v)
+                        json!(s.value())
                     }
                 })
                 .collect();
@@ -1285,14 +1309,19 @@ pub fn fill_options(
                 "rng": rng.state(),
             });
             if matches!(qt, QuestionType::TrueStmt) {
+                let types = true_stmt_question_types
+                    .as_ref()
+                    .expect("TrueStmt qi must have populated claim types");
                 let claims: Vec<Value> = (0..option_count)
-                    .map(|oi| match &option_claims[qi][oi] {
-                        Some(c) => {
-                            let mut co = json!({"questionType": "", "value": c.value});
-                            co["questionType"] = format_claim_qt(&c.question_type);
+                    .map(|oi| {
+                        let v = options[qi][oi];
+                        if v.is_unused() {
+                            Value::Null
+                        } else {
+                            let mut co = json!({"questionType": "", "value": v.to_i16()});
+                            co["questionType"] = format_claim_qt(&types[oi]);
                             co
                         }
-                        None => Value::Null,
                     })
                     .collect();
                 obj["claims"] = json!(claims);
@@ -1305,9 +1334,8 @@ pub fn fill_options(
 
     FlatPuzzle {
         question_types: *question_types,
-        option_nums,
-        option_answers,
-        option_claims,
+        options,
+        true_stmt_question_types,
         affected_by,
         global_indices,
         n,
@@ -1316,11 +1344,11 @@ pub fn fill_options(
     }
 }
 
-fn place_distractors(distractors: &[i16; 4], nums: &mut [i16; 5], correct_oi: usize) {
+fn place_distractors(distractors: &[i16; 4], slots: &mut [OptionValue; 5], correct_oi: usize) {
     let mut di = 0;
     for oi in 0..5 {
         if oi != correct_oi {
-            nums[oi] = distractors[di];
+            slots[oi] = to_slot(distractors[di]);
             di += 1;
         }
     }
@@ -1546,15 +1574,15 @@ fn build_claims(
     solution: &[Answer; MAX_N],
     n: usize,
     rng: &mut Rng,
-    claims: &mut [Option<Claim>; 5],
-    nums: &mut [i16; 5],
+    slots: &mut [OptionValue; 5],
+    claim_types: &mut Option<[QuestionType; 5]>,
     option_count: usize,
 ) {
     let target_oi = solution[qi].idx();
+    let mut local: [Option<Claim>; 5] = [None; 5];
 
     let true_claim = make_true_claim(solution, qi, n, rng, option_count);
-    claims[target_oi] = Some(true_claim);
-    nums[target_oi] = NAN_VAL;
+    local[target_oi] = Some(true_claim);
 
     for oi in 0..option_count {
         if oi == target_oi {
@@ -1564,21 +1592,32 @@ fn build_claims(
         for _ in 0..30 {
             let fc = make_false_claim(solution, qi, n, rng, option_count);
             let cat = claim_category(&fc);
-            if cat != claim_category(claims[target_oi].as_ref().unwrap())
+            if cat != claim_category(local[target_oi].as_ref().unwrap())
                 && (0..oi).all(|j| {
-                    j == target_oi || claims[j].as_ref().is_none_or(|c| claim_category(c) != cat)
+                    j == target_oi || local[j].as_ref().is_none_or(|c| claim_category(c) != cat)
                 })
             {
-                claims[oi] = Some(fc);
+                local[oi] = Some(fc);
                 found = true;
                 break;
             }
         }
         if !found {
-            claims[oi] = Some(make_false_claim(solution, qi, n, rng, option_count));
+            local[oi] = Some(make_false_claim(solution, qi, n, rng, option_count));
         }
-        nums[oi] = NAN_VAL;
     }
+
+    // Split into SoA: values live in `slots`, claim types in `claim_types`.
+    // Slots with no claim (oi >= option_count) stay UNUSED; the matching type
+    // entry is a harmless placeholder since `claim_at` gates on slot validity.
+    let mut types = [QuestionType::AnswerIsSelf; 5];
+    for oi in 0..option_count {
+        if let Some(c) = local[oi] {
+            types[oi] = c.question_type;
+            slots[oi] = c.value;
+        }
+    }
+    *claim_types = Some(types);
 }
 
 // Position-dependent kinds (NextSame, PrevSame) must NOT appear here: a claim
@@ -1625,16 +1664,16 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let a = rng.pick(&LETTERS);
             Some(Claim {
                 question_type: QuestionType::CountAnswer { answer: a },
-                value: count_letter(sol, a, n) as i16,
+                value: OptionValue::from_i16(count_letter(sol, a, n) as i16),
             })
         }
         QuestionTypeKind::CountConsonant => Some(Claim {
             question_type: QuestionType::CountConsonant,
-            value: (0..n).filter(|&i| !sol[i].is_vowel()).count() as i16,
+            value: OptionValue::from_i16((0..n).filter(|&i| !sol[i].is_vowel()).count() as i16),
         }),
         QuestionTypeKind::CountVowel => Some(Claim {
             question_type: QuestionType::CountVowel,
-            value: (0..n).filter(|&i| sol[i].is_vowel()).count() as i16,
+            value: OptionValue::from_i16((0..n).filter(|&i| sol[i].is_vowel()).count() as i16),
         }),
         QuestionTypeKind::CountAnswerAfter => {
             let a = rng.pick(&LETTERS);
@@ -1644,7 +1683,9 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                     answer: a,
                     after_index: ai,
                 },
-                value: ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as i16,
+                value: OptionValue::from_i16(
+                    ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as i16,
+                ),
             })
         }
         QuestionTypeKind::CountAnswerBefore => {
@@ -1658,7 +1699,9 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                     answer: a,
                     before_index: bi,
                 },
-                value: (0..bi as usize).filter(|&i| sol[i] == a).count() as i16,
+                value: OptionValue::from_i16(
+                    (0..bi as usize).filter(|&i| sol[i] == a).count() as i16
+                ),
             })
         }
         QuestionTypeKind::AnswerOf => {
@@ -1674,7 +1717,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                 question_type: QuestionType::AnswerOf {
                     question_index: target as u8,
                 },
-                value: sol[target].idx() as i16,
+                value: OptionValue::from_i16(sol[target].idx() as i16),
             })
         }
         QuestionTypeKind::FirstWith => {
@@ -1682,7 +1725,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let first = (0..n).find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::FirstWith { answer: a },
-                value: first as i16,
+                value: OptionValue::from_i16(first as i16),
             })
         }
         QuestionTypeKind::LastWith => {
@@ -1690,7 +1733,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let last = (0..n).rev().find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::LastWith { answer: a },
-                value: last as i16,
+                value: OptionValue::from_i16(last as i16),
             })
         }
         QuestionTypeKind::MostCommon => {
@@ -1706,7 +1749,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             }
             Some(Claim {
                 question_type: QuestionType::MostCommon,
-                value: most[0].idx() as i16,
+                value: OptionValue::from_i16(most[0].idx() as i16),
             })
         }
         QuestionTypeKind::ClosestAfter => {
@@ -1718,7 +1761,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                     answer: a,
                     after_index: ai,
                 },
-                value: target as i16,
+                value: OptionValue::from_i16(target as i16),
             })
         }
         QuestionTypeKind::ClosestBefore => {
@@ -1730,7 +1773,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                     answer: a,
                     before_index: bi,
                 },
-                value: target as i16,
+                value: OptionValue::from_i16(target as i16),
             })
         }
         QuestionTypeKind::MostCommonCount => {
@@ -1738,7 +1781,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let max = *counts.iter().max().unwrap_or(&0);
             Some(Claim {
                 question_type: QuestionType::MostCommonCount,
-                value: max as i16,
+                value: OptionValue::from_i16(max as i16),
             })
         }
         QuestionTypeKind::LeastCommon => {
@@ -1750,7 +1793,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let idx = counts.iter().position(|&c| c == min).unwrap();
             Some(Claim {
                 question_type: QuestionType::LeastCommon,
-                value: idx as i16,
+                value: OptionValue::from_i16(idx as i16),
             })
         }
         QuestionTypeKind::EqualCount => {
@@ -1768,7 +1811,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let target = rng.pick(&candidates);
             Some(Claim {
                 question_type: QuestionType::EqualCount { answer: ref_ans },
-                value: target.idx() as i16,
+                value: OptionValue::from_i16(target.idx() as i16),
             })
         }
         QuestionTypeKind::ConsecIdent => {
@@ -1787,7 +1830,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             }
             Some(Claim {
                 question_type: QuestionType::ConsecIdent,
-                value: pair_idx,
+                value: OptionValue::from_i16(pair_idx),
             })
         }
         QuestionTypeKind::OnlyOdd => {
@@ -1805,7 +1848,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             }
             Some(Claim {
                 question_type: QuestionType::OnlyOdd { answer: a },
-                value: found,
+                value: OptionValue::from_i16(found),
             })
         }
         QuestionTypeKind::OnlyEven => {
@@ -1823,7 +1866,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             }
             Some(Claim {
                 question_type: QuestionType::OnlyEven { answer: a },
-                value: found,
+                value: OptionValue::from_i16(found),
             })
         }
         QuestionTypeKind::SameAsWhich => {
@@ -1850,7 +1893,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                 question_type: QuestionType::SameAsWhich {
                     question_index: ref_qi as u8,
                 },
-                value: target as i16,
+                value: OptionValue::from_i16(target as i16),
             })
         }
         _ => None,
@@ -1873,7 +1916,7 @@ fn make_true_claim(
     let a = rng.pick(&LETTERS);
     Claim {
         question_type: QuestionType::CountAnswer { answer: a },
-        value: count_letter(sol, a, n) as i16,
+        value: OptionValue::from_i16(count_letter(sol, a, n) as i16),
     }
 }
 
@@ -1895,7 +1938,7 @@ fn make_false_claim(
     }
     Claim {
         question_type: QuestionType::CountAnswer { answer: Answer::A },
-        value: n as i16 + 1,
+        value: OptionValue::from_i16(n as i16 + 1),
     }
 }
 
@@ -1907,7 +1950,7 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         | QuestionType::MostCommonCount => {
             let offsets: [i16; 4] = [-2, -1, 1, 2];
             let offset = rng.pick(&offsets);
-            let v = claim.value + offset;
+            let v = claim.value.to_i16() + offset;
             if v < 0 || v > n as i16 {
                 return None;
             }
@@ -1916,7 +1959,7 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::CountAnswerAfter { after_index, .. } => {
             let offsets: [i16; 4] = [-2, -1, 1, 2];
             let offset = rng.pick(&offsets);
-            let v = claim.value + offset;
+            let v = claim.value.to_i16() + offset;
             let max = n as i16 - after_index as i16 - 1;
             if v < 0 || v > max {
                 return None;
@@ -1926,7 +1969,7 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::CountAnswerBefore { before_index, .. } => {
             let offsets: [i16; 4] = [-2, -1, 1, 2];
             let offset = rng.pick(&offsets);
-            let v = claim.value + offset;
+            let v = claim.value.to_i16() + offset;
             if v < 0 || v > before_index as i16 {
                 return None;
             }
@@ -1983,11 +2026,11 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         }
         _ => return None,
     };
-    if new_val == claim.value {
+    if new_val == claim.value.to_i16() {
         return None;
     }
     Some(Claim {
-        value: new_val,
+        value: OptionValue::from_i16(new_val),
         ..claim
     })
 }
@@ -2079,14 +2122,8 @@ mod tests {
                     let Some(expected) = expected_correct[qi] else {
                         continue;
                     };
-                    let qt = &fp.question_types[qi];
                     let correct_oi = solution[qi].idx();
-                    let stored: i16 = match qt {
-                        QuestionType::AnswerOf { .. }
-                        | QuestionType::LeastCommon
-                        | QuestionType::MostCommon => fp.option_answers[qi][correct_oi] as i16,
-                        _ => fp.option_nums[qi][correct_oi],
-                    };
+                    let stored: i16 = slot_to_i16(fp.options[qi][correct_oi]);
                     if stored != expected {
                         eprintln!(
                             "FAIL: {name} (seed={seed}) Q{}: stored {stored} != expected {expected}",
@@ -2102,23 +2139,24 @@ mod tests {
 
                 // Distinctness: distractor option values must differ from the correct value
                 // and from each other (across the active option count). Identity-option
-                // and TrueStmt types don't store values in option_nums, so skip them.
+                // and TrueStmt types don't store distinct distractor values, so skip them.
                 for qi in 0..n {
                     let qt = &fp.question_types[qi];
                     if qt.has_identity_options() || matches!(qt, QuestionType::TrueStmt) {
                         continue;
                     }
-                    let nums = &fp.option_nums[qi];
-                    let mut seen: Vec<i16> = Vec::new();
-                    for &v in &nums[..oc] {
-                        if v == NAN_VAL || v == NONE_VAL {
+                    let slots = &fp.options[qi];
+                    let mut seen: Vec<u8> = Vec::new();
+                    for &s in &slots[..oc] {
+                        if !s.is_num() {
                             continue;
                         }
+                        let v = s.value();
                         if seen.contains(&v) {
                             eprintln!(
                                 "FAIL: {name} (seed={seed}) Q{}: duplicate option value {v} in {:?}",
                                 qi + 1,
-                                &nums[..oc]
+                                &slots[..oc]
                             );
                             case_failed = true;
                             break;

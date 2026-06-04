@@ -252,7 +252,7 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [i16; 5] {
 /// `answers[...]`). For form checks, see `check_form::check_claim_form`.
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     let qt = &claim.question_type;
-    let value = claim.value;
+    let value = claim.value.to_i16();
     let qi = opt.qi;
     let si = opt.oi;
     let self_letter = LETTERS[si];
@@ -771,11 +771,11 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
     let t = &fp.question_types[qi];
 
     if matches!(t, QuestionType::TrueStmt) {
-        let selected_claim = match &fp.option_claims[qi][ai] {
+        let selected_claim = match fp.claim_at(qi, ai) {
             Some(c) => c,
             None => return Validity::Invalid,
         };
-        let selected_v = check_claim(fp, state, OptionPos { qi, oi: ai }, *selected_claim);
+        let selected_v = check_claim(fp, state, OptionPos { qi, oi: ai }, selected_claim);
         if selected_v != Validity::Valid {
             return selected_v;
         }
@@ -785,14 +785,14 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
             }
             let mut hyp = state;
             hyp.answers[qi] = Some(LETTERS[oi]);
-            if check_claim(fp, hyp, OptionPos { qi, oi }, *selected_claim) != Validity::Valid {
+            if check_claim(fp, hyp, OptionPos { qi, oi }, selected_claim) != Validity::Valid {
                 return Validity::Consistent;
             }
         }
         return Validity::Valid;
     }
 
-    let on = fp.option_nums[qi][ai];
+    let on = fp.options[qi][ai].to_i16();
     match *t {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => {
             maybe_consistent(
@@ -802,7 +802,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
                     OptionPos { qi, oi: ai },
                     Claim {
                         question_type: *t,
-                        value: fp.option_answers[qi][ai] as i16,
+                        value: OptionValue::from_i16(fp.options[qi][ai].value() as i16),
                     },
                 ),
                 t,
@@ -816,7 +816,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
                 OptionPos { qi, oi: ai },
                 Claim {
                     question_type: *t,
-                    value: ai as i16,
+                    value: OptionValue::from_i16(ai as i16),
                 },
             ),
             t,
@@ -833,7 +833,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
                     OptionPos { qi, oi: ai },
                     Claim {
                         question_type: *t,
-                        value: on,
+                        value: OptionValue::from_i16(on),
                     },
                 ),
                 t,
@@ -857,7 +857,7 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
 #[inline(always)]
 pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
     let n = answers.len();
-    let value = claim.value;
+    let value = claim.value.to_i16();
     match claim.question_type {
         QuestionType::CountAnswer { answer } => {
             answers.iter().filter(|&&a| a == answer).count() as i16 == value

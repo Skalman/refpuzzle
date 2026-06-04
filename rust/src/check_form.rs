@@ -287,11 +287,11 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             // TrueStmt: each option is a Claim. Run form checks per claim.
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
-                let Some(claim) = fp.option_claims[qi][oi] else {
+                let Some(claim) = fp.claim_at(qi, oi) else {
                     continue;
                 };
                 let cqt = &claim.question_type;
-                let cv = claim.value;
+                let cv = claim.value.to_i16();
                 // The claim's own QT also needs structural checks.
                 if let Some((msg, sev)) = check_question_form(fp, qi, cqt) {
                     errors.push(FormError {
@@ -322,16 +322,7 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             // option_nums and store the letter in option_answers, so compare on the
             // unified value. Identity-option types are excluded.
             if !qt.has_identity_options() {
-                let vals: Vec<i16> = (0..oc)
-                    .map(|oi| {
-                        let v = fp.option_nums[qi][oi];
-                        if v == NAN_VAL {
-                            fp.option_answers[qi][oi] as i16
-                        } else {
-                            v
-                        }
-                    })
-                    .collect();
+                let vals: Vec<i16> = (0..oc).map(|oi| fp.options[qi][oi].to_i16()).collect();
                 let unique: std::collections::HashSet<i16> = vals.iter().copied().collect();
                 if unique.len() < vals.len() {
                     errors.push(FormError {
@@ -358,7 +349,7 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             );
             if null_not_allowed {
                 for oi in 0..oc {
-                    if fp.option_nums[qi][oi] == NONE_VAL {
+                    if fp.options[qi][oi].to_i16() == NONE_VAL {
                         errors.push(FormError {
                             qi,
                             message: format!(
@@ -382,10 +373,14 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
                 let value = if letter_valued {
-                    let a = fp.option_answers[qi][oi];
-                    if a == 0xFF { NAN_VAL } else { a as i16 }
+                    let s = fp.options[qi][oi];
+                    if s.is_num() {
+                        s.value() as i16
+                    } else {
+                        NAN_VAL
+                    }
                 } else {
-                    fp.option_nums[qi][oi]
+                    fp.options[qi][oi].to_i16()
                 };
                 if value == NAN_VAL {
                     continue;

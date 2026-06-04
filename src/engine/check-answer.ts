@@ -1,4 +1,5 @@
 import type { Answer, FlatPuzzle, FlatQuestion, State, OptionPos, Claim } from "./types.ts";
+import { claimAt } from "./types.ts";
 import {
   LETTERS,
   L2I,
@@ -473,8 +474,7 @@ export function checkAnswer(fp: FlatPuzzle, state: State, qi: number): Validity 
   const n = fp.n;
 
   if (q.t === QT_TRUE_STMT) {
-    const claims = fp.optionClaims[qi];
-    const selectedClaim = claims[ai];
+    const selectedClaim = claimAt(fp, qi, ai);
     if (!selectedClaim) return V_INVALID;
 
     const selectedV = checkClaim(fp, state, { qi, oi: ai }, selectedClaim);

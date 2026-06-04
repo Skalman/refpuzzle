@@ -4,6 +4,82 @@ pub const MAX_N: usize = 12;
 pub const NONE_VAL: i16 = -1;
 pub const NAN_VAL: i16 = i16::MIN;
 
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(transparent)]
+pub struct OptionValue(u8);
+
+impl OptionValue {
+    pub const NONE: Self = Self(0xFE);
+    pub const UNUSED: Self = Self(0xFF);
+
+    pub fn num(v: u8) -> Self {
+        debug_assert!(v < 0xFE);
+        Self(v)
+    }
+
+    pub fn is_none(self) -> bool {
+        self == Self::NONE
+    }
+    pub fn is_unused(self) -> bool {
+        self == Self::UNUSED
+    }
+    pub fn is_num(self) -> bool {
+        self.0 < 0xFE
+    }
+
+    pub fn value(self) -> u8 {
+        debug_assert!(self.is_num());
+        self.0
+    }
+
+    /// Inverse of `to_i16`. NONE_VAL → NONE, NAN_VAL → UNUSED, 0..0xFE → Num(v).
+    pub fn from_i16(v: i16) -> Self {
+        if v == NONE_VAL {
+            Self::NONE
+        } else if v == NAN_VAL {
+            Self::UNUSED
+        } else {
+            debug_assert!((0..0xFE).contains(&v));
+            Self::num(v as u8)
+        }
+    }
+
+    /// Lossy convenience used by deduce/build where the old i16 sentinels are
+    /// convenient: NONE → NONE_VAL, UNUSED → NAN_VAL, otherwise the value.
+    pub fn to_i16(self) -> i16 {
+        if self.is_none() {
+            NONE_VAL
+        } else if self.is_unused() {
+            NAN_VAL
+        } else {
+            self.0 as i16
+        }
+    }
+}
+
+// Wire format for OptionValue: a JSON number (NONE → -1, Num(v) → v).
+// UNUSED never serializes — it's a storage-only artifact of fixed arrays.
+impl Serialize for OptionValue {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_i16(self.to_i16())
+    }
+}
+
+impl<'de> Deserialize<'de> for OptionValue {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        let v = i16::deserialize(d)?;
+        if v == NONE_VAL {
+            Ok(Self::NONE)
+        } else if (0..0xFE).contains(&v) {
+            Ok(Self::num(v as u8))
+        } else {
+            Err(serde::de::Error::custom(format!(
+                "invalid claim value: {v}"
+            )))
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum Answer {
@@ -295,12 +371,10 @@ pub struct OptionPos {
     pub oi: usize,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Claim {
-    #[serde(flatten)]
     pub question_type: QuestionType,
-    #[serde(rename = "v")]
-    pub value: i16,
+    pub value: OptionValue,
 }
 
 #[derive(Clone)]
@@ -324,9 +398,13 @@ impl SmallList {
 
 pub struct FlatPuzzle {
     pub question_types: [QuestionType; MAX_N],
-    pub option_nums: [[i16; 5]; MAX_N],
-    pub option_answers: [[u8; 5]; MAX_N],
-    pub option_claims: [[Option<Claim>; 5]; MAX_N],
+    /// Per-option values. For TrueStmt rows this stores the per-claim values;
+    /// the matching claim question types live in `true_stmt_question_types`.
+    pub options: [[OptionValue; 5]; MAX_N],
+    /// Question types for the TrueStmt's claims, indexed by option. `Some` iff
+    /// the puzzle has exactly one TrueStmt question. Slots beyond
+    /// `option_count` are unused.
+    pub true_stmt_question_types: Option<[QuestionType; 5]>,
     pub affected_by: [SmallList; MAX_N],
     pub global_indices: SmallList,
     pub n: usize,
@@ -387,5 +465,24 @@ impl FlatPuzzle {
 
     pub fn phantom_mask(&self) -> u8 {
         self.initial_state.eliminated[0]
+    }
+
+    /// Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `None` if
+    /// `qi` is not the TrueStmt question, if the puzzle has no TrueStmt, or if
+    /// the option slot is unused (e.g. `oi >= option_count`).
+    #[inline]
+    pub fn claim_at(&self, qi: usize, oi: usize) -> Option<Claim> {
+        if !matches!(self.question_types[qi], QuestionType::TrueStmt) {
+            return None;
+        }
+        let types = self.true_stmt_question_types.as_ref()?;
+        let value = self.options[qi][oi];
+        if value.is_unused() {
+            return None;
+        }
+        Some(Claim {
+            question_type: types[oi],
+            value,
+        })
     }
 }

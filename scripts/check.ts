@@ -1,7 +1,7 @@
 import type { Puzzle } from "../src/engine/types.ts";
 import { checkAnswer } from "../src/engine/check-answer.ts";
 import { formatTypeTag } from "../src/engine/format.ts";
-import { flattenPuzzle } from "../src/engine/types.ts";
+import { flattenPuzzle, claimAt } from "../src/engine/types.ts";
 import { isValid, type Validity } from "../src/engine/state.ts";
 import { solvePuzzle } from "../src/engine/solve-deduce.ts";
 import { solve } from "../src/generator/solve-brute.ts";
@@ -137,7 +137,7 @@ function checkOnePuzzle(id: string, puzzle: Puzzle): PuzzleCheckResult {
       claims = [];
       for (let oi = 0; oi < oc; oi++) {
         const label = LETTERS[oi];
-        const claim = fp.optionClaims[qi][oi];
+        const claim = claimAt(fp, qi, oi);
         const text = claim ? `${formatTypeTag(claim.questionType)} = ${claim.value}` : "null";
         claims.push({ label, text });
       }

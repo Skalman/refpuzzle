@@ -16,64 +16,62 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         .map_or(5, |a| a.len());
 
     let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
-    let mut option_nums = [[NAN_VAL; 5]; MAX_N];
-    let mut option_answers = [[0xFFu8; 5]; MAX_N];
-    let mut option_claims: [[Option<Claim>; 5]; MAX_N] = [[None; 5]; MAX_N];
+    let mut options = [[OptionValue::UNUSED; 5]; MAX_N];
+    let mut true_stmt_question_types: Option<[QuestionType; 5]> = None;
 
     for (qi, q) in qs.iter().enumerate() {
         let t = q.get("t")?;
         question_types[qi] = serde_json::from_value(t.clone()).ok()?;
 
         if let Some(claims) = q.get("c") {
+            // Old wire format: claims array stores `{question_type fields, "v": value}`.
+            // Split into SoA: claim question types in `true_stmt_question_types`,
+            // claim values in `options[qi]`.
             let claims = claims.as_array()?;
+            let mut types = [QuestionType::AnswerIsSelf; 5];
             for (oi, c) in claims.iter().enumerate() {
                 if c.is_null() {
                     continue;
                 }
-                option_claims[qi][oi] = Some(serde_json::from_value(c.clone()).ok()?);
-                option_nums[qi][oi] = NAN_VAL;
+                let claim: Claim = {
+                    let qt: QuestionType = serde_json::from_value(c.clone()).ok()?;
+                    let value = c.get("v").and_then(|v| v.as_i64())?;
+                    let ov = if value == NONE_VAL as i64 {
+                        OptionValue::NONE
+                    } else if (0..0xFE).contains(&value) {
+                        OptionValue::num(value as u8)
+                    } else {
+                        OptionValue::UNUSED
+                    };
+                    Claim {
+                        question_type: qt,
+                        value: ov,
+                    }
+                };
+                types[oi] = claim.question_type;
+                options[qi][oi] = claim.value;
+            }
+            true_stmt_question_types = Some(types);
+        } else if question_types[qi].has_identity_options() {
+            for oi in 0..option_count {
+                options[qi][oi] = OptionValue::num(oi as u8);
             }
         } else if let Some(opts) = q.get("o") {
             let opts = opts.as_array()?;
             for (oi, o) in opts.iter().enumerate() {
-                if o.is_null() {
-                    option_nums[qi][oi] = NONE_VAL;
+                options[qi][oi] = if o.is_null() {
+                    OptionValue::NONE
                 } else {
-                    option_nums[qi][oi] = o.as_i64()? as i16;
-                }
-            }
-            if matches!(
-                question_types[qi],
-                QuestionType::AnswerOf { .. }
-                    | QuestionType::LeastCommon
-                    | QuestionType::MostCommon
-            ) {
-                for oi in 0..option_count {
-                    // Bound is `<= 4` (max letter index, E) not `< option_count`: we want values
-                    // 0..=4 to round-trip even on oc<5 puzzles so check_form can flag them as
-                    // "letter outside option count". Tightening to oc would silently drop them.
-                    option_answers[qi][oi] = if option_nums[qi][oi] >= 0 && option_nums[qi][oi] <= 4
-                    {
-                        option_nums[qi][oi] as u8
+                    let v = o.as_i64()?;
+                    // Out-of-range JSON values get stored verbatim as u8 so check_form
+                    // can flag them via its existing range checks. Truly malformed
+                    // values (negative, or >= 0xFE) collapse to UNUSED.
+                    if (0..0xFE).contains(&v) {
+                        OptionValue::num(v as u8)
                     } else {
-                        0xFF
-                    };
-                    // The letter index lives in option_answers; option_nums only needs to
-                    // distinguish "was null" (NONE_VAL, so check_form can flag it) from
-                    // everything else (NAN_VAL). Decide based on the original JSON so a
-                    // literal -1 doesn't collide with the NONE_VAL sentinel.
-                    option_nums[qi][oi] = if opts.get(oi).is_some_and(|o| o.is_null()) {
-                        NONE_VAL
-                    } else {
-                        NAN_VAL
-                    };
-                }
-            }
-            if question_types[qi].has_identity_options() {
-                for oi in 0..option_count {
-                    option_answers[qi][oi] = oi as u8;
-                    option_nums[qi][oi] = NAN_VAL;
-                }
+                        OptionValue::UNUSED
+                    }
+                };
             }
         }
     }
@@ -81,9 +79,8 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
     Some(FlatPuzzle {
         question_types,
-        option_nums,
-        option_answers,
-        option_claims,
+        options,
+        true_stmt_question_types,
         affected_by,
         global_indices,
         n,
@@ -92,9 +89,16 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     })
 }
 
+/// Serialize a `Claim` to the old wire-format object (question-type fields plus `"v"`).
 pub fn claim_to_json(claim: &Option<Claim>) -> Value {
     match claim {
         None => Value::Null,
-        Some(c) => serde_json::to_value(c).unwrap(),
+        Some(c) => {
+            let mut obj = serde_json::to_value(c.question_type).unwrap();
+            if let Some(map) = obj.as_object_mut() {
+                map.insert("v".into(), serde_json::json!(c.value.to_i16()));
+            }
+            obj
+        }
     }
 }
