@@ -19,12 +19,14 @@ const edges: [keyof typeof nodes, keyof typeof nodes][] = [
   ["d", "a"],
 ];
 
-const DOT_R = 5;
+const DOT_R = 7;
 const GAP = 8;
 const HEAD_LEN = 15;
-const HEAD_HALF_W = 6.5;
-const ARC_R = 60;
-const STROKE_W = 3;
+const HEAD_HALF_W = 7.5;
+// Per-edge arc radius (bigger = straighter). Yellow (c->a, index 2) is
+// straightened to nudge its head to the right; the rest stay at the base 60.
+const ARC_RADII = [60, 60, 75, 60];
+const STROKE_W = 4.5;
 
 // Find BOTH circle centers for an arc of radius R between two points
 function arcCenters(sx: number, sy: number, ex: number, ey: number, r: number) {
@@ -79,10 +81,12 @@ const arcs: string[] = [];
 const heads: string[] = [];
 const debug: string[] = [];
 const tipMids: { x: number; y: number; sweepFlag: number }[] = [];
+let maxDrawLen = 0;
 
-for (const [fromKey, toKey] of edges) {
+edges.forEach(([fromKey, toKey], i) => {
   const from = nodes[fromKey];
   const to = nodes[toKey];
+  const ARC_R = ARC_RADII[i];
 
   // Step 1: find the circle that SVG uses for sweep=1 arc from source→target
   const cc = sweep1CenterOf(from.x, from.y, to.x, to.y, ARC_R);
@@ -105,6 +109,12 @@ for (const [fromKey, toKey] of edges) {
   const baseAngle = targetAngle - sign * (totalBack / ARC_R);
   const baseX = cc.cx + ARC_R * Math.cos(baseAngle);
   const baseY = cc.cy + ARC_R * Math.sin(baseAngle);
+
+  // Track the longest drawn arc (source -> base) to size the draw-dash below.
+  let drawDelta = baseAngle - srcAngle;
+  while (drawDelta > Math.PI) drawDelta -= 2 * Math.PI;
+  while (drawDelta < -Math.PI) drawDelta += 2 * Math.PI;
+  maxDrawLen = Math.max(maxDrawLen, Math.abs(drawDelta) * ARC_R);
 
   // Walk back from target by (DOT_R + GAP) for arrowhead tip
   const tipBack = DOT_R + GAP;
@@ -160,12 +170,12 @@ for (const [fromKey, toKey] of edges) {
   console.log(
     `${fromKey}→${toKey}: sweep=${baseSweep} dir=${sign > 0 ? "CCW" : "CW"} tangent=${r(deg)}°`,
   );
-}
+});
 
 const STYLE = `<style>@media (max-width: 47px) { .heads { display: none; } .arcs { stroke-width: 4.5; } }</style>`;
 
-const nodeColors = ["#ff4d94", "#00d4ff", "#ffe014", "#00e676"]; // pink, blue, yellow, green
-const arcColors = ["#ff4d94", "#00d4ff", "#ffe014", "#00e676"];
+const nodeColors = ["#ff66c4", "#00d4ff", "#ffe866", "#00e676"]; // pink, blue, yellow, green
+const arcColors = ["#ff66c4", "#00d4ff", "#ffe866", "#00e676"];
 const nodeList = Object.values(nodes);
 
 // Helper to wrap content in SVG
@@ -222,15 +232,40 @@ const extendedArcsSvg = tipMids
       Object.values(nodes)[
         edges[i][0] === "a" ? 0 : edges[i][0] === "b" ? 1 : edges[i][0] === "c" ? 2 : 3
       ];
-    return `    <path d="M${r(from.x)},${r(from.y)} A${ARC_R},${ARC_R} 0 0,${p.sweepFlag} ${r(p.x)},${r(p.y)}"/>`;
+    return `    <path d="M${r(from.x)},${r(from.y)} A${ARC_RADII[i]},${ARC_RADII[i]} 0 0,${p.sweepFlag} ${r(p.x)},${r(p.y)}"/>`;
   })
   .join("\n");
-// 12. Combined: animated draw + colored → white + pulsing
-const v12 = makeSvg(`  <style>
+// Draw-animation dash. The stroke draws at (dash / 1.0s), so this also sets the
+// draw SPEED, not just correctness. Keep the original 80 (the look we tuned the
+// pacing around) and only grow it if geometry ever makes an arc longer than that.
+const DRAW_DASH = Math.max(80, Math.ceil(maxDrawLen) + 8);
+
+// Shared body: indigo tile + the five graph groups. Identical across both
+// animated variants; only the leading <style>/<script> differs.
+const body = `  <rect width="100" height="100" rx="20" fill="#6366f1"/>
+  <g stroke-width="${STROKE_W}" stroke-linecap="round" fill="none" class="arcs">
+${buildArcs(arcColors)}
+  </g>
+  <g stroke="white" stroke-width="${STROKE_W}" stroke-linecap="round" fill="none" class="arcs-ext">
+${extendedArcsSvg}
+  </g>
+  <g class="heads">
+${buildHeads(arcColors)}
+  </g>
+  <g fill="white" class="tip-circles">
+${tipCirclesSvg}
+  </g>
+  <g class="dots">
+${buildDots(nodeColors)}
+  </g>`;
+
+// Favicon variant (public/logo.svg): dots pulse, then click/hover replays via
+// an inline script. Used as the browser-tab icon.
+const faviconHead = `  <style>
     .tip-circles { display: none; }
     .arcs-ext { display: none; }
     @media (max-width: 47px) { .heads { display: none; } .arcs { display: none; } .arcs-ext { display: block; stroke-width: 8; } .tip-circles { display: block; } .dots circle { fill: white; animation: none; } }
-    .arcs path { stroke-dasharray: 80; stroke-dashoffset: 80;
+    .arcs path { stroke-dasharray: ${DRAW_DASH}; stroke-dashoffset: ${DRAW_DASH};
       animation: draw 1.0s ease-out var(--d) forwards, towhite-stroke 0.7s ease 0.8s forwards; }
     .heads polygon { opacity: 0; transform: scale(0);
       animation: pophead 0.25s ease-out var(--d) forwards, towhite-fill 0.7s ease 0.8s forwards; }
@@ -261,23 +296,86 @@ const v12 = makeSvg(`  <style>
       document.documentElement.addEventListener("mouseenter", restart);
       document.documentElement.addEventListener("click", restart);
     });
-  </script>
-  <rect width="100" height="100" rx="20" fill="#6366f1"/>
-  <g stroke-width="${STROKE_W}" stroke-linecap="round" fill="none" class="arcs">
-${buildArcs(arcColors)}
-  </g>
-  <g stroke="white" stroke-width="${STROKE_W}" stroke-linecap="round" fill="none" class="arcs-ext">
-${extendedArcsSvg}
-  </g>
-  <g class="heads">
-${buildHeads(arcColors)}
-  </g>
-  <g fill="white" class="tip-circles">
-${tipCirclesSvg}
-  </g>
-  <g class="dots">
-${buildDots(nodeColors)}
-  </g>`);
+  </script>`;
 
-writeFileSync(resolve(import.meta.dirname, "../public/logo.svg"), v12);
-console.log("Wrote logo.svg");
+// In-app variant (src/assets/logo.svg): draws in, then settles to white. No
+// pulse, no script; Logo.tsx replays by toggling the .replay class.
+const inAppHead = `  <style>
+    .tip-circles { display: none; }
+    .arcs-ext { display: none; }
+    @media (max-width: 47px) { .heads { display: none; } .arcs { display: none; } .arcs-ext { display: block; stroke-width: 8; } .tip-circles { display: block; } .dots circle { fill: white; animation: none; } }
+    .arcs path { stroke-dasharray: ${DRAW_DASH}; stroke-dashoffset: ${DRAW_DASH};
+      animation: draw 1.0s ease-out var(--d) forwards, towhite-stroke 0.7s ease 0.8s forwards; }
+    .heads polygon { opacity: 0; transform: scale(0);
+      animation: pophead 0.25s ease-out var(--d) forwards, towhite-fill 0.7s ease 0.8s forwards; }
+    .dots circle { animation: towhite-fill 0.7s ease 0.8s forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+    @keyframes pophead { to { opacity: 1; transform: scale(1); } }
+    @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.4); } }
+    @keyframes towhite-stroke { to { stroke: white; } }
+    @keyframes towhite-fill { to { fill: white; } }
+    .replay .arcs path,
+    .replay .heads polygon,
+    .replay .dots circle { animation: none; }
+  </style>`;
+
+// ---- Static variants (no animation): app icon + maskable ----
+// The single shaft runs to the head MIDPOINT (tipMids) so it overlaps the rear
+// of the arrowhead and joins seamlessly — same construction as the .arcs-ext.
+const staticArcs = tipMids
+  .map((p, i) => {
+    const from = nodes[edges[i][0]];
+    return `    <path d="M${r(from.x)},${r(from.y)} A${ARC_RADII[i]},${ARC_RADII[i]} 0 0,${p.sweepFlag} ${r(p.x)},${r(p.y)}" stroke="${arcColors[i]}"/>`;
+  })
+  .join("\n");
+const staticHeads = heads.map((h, i) => h.replace("/>", ` fill="${arcColors[i]}"/>`)).join("\n");
+const staticDots = nodeList
+  .map((n, i) => `    <circle cx="${n.x}" cy="${n.y}" r="${DOT_R}" fill="${nodeColors[i]}"/>`)
+  .join("\n");
+
+// App icon (public/logo-static.svg): rounded-square tile, colored graph.
+const staticSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" rx="20" fill="#6366f1"/>
+  <g stroke-width="${STROKE_W}" stroke-linecap="round" fill="none">
+${staticArcs}
+  </g>
+  <g>
+${staticHeads}
+  </g>
+  <g>
+${staticDots}
+  </g>
+</svg>
+`;
+
+// Maskable icon (public/logo-maskable.svg): full-bleed tile (no rounded corners,
+// so platform masks can crop freely) with the graph scaled into the safe area.
+const maskableSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" fill="#6366f1"/>
+  <g transform="translate(50,50) scale(0.74) translate(-50,-50)">
+    <g stroke-width="${STROKE_W}" stroke-linecap="round" fill="none">
+${staticArcs}
+    </g>
+    <g>
+${staticHeads}
+    </g>
+    <g>
+${staticDots}
+    </g>
+  </g>
+</svg>
+`;
+
+writeFileSync(
+  resolve(import.meta.dirname, "../public/logo.svg"),
+  makeSvg(`${faviconHead}\n${body}`),
+);
+writeFileSync(
+  resolve(import.meta.dirname, "../src/assets/logo.svg"),
+  makeSvg(`${inAppHead}\n${body}`),
+);
+writeFileSync(resolve(import.meta.dirname, "../public/logo-static.svg"), staticSvg);
+writeFileSync(resolve(import.meta.dirname, "../public/logo-maskable.svg"), maskableSvg);
+console.log(
+  "Wrote public/logo.svg, src/assets/logo.svg, public/logo-static.svg, public/logo-maskable.svg",
+);
