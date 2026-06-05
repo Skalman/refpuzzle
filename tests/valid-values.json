@@ -1,9 +1,13 @@
 {
   "tests": [
-    { "section": "=== positional (NextSame/PrevSame/Closest*) ===" },
+    {
+      "section": "=== positional (NextSame/PrevSame/Closest*) ==="
+    },
     {
       "name": "NextSame qi=0 n=5",
-      "type": { "t": "NextSame" },
+      "type": {
+        "t": "NextSame"
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -11,7 +15,9 @@
     },
     {
       "name": "NextSame qi=3 n=8",
-      "type": { "t": "NextSame" },
+      "type": {
+        "t": "NextSame"
+      },
       "qi": 3,
       "n": 8,
       "oc": 5,
@@ -19,7 +25,9 @@
     },
     {
       "name": "NextSame qi=n-1 n=5 (no valid next)",
-      "type": { "t": "NextSame" },
+      "type": {
+        "t": "NextSame"
+      },
       "qi": 4,
       "n": 5,
       "oc": 5,
@@ -27,7 +35,9 @@
     },
     {
       "name": "PrevSame qi=4 n=8",
-      "type": { "t": "PrevSame" },
+      "type": {
+        "t": "PrevSame"
+      },
       "qi": 4,
       "n": 8,
       "oc": 5,
@@ -35,7 +45,9 @@
     },
     {
       "name": "PrevSame qi=0 n=5 (no valid prev)",
-      "type": { "t": "PrevSame" },
+      "type": {
+        "t": "PrevSame"
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -43,7 +55,11 @@
     },
     {
       "name": "ClosestAfter q=2 n=8",
-      "type": { "t": "ClosestAfter", "a": 0, "q": 2 },
+      "type": {
+        "t": "ClosestAfter",
+        "a": 0,
+        "q": 2
+      },
       "qi": 5,
       "n": 8,
       "oc": 5,
@@ -51,16 +67,25 @@
     },
     {
       "name": "ClosestBefore q=5 n=8",
-      "type": { "t": "ClosestBefore", "a": 0, "q": 5 },
+      "type": {
+        "t": "ClosestBefore",
+        "a": 0,
+        "q": 5
+      },
       "qi": 2,
       "n": 8,
       "oc": 5,
       "valid": [0, 1, 2, 3, 4, null]
     },
-    { "section": "=== count-family ===" },
+    {
+      "section": "=== count-family ==="
+    },
     {
       "name": "CountAnswer n=5",
-      "type": { "t": "CountAnswer", "a": 0 },
+      "type": {
+        "t": "CountAnswer",
+        "a": 0
+      },
       "qi": 2,
       "n": 5,
       "oc": 5,
@@ -68,7 +93,11 @@
     },
     {
       "name": "CountAnswerBefore q=3 n=8",
-      "type": { "t": "CountAnswerBefore", "a": 0, "q": 3 },
+      "type": {
+        "t": "CountAnswerBefore",
+        "a": 0,
+        "q": 3
+      },
       "qi": 5,
       "n": 8,
       "oc": 5,
@@ -76,7 +105,11 @@
     },
     {
       "name": "CountAnswerAfter q=2 n=8",
-      "type": { "t": "CountAnswerAfter", "a": 0, "q": 2 },
+      "type": {
+        "t": "CountAnswerAfter",
+        "a": 0,
+        "q": 2
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,
@@ -84,7 +117,9 @@
     },
     {
       "name": "CountVowel n=8",
-      "type": { "t": "CountVowel" },
+      "type": {
+        "t": "CountVowel"
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,
@@ -92,7 +127,9 @@
     },
     {
       "name": "CountConsonant n=6",
-      "type": { "t": "CountConsonant" },
+      "type": {
+        "t": "CountConsonant"
+      },
       "qi": 0,
       "n": 6,
       "oc": 5,
@@ -100,16 +137,23 @@
     },
     {
       "name": "MostCommonCount n=8",
-      "type": { "t": "MostCommonCount" },
+      "type": {
+        "t": "MostCommonCount"
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,
       "valid": [0, 1, 2, 3, 4, 5, 6, 7, 8]
     },
-    { "section": "=== letter-valued ===" },
+    {
+      "section": "=== letter-valued ==="
+    },
     {
       "name": "AnswerOf oc=3",
-      "type": { "t": "AnswerOf", "q": 0 },
+      "type": {
+        "t": "AnswerOf",
+        "q": 0
+      },
       "qi": 1,
       "n": 3,
       "oc": 3,
@@ -117,7 +161,9 @@
     },
     {
       "name": "LeastCommon oc=3",
-      "type": { "t": "LeastCommon" },
+      "type": {
+        "t": "LeastCommon"
+      },
       "qi": 0,
       "n": 3,
       "oc": 3,
@@ -125,7 +171,9 @@
     },
     {
       "name": "MostCommon oc=3",
-      "type": { "t": "MostCommon" },
+      "type": {
+        "t": "MostCommon"
+      },
       "qi": 0,
       "n": 3,
       "oc": 3,
@@ -133,7 +181,10 @@
     },
     {
       "name": "EqualCount oc=5",
-      "type": { "t": "EqualCount", "a": 0 },
+      "type": {
+        "t": "EqualCount",
+        "a": 0
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -141,16 +192,24 @@
     },
     {
       "name": "LetterDist oc=5",
-      "type": { "t": "LetterDist", "q": 1 },
+      "type": {
+        "t": "LetterDist",
+        "q": 1
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
       "valid": [0, 1, 2, 3, 4]
     },
-    { "section": "=== first/last/only ===" },
+    {
+      "section": "=== first/last/only ==="
+    },
     {
       "name": "FirstWith n=5",
-      "type": { "t": "FirstWith", "a": 0 },
+      "type": {
+        "t": "FirstWith",
+        "a": 0
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -158,7 +217,10 @@
     },
     {
       "name": "LastWith n=5",
-      "type": { "t": "LastWith", "a": 0 },
+      "type": {
+        "t": "LastWith",
+        "a": 0
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -166,7 +228,9 @@
     },
     {
       "name": "OnlySame n=5",
-      "type": { "t": "OnlySame" },
+      "type": {
+        "t": "OnlySame"
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -174,7 +238,9 @@
     },
     {
       "name": "SameAs n=5",
-      "type": { "t": "SameAs" },
+      "type": {
+        "t": "SameAs"
+      },
       "qi": 0,
       "n": 5,
       "oc": 5,
@@ -182,16 +248,24 @@
     },
     {
       "name": "SameAsWhich n=5",
-      "type": { "t": "SameAsWhich", "q": 0 },
+      "type": {
+        "t": "SameAsWhich",
+        "q": 0
+      },
       "qi": 1,
       "n": 5,
       "oc": 5,
       "valid": [0, 1, 2, 3, 4, null]
     },
-    { "section": "=== structural ===" },
+    {
+      "section": "=== structural ==="
+    },
     {
       "name": "OnlyOdd n=8",
-      "type": { "t": "OnlyOdd", "a": 0 },
+      "type": {
+        "t": "OnlyOdd",
+        "a": 0
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,
@@ -199,7 +273,10 @@
     },
     {
       "name": "OnlyEven n=8",
-      "type": { "t": "OnlyEven", "a": 0 },
+      "type": {
+        "t": "OnlyEven",
+        "a": 0
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,
@@ -207,7 +284,9 @@
     },
     {
       "name": "ConsecIdent n=8",
-      "type": { "t": "ConsecIdent" },
+      "type": {
+        "t": "ConsecIdent"
+      },
       "qi": 0,
       "n": 8,
       "oc": 5,

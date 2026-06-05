@@ -509,53 +509,48 @@ fn format_year(year: &serde_json::Map<String, Value>) -> String {
     out
 }
 
-fn option_value_json(qt: &QuestionType, qi: usize, oi: usize, fp: &FlatPuzzle) -> Value {
-    // Letter-type question types store values in option_answers as letter indices (already 0-based)
-    if matches!(
-        qt,
-        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon
-    ) {
-        let a = fp.options[qi][oi].value();
-        if a > 4 {
-            return Value::Null;
-        }
-        return json!(a);
-    }
-    // Identity-option types: option A=0, B=1, C=2, D=3, E=4
+fn option_row_json(qt: &QuestionType, qi: usize, oc: usize, fp: &FlatPuzzle) -> Value {
+    // Identity-option types persist their letter indices verbatim (the parser
+    // would rebuild them anyway, but emitting them explicitly keeps the wire
+    // shape stable across the SoA migration).
     if qt.has_identity_options() {
-        return json!(oi);
+        let row: Vec<Value> = (0..oc).map(|oi| json!(oi)).collect();
+        return json!(row);
     }
-    let v = fp.options[qi][oi].to_i16();
-    if v == NONE_VAL || v == NAN_VAL {
-        return Value::Null;
-    }
-    json!(v)
+    let row: Vec<Value> = (0..oc)
+        .map(|oi| {
+            let s = fp.options[qi][oi];
+            if !s.is_num() {
+                Value::Null
+            } else {
+                json!(s.value())
+            }
+        })
+        .collect();
+    json!(row)
 }
 
 fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
     let n = result.n;
     let oc = result.fp.option_count;
-    let questions: Vec<Value> = (0..n)
-        .map(|qi| {
-            let qt = &result.question_types[qi];
-            let mut q = serde_json::Map::new();
-            if let QuestionType::TrueStmt = qt {
-                let claims: Vec<Value> = (0..oc)
-                    .map(|oi| serialize::claim_to_json(&result.fp.claim_at(qi, oi)))
-                    .collect();
-                q.insert("c".into(), json!(claims));
-            } else {
-                let options: Vec<Value> = (0..oc)
-                    .map(|oi| option_value_json(qt, qi, oi, &result.fp))
-                    .collect();
-                q.insert("o".into(), json!(options));
-            }
-            q.insert("t".into(), question_type_to_json(qt));
-            Value::Object(q)
-        })
-        .collect();
+    let mut obj = serde_json::Map::new();
 
-    json!({ "q": questions })
+    let qs: Vec<Value> = (0..n)
+        .map(|qi| question_type_to_json(&result.question_types[qi]))
+        .collect();
+    obj.insert("q".into(), json!(qs));
+
+    let opts: Vec<Value> = (0..n)
+        .map(|qi| option_row_json(&result.question_types[qi], qi, oc, &result.fp))
+        .collect();
+    obj.insert("o".into(), json!(opts));
+
+    if let Some(types) = result.fp.true_stmt_question_types.as_ref() {
+        let arr: Vec<Value> = types.iter().map(question_type_to_json).collect();
+        obj.insert("t".into(), json!(arr));
+    }
+
+    Value::Object(obj)
 }
 
 fn dates_in_year(

@@ -1,47 +1,23 @@
-import type {
-  Puzzle,
-  QuestionDef,
-  QuestionType,
-  OptionDef,
-  Claim,
-  Answer,
-} from "../engine/types.ts";
+import type { Puzzle, QuestionDef, QuestionType, OptionDef, Answer } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
 const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
-interface CompactQuestionType {
+export interface CompactQuestionType {
   t: string;
   a?: number;
   q?: number;
-}
-interface CompactClaim {
-  t: string;
-  a?: number;
-  q?: number;
-  v: number;
-}
-interface CompactQuestion {
-  o?: (number | null)[];
-  t: CompactQuestionType;
-  c?: (CompactClaim | null)[];
 }
 export interface CompactPuzzle {
-  q: CompactQuestion[];
+  q: CompactQuestionType[];
+  o: (number | null)[][];
+  t?: CompactQuestionType[];
 }
 
 export function parseCompactPuzzle(compact: CompactPuzzle): Puzzle {
-  const optionCount = compact.q[0]?.o?.length ?? 5;
-  const questions = compact.q.map<QuestionDef>((cq) => {
-    const questionType = expandQuestion(cq.t);
-    const options: OptionDef[] = cq.c
-      ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
-      : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
-    return { options, questionType };
-  });
-  return { id: "playground", title: "", difficulty: "1", questions, optionCount };
+  return buildPuzzle(compact, "playground");
 }
 
 export function parseCompactYear(
@@ -51,24 +27,29 @@ export function parseCompactYear(
   for (const [mmdd, levels] of Object.entries(data)) {
     result[mmdd] = {};
     for (const [lvl, compact] of Object.entries(levels)) {
-      const questions = compact.q.map<QuestionDef>((cq) => {
-        const questionType = expandQuestion(cq.t);
-        const options: OptionDef[] = cq.c
-          ? cq.c.map((cc) => ({ value: null, claim: expandClaim(cc!) }))
-          : (cq.o ?? [null, null, null, null, null]).map((v) => ({ value: v }));
-        return { options, questionType };
-      });
-      const optionCount = compact.q[0]?.o?.length ?? 5;
-      result[mmdd][lvl] = {
-        id: "",
-        title: "",
-        difficulty: lvl,
-        questions,
-        optionCount,
-      };
+      result[mmdd][lvl] = buildPuzzle(compact, "", lvl);
     }
   }
   return result;
+}
+
+function buildPuzzle(compact: CompactPuzzle, id: string, difficulty: string = "1"): Puzzle {
+  const optionCount = compact.o[0]?.length ?? 5;
+  const questions = compact.q.map<QuestionDef>((cq, qi) => {
+    const questionType = expandQuestion(cq);
+    const row = compact.o[qi] ?? [];
+    let options: OptionDef[];
+    if (questionType.type === "TrueStmt" && compact.t) {
+      options = row.map((v, oi) => ({
+        value: null,
+        claim: { questionType: expandQuestion(compact.t![oi]), value: v ?? -1 },
+      }));
+    } else {
+      options = row.map((v) => ({ value: v }));
+    }
+    return { options, questionType };
+  });
+  return { id, title: "", difficulty, questions, optionCount };
 }
 
 function L(i: number | undefined): Answer {
@@ -116,10 +97,6 @@ export function expandQuestion(q: CompactQuestionType): QuestionType {
       throw new Error(`Unknown question type: ${type}`);
     }
   }
-}
-
-function expandClaim(c: CompactClaim): Claim {
-  return { questionType: expandQuestion(c), value: c.v };
 }
 
 export function todayDateStr(): string {

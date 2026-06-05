@@ -1,17 +1,32 @@
 {
   "_doc": "expectedCorrect[qi] is the hand-computed value stored at the correct option for question qi. Use null for AnswerIsSelf/NoOtherHasAnswer/TrueStmt (no numeric value) or to intentionally skip a check.",
   "tests": [
-    { "section": "=== mixed types, oc=5 ===" },
+    {
+      "section": "=== mixed types, oc=5 ==="
+    },
     {
       "name": "n=5 count + identity + positional + vowel",
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "CountAnswer", "a": 0 },
-        { "t": "AnswerIsSelf" },
-        { "t": "FirstWith", "a": 0 },
-        { "t": "CountVowel" },
-        { "t": "LastWith", "a": 3 }
+        {
+          "t": "CountAnswer",
+          "a": 0
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "FirstWith",
+          "a": 0
+        },
+        {
+          "t": "CountVowel"
+        },
+        {
+          "t": "LastWith",
+          "a": 3
+        }
       ],
       "solution": "ABACD",
       "expectedCorrect": [2, null, 0, 2, 4]
@@ -21,12 +36,32 @@
       "n": 6,
       "oc": 5,
       "types": [
-        { "t": "FirstWith", "a": 0 },
-        { "t": "AnswerOf", "q": 0 },
-        { "t": "CountAnswer", "a": 0 },
-        { "t": "CountAnswerAfter", "a": 0, "q": 0 },
-        { "t": "CountAnswerBefore", "a": 0, "q": 4 },
-        { "t": "LastWith", "a": 0 }
+        {
+          "t": "FirstWith",
+          "a": 0
+        },
+        {
+          "t": "AnswerOf",
+          "q": 0
+        },
+        {
+          "t": "CountAnswer",
+          "a": 0
+        },
+        {
+          "t": "CountAnswerAfter",
+          "a": 0,
+          "q": 0
+        },
+        {
+          "t": "CountAnswerBefore",
+          "a": 0,
+          "q": 4
+        },
+        {
+          "t": "LastWith",
+          "a": 0
+        }
       ],
       "solution": "AAABCD",
       "expectedCorrect": [0, 0, 3, 2, 3, 2]
@@ -36,21 +71,43 @@
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "LeastCommon" },
-        { "t": "MostCommon" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "LeastCommon"
+        },
+        {
+          "t": "MostCommon"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "BABCD",
       "expectedCorrect": [4, 1, null, null, null]
     },
-    { "section": "=== oc<5 (phantom letters) ===" },
+    {
+      "section": "=== oc<5 (phantom letters) ==="
+    },
     {
       "name": "n=3 oc=3 identity-only",
       "n": 3,
       "oc": 3,
-      "types": [{ "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }],
+      "types": [
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
+      ],
       "solution": "ABC",
       "expectedCorrect": [null, null, null]
     },
@@ -59,45 +116,94 @@
       "n": 4,
       "oc": 4,
       "types": [
-        { "t": "FirstWith", "a": 0 },
-        { "t": "AnswerOf", "q": 0 },
-        { "t": "CountAnswer", "a": 0 },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "FirstWith",
+          "a": 0
+        },
+        {
+          "t": "AnswerOf",
+          "q": 0
+        },
+        {
+          "t": "CountAnswer",
+          "a": 0
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "AABD",
       "expectedCorrect": [0, 0, 2, null]
     },
-    { "section": "=== count + closest types ===" },
+    {
+      "section": "=== count + closest types ==="
+    },
     {
       "name": "n=5 CountConsonant + MostCommonCount + ClosestAfter/Before",
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "CountConsonant" },
-        { "t": "MostCommonCount" },
-        { "t": "ClosestAfter", "a": 0, "q": 0 },
-        { "t": "ClosestBefore", "a": 0, "q": 4 },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "CountConsonant"
+        },
+        {
+          "t": "MostCommonCount"
+        },
+        {
+          "t": "ClosestAfter",
+          "a": 0,
+          "q": 0
+        },
+        {
+          "t": "ClosestBefore",
+          "a": 0,
+          "q": 4
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "AABCD",
       "expectedCorrect": [3, 2, 1, 1, null]
     },
-    { "section": "=== relational types ===" },
+    {
+      "section": "=== relational types ==="
+    },
     {
       "name": "n=10 PrevSame + NextSame",
       "n": 10,
       "oc": 5,
       "types": [
-        { "t": "NextSame" },
-        { "t": "NextSame" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "PrevSame" },
-        { "t": "PrevSame" }
+        {
+          "t": "NextSame"
+        },
+        {
+          "t": "NextSame"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "PrevSame"
+        },
+        {
+          "t": "PrevSame"
+        }
       ],
       "solution": "ABCDEABCDE",
       "expectedCorrect": [5, 6, null, null, null, null, null, null, 3, 4]
@@ -107,11 +213,21 @@
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "OnlySame" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "OnlySame" },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "OnlySame"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "OnlySame"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "ABCAD",
       "expectedCorrect": [3, null, null, 0, null]
@@ -121,46 +237,93 @@
       "n": 7,
       "oc": 5,
       "types": [
-        { "t": "SameAsWhich", "q": 4 },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "SameAs" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "SameAsWhich",
+          "q": 4
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "SameAs"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "ABCABDE",
       "expectedCorrect": [1, null, null, 0, null, null, null]
     },
-    { "section": "=== structural (Odd/Even/Consec) ===" },
+    {
+      "section": "=== structural (Odd/Even/Consec) ==="
+    },
     {
       "name": "n=8 OnlyOdd + OnlyEven + ConsecIdent",
       "n": 8,
       "oc": 5,
       "types": [
-        { "t": "OnlyOdd", "a": 0 },
-        { "t": "OnlyEven", "a": 0 },
-        { "t": "ConsecIdent" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "OnlyOdd",
+          "a": 0
+        },
+        {
+          "t": "OnlyEven",
+          "a": 0
+        },
+        {
+          "t": "ConsecIdent"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "AABCDECB",
       "expectedCorrect": [0, 1, 0, null, null, null, null, null]
     },
-    { "section": "=== special: NoOtherHasAnswer, EqualCount, LetterDist ===" },
+    {
+      "section": "=== special: NoOtherHasAnswer, EqualCount, LetterDist ==="
+    },
     {
       "name": "n=5 NoOtherHasAnswer (all unique letters)",
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "NoOtherHasAnswer" },
-        { "t": "NoOtherHasAnswer" },
-        { "t": "NoOtherHasAnswer" },
-        { "t": "NoOtherHasAnswer" },
-        { "t": "NoOtherHasAnswer" }
+        {
+          "t": "NoOtherHasAnswer"
+        },
+        {
+          "t": "NoOtherHasAnswer"
+        },
+        {
+          "t": "NoOtherHasAnswer"
+        },
+        {
+          "t": "NoOtherHasAnswer"
+        },
+        {
+          "t": "NoOtherHasAnswer"
+        }
       ],
       "solution": "ABCDE",
       "expectedCorrect": [null, null, null, null, null]
@@ -170,11 +333,23 @@
       "n": 5,
       "oc": 5,
       "types": [
-        { "t": "EqualCount", "a": 0 },
-        { "t": "AnswerIsSelf" },
-        { "t": "LetterDist", "q": 0 },
-        { "t": "AnswerIsSelf" },
-        { "t": "AnswerIsSelf" }
+        {
+          "t": "EqualCount",
+          "a": 0
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "LetterDist",
+          "q": 0
+        },
+        {
+          "t": "AnswerIsSelf"
+        },
+        {
+          "t": "AnswerIsSelf"
+        }
       ],
       "solution": "ABCDE",
       "expectedCorrect": [1, null, 2, null, null]

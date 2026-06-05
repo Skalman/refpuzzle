@@ -1,4 +1,4 @@
-const CACHE_NAME = "refpuzzle-v1";
+const CACHE_NAME = "refpuzzle-v2";
 
 const PRECACHE = ["/", "/logo.svg", "/manifest.json"];
 

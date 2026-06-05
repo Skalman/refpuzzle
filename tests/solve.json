@@ -1,14 +1,34 @@
 {
   "tests": [
-    { "section": "=== Solve: deduce only ===" },
+    {
+      "section": "=== Solve: deduce only ==="
+    },
     {
       "name": "4-question puzzle: answer_of + count_answer + last_with",
       "puzzle": {
+        "o": [
+          [2, 0, null, 3, 1],
+          [4, 1, 0, 3, 2],
+          [1, 2, 3, 4, 0],
+          [4, 2, 0, 1, 3]
+        ],
         "q": [
-          { "t": { "t": "LastWith", "a": 0 }, "o": [2, 0, null, 3, 1] },
-          { "t": { "t": "AnswerOf", "q": 2 }, "o": [4, 1, 0, 3, 2] },
-          { "t": { "t": "CountAnswer", "a": 2 }, "o": [1, 2, 3, 4, 0] },
-          { "t": { "t": "AnswerOf", "q": 1 }, "o": [4, 2, 0, 1, 3] }
+          {
+            "t": "LastWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerOf",
+            "q": 2
+          },
+          {
+            "t": "CountAnswer",
+            "a": 2
+          },
+          {
+            "t": "AnswerOf",
+            "q": 1
+          }
         ]
       },
       "expect": "solved"
@@ -16,49 +36,116 @@
     {
       "name": "3-question trivial: all answer_is_self with 1 remaining each",
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expect": "stuck"
     },
-    { "section": "=== Solve: requires lookahead ===" },
+    {
+      "section": "=== Solve: requires lookahead ==="
+    },
     {
       "name": "Lookahead needed: assumption eliminates via count contradiction",
       "puzzle": {
+        "o": [
+          [2, 2, 2, 2, 2],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [2, 2, 2, 2, 2] },
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerOf",
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expect": "stuck"
     },
-    { "section": "=== Solve: count saturation ===" },
+    {
+      "section": "=== Solve: count saturation ==="
+    },
     {
       "name": "Count saturation solves: count_answer + answer_of",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerOf",
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expect": "stuck"
     },
-    { "section": "=== Solve: real puzzles ===" },
+    {
+      "section": "=== Solve: real puzzles ==="
+    },
     {
       "name": "Real: 1001-level-1 (4Q)",
       "puzzle": {
+        "o": [
+          [2, 0, null, 3, 1],
+          [4, 1, 0, 3, 2],
+          [1, 2, 3, 4, 0],
+          [4, 2, 0, 1, 3]
+        ],
         "q": [
-          { "o": [2, 0, null, 3, 1], "t": { "a": 0, "t": "LastWith" } },
-          { "o": [4, 1, 0, 3, 2], "t": { "q": 2, "t": "AnswerOf" } },
-          { "o": [1, 2, 3, 4, 0], "t": { "a": 2, "t": "CountAnswer" } },
-          { "o": [4, 2, 0, 1, 3], "t": { "q": 1, "t": "AnswerOf" } }
+          {
+            "a": 0,
+            "t": "LastWith"
+          },
+          {
+            "q": 2,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 2,
+            "t": "CountAnswer"
+          },
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          }
         ]
       },
       "expect": "solved"
@@ -66,12 +153,35 @@
     {
       "name": "Real: 1001-level-2 (5Q)",
       "puzzle": {
+        "o": [
+          [0, 2, null, 3, 4],
+          [3, 4, null, 1, 0],
+          [3, null, 0, 2, 1],
+          [3, 5, 2, 0, 4],
+          [4, 2, 1, 3, 0]
+        ],
         "q": [
-          { "o": [0, 2, null, 3, 4], "t": { "a": 0, "t": "LastWith" } },
-          { "o": [3, 4, null, 1, 0], "t": { "a": 4, "t": "LastWith" } },
-          { "o": [3, null, 0, 2, 1], "t": { "a": 3, "q": 4, "t": "ClosestBefore" } },
-          { "o": [3, 5, 2, 0, 4], "t": { "a": 4, "t": "CountAnswer" } },
-          { "o": [4, 2, 1, 3, 0], "t": { "q": 3, "t": "AnswerOf" } }
+          {
+            "a": 0,
+            "t": "LastWith"
+          },
+          {
+            "a": 4,
+            "t": "LastWith"
+          },
+          {
+            "a": 3,
+            "q": 4,
+            "t": "ClosestBefore"
+          },
+          {
+            "a": 4,
+            "t": "CountAnswer"
+          },
+          {
+            "q": 3,
+            "t": "AnswerOf"
+          }
         ]
       },
       "expect": "solved"
@@ -79,15 +189,48 @@
     {
       "name": "Real: 1001-level-3 (8Q)",
       "puzzle": {
+        "o": [
+          [3, 7, null, 6, 4],
+          [null, 0, 2, 7, 6],
+          [7, 4, 1, 5, 6],
+          [3, 2, 4, 0, 1],
+          [3, 7, null, 0, 1],
+          [3, 4, 6, null, 1],
+          [2, 4, 1, 0, 3],
+          [5, 2, 7, 1, 8]
+        ],
         "q": [
-          { "o": [3, 7, null, 6, 4], "t": { "a": 1, "q": 2, "t": "ClosestAfter" } },
-          { "o": [null, 0, 2, 7, 6], "t": { "t": "NextSame" } },
-          { "o": [7, 4, 1, 5, 6], "t": { "a": 0, "t": "FirstWith" } },
-          { "o": [3, 2, 4, 0, 1], "t": { "q": 6, "t": "AnswerOf" } },
-          { "o": [3, 7, null, 0, 1], "t": { "a": 3, "t": "FirstWith" } },
-          { "o": [3, 4, 6, null, 1], "t": { "t": "OnlySame" } },
-          { "o": [2, 4, 1, 0, 3], "t": { "q": 7, "t": "AnswerOf" } },
-          { "o": [5, 2, 7, 1, 8], "t": { "a": 3, "t": "CountAnswer" } }
+          {
+            "a": 1,
+            "q": 2,
+            "t": "ClosestAfter"
+          },
+          {
+            "t": "NextSame"
+          },
+          {
+            "a": 0,
+            "t": "FirstWith"
+          },
+          {
+            "q": 6,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 3,
+            "t": "FirstWith"
+          },
+          {
+            "t": "OnlySame"
+          },
+          {
+            "q": 7,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 3,
+            "t": "CountAnswer"
+          }
         ]
       },
       "expect": "solved"
@@ -95,11 +238,29 @@
     {
       "name": "Real: 1002-level-1 (4Q)",
       "puzzle": {
+        "o": [
+          [1, 3, 2, 4, 0],
+          [1, 2, 0, 3, null],
+          [4, 1, 2, 0, 3],
+          [3, 2, 0, 4, 1]
+        ],
         "q": [
-          { "o": [1, 3, 2, 4, 0], "t": { "q": 3, "t": "AnswerOf" } },
-          { "o": [1, 2, 0, 3, null], "t": { "a": 4, "t": "FirstWith" } },
-          { "o": [4, 1, 2, 0, 3], "t": { "a": 4, "t": "CountAnswer" } },
-          { "o": [3, 2, 0, 4, 1], "t": { "q": 2, "t": "AnswerOf" } }
+          {
+            "q": 3,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 4,
+            "t": "FirstWith"
+          },
+          {
+            "a": 4,
+            "t": "CountAnswer"
+          },
+          {
+            "q": 2,
+            "t": "AnswerOf"
+          }
         ]
       },
       "expect": "solved"
@@ -107,15 +268,51 @@
     {
       "name": "Real: 1002-level-3 (8Q)",
       "puzzle": {
+        "o": [
+          [0, null, 3, 7, 6],
+          [3, 1, 4, 7, 6],
+          [0, 1, 5, 6, 7],
+          [0, 1, 4, 3, 2],
+          [1, 2, 0, 4, 3],
+          [0, 3, 1, null, 2],
+          [3, 5, 8, 0, 2],
+          [5, null, 7, 4, 6]
+        ],
         "q": [
-          { "o": [0, null, 3, 7, 6], "t": { "t": "OnlySame" } },
-          { "o": [3, 1, 4, 7, 6], "t": { "a": 4, "q": 0, "t": "ClosestAfter" } },
-          { "o": [0, 1, 5, 6, 7], "t": { "a": 3, "q": 7, "t": "CountAnswerBefore" } },
-          { "o": [0, 1, 4, 3, 2], "t": { "q": 4, "t": "AnswerOf" } },
-          { "o": [1, 2, 0, 4, 3], "t": { "q": 6, "t": "AnswerOf" } },
-          { "o": [0, 3, 1, null, 2], "t": { "a": 4, "q": 5, "t": "ClosestBefore" } },
-          { "o": [3, 5, 8, 0, 2], "t": { "t": "CountVowel" } },
-          { "o": [5, null, 7, 4, 6], "t": { "a": 2, "q": 1, "t": "ClosestAfter" } }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "a": 4,
+            "q": 0,
+            "t": "ClosestAfter"
+          },
+          {
+            "a": 3,
+            "q": 7,
+            "t": "CountAnswerBefore"
+          },
+          {
+            "q": 4,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 6,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 4,
+            "q": 5,
+            "t": "ClosestBefore"
+          },
+          {
+            "t": "CountVowel"
+          },
+          {
+            "a": 2,
+            "q": 1,
+            "t": "ClosestAfter"
+          }
         ]
       },
       "expect": "solved"
@@ -123,28 +320,84 @@
     {
       "name": "Real: 1003-level-4 (10Q)",
       "puzzle": {
+        "o": [
+          [3, 0, 5, 2, 1],
+          [5, null, 7, 4, 8],
+          [4, 2, 7, 5, 3],
+          [1, 0, 2, 4, 3],
+          [0, 1, 2, 3, 4],
+          [2, 4, null, 7, 5],
+          [4, 2, 0, 1, 3],
+          [0, 2, 1, 3, 4],
+          [9, 8, 6, 2, 7],
+          [6, 4, 5, 3, null]
+        ],
         "q": [
-          { "o": [3, 0, 5, 2, 1], "t": { "a": 2, "q": 1, "t": "CountAnswerAfter" } },
-          { "o": [5, null, 7, 4, 8], "t": { "a": 3, "q": 1, "t": "ClosestAfter" } },
-          { "o": [4, 2, 7, 5, 3], "t": { "a": 1, "t": "FirstWith" } },
-          { "o": [1, 0, 2, 4, 3], "t": { "q": 6, "t": "AnswerOf" } },
-          { "o": [0, 1, 2, 3, 4], "t": { "t": "NoOtherHasAnswer" } },
-          { "o": [2, 4, null, 7, 5], "t": { "t": "ConsecIdent" } },
-          { "o": [4, 2, 0, 1, 3], "t": { "q": 0, "t": "AnswerOf" } },
-          { "o": [0, 2, 1, 3, 4], "t": { "q": 1, "t": "LetterDist" } },
-          { "o": [9, 8, 6, 2, 7], "t": { "a": 4, "q": 9, "t": "CountAnswerBefore" } },
-          { "o": [6, 4, 5, 3, null], "t": { "a": 2, "q": 2, "t": "ClosestAfter" } }
+          {
+            "a": 2,
+            "q": 1,
+            "t": "CountAnswerAfter"
+          },
+          {
+            "a": 3,
+            "q": 1,
+            "t": "ClosestAfter"
+          },
+          {
+            "a": 1,
+            "t": "FirstWith"
+          },
+          {
+            "q": 6,
+            "t": "AnswerOf"
+          },
+          {
+            "t": "NoOtherHasAnswer"
+          },
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "q": 0,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 1,
+            "t": "LetterDist"
+          },
+          {
+            "a": 4,
+            "q": 9,
+            "t": "CountAnswerBefore"
+          },
+          {
+            "a": 2,
+            "q": 2,
+            "t": "ClosestAfter"
+          }
         ]
       },
       "expect": "solved"
     },
-    { "section": "=== Edge cases ===" },
+    {
+      "section": "=== Edge cases ==="
+    },
     {
       "name": "Impossible: contradictory answer_of chain",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [1, 0, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [1, 0, 2, 3, 4] }
+          {
+            "t": "AnswerOf",
+            "q": 1
+          },
+          {
+            "t": "AnswerOf",
+            "q": 0
+          }
         ]
       },
       "expect": "stuck"
@@ -152,58 +405,183 @@
     {
       "name": "Real: 1001-level-5 (12Q, with true_stmt)",
       "puzzle": {
+        "o": [
+          [7, 5, 1, 3, 0],
+          [1, 5, 1, 1, 4],
+          [2, 0, 1, 3, 4],
+          [8, null, 2, 0, 10],
+          [8, 0, 10, null, 4],
+          [5, 11, 4, 1, 0],
+          [6, null, 3, 5, 0],
+          [1, 3, 0, 4, 2],
+          [0, 7, 5, 9, 1],
+          [6, 9, 3, 0, 11],
+          [2, 0, 3, 1, 4],
+          [null, 4, 2, 6, 0]
+        ],
         "q": [
-          { "o": [7, 5, 1, 3, 0], "t": { "a": 4, "q": 8, "t": "ClosestBefore" } },
           {
-            "c": [
-              { "a": 2, "t": "CountAnswer", "v": 1 },
-              { "a": 3, "q": 2, "t": "CountAnswerAfter", "v": 5 },
-              { "a": 4, "q": 6, "t": "CountAnswerBefore", "v": 1 },
-              { "t": "CountVowel", "v": 1 },
-              { "t": "CountVowel", "v": 4 }
-            ],
-            "t": { "t": "TrueStmt" }
+            "a": 4,
+            "q": 8,
+            "t": "ClosestBefore"
           },
-          { "o": [2, 0, 1, 3, 4], "t": { "q": 5, "t": "LetterDist" } },
-          { "o": [8, null, 2, 0, 10], "t": { "a": 0, "t": "OnlyOdd" } },
-          { "o": [8, 0, 10, null, 4], "t": { "a": 4, "t": "OnlyOdd" } },
-          { "o": [5, 11, 4, 1, 0], "t": { "a": 1, "t": "FirstWith" } },
-          { "o": [6, null, 3, 5, 0], "t": { "t": "ConsecIdent" } },
-          { "o": [1, 3, 0, 4, 2], "t": { "q": 9, "t": "AnswerOf" } },
-          { "o": [0, 7, 5, 9, 1], "t": { "t": "CountConsonant" } },
-          { "o": [6, 9, 3, 0, 11], "t": { "t": "CountVowel" } },
-          { "o": [2, 0, 3, 1, 4], "t": { "q": 7, "t": "AnswerOf" } },
-          { "o": [null, 4, 2, 6, 0], "t": { "a": 3, "q": 8, "t": "ClosestBefore" } }
+          {
+            "t": "TrueStmt"
+          },
+          {
+            "q": 5,
+            "t": "LetterDist"
+          },
+          {
+            "a": 0,
+            "t": "OnlyOdd"
+          },
+          {
+            "a": 4,
+            "t": "OnlyOdd"
+          },
+          {
+            "a": 1,
+            "t": "FirstWith"
+          },
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "q": 9,
+            "t": "AnswerOf"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountVowel"
+          },
+          {
+            "q": 7,
+            "t": "AnswerOf"
+          },
+          {
+            "a": 3,
+            "q": 8,
+            "t": "ClosestBefore"
+          }
+        ],
+        "t": [
+          {
+            "a": 2,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 3,
+            "q": 2,
+            "t": "CountAnswerAfter"
+          },
+          {
+            "a": 4,
+            "q": 6,
+            "t": "CountAnswerBefore"
+          },
+          {
+            "t": "CountVowel"
+          },
+          {
+            "t": "CountVowel"
+          }
         ]
       },
       "expect": "solved"
     },
-    { "section": "=== Solve: TS/Rust divergence ===" },
+    {
+      "section": "=== Solve: TS/Rust divergence ==="
+    },
     {
       "name": "2026-0825-6: TS stuck, Rust solves",
       "puzzle": {
+        "o": [
+          [0, 4, 1, 3, 2],
+          [9, 11, 3, 1, 5],
+          [2, 4, 2, null, 4],
+          [0, 3, 1, 4, 2],
+          [8, 9, 7, null, 10],
+          [1, 10, 6, 7, 8],
+          [null, 11, 5, 2, 8],
+          [11, 8, null, 1, 5],
+          [2, 4, 0, 3, 1],
+          [1, null, 2, 9, 6],
+          [2, 9, 4, 7, 10],
+          [3, 2, 0, 9, 4]
+        ],
         "q": [
-          { "o": [0, 4, 1, 3, 2], "t": { "q": 3, "t": "AnswerOf" } },
-          { "o": [9, 11, 3, 1, 5], "t": { "a": 2, "t": "OnlyEven" } },
           {
-            "c": [
-              { "a": 0, "q": 6, "t": "CountAnswerBefore", "v": 2 },
-              { "a": 4, "t": "EqualCount", "v": 4 },
-              { "a": 1, "q": 8, "t": "CountAnswerBefore", "v": 2 },
-              { "t": "ConsecIdent", "v": -1 },
-              { "a": 4, "t": "OnlyOdd", "v": 4 }
-            ],
-            "t": { "t": "TrueStmt" }
+            "q": 3,
+            "t": "AnswerOf"
           },
-          { "o": [0, 3, 1, 4, 2], "t": { "q": 5, "t": "AnswerOf" } },
-          { "o": [8, 9, 7, null, 10], "t": { "t": "NextSame" } },
-          { "o": [1, 10, 6, 7, 8], "t": { "t": "CountConsonant" } },
-          { "o": [null, 11, 5, 2, 8], "t": { "a": 3, "q": 0, "t": "ClosestAfter" } },
-          { "o": [11, 8, null, 1, 5], "t": { "a": 2, "t": "LastWith" } },
-          { "o": [2, 4, 0, 3, 1], "t": { "q": 5, "t": "LetterDist" } },
-          { "o": [1, null, 2, 9, 6], "t": { "a": 3, "q": 10, "t": "ClosestBefore" } },
-          { "o": [2, 9, 4, 7, 10], "t": { "a": 4, "t": "LastWith" } },
-          { "o": [3, 2, 0, 9, 4], "t": { "t": "PrevSame" } }
+          {
+            "a": 2,
+            "t": "OnlyEven"
+          },
+          {
+            "t": "TrueStmt"
+          },
+          {
+            "q": 5,
+            "t": "AnswerOf"
+          },
+          {
+            "t": "NextSame"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "a": 3,
+            "q": 0,
+            "t": "ClosestAfter"
+          },
+          {
+            "a": 2,
+            "t": "LastWith"
+          },
+          {
+            "q": 5,
+            "t": "LetterDist"
+          },
+          {
+            "a": 3,
+            "q": 10,
+            "t": "ClosestBefore"
+          },
+          {
+            "a": 4,
+            "t": "LastWith"
+          },
+          {
+            "t": "PrevSame"
+          }
+        ],
+        "t": [
+          {
+            "a": 0,
+            "q": 6,
+            "t": "CountAnswerBefore"
+          },
+          {
+            "a": 4,
+            "t": "EqualCount"
+          },
+          {
+            "a": 1,
+            "q": 8,
+            "t": "CountAnswerBefore"
+          },
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "a": 4,
+            "t": "OnlyOdd"
+          }
         ]
       },
       "expect": "solved",

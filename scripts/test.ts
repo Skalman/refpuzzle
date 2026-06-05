@@ -553,167 +553,29 @@ function testSharedCheckAnswer() {
   const suiteJson = JSON.parse(
     readFileSync(resolve(import.meta.dirname, "../tests/check-answer.json"), "utf8"),
   );
-  const tests = suiteJson.tests as {
-    section?: string;
-    name?: string;
-    qi?: number;
-    puzzle?: {
-      q: {
-        t: Record<string, unknown>;
-        o?: (number | null)[];
-        c?: (Record<string, unknown> | null)[];
-      }[];
-    };
-    state?: string[];
-    expect?: string;
-  }[];
+  const tests = suiteJson.tests as (
+    | { section: string }
+    | {
+        name: string;
+        qi: number;
+        puzzle: Record<string, unknown>;
+        state: string[];
+        expect: string;
+      }
+  )[];
 
   for (const t of tests) {
-    if (t.section) continue;
-    const {
-      name,
-      qi,
-      puzzle: puz,
-      state,
-      expect,
-    } = t as {
-      name: string;
-      qi: number;
-      puzzle: {
-        q: {
-          t: Record<string, unknown>;
-          o?: (number | null)[];
-          c?: (Record<string, unknown> | null)[];
-        }[];
-      };
-      state: string[];
-      expect: string;
-    };
-    const n = puz.q.length;
+    if ("section" in t) continue;
+    const { name, qi, puzzle: compact, state, expect } = t;
 
-    const questions = puz.q.map((q): import("../src/engine/types.ts").QuestionDef => {
-      const r = q.t as Record<string, unknown>;
-      const type = r.t as string;
-      const a = typeof r.a === "number" ? LETTERS[r.a as number] : undefined;
-      const qIdx = r.q as number | undefined;
-
-      let questionType: import("../src/engine/types.ts").QuestionType;
-      switch (type) {
-        case "CountAnswer":
-          questionType = { type, answer: a! };
-          break;
-        case "CountAnswerBefore":
-          questionType = { type, answer: a!, beforeIndex: qIdx! };
-          break;
-        case "CountAnswerAfter":
-          questionType = { type, answer: a!, afterIndex: qIdx! };
-          break;
-        case "CountVowel":
-        case "CountConsonant":
-        case "MostCommonCount":
-          questionType = {
-            type,
-          } as import("../src/engine/types.ts").QuestionType;
-          break;
-        case "ClosestAfter":
-          questionType = { type, afterIndex: qIdx!, answer: a! };
-          break;
-        case "ClosestBefore":
-          questionType = { type, beforeIndex: qIdx!, answer: a! };
-          break;
-        case "FirstWith":
-        case "LastWith":
-          questionType = { type, answer: a! };
-          break;
-        case "OnlyOdd":
-        case "OnlyEven":
-          questionType = {
-            type,
-            answer: a!,
-          } as import("../src/engine/types.ts").QuestionType;
-          break;
-        case "AnswerOf":
-          questionType = { type, questionIndex: qIdx! };
-          break;
-        case "LetterDist":
-          questionType = { type, questionIndex: qIdx! };
-          break;
-        case "SameAsWhich":
-          questionType = { type, questionIndex: qIdx! };
-          break;
-        case "EqualCount":
-          questionType = { type, answer: a! };
-          break;
-        default:
-          questionType = {
-            type,
-          } as import("../src/engine/types.ts").QuestionType;
-          break;
-      }
-
-      const options: import("../src/engine/types.ts").OptionDef[] = [];
-      if (q.c) {
-        for (const c of q.c) {
-          if (c == null) {
-            options.push({
-              value: null,
-              claim: {
-                questionType: { type: "CountAnswer", answer: "A" },
-                value: 0,
-              },
-            });
-          } else {
-            const ct = c.t as string;
-            const ca = typeof c.a === "number" ? LETTERS[c.a as number] : undefined;
-            const cv = c.v as number;
-            let qt: import("../src/engine/types.ts").QuestionType;
-            switch (ct) {
-              case "CountAnswer":
-                qt = { type: ct, answer: ca! };
-                break;
-              case "CountConsonant":
-              case "CountVowel":
-              case "MostCommon":
-                qt = { type: ct };
-                break;
-              case "CountAnswerAfter":
-                qt = { type: ct, answer: ca!, afterIndex: c.q as number };
-                break;
-              case "CountAnswerBefore":
-                qt = { type: ct, answer: ca!, beforeIndex: c.q as number };
-                break;
-              case "AnswerOf":
-                qt = { type: ct, questionIndex: c.q as number };
-                break;
-              case "FirstWith":
-              case "LastWith":
-                qt = { type: ct, answer: ca! };
-                break;
-              default:
-                qt = { type: "CountAnswer", answer: "A" };
-                break;
-            }
-            options.push({ value: null, claim: { questionType: qt, value: cv } });
-          }
-        }
-      } else if (q.o) {
-        for (const v of q.o) {
-          options.push({ value: v });
-        }
-      }
-
-      return { options, questionType };
-    });
-
-    const puzzle: import("../src/engine/types.ts").Puzzle = {
-      id: "cv",
-      title: "CV",
-      difficulty: "1",
-      questions,
-    };
+    const wrapped = { "0101": { "1": compact } } as unknown as Parameters<
+      typeof parseCompactYear
+    >[0];
+    const puzzle = parseCompactYear(wrapped)["0101"]["1"];
     const fp = flattenPuzzle(puzzle);
+    const n = puzzle.questions.length;
 
-    const answers: (import("../src/engine/types.ts").Answer | null)[] = new Array(n).fill(null);
+    const answers: (Answer | null)[] = new Array(n).fill(null);
     const eliminated: number[] = new Array(n).fill(0);
     for (let i = 0; i < n; i++) {
       const s = state[i];

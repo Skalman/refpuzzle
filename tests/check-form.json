@@ -1,16 +1,38 @@
 {
   "tests": [
-    { "section": "=== SameAs ===" },
+    {
+      "section": "=== SameAs ==="
+    },
     {
       "name": "SameAs: single none option",
       "puzzle": {
+        "o": [
+          [1, null, 3, 4, 5],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, null, 3, 4, 5] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": false
@@ -18,13 +40,33 @@
     {
       "name": "SameAs: duplicate none options",
       "puzzle": {
+        "o": [
+          [1, null, 3, null, 5],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, null, 3, null, 5] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
@@ -32,13 +74,33 @@
     {
       "name": "SameAs: self-reference",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
@@ -46,13 +108,33 @@
     {
       "name": "SameAs: duplicate targets",
       "puzzle": {
+        "o": [
+          [1, 2, 1, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, 2, 1, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
@@ -60,41 +142,100 @@
     {
       "name": "SameAs: valid",
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, 5],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, 2, 3, 4, 5] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": false
     },
-    { "section": "=== OnlySame ===" },
+    {
+      "section": "=== OnlySame ==="
+    },
     {
       "name": "OnlySame: self-reference",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "OnlySame" }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
     },
-    { "section": "=== EqualCount ===" },
+    {
+      "section": "=== EqualCount ==="
+    },
     {
       "name": "EqualCount: self-referencing letter",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
@@ -102,47 +243,111 @@
     {
       "name": "EqualCount: valid",
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": false
     },
-    { "section": "=== TrueStmt claims ===" },
+    {
+      "section": "=== TrueStmt claims ==="
+    },
     {
       "name": "TrueStmt: EqualCount claim self-referencing",
       "puzzle": {
+        "o": [
+          [1, 0, 2, 1, 1],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "a": 0, "t": "CountAnswer", "v": 1 },
-              { "a": 0, "t": "EqualCount", "v": 0 },
-              { "a": 1, "t": "CountAnswer", "v": 2 },
-              { "a": 2, "t": "CountAnswer", "v": 1 },
-              { "a": 3, "t": "CountAnswer", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "a": 0,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 0,
+            "t": "EqualCount"
+          },
+          {
+            "a": 1,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 2,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 3,
+            "t": "CountAnswer"
+          }
         ]
       },
       "expectError": true
     },
-    { "section": "=== AnswerOf ===" },
+    {
+      "section": "=== AnswerOf ==="
+    },
     {
       "name": "AnswerOf: self-reference",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerOf",
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
@@ -150,37 +355,87 @@
     {
       "name": "AnswerOf: out of range",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 5 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerOf",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
     },
-    { "section": "=== Duplicate values ===" },
+    {
+      "section": "=== Duplicate values ==="
+    },
     {
       "name": "CountAnswer: duplicate option values",
       "puzzle": {
+        "o": [
+          [1, 2, 2, 3, 0],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [1, 2, 2, 3, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true
     },
-    { "section": "=== Range checks ===" },
+    {
+      "section": "=== Range checks ==="
+    },
     {
       "name": "CountAnswerBefore: value exceeds range",
       "puzzle": {
+        "o": [
+          [0, 1, 4, 2, 3],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "CountAnswerBefore", "a": 0, "q": 3 }, "o": [0, 1, 4, 2, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "CountAnswerBefore",
+            "a": 0,
+            "q": 3
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "expectError": true

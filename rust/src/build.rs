@@ -2212,26 +2212,25 @@ mod tests {
         let build_puzzle =
             |type_json: &Value, qi: usize, n: usize, oc: usize, v: Option<i64>| -> Value {
                 let mut qs = Vec::with_capacity(n);
+                let mut opts: Vec<Value> = Vec::with_capacity(n);
                 for i in 0..n {
                     if i == qi {
-                        let mut o: Vec<Value> = Vec::with_capacity(oc);
-                        o.push(match v {
+                        qs.push(type_json.clone());
+                        let mut row: Vec<Value> = Vec::with_capacity(oc);
+                        row.push(match v {
                             Some(x) => json!(x),
                             None => Value::Null,
                         });
                         for _ in 1..oc {
-                            o.push(Value::Null);
+                            row.push(Value::Null);
                         }
-                        qs.push(json!({ "o": o, "t": type_json }));
+                        opts.push(json!(row));
                     } else {
-                        let mut o: Vec<Value> = Vec::with_capacity(oc);
-                        for _ in 0..oc {
-                            o.push(Value::Null);
-                        }
-                        qs.push(json!({ "o": o, "t": { "t": "AnswerIsSelf" } }));
+                        qs.push(json!({ "t": "AnswerIsSelf" }));
+                        opts.push(json!(vec![Value::Null; oc]));
                     }
                 }
-                json!({ "q": qs })
+                json!({ "q": qs, "o": opts })
             };
 
         for test in tests {

@@ -57,25 +57,31 @@ impl OptionValue {
     }
 }
 
-// Wire format for OptionValue: a JSON number (NONE → -1, Num(v) → v).
+// Wire format for OptionValue: JSON `null` for NONE, integer for Num(v).
 // UNUSED never serializes — it's a storage-only artifact of fixed arrays.
 impl Serialize for OptionValue {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        s.serialize_i16(self.to_i16())
+        if self.is_none() {
+            s.serialize_none()
+        } else if self.is_num() {
+            s.serialize_u8(self.value())
+        } else {
+            // UNUSED slipped through — serialize as null defensively rather
+            // than panicking from the debug_assert in value().
+            s.serialize_none()
+        }
     }
 }
 
 impl<'de> Deserialize<'de> for OptionValue {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let v = i16::deserialize(d)?;
-        if v == NONE_VAL {
-            Ok(Self::NONE)
-        } else if (0..0xFE).contains(&v) {
-            Ok(Self::num(v as u8))
-        } else {
-            Err(serde::de::Error::custom(format!(
-                "invalid claim value: {v}"
-            )))
+        let v = Option::<i16>::deserialize(d)?;
+        match v {
+            None => Ok(Self::NONE),
+            Some(n) if (0..0xFE).contains(&n) => Ok(Self::num(n as u8)),
+            Some(n) => Err(serde::de::Error::custom(format!(
+                "invalid option value: {n}"
+            ))),
         }
     }
 }

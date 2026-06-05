@@ -1,15 +1,32 @@
 {
   "tests": [
-    { "section": "=== count_answer ===" },
+    {
+      "section": "=== count_answer ==="
+    },
     {
       "name": "count_answer: count exceeds value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 1, 0, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [2, 1, 0, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "A", ""],
@@ -19,11 +36,26 @@
       "name": "count_answer: count + remaining < value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 1, 0, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [2, 1, 0, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "C", "D"],
@@ -33,11 +65,26 @@
       "name": "count_answer: exact count, no remaining → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "A", "B"],
@@ -47,11 +94,26 @@
       "name": "count_answer: count < value, remaining could match → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 2, 3, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [4, 2, 3, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "", ""],
@@ -61,11 +123,26 @@
       "name": "count_answer: count equals value but remaining > 0 → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 1, 3, 2, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [4, 1, 3, 2, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "", "B"],
@@ -75,11 +152,26 @@
       "name": "count_answer: count matches, remaining eliminated → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 1, 3, 2, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [4, 1, 3, 2, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "a", "B"],
@@ -89,26 +181,59 @@
       "name": "count_answer: null value → invalid (count can never be null)",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 0, 3, 1, 2],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 4 }, "o": [null, 0, 3, 1, 2] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 4
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "", "", ""],
       "expect": "invalid"
     },
-    { "section": "=== count_answer_before / count_answer_after ===" },
+    {
+      "section": "=== count_answer_before / count_answer_after ==="
+    },
     {
       "name": "count_answer_before: count in range exceeds value → invalid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "CountAnswerBefore", "a": 0, "q": 2 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "CountAnswerBefore",
+            "a": 0,
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "A", ""],
@@ -118,11 +243,27 @@
       "name": "count_answer_before: exact count in range → valid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "CountAnswerBefore", "a": 0, "q": 2 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "CountAnswerBefore",
+            "a": 0,
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "B", ""],
@@ -132,11 +273,27 @@
       "name": "count_answer_after: count + remaining < value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswerAfter", "a": 0, "q": 1 }, "o": [4, 3, 2, 3, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswerAfter",
+            "a": 0,
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "B", "B", "C"],
@@ -146,26 +303,58 @@
       "name": "count_answer_after: exact count → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswerAfter", "a": 0, "q": 1 }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswerAfter",
+            "a": 0,
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "B", "A", "B"],
       "expect": "consistent"
     },
-    { "section": "=== count_vowel / count_consonant ===" },
+    {
+      "section": "=== count_vowel / count_consonant ==="
+    },
     {
       "name": "count_vowel: count exceeds value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 1, 0, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountVowel" }, "o": [2, 1, 0, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountVowel"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "E", "B"],
@@ -175,11 +364,25 @@
       "name": "count_vowel: exact count → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 2, 3, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountVowel" }, "o": [4, 2, 3, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountVowel"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "E", "B"],
@@ -189,11 +392,25 @@
       "name": "count_vowel: unanswered could be vowels → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 2, 3, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountVowel" }, "o": [4, 2, 3, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountVowel"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "", ""],
@@ -203,11 +420,25 @@
       "name": "count_consonant: count + remaining < value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountConsonant" }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "E", "A"],
@@ -217,25 +448,53 @@
       "name": "count_consonant: exact count → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountConsonant" }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "B", "C", "A"],
       "expect": "consistent"
     },
-    { "section": "=== answer_of_question ===" },
+    {
+      "section": "=== answer_of_question ==="
+    },
     {
       "name": "answer_of: target has different answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 0, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 1 }, "o": [1, 0, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerOf",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "C", ""],
@@ -245,10 +504,22 @@
       "name": "answer_of: target matches → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 0, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 1 }, "o": [1, 0, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerOf",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", ""],
@@ -258,24 +529,50 @@
       "name": "answer_of: target not answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 0, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerOf", "q": 1 }, "o": [1, 0, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerOf",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "", ""],
       "expect": "pending"
     },
-    { "section": "=== letter_distance ===" },
+    {
+      "section": "=== letter_distance ==="
+    },
     {
       "name": "letter_distance: distance doesn't match → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LetterDist", "q": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LetterDist",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", ""],
@@ -285,10 +582,22 @@
       "name": "letter_distance: distance matches → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LetterDist", "q": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LetterDist",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", ""],
@@ -298,25 +607,53 @@
       "name": "letter_distance: other not answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LetterDist", "q": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LetterDist",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "", ""],
       "expect": "pending"
     },
-    { "section": "=== same_answer_as ===" },
+    {
+      "section": "=== same_answer_as ==="
+    },
     {
       "name": "same_answer_as: target has different answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, 2, 0, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "", ""],
@@ -326,11 +663,25 @@
       "name": "same_answer_as: target has same answer → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, 2, 0, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "", ""],
@@ -340,26 +691,56 @@
       "name": "same_answer_as: target not answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAs" }, "o": [1, 2, 0, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "", "", ""],
       "expect": "pending"
     },
-    { "section": "=== unique_answer ===" },
+    {
+      "section": "=== unique_answer ==="
+    },
     {
       "name": "unique_answer: duplicate exists → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NoOtherHasAnswer"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "B", "C"],
@@ -369,11 +750,25 @@
       "name": "unique_answer: all answered, no duplicate → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NoOtherHasAnswer"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "C", "D"],
@@ -383,11 +778,25 @@
       "name": "unique_answer: no duplicate yet, unanswered could match → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NoOtherHasAnswer"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "", ""],
@@ -397,26 +806,57 @@
       "name": "unique_answer: unanswered but answer eliminated → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NoOtherHasAnswer" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NoOtherHasAnswer"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "a", "a"],
       "expect": "consistent"
     },
-    { "section": "=== first_with_answer ===" },
+    {
+      "section": "=== first_with_answer ==="
+    },
     {
       "name": "first_with: claimed position has wrong answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, null, 1, 2, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, null, 1, 2, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "", ""],
@@ -426,11 +866,26 @@
       "name": "first_with: earlier question has the answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "A", ""],
@@ -440,11 +895,26 @@
       "name": "first_with: claims None but A exists → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "A", "B", "C"],
@@ -454,11 +924,26 @@
       "name": "first_with: correct first, all earlier answered → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "A", ""],
@@ -468,11 +953,26 @@
       "name": "first_with: claims None, no A exists → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "B", "C", "B"],
@@ -482,11 +982,26 @@
       "name": "first_with: position has A but earlier unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "", "A", ""],
@@ -496,11 +1011,26 @@
       "name": "first_with: claimed position unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "", ""],
@@ -510,11 +1040,26 @@
       "name": "first_with: earlier unanswered has A eliminated → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "a", "A", ""],
@@ -524,12 +1069,29 @@
       "name": "consec_ident: Q1=C but C eliminated from Q2 → invalid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [null, 0, 1, 2, 3],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "ConsecIdent" }, "o": [null, 0, 1, 2, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "c", "C", "", ""],
@@ -539,26 +1101,58 @@
       "name": "first_with: claimed position has answer eliminated → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "FirstWith", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "FirstWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "", "", "a"],
       "expect": "invalid"
     },
-    { "section": "=== last_with_answer ===" },
+    {
+      "section": "=== last_with_answer ==="
+    },
     {
       "name": "last_with: later question has the answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LastWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LastWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "A", ""],
@@ -568,11 +1162,26 @@
       "name": "last_with: correct last, all later answered → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LastWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LastWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "B", "C"],
@@ -582,26 +1191,59 @@
       "name": "last_with: correct position but later unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, null, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LastWith", "a": 0 }, "o": [0, 1, 2, null, 3] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LastWith",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "", "C"],
       "expect": "pending"
     },
-    { "section": "=== closest_after ===" },
+    {
+      "section": "=== closest_after ==="
+    },
     {
       "name": "closest_after: correct closest → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ClosestAfter", "a": 0, "q": 0 }, "o": [null, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ClosestAfter",
+            "a": 0,
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "B", "C"],
@@ -611,26 +1253,60 @@
       "name": "closest_after: earlier match in range → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ClosestAfter", "a": 0, "q": 0 }, "o": [null, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ClosestAfter",
+            "a": 0,
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "A", "B"],
       "expect": "invalid"
     },
-    { "section": "=== closest_before ===" },
+    {
+      "section": "=== closest_before ==="
+    },
     {
       "name": "closest_before: correct closest → valid",
       "qi": 3,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, 2, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "ClosestBefore", "a": 0, "q": 3 }, "o": [0, 1, 2, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "ClosestBefore",
+            "a": 0,
+            "q": 3
+          }
         ]
       },
       "state": ["B", "A", "B", "B"],
@@ -640,26 +1316,58 @@
       "name": "closest_before: later match in range → invalid",
       "qi": 3,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, 2, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "ClosestBefore", "a": 0, "q": 3 }, "o": [0, 1, 2, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "ClosestBefore",
+            "a": 0,
+            "q": 3
+          }
         ]
       },
       "state": ["A", "A", "A", "A"],
       "expect": "invalid"
     },
-    { "section": "=== previous_same_answer ===" },
+    {
+      "section": "=== previous_same_answer ==="
+    },
     {
       "name": "prev_same: target >= self → invalid",
       "qi": 1,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [0, 2, 1, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 2, 1, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["", "B", "", ""],
@@ -669,11 +1377,25 @@
       "name": "prev_same: target has different answer → invalid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "A", ""],
@@ -683,11 +1405,25 @@
       "name": "prev_same: closer match exists → invalid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "A", ""],
@@ -697,11 +1433,25 @@
       "name": "prev_same: claims None but match exists → invalid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "C", "C", ""],
@@ -711,11 +1461,25 @@
       "name": "prev_same: correct target, no closer → valid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "A", ""],
@@ -725,11 +1489,25 @@
       "name": "prev_same: claims None, no match → valid",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "B", "C", ""],
@@ -739,26 +1517,56 @@
       "name": "prev_same: target ok but closer unanswered → pending",
       "qi": 2,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [0, 1, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "PrevSame" }, "o": [0, 1, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "PrevSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "", "A", ""],
       "expect": "pending"
     },
-    { "section": "=== next_same_answer ===" },
+    {
+      "section": "=== next_same_answer ==="
+    },
     {
       "name": "next_same: target <= self → invalid",
       "qi": 1,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "NextSame" }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "NextSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["", "A", "", ""],
@@ -768,11 +1576,25 @@
       "name": "next_same: correct next, no closer → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NextSame" }, "o": [null, null, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NextSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "C", "D"],
@@ -782,26 +1604,56 @@
       "name": "next_same: target unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "NextSame" }, "o": [null, null, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "NextSame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "", ""],
       "expect": "pending"
     },
-    { "section": "=== only_same_answer ===" },
+    {
+      "section": "=== only_same_answer ==="
+    },
     {
       "name": "only_same: target has different answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlySame" }, "o": [1, 2, 3, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "C", "D"],
@@ -811,11 +1663,25 @@
       "name": "only_same: non-target also has same answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlySame" }, "o": [1, 2, 3, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "A", "B"],
@@ -825,11 +1691,25 @@
       "name": "only_same: exactly one match at target → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlySame" }, "o": [1, 2, 3, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "B", "C"],
@@ -839,26 +1719,56 @@
       "name": "only_same: target matches but others unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlySame" }, "o": [1, 2, 3, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "", ""],
       "expect": "pending"
     },
-    { "section": "=== consecutive_identical ===" },
+    {
+      "section": "=== consecutive_identical ==="
+    },
     {
       "name": "consec_ident: claimed pair has different answers → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 0, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ConsecIdent" }, "o": [null, 1, 2, 0, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "A", "B", "C"],
@@ -868,11 +1778,25 @@
       "name": "consec_ident: claims None but pair exists → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 0, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ConsecIdent" }, "o": [null, 1, 2, 0, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "B", "C"],
@@ -882,11 +1806,25 @@
       "name": "consec_ident: one matching pair, all others different → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 0, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ConsecIdent" }, "o": [null, 1, 2, 0, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "A", "B"],
@@ -896,11 +1834,25 @@
       "name": "consec_ident: claims None, all answered differently → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 0, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ConsecIdent" }, "o": [null, 1, 2, 0, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "C", "D"],
@@ -910,26 +1862,57 @@
       "name": "consec_ident: pair matches but others uncertain → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, 1, 2, 0, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "ConsecIdent" }, "o": [null, 1, 2, 0, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "ConsecIdent"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "A", ""],
       "expect": "pending"
     },
-    { "section": "=== only_odd_with_answer ===" },
+    {
+      "section": "=== only_odd_with_answer ==="
+    },
     {
       "name": "only_odd: claimed position is even (1-indexed) → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "", "", ""],
@@ -939,11 +1922,26 @@
       "name": "only_odd: claimed position has wrong answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "B", ""],
@@ -953,12 +1951,30 @@
       "name": "only_odd: another odd position has the answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "A", "B", "A"],
@@ -968,12 +1984,30 @@
       "name": "only_odd: only one odd position has A → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "A", "B", "B"],
@@ -983,12 +2017,30 @@
       "name": "only_odd: correct position but other odd unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "B", "A", "B", ""],
@@ -998,26 +2050,58 @@
       "name": "only_odd: claims None but odd position has A → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyOdd", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["E", "B", "A", "B"],
       "expect": "invalid"
     },
-    { "section": "=== only_even_with_answer ===" },
+    {
+      "section": "=== only_even_with_answer ==="
+    },
     {
       "name": "only_even: claimed position is odd (1-indexed) → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "", "", ""],
@@ -1027,11 +2111,26 @@
       "name": "only_even: claimed position has wrong answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "B", "B", ""],
@@ -1041,12 +2140,30 @@
       "name": "only_even: another even position has the answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "B", "A", "B"],
@@ -1056,12 +2173,30 @@
       "name": "only_even: only one even position has A → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "B", "B", "B"],
@@ -1071,12 +2206,30 @@
       "name": "only_even: correct position but other even unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["B", "A", "B", "", "B"],
@@ -1086,35 +2239,76 @@
       "name": "only_even: claims None but even position has A → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "OnlyEven", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["E", "A", "B", "B"],
       "expect": "invalid"
     },
-    { "section": "=== only_true_statement ===" },
+    {
+      "section": "=== only_true_statement ==="
+    },
     {
       "name": "only_true_stmt: selected claim true, depends on own answer → consistent",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 0, 3, 1, 1],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "t": "CountAnswer", "a": 0, "v": 2 },
-              { "t": "CountAnswer", "a": 0, "v": 0 },
-              { "t": "CountConsonant", "v": 3 },
-              { "t": "CountConsonant", "v": 1 },
-              { "t": "CountVowel", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountVowel"
+          }
         ]
       },
       "state": ["B", "B", "D", "D"],
@@ -1124,20 +2318,44 @@
       "name": "only_true_stmt: selected claim is false → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 0, 3, 1, 1],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "t": "CountAnswer", "a": 0, "v": 2 },
-              { "t": "CountAnswer", "a": 0, "v": 0 },
-              { "t": "CountConsonant", "v": 3 },
-              { "t": "CountConsonant", "v": 1 },
-              { "t": "CountVowel", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountVowel"
+          }
         ]
       },
       "state": ["A", "B", "D", "D"],
@@ -1147,20 +2365,44 @@
       "name": "only_true_stmt: not all answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 0, 3, 1, 1],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "t": "CountAnswer", "a": 0, "v": 2 },
-              { "t": "CountAnswer", "a": 0, "v": 0 },
-              { "t": "CountConsonant", "v": 3 },
-              { "t": "CountConsonant", "v": 1 },
-              { "t": "CountVowel", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountVowel"
+          }
         ]
       },
       "state": ["B", "B", "", ""],
@@ -1170,20 +2412,44 @@
       "name": "only_true_stmt: selected claim provably false with partial state → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [3, 0, 3, 1, 1],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "t": "CountAnswer", "a": 0, "v": 3 },
-              { "t": "CountAnswer", "a": 1, "v": 0 },
-              { "t": "CountConsonant", "v": 3 },
-              { "t": "CountConsonant", "v": 1 },
-              { "t": "CountVowel", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "CountAnswer",
+            "a": 1
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountConsonant"
+          },
+          {
+            "t": "CountVowel"
+          }
         ]
       },
       "state": ["B", "B", "", ""],
@@ -1193,21 +2459,51 @@
       "name": "only_true_stmt: selected claim provably true, all others invalid → consistent",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 0, 1, 4, 3],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "t": "CountAnswer", "a": 2, "v": 2 },
-              { "t": "CountAnswer", "a": 2, "v": 0 },
-              { "t": "CountAnswer", "a": 2, "v": 1 },
-              { "t": "CountAnswer", "a": 2, "v": 4 },
-              { "t": "CountAnswer", "a": 2, "v": 3 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "t": "CountAnswer",
+            "a": 2
+          },
+          {
+            "t": "CountAnswer",
+            "a": 2
+          },
+          {
+            "t": "CountAnswer",
+            "a": 2
+          },
+          {
+            "t": "CountAnswer",
+            "a": 2
+          },
+          {
+            "t": "CountAnswer",
+            "a": 2
+          }
         ]
       },
       "state": ["A", "C", "C", "B", "D"],
@@ -1217,20 +2513,47 @@
       "name": "only_true_stmt: claim doesn't depend on own answer → valid (proven)",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 0, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "q": 1, "t": "AnswerOf", "v": 1 },
-              { "q": 1, "t": "AnswerOf", "v": 0 },
-              { "q": 1, "t": "AnswerOf", "v": 2 },
-              { "q": 1, "t": "AnswerOf", "v": 3 },
-              { "q": 1, "t": "AnswerOf", "v": 4 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          },
+          {
+            "q": 1,
+            "t": "AnswerOf"
+          }
         ]
       },
       "state": ["A", "B", "C", "D"],
@@ -1240,49 +2563,105 @@
       "name": "only_true_stmt: all options eliminated → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 1, 2, 1],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
           {
-            "t": { "t": "TrueStmt" },
-            "c": [
-              { "a": 0, "t": "CountAnswer", "v": 1 },
-              { "a": 0, "t": "CountAnswer", "v": 2 },
-              { "a": 1, "t": "CountAnswer", "v": 1 },
-              { "a": 1, "t": "CountAnswer", "v": 2 },
-              { "a": 2, "t": "CountAnswer", "v": 1 }
-            ]
+            "t": "TrueStmt"
           },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ],
+        "t": [
+          {
+            "a": 0,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 0,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 1,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 1,
+            "t": "CountAnswer"
+          },
+          {
+            "a": 2,
+            "t": "CountAnswer"
+          }
         ]
       },
       "state": ["abcde", "", "", ""],
       "expect": "invalid"
     },
-    { "section": "=== answer_is_self ===" },
+    {
+      "section": "=== answer_is_self ==="
+    },
     {
       "name": "answer_is_self: always valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "", ""],
       "expect": "consistent"
     },
-    { "section": "=== most_common_count ===" },
+    {
+      "section": "=== most_common_count ==="
+    },
     {
       "name": "most_common_count: letter already exceeds value → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "MostCommonCount" }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "MostCommonCount"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["D", "A", "A", "A"],
@@ -1292,11 +2671,25 @@
       "name": "most_common_count: all answered, max matches → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "MostCommonCount" }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "MostCommonCount"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "A", "B"],
@@ -1306,32 +2699,80 @@
       "name": "most_common_count: unanswered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [4, 3, 2, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "MostCommonCount" }, "o": [4, 3, 2, 1, 0] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "MostCommonCount"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "", ""],
       "expect": "pending"
     },
-    { "section": "=== least_common_answer / most_common_answer ===" },
+    {
+      "section": "=== least_common_answer / most_common_answer ==="
+    },
     {
       "name": "least_common: all answered, unique least → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "B", "C", "C", "D", "D", "E", "E", "E"],
@@ -1341,12 +2782,29 @@
       "name": "least_common: all answered, wrong → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "B", "C", "D"],
@@ -1356,11 +2814,25 @@
       "name": "least_common: not all answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "", ""],
@@ -1370,11 +2842,25 @@
       "name": "most_common: all answered, correct → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "MostCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "MostCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "A", "B"],
@@ -1384,26 +2870,57 @@
       "name": "most_common: all answered, wrong → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "MostCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "MostCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "B", "B"],
       "expect": "invalid"
     },
-    { "section": "=== equal_count_as ===" },
+    {
+      "section": "=== equal_count_as ==="
+    },
     {
       "name": "equal_count: option is reference answer → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "B", "A", "B"],
@@ -1413,11 +2930,26 @@
       "name": "equal_count: all answered, counts equal → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "B", "B"],
@@ -1427,11 +2959,26 @@
       "name": "equal_count: all answered, counts differ → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "A", "B"],
@@ -1441,12 +2988,30 @@
       "name": "equal_count: count ranges can't overlap → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "A", "b", "b"],
@@ -1456,11 +3021,26 @@
       "name": "equal_count: not all answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "", ""],
@@ -1470,11 +3050,26 @@
       "name": "equal_count: None correct, no other letter matches → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["E", "A", "A", "B"],
@@ -1484,11 +3079,26 @@
       "name": "equal_count: None wrong, another letter matches → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["E", "A", "B", "B"],
@@ -1498,27 +3108,62 @@
       "name": "equal_count: None, not all answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "EqualCount", "a": 0 }, "o": [1, 2, 3, 4, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "EqualCount",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["E", "A", "", ""],
       "expect": "pending"
     },
-    { "section": "=== same_answer_which ===" },
+    {
+      "section": "=== same_answer_which ==="
+    },
     {
       "name": "same_answer_which: correct match → valid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "B", "C", "B"],
@@ -1528,12 +3173,30 @@
       "name": "same_answer_which: option target mismatch → invalid",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["A", "A", "B", "C", "B"],
@@ -1543,26 +3206,58 @@
       "name": "same_answer_which: ref not answered → pending",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "SameAsWhich", "q": 2 }, "o": [1, 3, 4, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["C", "A", "", "C", "B"],
       "expect": "pending"
     },
-    { "section": "=== unanswered question ===" },
+    {
+      "section": "=== unanswered question ==="
+    },
     {
       "name": "unanswered question → neutral",
       "qi": 0,
       "puzzle": {
+        "o": [
+          [2, 1, 0, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 0 }, "o": [2, 1, 0, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [null, null, null, null, null] }
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "state": ["", "A", "B"],

@@ -2,7 +2,7 @@ import { writeFileSync, readFileSync, statSync } from "node:fs";
 import { generateConstructive as generate } from "../src/generator/construct.ts";
 import { profiles } from "../src/generator/difficulty.ts";
 import { RNG } from "../src/generator/rng.ts";
-import type { Puzzle, QuestionType, Claim } from "../src/engine/types.ts";
+import type { Puzzle, QuestionType } from "../src/engine/types.ts";
 
 // ── CLI ──
 
@@ -250,25 +250,37 @@ function compactQuestionType(qt: QuestionType): Record<string, unknown> {
   return obj;
 }
 
-function compactClaim(claim: Claim): Record<string, unknown> {
-  const obj = compactQuestionType(claim.questionType) as Record<string, unknown>;
-  obj.v = claim.value;
-  return obj;
-}
-
 function puzzleToJson(puzzle: Puzzle): Record<string, unknown> {
   const oc = puzzle.optionCount ?? 5;
-  const questions = puzzle.questions.map((q) => {
-    const obj: Record<string, unknown> = {};
+  const qs = puzzle.questions.map((q) => compactQuestionType(q.questionType));
+  const opts = puzzle.questions.map((q) => {
     if (q.questionType.type === "TrueStmt") {
-      obj.c = q.options.slice(0, oc).map((o) => ("claim" in o ? compactClaim(o.claim) : null));
-    } else {
-      obj.o = q.options.slice(0, oc).map((o) => o.value);
+      return q.options.slice(0, oc).map((o) => {
+        if (!("claim" in o)) return null;
+        const v = o.claim.value;
+        return v === -1 ? null : v;
+      });
     }
-    obj.t = compactQuestionType(q.questionType);
-    return obj;
+    // Identity-option types: emit letter indices verbatim (matches Rust).
+    if (q.questionType.type === "NoOtherHasAnswer" || q.questionType.type === "AnswerIsSelf") {
+      return Array.from({ length: oc }, (_, oi) => oi);
+    }
+    return q.options.slice(0, oc).map((o) => o.value);
   });
-  return { q: questions };
+  // Alphabetical key order (o, q[, t]) matches Rust's serde_json BTreeMap.
+  const out: Record<string, unknown> = { o: opts, q: qs };
+  const tsQi = puzzle.questions.findIndex((q) => q.questionType.type === "TrueStmt");
+  if (tsQi >= 0) {
+    const claims = puzzle.questions[tsQi].options.slice(0, 5);
+    const types: Record<string, unknown>[] = new Array(5);
+    for (let oi = 0; oi < 5; oi++) {
+      const o = claims[oi];
+      types[oi] =
+        o && "claim" in o ? compactQuestionType(o.claim.questionType) : { t: "AnswerIsSelf" };
+    }
+    out.t = types;
+  }
+  return out;
 }
 
 // ── Generation ──

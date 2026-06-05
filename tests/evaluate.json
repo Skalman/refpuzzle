@@ -1,14 +1,31 @@
 {
   "tests": [
-    { "section": "=== CountAnswer ===" },
+    {
+      "section": "=== CountAnswer ==="
+    },
     {
       "name": "count_answer: count(B)=1, optB=1 → true",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "CountAnswer",
+            "a": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["B", "C", "C", "A"],
@@ -18,26 +35,58 @@
     {
       "name": "count_answer: count(B)=1, optC=2 → false",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "CountAnswer", "a": 1 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "CountAnswer",
+            "a": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["C", "B", "C", "A"],
       "qi": 0,
       "expect": false
     },
-    { "section": "=== AnswerOf ===" },
+    {
+      "section": "=== AnswerOf ==="
+    },
     {
       "name": "answer_of: Q1=C, Q2 selects C → optC matches Q1 answer",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerOf",
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["C", "C", "C", "A"],
@@ -47,26 +96,59 @@
     {
       "name": "answer_of: Q1=C, Q2 selects A → optA=0 ≠ 2 (C)",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerOf", "q": 0 }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerOf",
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["C", "A", "C", "A"],
       "qi": 1,
       "expect": false
     },
-    { "section": "=== ClosestAfter ===" },
+    {
+      "section": "=== ClosestAfter ==="
+    },
     {
       "name": "closest_after: closest C after Q1 is Q3, optC=3 matches",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, null],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "ClosestAfter", "a": 2, "q": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "ClosestAfter",
+            "a": 2,
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["B", "B", "C", "A"],
@@ -76,26 +158,59 @@
     {
       "name": "closest_after: optA=0 does not match position 3",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, null],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "ClosestAfter", "a": 2, "q": 0 }, "o": [0, 1, 2, 3, null] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "ClosestAfter",
+            "a": 2,
+            "q": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["B", "B", "A", "C"],
       "qi": 2,
       "expect": false
     },
-    { "section": "=== LetterDist ===" },
+    {
+      "section": "=== LetterDist ==="
+    },
     {
       "name": "letter_dist: |B-C|=1, optB=1 matches",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "LetterDist", "q": 0 }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "LetterDist",
+            "q": 0
+          }
         ]
       },
       "answers": ["C", "B", "C", "B"],
@@ -105,25 +220,53 @@
     {
       "name": "letter_dist: |A-C|=2, optA=0 does not match",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "LetterDist", "q": 0 }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "LetterDist",
+            "q": 0
+          }
         ]
       },
       "answers": ["C", "B", "C", "A"],
       "qi": 3,
       "expect": false
     },
-    { "section": "=== LeastCommon (tie rejection) ===" },
+    {
+      "section": "=== LeastCommon (tie rejection) ==="
+    },
     {
       "name": "least_common: A=1 B=2 C=D=E=0, three-way tie → false for C",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["C", "B", "B"],
@@ -133,24 +276,48 @@
     {
       "name": "least_common: A=1 B=2 C=D=E=0, three-way tie → false for A",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "LeastCommon" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["A", "B", "B"],
       "qi": 0,
       "expect": false
     },
-    { "section": "=== LeastCommon (optionCount=3) ===" },
+    {
+      "section": "=== LeastCommon (optionCount=3) ==="
+    },
     {
       "name": "least_common_3opt: A=1 B=2 C=0, claims C → true",
       "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [0, 1, 2],
+          [1, 2, 0]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "LeastCommon" }, "o": [1, 2, 0] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "LeastCommon"
+          }
         ]
       },
       "answers": ["A", "B", "B"],
@@ -160,24 +327,48 @@
     {
       "name": "least_common_3opt: A=2 B=1 C=0, claims B → false",
       "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [0, 1, 2],
+          [1, 2, 0]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "LeastCommon" }, "o": [1, 2, 0] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "LeastCommon"
+          }
         ]
       },
       "answers": ["A", "B", "A"],
       "qi": 2,
       "expect": false
     },
-    { "section": "=== MostCommon (optionCount=3) ===" },
+    {
+      "section": "=== MostCommon (optionCount=3) ==="
+    },
     {
       "name": "most_common_3opt: A=1 B=2 C=0, claims B → true",
       "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [0, 1, 2],
+          [1, 2, 0]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "MostCommon" }, "o": [1, 2, 0] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "MostCommon"
+          }
         ]
       },
       "answers": ["B", "B", "A"],
@@ -187,24 +378,48 @@
     {
       "name": "most_common_3opt: A=1 B=2 C=0, claims A → false",
       "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [0, 1, 2],
+          [1, 2, 0]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2] },
-          { "t": { "t": "MostCommon" }, "o": [1, 2, 0] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "MostCommon"
+          }
         ]
       },
       "answers": ["B", "B", "C"],
       "qi": 2,
       "expect": false
     },
-    { "section": "=== AnswerIsSelf ===" },
+    {
+      "section": "=== AnswerIsSelf ==="
+    },
     {
       "name": "answer_is_self: always true",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["A", "B", "B"],
@@ -214,25 +429,53 @@
     {
       "name": "answer_is_self: always true for E",
       "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["A", "E", "B"],
       "qi": 1,
       "expect": true
     },
-    { "section": "=== SameAsWhich ===" },
+    {
+      "section": "=== SameAsWhich ==="
+    },
     {
       "name": "same_as_which: Q4 has same answer as Q2 → true",
       "puzzle": {
+        "o": [
+          [2, 0, 3, 0, 1],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAsWhich", "q": 1 }, "o": [2, 0, 3, 0, 1] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAsWhich",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["C", "A", "B", "A"],
@@ -242,11 +485,26 @@
     {
       "name": "same_as_which: Q3 does not have same answer as Q2 → false",
       "puzzle": {
+        "o": [
+          [2, 0, 3, 0, 1],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
+        ],
         "q": [
-          { "t": { "t": "SameAsWhich", "q": 1 }, "o": [2, 0, 3, 0, 1] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] },
-          { "t": { "t": "AnswerIsSelf" }, "o": [0, 1, 2, 3, 4] }
+          {
+            "t": "SameAsWhich",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
         ]
       },
       "answers": ["A", "A", "B", "A"],
