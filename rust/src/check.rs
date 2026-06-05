@@ -211,13 +211,11 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
             let type_tag = format::format_type_tag(&fp.question_types[qi]);
             let options: Vec<Option<i64>> = (0..oc)
                 .map(|oi| {
-                    let v = fp.options[qi][oi].to_i16();
-                    if matches!(fp.question_types[qi], QuestionType::TrueStmt) || v == NONE_VAL {
+                    let s = fp.options[qi][oi];
+                    if matches!(fp.question_types[qi], QuestionType::TrueStmt) || !s.is_num() {
                         None
-                    } else if v == NAN_VAL {
-                        Some(fp.options[qi][oi].value() as i64)
                     } else {
-                        Some(v as i64)
+                        Some(s.value() as i64)
                     }
                 })
                 .collect();
@@ -227,11 +225,15 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
                         .map(|oi| {
                             let label = ['A', 'B', 'C', 'D', 'E'][oi].to_string();
                             let text = match fp.claim_at(qi, oi) {
-                                Some(c) => format!(
-                                    "{} = {}",
-                                    format::format_type_tag(&c.question_type),
-                                    c.value.to_i16()
-                                ),
+                                Some(c) => {
+                                    let tag = format::format_type_tag(&c.question_type);
+                                    let v = if c.value.is_none() {
+                                        "null".into()
+                                    } else {
+                                        c.value.value().to_string()
+                                    };
+                                    format!("{tag} = {v}")
+                                }
                                 None => "none".into(),
                             };
                             ClaimInfo { label, text }

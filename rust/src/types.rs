@@ -1,10 +1,8 @@
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const MAX_N: usize = 12;
-pub const NONE_VAL: i16 = -1;
-pub const NAN_VAL: i16 = i16::MIN;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 #[repr(transparent)]
 pub struct OptionValue(u8);
 
@@ -27,33 +25,11 @@ impl OptionValue {
         self.0 < 0xFE
     }
 
+    /// Numeric payload. Asserts `is_num()` in debug — call sites must
+    /// pre-check (or handle NONE / UNUSED) before using.
     pub fn value(self) -> u8 {
         debug_assert!(self.is_num());
         self.0
-    }
-
-    /// Inverse of `to_i16`. NONE_VAL → NONE, NAN_VAL → UNUSED, 0..0xFE → Num(v).
-    pub fn from_i16(v: i16) -> Self {
-        if v == NONE_VAL {
-            Self::NONE
-        } else if v == NAN_VAL {
-            Self::UNUSED
-        } else {
-            debug_assert!((0..0xFE).contains(&v));
-            Self::num(v as u8)
-        }
-    }
-
-    /// Lossy convenience used by deduce/build where the old i16 sentinels are
-    /// convenient: NONE → NONE_VAL, UNUSED → NAN_VAL, otherwise the value.
-    pub fn to_i16(self) -> i16 {
-        if self.is_none() {
-            NONE_VAL
-        } else if self.is_unused() {
-            NAN_VAL
-        } else {
-            self.0 as i16
-        }
     }
 }
 
@@ -385,8 +361,8 @@ pub struct Claim {
 
 #[derive(Clone)]
 pub struct SmallList {
-    pub data: [u8; MAX_N],
-    pub len: u8,
+    data: [u8; MAX_N],
+    len: u8,
 }
 
 impl SmallList {
@@ -396,9 +372,28 @@ impl SmallList {
             len: 0,
         }
     }
+
     pub fn push(&mut self, val: u8) {
         self.data[self.len as usize] = val;
         self.len += 1;
+    }
+
+    pub fn len(&self) -> usize {
+        self.len as usize
+    }
+
+    /// Iterate stored values as usize (the typical use is as a question
+    /// index). Storage is still u8 internally; this widens at the boundary.
+    pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+        self.data[..self.len()].iter().map(|&i| i as usize)
+    }
+}
+
+impl std::ops::Index<usize> for SmallList {
+    type Output = u8;
+    fn index(&self, i: usize) -> &u8 {
+        debug_assert!(i < self.len());
+        &self.data[i]
     }
 }
 

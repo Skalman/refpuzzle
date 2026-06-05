@@ -91,144 +91,88 @@ fn check_claim_form(
     fp: &FlatPuzzle,
     opt: OptionPos,
     qt: &QuestionType,
-    value: i16,
+    value: OptionValue,
 ) -> Option<(String, Severity)> {
     let n = fp.n;
     let oc = fp.option_count;
     let qi = opt.qi;
 
-    // Null short-circuit: no value-level checks apply when the option's value
-    // is NONE_VAL. Whether null is *disallowed* for the type is enforced
-    // separately in `check_form`'s main loop.
-    if value == NONE_VAL {
+    // NONE / UNUSED: no value-level checks apply. Whether NONE is *disallowed*
+    // for the type is enforced separately in `check_form`'s main loop.
+    if !value.is_num() {
         return None;
     }
+    let v = usize::from(value.value());
+    let oor = || (format!("value {v} out of range"), Severity::Warning);
 
     match qt {
         QuestionType::CountAnswer { .. }
         | QuestionType::CountVowel
         | QuestionType::CountConsonant
-        | QuestionType::MostCommonCount => {
-            if value < 0 || value > n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
+        | QuestionType::MostCommonCount => (v > n).then(oor),
         QuestionType::CountAnswerBefore { before_index, .. } => {
-            if value < 0 || value > *before_index as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
+            (v > usize::from(*before_index)).then(oor)
         }
         QuestionType::CountAnswerAfter { after_index, .. } => {
-            if value < 0 || value > (n as i16 - 1 - *after_index as i16) {
-                return warning(format!("value {value} out of range"));
-            }
-            None
+            (v + 1 + usize::from(*after_index) > n).then(oor)
         }
-        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => {
-            if value < 0 || value >= n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
+        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => (v >= n).then(oor),
         QuestionType::ClosestAfter { after_index, .. } => {
-            if value <= *after_index as i16 || value >= n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
+            (v <= usize::from(*after_index) || v >= n).then(oor)
         }
         QuestionType::ClosestBefore { before_index, .. } => {
-            if value < 0 || value >= *before_index as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
+            (v >= usize::from(*before_index)).then(oor)
         }
-        QuestionType::NextSame => {
-            if value <= qi as i16 || value >= n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
-        QuestionType::PrevSame => {
-            if value < 0 || value >= qi as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
+        QuestionType::NextSame => (v <= qi || v >= n).then(oor),
+        QuestionType::PrevSame => (v >= qi).then(oor),
         QuestionType::SameAs => {
-            if value as usize == qi {
-                return error(format!("SameAs option {} references itself", opt.oi));
-            }
-            if value < 0 || value >= n as i16 {
-                return error(format!(
-                    "SameAs option {} references out-of-range question {value}",
+            if v == qi {
+                error(format!("SameAs option {} references itself", opt.oi))
+            } else if v >= n {
+                error(format!(
+                    "SameAs option {} references out-of-range question {v}",
                     opt.oi
-                ));
+                ))
+            } else {
+                None
             }
-            None
         }
         QuestionType::OnlySame => {
-            if value == qi as i16 {
-                return warning(format!("OnlySame option {} references itself", opt.oi));
+            if v == qi {
+                warning(format!("OnlySame option {} references itself", opt.oi))
+            } else if v >= n {
+                Some(oor())
+            } else {
+                None
             }
-            if value < 0 || value >= n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
         }
-        QuestionType::SameAsWhich { .. } => {
-            if value < 0 || value >= n as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
+        QuestionType::SameAsWhich { .. } => (v >= n).then(oor),
         QuestionType::AnswerOf { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
-        | QuestionType::NoOtherHasAnswer => {
-            if value < 0 || value >= oc as i16 {
-                return warning(format!("letter index {value} outside option count {oc}"));
-            }
-            None
-        }
+        | QuestionType::NoOtherHasAnswer => (v >= oc).then(|| {
+            (
+                format!("letter index {v} outside option count {oc}"),
+                Severity::Warning,
+            )
+        }),
         QuestionType::EqualCount { answer } => {
-            if value == answer.idx() as i16 {
-                return warning(format!(
+            if v == answer.idx() {
+                warning(format!(
                     "EqualCount({}) points to {} (self-referencing)",
                     answer.as_char(),
                     answer.as_char()
-                ));
+                ))
+            } else if v >= oc {
+                Some(oor())
+            } else {
+                None
             }
-            if value < 0 || value >= oc as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
         }
-        QuestionType::OnlyOdd { .. } => {
-            if value < 0 || value >= n as i16 || value % 2 != 0 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
-        QuestionType::OnlyEven { .. } => {
-            if value < 0 || value >= n as i16 || value % 2 != 1 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
-        QuestionType::ConsecIdent => {
-            if value < 0 || value >= n as i16 - 1 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
-        QuestionType::AnswerIsSelf | QuestionType::LetterDist { .. } => {
-            if value < 0 || value >= oc as i16 {
-                return warning(format!("value {value} out of range"));
-            }
-            None
-        }
+        QuestionType::OnlyOdd { .. } => (v >= n || v % 2 != 0).then(oor),
+        QuestionType::OnlyEven { .. } => (v >= n || v % 2 != 1).then(oor),
+        QuestionType::ConsecIdent => (v + 1 >= n).then(oor),
+        QuestionType::AnswerIsSelf | QuestionType::LetterDist { .. } => (v >= oc).then(oor),
         // Claims cannot be TrueStmt — nesting is not allowed.
         QuestionType::TrueStmt => error("TrueStmt is not a valid claim type".to_string()),
     }
@@ -243,16 +187,20 @@ fn check_correct_claim_form(
     solution: &[Answer],
     opt: OptionPos,
     qt: &QuestionType,
-    value: i16,
+    value: OptionValue,
 ) -> Option<(String, Severity)> {
     let oc = fp.option_count;
     if !matches!(qt, QuestionType::NoOtherHasAnswer) {
         return None;
     }
-    if value < 0 || value >= oc as i16 {
+    if !value.is_num() {
+        return None;
+    }
+    let v = usize::from(value.value());
+    if v >= oc {
         return None; // out-of-range letter caught by check_claim_form
     }
-    let self_ans = LETTERS[value as usize];
+    let self_ans = LETTERS[v];
     for letter in LETTERS.iter().take(oc) {
         if *letter != self_ans
             && !solution
@@ -295,7 +243,7 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                     continue;
                 };
                 let cqt = &claim.question_type;
-                let cv = claim.value.to_i16();
+                let cv = claim.value;
                 // The claim's own QT also needs structural checks.
                 if let Some((msg, sev)) = check_question_form(fp, qi, cqt) {
                     errors.push(FormError {
@@ -322,12 +270,10 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                 }
             }
         } else {
-            // Per-qi: duplicate option values. Letter-valued slots carry NAN_VAL in
-            // option_nums and store the letter in option_answers, so compare on the
-            // unified value. Identity-option types are excluded.
+            // Per-qi: duplicate option values. Identity-option types are excluded.
             if !qt.has_identity_options() {
-                let vals: Vec<i16> = (0..oc).map(|oi| fp.options[qi][oi].to_i16()).collect();
-                let unique: std::collections::HashSet<i16> = vals.iter().copied().collect();
+                let vals: Vec<OptionValue> = (0..oc).map(|oi| fp.options[qi][oi]).collect();
+                let unique: std::collections::HashSet<OptionValue> = vals.iter().copied().collect();
                 if unique.len() < vals.len() {
                     errors.push(FormError {
                         qi,
@@ -353,7 +299,7 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             );
             if null_not_allowed {
                 for oi in 0..oc {
-                    if fp.options[qi][oi].to_i16() == NONE_VAL {
+                    if fp.options[qi][oi].is_none() {
                         errors.push(FormError {
                             qi,
                             message: format!(
@@ -366,27 +312,12 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                 }
             }
 
-            // Per-oi: look up the option's value (letter index for letter-typed,
-            // numeric otherwise) and check.
-            let letter_valued = matches!(
-                qt,
-                QuestionType::AnswerOf { .. }
-                    | QuestionType::LeastCommon
-                    | QuestionType::MostCommon
-            );
+            // Per-oi: pass the option value to check_claim_form (which handles
+            // NONE / UNUSED internally by returning no error).
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
-                let value = if letter_valued {
-                    let s = fp.options[qi][oi];
-                    if s.is_num() {
-                        s.value() as i16
-                    } else {
-                        NAN_VAL
-                    }
-                } else {
-                    fp.options[qi][oi].to_i16()
-                };
-                if value == NAN_VAL {
+                let value = fp.options[qi][oi];
+                if value.is_unused() {
                     continue;
                 }
                 if let Some((msg, sev)) = check_claim_form(fp, opt, qt, value) {
@@ -403,8 +334,8 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             // for other types the function no-ops so we pass a placeholder value.
             if let Some(sol) = solution {
                 let value = match qt {
-                    QuestionType::NoOtherHasAnswer => sol[qi].idx() as i16,
-                    _ => 0,
+                    QuestionType::NoOtherHasAnswer => OptionValue::num(sol[qi].idx() as u8),
+                    _ => OptionValue::num(0),
                 };
                 if let Some((msg, sev)) =
                     check_correct_claim_form(fp, sol, OptionPos { qi, oi: 0 }, qt, value)

@@ -120,28 +120,32 @@ fn get_force(
         | QuestionType::ClosestBefore { answer, .. }
         | QuestionType::OnlyOdd { answer }
         | QuestionType::OnlyEven { answer } => {
-            let v = fp.options[qi][ai].to_i16();
-            if v >= 0 && (v as usize) < fp.n {
-                Some((v as usize, answer))
-            } else {
-                None
+            let s = fp.options[qi][ai];
+            if !s.is_num() {
+                return None;
             }
+            let v = s.value() as usize;
+            (v < fp.n).then_some((v, answer))
         }
         QuestionType::SameAs
         | QuestionType::OnlySame
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            let v = fp.options[qi][ai].to_i16();
-            if v >= 0 && (v as usize) < fp.n {
-                Some((v as usize, letter))
-            } else {
-                None
+            let s = fp.options[qi][ai];
+            if !s.is_num() {
+                return None;
             }
+            let v = s.value() as usize;
+            (v < fp.n).then_some((v, letter))
         }
         QuestionType::SameAsWhich { question_index } => {
-            let v = fp.options[qi][ai].to_i16();
-            if v >= 0 && (v as usize) < fp.n {
-                current[question_index as usize].map(|ref_ans| (v as usize, ref_ans))
+            let s = fp.options[qi][ai];
+            if !s.is_num() {
+                return None;
+            }
+            let v = s.value() as usize;
+            if v < fp.n {
+                current[question_index as usize].map(|ref_ans| (v, ref_ans))
             } else {
                 None
             }
@@ -181,8 +185,7 @@ fn propagate_forces(
         // AnswerOf question references qi, we can determine it too — the
         // correct option is whichever one claims qi's actual answer.
         let affected = &fp.affected_by[qi];
-        for k in 0..affected.len as usize {
-            let j = affected.data[k] as usize;
+        for j in affected.iter() {
             if current[j].is_some() {
                 continue;
             }
@@ -343,9 +346,7 @@ fn has_contradiction(
         return !check_answers(fp, answers);
     }
 
-    let affected = &fp.affected_by[just_assigned];
-    for k in 0..affected.len as usize {
-        let i = affected.data[k] as usize;
+    for i in fp.affected_by[just_assigned].iter() {
         if answers[i].is_none() {
             continue;
         }
@@ -354,9 +355,7 @@ fn has_contradiction(
         }
     }
 
-    let globals = &fp.global_indices;
-    for k in 0..globals.len as usize {
-        let i = globals.data[k] as usize;
+    for i in fp.global_indices.iter() {
         if answers[i].is_none() {
             continue;
         }
@@ -399,10 +398,11 @@ fn check_rule(
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
-            let opt_val = fp.options[i][answer_i.idx()].to_i16();
-            if opt_val == NAN_VAL {
+            let s = fp.options[i][answer_i.idx()];
+            if s.is_unused() {
                 return false;
             }
+            let opt_val = s.value() as i16;
 
             let (range_start, range_end) = match *t {
                 QuestionType::CountAnswer { .. } => (0, n),
@@ -425,10 +425,11 @@ fn check_rule(
             }
         }
         QuestionType::CountVowel | QuestionType::CountConsonant => {
-            let opt_val = fp.options[i][answer_i.idx()].to_i16();
-            if opt_val == NAN_VAL {
+            let s = fp.options[i][answer_i.idx()];
+            if s.is_unused() {
                 return false;
             }
+            let opt_val = s.value() as i16;
             let is_vowel = matches!(*t, QuestionType::CountVowel);
             let mut count: i16 = 0;
             let mut remaining: i16 = 0;
