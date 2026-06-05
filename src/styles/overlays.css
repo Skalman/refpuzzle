@@ -547,3 +547,65 @@ kbd {
 .history-progress svg {
   vertical-align: middle;
 }
+
+/* ── Error overlay ── */
+.error-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.error-overlay-card {
+  background: var(--bg-surface);
+  border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  max-width: 28rem;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.error-overlay-card h2 {
+  margin: 0 0 0.6rem;
+  font-size: 1.1rem;
+}
+
+.error-overlay-message {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+  background: color-mix(in srgb, var(--bg-surface), var(--text) 6%);
+  padding: 0.5rem 0.7rem;
+  border-radius: 6px;
+  word-break: break-word;
+  margin: 0.4rem 0 0.8rem;
+}
+
+.error-overlay-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
+.error-overlay-actions button {
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.error-overlay-primary {
+  background: var(--accent) !important;
+  color: white !important;
+  border-color: var(--accent) !important;
+  font-weight: 600;
+}

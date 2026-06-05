@@ -29,6 +29,7 @@ import { BackupDialog } from "./components/BackupDialog.tsx";
 import { SyncDialog } from "./components/SyncDialog.tsx";
 import { ImportPreview } from "./components/ImportPreview.tsx";
 import { AppHeader } from "./components/AppHeader.tsx";
+import { ErrorOverlay } from "./components/ErrorOverlay.tsx";
 
 if (new URLSearchParams(window.location.search).has("debug")) {
   sessionStorage.setItem("debug", "1");
@@ -744,6 +745,7 @@ export function App() {
   return (
     <LocationProvider>
       <div class="page">
+        <ErrorOverlay />
         <Router>
           <Route path="/" component={DailyPage} />
           <Route path="/past" component={PastPuzzlesPage} />
