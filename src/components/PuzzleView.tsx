@@ -728,6 +728,9 @@ export function PuzzleView({
                 disabled={completed || tutorial.active}
                 focusedOption={focusedQuestion === qi ? focusedOption : null}
                 defaultFocus={focusedQuestion == null && qi === 0}
+                trueStmtQuestionTypes={
+                  qDef.questionType.type === "TrueStmt" ? puzzle.trueStmtQuestionTypes : undefined
+                }
                 onOptionClick={stableOptionClick}
               />
             ))}

@@ -254,13 +254,6 @@ function puzzleToJson(puzzle: Puzzle): Record<string, unknown> {
   const oc = puzzle.optionCount ?? 5;
   const qs = puzzle.questions.map((q) => compactQuestionType(q.questionType));
   const opts = puzzle.questions.map((q) => {
-    if (q.questionType.type === "TrueStmt") {
-      return q.options.slice(0, oc).map((o) => {
-        if (!("claim" in o)) return null;
-        const v = o.claim.value;
-        return v === -1 ? null : v;
-      });
-    }
     // Identity-option types: emit letter indices verbatim (matches Rust).
     if (q.questionType.type === "NoOtherHasAnswer" || q.questionType.type === "AnswerIsSelf") {
       return Array.from({ length: oc }, (_, oi) => oi);
@@ -269,16 +262,8 @@ function puzzleToJson(puzzle: Puzzle): Record<string, unknown> {
   });
   // Alphabetical key order (o, q[, t]) matches Rust's serde_json BTreeMap.
   const out: Record<string, unknown> = { o: opts, q: qs };
-  const tsQi = puzzle.questions.findIndex((q) => q.questionType.type === "TrueStmt");
-  if (tsQi >= 0) {
-    const claims = puzzle.questions[tsQi].options.slice(0, 5);
-    const types: Record<string, unknown>[] = new Array(5);
-    for (let oi = 0; oi < 5; oi++) {
-      const o = claims[oi];
-      types[oi] =
-        o && "claim" in o ? compactQuestionType(o.claim.questionType) : { t: "AnswerIsSelf" };
-    }
-    out.t = types;
+  if (puzzle.trueStmtQuestionTypes) {
+    out.t = puzzle.trueStmtQuestionTypes.slice(0, 5).map((qt) => compactQuestionType(qt));
   }
   return out;
 }

@@ -12,9 +12,11 @@ export interface FormError {
 // ── Internal form-check helpers ──
 //
 // Each returns `[message, severity] | null`. The caller wraps into a FormError
-// and supplies the `qi` (which differs for top-level options vs claims nested
-// in TrueStmt). All three are wellformedness checks — for the **semantic**
-// "is this claim true?" check see `check-answer.ts`'s `checkClaim`.
+// and supplies the `qi` (the same qi is used whether we're checking a top-
+// level question or one of a TrueStmt's per-option claims — errors attribute
+// to the TrueStmt question in both cases). All three are wellformedness
+// checks — for the **semantic** "is this claim true?" check see
+// `check-answer.ts`'s `checkClaim`.
 
 function warning(msg: string): [string, Severity] {
   return [msg, "warning"];
@@ -26,7 +28,8 @@ function error(msg: string): [string, Severity] {
 /** Per-qt structural checks (value-independent): question_index references in
  *  range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer letter
  *  within option count for types that carry an `answer` field. `qi` is the
- *  OWNER (top-level qi or TrueStmt's container qi for a claim). */
+ *  owning question — when checking one of a TrueStmt's per-option claims,
+ *  this is the TrueStmt's qi. */
 function checkQuestionForm(
   n: number,
   oc: number,
@@ -214,42 +217,25 @@ export function checkForm(puzzle: Puzzle, solution: Answer[] = []): FormError[] 
     if (qErr) errors.push({ qi, message: qErr[0], severity: qErr[1] });
 
     if (qt.type === "TrueStmt") {
-      // TrueStmt: each option is a Claim. Run form checks per claim.
+      // TrueStmt: per-option types live on the puzzle, per-option values in
+      // this row's options. Run the form checks against the SoA reads.
+      const types = puzzle.trueStmtQuestionTypes;
+      if (!types) continue;
       for (let oi = 0; oi < oc; oi++) {
-        const o = q.options[oi];
-        if (!("claim" in o)) continue;
-        const claim = o.claim;
         const opt: OptionPos = { qi, oi };
-        const cqt = claim.questionType;
-        // Claims encode null as the sentinel -1; normalise for the form helpers.
-        const cv = claim.value === -1 ? null : claim.value;
-
-        const cQErr = checkQuestionForm(n, oc, qi, cqt);
-        if (cQErr) {
-          errors.push({
-            qi,
-            message: `TrueStmt option ${String(oi)}: ${cQErr[0]}`,
-            severity: cQErr[1],
-          });
-        }
-        const cErr = checkClaimForm(n, oc, opt, cqt, cv);
-        if (cErr) {
-          errors.push({
-            qi,
-            message: `TrueStmt option ${String(oi)}: ${cErr[0]}`,
-            severity: cErr[1],
-          });
-        }
-        if (haveSolution) {
-          const ccErr = checkCorrectClaimForm(oc, solution, opt, cqt, cv);
-          if (ccErr) {
+        const value = q.options[oi]?.value ?? null;
+        const push = (err: [string, Severity] | null) => {
+          if (err) {
             errors.push({
               qi,
-              message: `TrueStmt option ${String(oi)}: ${ccErr[0]}`,
-              severity: ccErr[1],
+              message: `TrueStmt option ${String(oi)}: ${err[0]}`,
+              severity: err[1],
             });
           }
-        }
+        };
+        push(checkQuestionForm(n, oc, qi, types[oi]));
+        push(checkClaimForm(n, oc, opt, types[oi], value));
+        if (haveSolution) push(checkCorrectClaimForm(oc, solution, opt, types[oi], value));
       }
       continue;
     }

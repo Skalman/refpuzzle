@@ -1035,7 +1035,7 @@ fn fill_one_question(
     option_count: usize,
     rng: &mut Rng,
     slots: &mut [OptionValue; 5],
-    claim_types: &mut Option<[QuestionType; 5]>,
+    true_stmt_question_types: &mut Option<[QuestionType; 5]>,
 ) {
     let correct_oi = solution[qi].idx();
 
@@ -1055,7 +1055,15 @@ fn fill_one_question(
     }
 
     if matches!(qt, QuestionType::TrueStmt) {
-        build_claims(qi, solution, n, rng, slots, claim_types, option_count);
+        build_claims(
+            qi,
+            solution,
+            n,
+            rng,
+            slots,
+            true_stmt_question_types,
+            option_count,
+        );
         return;
     }
 
@@ -1275,7 +1283,7 @@ pub fn fill_options(
 
     for qi in 0..n {
         let qt = &question_types[qi];
-        let mut local_claim_types: Option<[QuestionType; 5]> = None;
+        let mut local_types: Option<[QuestionType; 5]> = None;
         fill_one_question(
             qt,
             qi,
@@ -1284,9 +1292,9 @@ pub fn fill_options(
             option_count,
             rng,
             &mut options[qi],
-            &mut local_claim_types,
+            &mut local_types,
         );
-        if let Some(types) = local_claim_types {
+        if let Some(types) = local_types {
             true_stmt_question_types = Some(types);
         }
 
@@ -1575,7 +1583,7 @@ fn build_claims(
     n: usize,
     rng: &mut Rng,
     slots: &mut [OptionValue; 5],
-    claim_types: &mut Option<[QuestionType; 5]>,
+    true_stmt_question_types: &mut Option<[QuestionType; 5]>,
     option_count: usize,
 ) {
     let target_oi = solution[qi].idx();
@@ -1607,7 +1615,7 @@ fn build_claims(
         }
     }
 
-    // Split into SoA: values live in `slots`, claim types in `claim_types`.
+    // Split into SoA: values live in `slots`, types in `true_stmt_question_types`.
     // Slots with no claim (oi >= option_count) stay UNUSED; the matching type
     // entry is a harmless placeholder since `claim_at` gates on slot validity.
     let mut types = [QuestionType::AnswerIsSelf; 5];
@@ -1617,7 +1625,7 @@ fn build_claims(
             slots[oi] = c.value;
         }
     }
-    *claim_types = Some(types);
+    *true_stmt_question_types = Some(types);
 }
 
 // Position-dependent kinds (NextSame, PrevSame) must NOT appear here: a claim

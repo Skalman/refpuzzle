@@ -1,5 +1,5 @@
 import { memo } from "preact/compat";
-import type { QuestionDef, Marks } from "../engine/types.ts";
+import type { QuestionDef, QuestionType, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
 import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../engine/render.ts";
@@ -14,6 +14,9 @@ interface Props {
   disabled?: boolean;
   focusedOption?: number | null;
   defaultFocus?: boolean;
+  /// Question types for the TrueStmt's per-option claims. Matching values
+  /// live in `question.options[oi].value`. Omitted for non-TrueStmt rows.
+  trueStmtQuestionTypes?: QuestionType[];
   onOptionClick: (questionIndex: number, optionIndex: number) => void;
 }
 
@@ -33,12 +36,18 @@ export const QuestionRow = memo(
     disabled,
     focusedOption,
     defaultFocus,
+    trueStmtQuestionTypes,
     onOptionClick,
   }: Props) {
     const { highlighted, mute } = useQuestionHighlight(index);
     const rule = question.questionType;
     const labels = question.options.map((opt, oi) => {
-      if ("claim" in opt) return renderClaimLabel(opt.claim);
+      if (trueStmtQuestionTypes && rule.type === "TrueStmt") {
+        return renderClaimLabel({
+          questionType: trueStmtQuestionTypes[oi],
+          value: opt.value ?? -1,
+        });
+      }
       return renderOptionLabel(rule, opt.value, oi);
     });
     const isLong = labels.some((l) => l.length > LONG_THRESHOLD);

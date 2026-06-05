@@ -26,6 +26,10 @@ export interface Puzzle {
   difficulty: string;
   questions: QuestionDef[];
   optionCount?: number;
+  /// Question types for the TrueStmt question's claims, indexed by option.
+  /// Present iff the puzzle has a TrueStmt question; its `options[oi].value`
+  /// then holds the claim's value (null = NONE).
+  trueStmtQuestionTypes?: QuestionType[];
 }
 
 export interface QuestionDef {
@@ -33,17 +37,14 @@ export interface QuestionDef {
   questionType: QuestionType;
 }
 
-export type OptionDef = SimpleOption | StatementOption;
-
-export interface SimpleOption {
+export interface OptionDef {
   value: number | null;
 }
 
-export interface StatementOption {
-  value: number | null;
-  claim: Claim;
-}
-
+/// Helper carrier for the `(question_type, value)` pair. Used as a function
+/// return/argument by `checkClaim`, `checkClaimFast`, `renderClaimLabel`, and
+/// the generator's claim builders. Never persisted — claims live in the
+/// puzzle as `trueStmtQuestionTypes[oi]` + `options[oi].value`.
 export interface Claim {
   questionType: QuestionType;
   value: number;
@@ -237,18 +238,17 @@ export interface FlatPuzzle {
   optionCount: number;
 }
 
-/// Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if `qi`
-/// is not the TrueStmt question, if the puzzle has no TrueStmt, or if the
-/// option slot has no claim (e.g. `oi` outside the active option count).
+/// Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if
+/// `qi` is not the TrueStmt question, if the puzzle has no TrueStmt, or if
+/// `oi` is outside the active option count. Maps the in-memory `null = NONE`
+/// convention to the Claim helper's `-1 = NONE` sentinel.
 export function claimAt(fp: FlatPuzzle, qi: number, oi: number): Claim | null {
   if (fp.questions[qi].t !== QT_TRUE_STMT) return null;
   const types = fp.trueStmtQuestionTypes;
   if (!types) return null;
+  if (oi >= fp.optionCount) return null;
   const value = fp.optionValues[qi][oi];
-  // `null` (absent) vs `-1` (NONE sentinel) are distinct: only the former
-  // means "no claim at this slot".
-  if (value == null) return null;
-  return { questionType: types[oi], value };
+  return { questionType: types[oi], value: value ?? -1 };
 }
 
 const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([
@@ -311,41 +311,10 @@ export function flattenPuzzle(puzzle: Puzzle): FlatPuzzle {
     affectedBy[i].push(i);
   }
 
-  // For TrueStmt rows the claim's value goes into optionValues (kept verbatim,
-  // including the -1 = NONE sentinel) and claim types into the puzzle-level
-  // `trueStmtQuestionTypes` array. Slots with no claim use null so claimAt can
-  // distinguish present-but-NONE (-1) from absent (null).
-  let trueStmtQuestionTypes: QuestionType[] | null = null;
-  const optionValues: (number | null)[][] = puzzle.questions.map((q, qi) => {
-    if (q.questionType.type === "TrueStmt") {
-      const types: QuestionType[] = new Array(5);
-      const vals: (number | null)[] = new Array(q.options.length);
-      for (let oi = 0; oi < q.options.length; oi++) {
-        const o = q.options[oi];
-        if ("claim" in o) {
-          types[oi] = o.claim.questionType;
-          vals[oi] = o.claim.value;
-        } else {
-          types[oi] = { type: "AnswerIsSelf" };
-          vals[oi] = null;
-        }
-      }
-      // Pad type array to length 5 with a placeholder for stable shape; the
-      // matching optionValues entries stay implicit (undefined → no claim).
-      for (let oi = q.options.length; oi < 5; oi++) {
-        types[oi] = { type: "AnswerIsSelf" };
-      }
-      trueStmtQuestionTypes = types;
-      void qi;
-      return vals;
-    }
-    return q.options.map((o) => o.value);
-  });
-
   return {
     questions,
-    optionValues,
-    trueStmtQuestionTypes,
+    optionValues: puzzle.questions.map((q) => q.options.map((o) => o.value)),
+    trueStmtQuestionTypes: puzzle.trueStmtQuestionTypes ?? null,
     affectedBy,
     globalIndices,
     n,

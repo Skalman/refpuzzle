@@ -458,9 +458,11 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
                   {s.difficulty[lvl]} ({p.questions.length} {s.puzzleList.questions})
                 </h2>
                 {p.questions.map((q, qi) => {
+                  const tsTypes =
+                    q.questionType.type === "TrueStmt" ? p.trueStmtQuestionTypes : undefined;
                   const labels = q.options.map((opt, oi) =>
-                    "claim" in opt
-                      ? renderClaimLabel(opt.claim)
+                    tsTypes
+                      ? renderClaimLabel({ questionType: tsTypes[oi], value: opt.value ?? -1 })
                       : renderOptionLabel(q.questionType, opt.value, oi),
                   );
                   return (

@@ -1,4 +1,4 @@
-import type { Puzzle, QuestionDef, QuestionType, OptionDef, Answer } from "../engine/types.ts";
+import type { Puzzle, QuestionDef, QuestionType, Answer } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 
 const START_DATE = "2026-04-19";
@@ -35,21 +35,12 @@ export function parseCompactYear(
 
 function buildPuzzle(compact: CompactPuzzle, id: string, difficulty: string = "1"): Puzzle {
   const optionCount = compact.o[0]?.length ?? 5;
-  const questions = compact.q.map<QuestionDef>((cq, qi) => {
-    const questionType = expandQuestion(cq);
-    const row = compact.o[qi] ?? [];
-    let options: OptionDef[];
-    if (questionType.type === "TrueStmt" && compact.t) {
-      options = row.map((v, oi) => ({
-        value: null,
-        claim: { questionType: expandQuestion(compact.t![oi]), value: v ?? -1 },
-      }));
-    } else {
-      options = row.map((v) => ({ value: v }));
-    }
-    return { options, questionType };
-  });
-  return { id, title: "", difficulty, questions, optionCount };
+  const questions = compact.q.map<QuestionDef>((cq, qi) => ({
+    options: (compact.o[qi] ?? []).map((v) => ({ value: v })),
+    questionType: expandQuestion(cq),
+  }));
+  const trueStmtQuestionTypes = compact.t?.map(expandQuestion);
+  return { id, title: "", difficulty, questions, optionCount, trueStmtQuestionTypes };
 }
 
 function L(i: number | undefined): Answer {

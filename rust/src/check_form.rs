@@ -16,9 +16,11 @@ pub struct FormError {
 // ── Internal form-check helpers ──
 //
 // Each returns `Option<(message, severity)>`. The caller wraps the message into
-// a `FormError` and supplies the `qi` (which differs for top-level options vs
-// claims nested in TrueStmt). All three are wellformedness checks — for the
-// **semantic** "is this claim true?" check see `check_answer::check_claim`.
+// a `FormError` and supplies the `qi` (the same qi is used whether we're
+// checking a top-level question or one of a TrueStmt's per-option claims —
+// errors attribute to the TrueStmt question in both cases). All three are
+// wellformedness checks — for the **semantic** "is this claim true?" check
+// see `check_answer::check_claim`.
 
 fn warning(msg: impl Into<String>) -> Option<(String, Severity)> {
     Some((msg.into(), Severity::Warning))
@@ -31,7 +33,8 @@ fn error(msg: impl Into<String>) -> Option<(String, Severity)> {
 /// Per-qt structural checks (value-independent): question_index references
 /// in range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer
 /// letter within option count for types that carry an `answer` field. `qi` is
-/// the OWNER (top-level qi or TrueStmt's container qi for a claim).
+/// the owning question — when checking one of a TrueStmt's per-option claims,
+/// this is the TrueStmt's qi.
 fn check_question_form(
     fp: &FlatPuzzle,
     qi: usize,
@@ -284,7 +287,8 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
         }
 
         if matches!(qt, QuestionType::TrueStmt) {
-            // TrueStmt: each option is a Claim. Run form checks per claim.
+            // TrueStmt: claim types live on the puzzle, claim values in this
+            // row's options. Run the form checks per claim using SoA reads.
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
                 let Some(claim) = fp.claim_at(qi, oi) else {

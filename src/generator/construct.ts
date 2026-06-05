@@ -15,7 +15,6 @@ import type {
   OptionDef,
   QuestionType,
   Claim,
-  StatementOption,
 } from "../engine/types.ts";
 import { LETTERS, L2I, flattenPuzzle } from "../engine/types.ts";
 import type { State } from "../engine/types.ts";
@@ -460,25 +459,43 @@ function tryConstruct(
 }
 
 export function fillOptions(cr: ConstructResult, rng: RNG, tracing: boolean): Puzzle {
-  const questions: QuestionDef[] = [];
-  for (let i = 0; i < cr.types.length; i++) {
-    const options = engineerOptions(cr.types[i], i, cr.solution, cr.n, cr.oc, rng);
-    if (tracing) {
-      const vals = options.map((o) => o.value);
-      const claims =
-        cr.types[i].type === "TrueStmt"
-          ? options.map((o) => ("claim" in o ? o.claim : null))
-          : undefined;
-      traceQuestion(i, formatTypeTag(cr.types[i]), vals, rng, claims);
+  let trueStmtQuestionTypes: QuestionType[] | undefined;
+  const questions: QuestionDef[] = cr.types.map((qt, qi) => {
+    let options: OptionDef[];
+    if (qt.type === "TrueStmt") {
+      const built = buildClaims(qi, cr.solution, cr.n, cr.oc, rng);
+      options = built.options;
+      trueStmtQuestionTypes = built.types;
+    } else {
+      options = engineerOptions(qt, qi, cr.solution, cr.n, cr.oc, rng);
     }
-    questions.push({ options, questionType: cr.types[i] });
-  }
+    if (tracing) {
+      const traceClaims =
+        trueStmtQuestionTypes && qt.type === "TrueStmt"
+          ? trueStmtQuestionTypes.map(
+              (t, oi): Claim => ({
+                questionType: t,
+                value: options[oi]?.value ?? -1,
+              }),
+            )
+          : undefined;
+      traceQuestion(
+        qi,
+        formatTypeTag(qt),
+        options.map((o) => o.value),
+        rng,
+        traceClaims,
+      );
+    }
+    return { options, questionType: qt };
+  });
   return {
     id: `level-${String(cr.level)}`,
     title: cr.name,
     difficulty: String(cr.level),
     questions,
     optionCount: cr.oc,
+    trueStmtQuestionTypes,
   };
 }
 
@@ -1208,10 +1225,6 @@ function engineerOptions(
     return Array.from({ length: oc }, (_, i) => ({ value: i }));
   }
 
-  if (rule.type === "TrueStmt") {
-    return buildClaims(qi, solution, n, oc, rng).slice(0, oc);
-  }
-
   const letters = LETTERS.slice(0, oc);
 
   if (rule.type === "AnswerOf") {
@@ -1419,35 +1432,43 @@ function computeValue(rule: QuestionType, qi: number, sol: Answer[]): number | n
   throw new Error(`computeValue: ${rule.type}`);
 }
 
+/// Build the TrueStmt question's claims as SoA: per-option values land in
+/// `options[oi].value` (null = NONE), per-option question types in `types[oi]`.
 function buildClaims(
   qi: number,
   solution: Answer[],
   n: number,
   optionCount: number,
   rng: RNG,
-): StatementOption[] {
+): { options: OptionDef[]; types: QuestionType[] } {
   const targetIdx = L2I[solution[qi]];
-  const options: StatementOption[] = new Array(5);
+  const types: QuestionType[] = new Array(5);
+  const options: OptionDef[] = new Array(optionCount);
+  const place = (oi: number, claim: Claim) => {
+    types[oi] = claim.questionType;
+    if (oi < optionCount) {
+      options[oi] = { value: claim.value === -1 ? null : claim.value };
+    }
+  };
+
   const trueClaim = makeTrueClaim(solution, qi, n, optionCount, rng);
-  options[targetIdx] = { value: null, claim: trueClaim };
+  place(targetIdx, trueClaim);
   const usedKeys = new Set([claimCategory(trueClaim)]);
   for (let i = 0; i < 5; i++) {
     if (i === targetIdx) continue;
-    for (let att = 0; att < 30; att++) {
+    let placed = false;
+    for (let att = 0; att < 30 && !placed; att++) {
       const fc = makeFalseClaim(solution, qi, n, optionCount, rng);
       const key = claimCategory(fc);
       if (!usedKeys.has(key)) {
         usedKeys.add(key);
-        options[i] = { value: null, claim: fc };
-        break;
+        place(i, fc);
+        placed = true;
       }
     }
-    if (!options[i]) {
-      const fc = makeFalseClaim(solution, qi, n, optionCount, rng);
-      options[i] = { value: null, claim: fc };
-    }
+    if (!placed) place(i, makeFalseClaim(solution, qi, n, optionCount, rng));
   }
-  return options;
+  return { options, types };
 }
 type ClaimGen = (sol: Answer[], qi: number, n: number, rng: RNG) => Claim | null;
 
