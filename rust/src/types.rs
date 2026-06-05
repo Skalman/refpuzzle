@@ -51,10 +51,10 @@ impl Serialize for OptionValue {
 
 impl<'de> Deserialize<'de> for OptionValue {
     fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let v = Option::<i16>::deserialize(d)?;
+        let v = Option::<u8>::deserialize(d)?;
         match v {
             None => Ok(Self::NONE),
-            Some(n) if (0..0xFE).contains(&n) => Ok(Self::num(n as u8)),
+            Some(n) if n < 0xFE => Ok(Self::num(n)),
             Some(n) => Err(serde::de::Error::custom(format!(
                 "invalid option value: {n}"
             ))),

@@ -1791,30 +1791,28 @@ fn make_false_claim(
 }
 
 fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
-    // Count-type perturbation: offset the existing claim value. Done in i16
-    // because the offset is signed and the base may be NONE (treated as -1
-    // for "the count was null").
-    let perturb_count = |max: i16, rng: &mut Rng| -> Option<u8> {
-        let offsets: [i16; 4] = [-2, -1, 1, 2];
-        let base = if claim.value.is_num() {
-            i16::from(claim.value.value())
+    // Count-type perturbation: offset the existing claim value. Done in i8
+    // because the offset is signed (-2..=2) and the base may be NONE
+    // (treated as -1 for "the count was null"). Range is [-3, MAX_N+2].
+    let perturb_count = |max: u8, rng: &mut Rng| -> Option<u8> {
+        let offsets: [i8; 4] = [-2, -1, 1, 2];
+        let base: i8 = if claim.value.is_num() {
+            claim.value.value() as i8
         } else {
             -1
         };
         let v = base + rng.pick(&offsets);
-        (0..=max).contains(&v).then_some(v as u8)
+        u8::try_from(v).ok().filter(|&v| v <= max)
     };
     let new_val: u8 = match claim.question_type {
         QuestionType::CountAnswer { .. }
         | QuestionType::CountConsonant
         | QuestionType::CountVowel
-        | QuestionType::MostCommonCount => perturb_count(n as i16, rng)?,
+        | QuestionType::MostCommonCount => perturb_count(n as u8, rng)?,
         QuestionType::CountAnswerAfter { after_index, .. } => {
-            perturb_count(n as i16 - after_index as i16 - 1, rng)?
+            perturb_count(n as u8 - after_index - 1, rng)?
         }
-        QuestionType::CountAnswerBefore { before_index, .. } => {
-            perturb_count(before_index as i16, rng)?
-        }
+        QuestionType::CountAnswerBefore { before_index, .. } => perturb_count(before_index, rng)?,
         QuestionType::FirstWith { .. }
         | QuestionType::LastWith { .. }
         | QuestionType::SameAsWhich { .. } => rng.int(0, n as i32 - 1) as u8,
@@ -1913,7 +1911,9 @@ mod tests {
                 solution[i] = LETTERS[(ch as u8 - b'A') as usize];
             }
 
-            let expected_correct: Vec<Option<i16>> = test["expectedCorrect"]
+            // Fixture entry: `null` = skip the check for this question;
+            // `<integer>` = expected numeric value at the correct option.
+            let expected_correct: Vec<Option<u8>> = test["expectedCorrect"]
                 .as_array()
                 .unwrap_or_else(|| panic!("{name}: missing expectedCorrect"))
                 .iter()
@@ -1922,9 +1922,9 @@ mod tests {
                         None
                     } else {
                         Some(
-                            v.as_i64()
-                                .expect("expectedCorrect entry must be int or null")
-                                as i16,
+                            v.as_u64()
+                                .expect("expectedCorrect entry must be a non-negative int or null")
+                                as u8,
                         )
                     }
                 })
@@ -1965,15 +1965,9 @@ mod tests {
                     };
                     let correct_oi = solution[qi].idx();
                     let stored = fp.options[qi][correct_oi];
-                    // Fixture uses -1 = NONE convention; map for comparison.
-                    let stored_i16: i16 = if stored.is_none() {
-                        -1
-                    } else {
-                        i16::from(stored.value())
-                    };
-                    if stored_i16 != expected {
+                    if !stored.is_num() || stored.value() != expected {
                         eprintln!(
-                            "FAIL: {name} (seed={seed}) Q{}: stored {stored_i16} != expected {expected}",
+                            "FAIL: {name} (seed={seed}) Q{}: stored {stored:?} != expected {expected}",
                             qi + 1
                         );
                         case_failed = true;
