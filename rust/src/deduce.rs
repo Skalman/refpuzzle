@@ -292,9 +292,9 @@ fn compute_letter_counts(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
-) -> ([i16; 5], [i16; 5]) {
-    let mut known = [0i16; 5];
-    let mut max = [0i16; 5];
+) -> ([u8; 5], [u8; 5]) {
+    let mut known = [0u8; 5];
+    let mut max = [0u8; 5];
     for j in 0..n {
         if let Some(a) = answers[j] {
             known[a.idx()] += 1;
@@ -830,15 +830,17 @@ fn deduce_impl(
             if s.is_unused() {
                 continue;
             }
-            // NONE here means "no distance" — would mismatch every position.
-            let dist = if s.is_num() { i16::from(s.value()) } else { -1 };
+            // NONE distance is unsatisfiable: every non-eliminated option ends
+            // up in elim_mask (the `actual == s.value()` check is skipped when
+            // the source's distance value is null).
             let mut valid_count = 0u8;
             let mut valid_oi = 0usize;
             for oi in 0..5usize {
                 if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                if (oi as i16 - src_ans.idx() as i16).abs() == dist {
+                let actual = (oi as u8).abs_diff(src_ans.idx() as u8);
+                if s.is_num() && actual == s.value() {
                     valid_count += 1;
                     valid_oi = oi;
                 } else {
@@ -872,7 +874,7 @@ fn deduce_impl(
                     let s = fp.options[src][si];
                     !is_elim(eliminated, src, si)
                         && s.is_num()
-                        && (oi as i16 - si as i16).abs() == i16::from(s.value())
+                        && (oi as u8).abs_diff(si as u8) == s.value()
                 });
                 if !compatible {
                     elim_mask |= 1 << oi;
@@ -916,9 +918,12 @@ fn deduce_impl(
                 // CountConsonant arm would compute the same pairings from the
                 // other side.
                 if let Some(cq) = consonant_qi {
-                    let nn = n as i16;
+                    let nn = n as u8;
                     let mut vowel_valid = 0u8;
                     let mut consonant_valid = 0u8;
+                    // NONE counts as "valid" (still a candidate option) but can't
+                    // partner — leaving it in vowel_valid without a partner is
+                    // what triggers VowelCrossElim on it.
                     for voi in 0..5 {
                         if !is_elim(eliminated, qi, voi) && !fp.options[qi][voi].is_unused() {
                             vowel_valid |= 1 << voi;
@@ -936,23 +941,19 @@ fn deduce_impl(
                             continue;
                         }
                         let vs = fp.options[qi][voi];
-                        // NONE here means "no count" — would never sum to n.
-                        let v = if vs.is_num() {
-                            i16::from(vs.value())
-                        } else {
-                            -1
-                        };
+                        if !vs.is_num() {
+                            continue;
+                        }
+                        let v = vs.value();
                         for coi in 0..5 {
                             if (consonant_valid >> coi) & 1 == 0 {
                                 continue;
                             }
                             let cs = fp.options[cq][coi];
-                            let c = if cs.is_num() {
-                                i16::from(cs.value())
-                            } else {
-                                -1
-                            };
-                            if v + c == nn {
+                            if !cs.is_num() {
+                                continue;
+                            }
+                            if v + cs.value() == nn {
                                 vowel_has_partner |= 1 << voi;
                                 consonant_has_partner |= 1 << coi;
                             }
@@ -1035,12 +1036,12 @@ fn deduce_impl(
                 if run(DeduceRule::LetterDistForward)
                     && let Some(other_ans) = answers[question_index as usize]
                 {
-                    let other_idx = other_ans.idx() as i16;
+                    let other_idx = other_ans.idx() as u8;
                     if let Some(oi) = exactly_one(0..5, |oi| {
                         let s = fp.options[qi][oi];
                         !is_elim(eliminated, qi, oi)
                             && s.is_num()
-                            && (oi as i16 - other_idx).abs() == i16::from(s.value())
+                            && (oi as u8).abs_diff(other_idx) == s.value()
                     }) {
                         push(
                             DeduceAction::Force {
@@ -1056,11 +1057,8 @@ fn deduce_impl(
                         continue;
                     }
                     let s = fp.options[qi][oi];
-                    // NONE/UNUSED → -1 so existing comparisons behave: > max_dist
-                    // never triggers; `dist != -1` eliminates NONE-bearing options.
-                    let on: i16 = if s.is_num() { i16::from(s.value()) } else { -1 };
-                    let max_dist = oi.max(4 - oi) as i16;
-                    if run(DeduceRule::LetterDistImpossible) && s.is_num() && on > max_dist {
+                    let max_dist = oi.max(4 - oi) as u8;
+                    if run(DeduceRule::LetterDistImpossible) && s.is_num() && s.value() > max_dist {
                         push(
                             DeduceAction::Eliminate { qi, oi },
                             DeduceRule::LetterDistImpossible,
@@ -1069,8 +1067,11 @@ fn deduce_impl(
                     if run(DeduceRule::LetterDistWrong)
                         && let Some(other) = answers[question_index as usize]
                     {
-                        let dist = (oi as i16 - other.idx() as i16).abs();
-                        if dist != on {
+                        // s is NONE/UNUSED: dist (always ≥ 0) can never equal it.
+                        // s is num: literal distance comparison.
+                        let dist = (oi as u8).abs_diff(other.idx() as u8);
+                        let matches = s.is_num() && dist == s.value();
+                        if !matches {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceRule::LetterDistWrong,
@@ -1080,11 +1081,12 @@ fn deduce_impl(
                     if run(DeduceRule::LetterDistNoMatch)
                         && s.is_num()
                         && answers[question_index as usize].is_none()
-                        && on <= max_dist
+                        && s.value() <= max_dist
                     {
+                        let on = s.value();
                         let no_match = !(0..5usize).any(|ti| {
                             !is_elim(eliminated, question_index as usize, ti)
-                                && (oi as i16 - ti as i16).abs() == on
+                                && (oi as u8).abs_diff(ti as u8) == on
                         });
                         if no_match {
                             push(
@@ -1493,8 +1495,8 @@ fn deduce_impl(
                             // Subtract pos's contribution to check for any OTHER match.
                             let letter = LETTERS[oi];
                             let (letter_known, _) = letter_counts.get();
-                            let pos_contrib = i16::from(answers[pos] == Some(letter));
-                            if letter_known[oi] - pos_contrib > 0 {
+                            let pos_contrib = u8::from(answers[pos] == Some(letter));
+                            if letter_known[oi] > pos_contrib {
                                 push(
                                     DeduceAction::Eliminate { qi, oi },
                                     DeduceRule::OnlySameOtherMatch,

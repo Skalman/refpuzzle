@@ -402,7 +402,7 @@ fn check_rule(
             if s.is_unused() {
                 return false;
             }
-            let opt_val = s.value() as i16;
+            let opt_val = s.value();
 
             let (range_start, range_end) = match *t {
                 QuestionType::CountAnswer { .. } => (0, n),
@@ -411,8 +411,8 @@ fn check_rule(
                 _ => unreachable!(),
             };
 
-            let mut count: i16 = 0;
-            let mut remaining: i16 = 0;
+            let mut count: u8 = 0;
+            let mut remaining: u8 = 0;
             for j in range_start..range_end {
                 if answers[j] == Some(answer) {
                     count += 1;
@@ -429,10 +429,10 @@ fn check_rule(
             if s.is_unused() {
                 return false;
             }
-            let opt_val = s.value() as i16;
+            let opt_val = s.value();
             let is_vowel = matches!(*t, QuestionType::CountVowel);
-            let mut count: i16 = 0;
-            let mut remaining: i16 = 0;
+            let mut count: u8 = 0;
+            let mut remaining: u8 = 0;
             for j in 0..n {
                 if answers[j].is_none() {
                     remaining += 1;

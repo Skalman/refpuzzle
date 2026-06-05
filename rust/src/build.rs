@@ -1331,9 +1331,9 @@ pub fn correct_option_value(
                 .find(|&&l| l != answer && count_letter(sol, l, n) == ref_count)
                 .map_or(OptionValue::NONE, |l| num(l.idx()))
         }
-        QuestionType::LetterDist { question_index } => num((sol[qi].idx() as i16
-            - sol[question_index as usize].idx() as i16)
-            .unsigned_abs() as usize),
+        QuestionType::LetterDist { question_index } => num(usize::from(
+            (sol[qi].idx() as u8).abs_diff(sol[question_index as usize].idx() as u8),
+        )),
         _ => OptionValue::UNUSED,
     }
 }
