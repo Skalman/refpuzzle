@@ -109,7 +109,7 @@ fn get_force(
         QuestionType::AnswerOf { question_index } => {
             let claimed = fp.options[qi][ai].value();
             if claimed < 5 {
-                Some((question_index as usize, LETTERS[claimed as usize]))
+                Some((question_index as usize, Answer::from(claimed)))
             } else {
                 None
             }
@@ -192,7 +192,7 @@ fn propagate_forces(
             if let QuestionType::AnswerOf { question_index } = fp.question_types[j]
                 && question_index as usize == qi
             {
-                let target_oi = current[qi].unwrap().idx() as u8;
+                let target_oi = current[qi].unwrap() as u8;
                 let mut found: Option<usize> = None;
                 for oi in 0..5usize {
                     if fp.options[j][oi].value() == target_oi {
@@ -204,7 +204,7 @@ fn propagate_forces(
                     }
                 }
                 if let Some(oi) = found {
-                    current[j] = Some(LETTERS[oi]);
+                    current[j] = Some(Answer::from(oi as u8));
                     *assigned_bits |= 1 << j;
                     forced.push(j);
                     queue.push(j);

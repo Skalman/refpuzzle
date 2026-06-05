@@ -735,7 +735,7 @@ fn format_deduce_action(action: &deduce::DeduceAction) -> String {
             format!("force Q{}={}", qi + 1, answer.as_char())
         }
         deduce::DeduceAction::Eliminate { qi, oi } => {
-            format!("eliminate Q{}{}", qi + 1, LETTERS[oi].as_char())
+            format!("eliminate Q{}{}", qi + 1, Answer::from(oi as u8).as_char())
         }
         deduce::DeduceAction::EliminateMulti {
             question_mask,
@@ -747,7 +747,7 @@ fn format_deduce_action(action: &deduce::DeduceAction) -> String {
                 .collect();
             let opts: String = (0..5usize)
                 .filter(|&oi| (option_mask >> oi) & 1 == 1)
-                .map(|oi| LETTERS[oi].as_char())
+                .map(|oi| Answer::from(oi as u8).as_char())
                 .collect();
             format!("eliminate-multi [{}] options [{}]", qs.join(", "), opts)
         }
@@ -777,13 +777,13 @@ fn first_incorrect_action(
                 }
             }
             CheckAction::Eliminate { qi, oi, rule } => {
-                if solution[*qi] == LETTERS[*oi] {
+                if solution[*qi] == Answer::from(*oi as u8) {
                     return Some(IncorrectActionReport {
                         index: idx + 1,
                         summary: format!(
                             "eliminate Q{}{} by {} (eliminates true answer)",
                             *qi + 1,
-                            LETTERS[*oi].as_char(),
+                            Answer::from(*oi as u8).as_char(),
                             rule.to_str(),
                         ),
                         details: Vec::new(),
@@ -815,7 +815,7 @@ fn first_incorrect_action(
                 }
             }
             CheckAction::LookaheadEliminate { trace } => {
-                if solution[trace.eliminate_qi] == LETTERS[trace.eliminate_oi] {
+                if solution[trace.eliminate_qi] == Answer::from(trace.eliminate_oi as u8) {
                     let mut details = vec![
                         format!(
                             "assumption: Q{}={}",
@@ -843,7 +843,7 @@ fn first_incorrect_action(
                         summary: format!(
                             "lookahead eliminate Q{}{} (eliminates true answer)",
                             trace.eliminate_qi + 1,
-                            LETTERS[trace.eliminate_oi].as_char(),
+                            Answer::from(trace.eliminate_oi as u8).as_char(),
                         ),
                         details,
                     });
@@ -969,12 +969,12 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                             oi,
                             rule: dr.rule,
                         });
-                        if state.answers[qi] == Some(LETTERS[oi]) {
+                        if state.answers[qi] == Some(Answer::from(oi as u8)) {
                             let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
                             eprintln!(
                                 "CONFLICT [{key}]: Q{} eliminating {} by {} but already forced to it (set by {})",
                                 qi + 1,
-                                LETTERS[oi].as_char(),
+                                Answer::from(oi as u8).as_char(),
                                 dr.rule.to_str(),
                                 origin,
                             );
@@ -1004,13 +1004,13 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
                                 state.eliminated[i] |= option_mask;
                                 for oi in 0..5usize {
                                     if (option_mask >> oi) & 1 == 1 {
-                                        if state.answers[i] == Some(LETTERS[oi]) {
+                                        if state.answers[i] == Some(Answer::from(oi as u8)) {
                                             let origin =
                                                 forced_by[i].map_or("unknown", |r| r.to_str());
                                             eprintln!(
                                                 "CONFLICT [{key}]: Q{} eliminating {} by {} (multi) but already forced to it (set by {})",
                                                 i + 1,
-                                                LETTERS[oi].as_char(),
+                                                Answer::from(oi as u8).as_char(),
                                                 dr.rule.to_str(),
                                                 origin,
                                             );

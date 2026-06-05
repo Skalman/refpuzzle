@@ -86,6 +86,20 @@ impl Answer {
     }
 }
 
+impl From<u8> for Answer {
+    /// Panics if `v >= 5` — the same out-of-range behavior as `Answer::from(v as u8)`.
+    fn from(v: u8) -> Answer {
+        match v {
+            0 => Answer::A,
+            1 => Answer::B,
+            2 => Answer::C,
+            3 => Answer::D,
+            4 => Answer::E,
+            _ => panic!("invalid answer index: {v}"),
+        }
+    }
+}
+
 impl Serialize for Answer {
     fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
         s.serialize_u8(*self as u8)

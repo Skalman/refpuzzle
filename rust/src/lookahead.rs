@@ -36,7 +36,7 @@ pub fn lookahead(
             }
 
             let mut hyp = *state;
-            hyp.answers[qi] = Some(LETTERS[oi]);
+            hyp.answers[qi] = Some(Answer::from(oi as u8));
             hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
             let mut chain = ArrayVec::new();
@@ -70,7 +70,7 @@ pub fn lookahead(
                     eliminate_qi: qi,
                     eliminate_oi: oi,
                     assumption_qi: qi,
-                    assumption_answer: LETTERS[oi],
+                    assumption_answer: Answer::from(oi as u8),
                     chain,
                     contradiction_qi: qi,
                 });
@@ -83,7 +83,7 @@ pub fn lookahead(
                             eliminate_qi: qi,
                             eliminate_oi: oi,
                             assumption_qi: qi,
-                            assumption_answer: LETTERS[oi],
+                            assumption_answer: Answer::from(oi as u8),
                             chain,
                             contradiction_qi: check_qi,
                         });
@@ -95,7 +95,7 @@ pub fn lookahead(
                         eliminate_qi: qi,
                         eliminate_oi: oi,
                         assumption_qi: qi,
-                        assumption_answer: LETTERS[oi],
+                        assumption_answer: Answer::from(oi as u8),
                         chain,
                         contradiction_qi: check_qi,
                     });
@@ -112,7 +112,7 @@ fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
             (hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer))
                 || (hyp.eliminated[qi] >> answer.idx()) & 1 == 1
         }
-        DeduceAction::Eliminate { qi, oi } => hyp.answers[qi] == Some(LETTERS[oi]),
+        DeduceAction::Eliminate { qi, oi } => hyp.answers[qi] == Some(Answer::from(oi as u8)),
         DeduceAction::EliminateMulti {
             question_mask,
             option_mask,
@@ -192,7 +192,7 @@ mod tests {
                 for ch in s.chars() {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
-                        answers[i] = Some(LETTERS[oi]);
+                        answers[i] = Some(Answer::from(oi as u8));
                         eliminated[i] = 0b11111 ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;

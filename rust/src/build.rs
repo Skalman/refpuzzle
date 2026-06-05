@@ -195,10 +195,11 @@ fn run_hint_engine_from(
                     }
                     DeduceAction::Eliminate { qi, oi } => {
                         assert!(
-                            state.answers[qi].is_none() || state.answers[qi] != Some(LETTERS[oi]),
+                            state.answers[qi].is_none()
+                                || state.answers[qi] != Some(Answer::from(oi as u8)),
                             "eliminating Q{} option {} but it's already forced to that answer",
                             qi + 1,
-                            LETTERS[oi].as_char()
+                            Answer::from(oi as u8).as_char()
                         );
                         state.eliminated[qi] |= 1 << oi;
                     }
@@ -336,7 +337,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
                         pool.contains(&claim.value),
                         "Q{} option {}: claim {:?} value {:?} not in {:?}",
                         qi + 1,
-                        LETTERS[oi].as_char(),
+                        Answer::from(oi as u8).as_char(),
                         claim.question_type,
                         claim.value,
                         &*pool
@@ -364,7 +365,7 @@ fn validate_option_values(fp: &FlatPuzzle) {
                 pool.contains(&s),
                 "Q{} option {}: type {:?} value {:?} not in {:?}",
                 qi + 1,
-                LETTERS[oi].as_char(),
+                Answer::from(oi as u8).as_char(),
                 qt,
                 s,
                 &*pool
@@ -1022,7 +1023,7 @@ fn fill_one_question(
             let mut pool = [OptionValue::UNUSED; 4];
             let mut plen = 0;
             for &l in letters {
-                let lv = OptionValue::num(l.idx() as u8);
+                let lv = OptionValue::num(l as u8);
                 if l != answer && lv != correct_val {
                     pool[plen] = lv;
                     plen += 1;
@@ -1332,7 +1333,7 @@ pub fn correct_option_value(
                 .map_or(OptionValue::NONE, |l| num(l.idx()))
         }
         QuestionType::LetterDist { question_index } => num(usize::from(
-            (sol[qi].idx() as u8).abs_diff(sol[question_index as usize].idx() as u8),
+            (sol[qi] as u8).abs_diff(sol[question_index as usize] as u8),
         )),
         _ => OptionValue::UNUSED,
     }
@@ -1571,7 +1572,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
                 question_type: QuestionType::AnswerOf {
                     question_index: target as u8,
                 },
-                value: OptionValue::num(sol[target].idx() as u8),
+                value: OptionValue::num(sol[target] as u8),
             })
         }
         QuestionTypeKind::FirstWith => {
@@ -1603,7 +1604,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             }
             Some(Claim {
                 question_type: QuestionType::MostCommon,
-                value: OptionValue::num(most[0].idx() as u8),
+                value: OptionValue::num(most[0] as u8),
             })
         }
         QuestionTypeKind::ClosestAfter => {
@@ -1665,7 +1666,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             let target = rng.pick(&candidates);
             Some(Claim {
                 question_type: QuestionType::EqualCount { answer: ref_ans },
-                value: OptionValue::num(target.idx() as u8),
+                value: OptionValue::num(target as u8),
             })
         }
         QuestionTypeKind::ConsecIdent => {
@@ -1854,10 +1855,10 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::AnswerOf { .. }
         | QuestionType::MostCommon
         | QuestionType::LeastCommon
-        | QuestionType::NoOtherHasAnswer => rng.pick(&LETTERS).idx() as u8,
+        | QuestionType::NoOtherHasAnswer => rng.pick(&LETTERS) as u8,
         QuestionType::EqualCount { answer } => {
-            let v = rng.pick(&LETTERS).idx() as u8;
-            if v == answer.idx() as u8 {
+            let v = rng.pick(&LETTERS) as u8;
+            if v == answer as u8 {
                 return None;
             }
             v
@@ -1908,7 +1909,7 @@ mod tests {
 
             let mut solution = [Answer::A; MAX_N];
             for (i, ch) in sol_str.chars().enumerate() {
-                solution[i] = LETTERS[(ch as u8 - b'A') as usize];
+                solution[i] = Answer::from(ch as u8 - b'A');
             }
 
             // Fixture entry: `null` = skip the check for this question;

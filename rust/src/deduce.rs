@@ -419,7 +419,9 @@ fn deduce_impl(
                                 continue;
                             }
                             for oi in 0..5usize {
-                                if !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi]) {
+                                if !is_elim(eliminated, j, oi)
+                                    && pred.matches(Answer::from(oi as u8))
+                                {
                                     push(
                                         DeduceAction::Eliminate { qi: j, oi },
                                         DeduceRule::CountSaturated,
@@ -436,13 +438,14 @@ fn deduce_impl(
                             if answers[j].is_none()
                                 && can_still_match(pred, eliminated[j])
                                 && let Some(oi) = exactly_one(0..5, |oi| {
-                                    !is_elim(eliminated, j, oi) && pred.matches(LETTERS[oi])
+                                    !is_elim(eliminated, j, oi)
+                                        && pred.matches(Answer::from(oi as u8))
                                 })
                             {
                                 push(
                                     DeduceAction::Force {
                                         qi: j,
-                                        answer: LETTERS[oi],
+                                        answer: Answer::from(oi as u8),
                                     },
                                     DeduceRule::CountMustMatchForce,
                                 );
@@ -454,7 +457,9 @@ fn deduce_impl(
                         for j in from..to {
                             if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
                                 for oi in 0..5usize {
-                                    if !is_elim(eliminated, j, oi) && !pred.matches(LETTERS[oi]) {
+                                    if !is_elim(eliminated, j, oi)
+                                        && !pred.matches(Answer::from(oi as u8))
+                                    {
                                         push(
                                             DeduceAction::Eliminate { qi: j, oi },
                                             DeduceRule::CountMustMatchElim,
@@ -475,7 +480,7 @@ fn deduce_impl(
                         push(
                             DeduceAction::Force {
                                 qi,
-                                answer: LETTERS[oi],
+                                answer: Answer::from(oi as u8),
                             },
                             DeduceRule::CountAllAnswered,
                         );
@@ -778,7 +783,7 @@ fn deduce_impl(
                 }
                 (
                     question_index as usize,
-                    LETTERS[implied as usize],
+                    Answer::from(implied),
                     DeduceRule::AnswerOfReverse,
                 )
             }
@@ -839,7 +844,7 @@ fn deduce_impl(
                 if is_elim(eliminated, qi, oi) {
                     continue;
                 }
-                let actual = (oi as u8).abs_diff(src_ans.idx() as u8);
+                let actual = (oi as u8).abs_diff(src_ans as u8);
                 if s.is_num() && actual == s.value() {
                     valid_count += 1;
                     valid_oi = oi;
@@ -851,7 +856,7 @@ fn deduce_impl(
                 push(
                     DeduceAction::Force {
                         qi,
-                        answer: LETTERS[valid_oi],
+                        answer: Answer::from(valid_oi as u8),
                     },
                     DeduceRule::LetterDistReverseForce,
                 );
@@ -904,7 +909,7 @@ fn deduce_impl(
             push(
                 DeduceAction::Force {
                     qi,
-                    answer: LETTERS[oi as usize],
+                    answer: Answer::from(oi as u8),
                 },
                 DeduceRule::OnlyOptionLeft,
             );
@@ -1004,7 +1009,7 @@ fn deduce_impl(
                         push(
                             DeduceAction::Force {
                                 qi,
-                                answer: LETTERS[oi],
+                                answer: Answer::from(oi as u8),
                             },
                             DeduceRule::AnswerOfForward,
                         );
@@ -1036,7 +1041,7 @@ fn deduce_impl(
                 if run(DeduceRule::LetterDistForward)
                     && let Some(other_ans) = answers[question_index as usize]
                 {
-                    let other_idx = other_ans.idx() as u8;
+                    let other_idx = other_ans as u8;
                     if let Some(oi) = exactly_one(0..5, |oi| {
                         let s = fp.options[qi][oi];
                         !is_elim(eliminated, qi, oi)
@@ -1046,7 +1051,7 @@ fn deduce_impl(
                         push(
                             DeduceAction::Force {
                                 qi,
-                                answer: LETTERS[oi],
+                                answer: Answer::from(oi as u8),
                             },
                             DeduceRule::LetterDistForward,
                         );
@@ -1069,7 +1074,7 @@ fn deduce_impl(
                     {
                         // s is NONE/UNUSED: dist (always ≥ 0) can never equal it.
                         // s is num: literal distance comparison.
-                        let dist = (oi as u8).abs_diff(other.idx() as u8);
+                        let dist = (oi as u8).abs_diff(other as u8);
                         let matches = s.is_num() && dist == s.value();
                         if !matches {
                             push(
@@ -1147,7 +1152,7 @@ fn deduce_impl(
                                 }
                             }
                             if run(DeduceRule::FirstClosestAfterSelfRef)
-                                && LETTERS[oi] == answer
+                                && oi == answer.idx()
                                 && qi >= scan_start
                                 && qi < pos
                             {
@@ -1216,7 +1221,7 @@ fn deduce_impl(
                                 );
                             }
                             if run(DeduceRule::LastClosestBeforeSelfRef)
-                                && LETTERS[oi] == answer
+                                && oi == answer.idx()
                                 && qi > pos
                                 && qi < before_idx
                             {
@@ -1349,14 +1354,14 @@ fn deduce_impl(
                         continue;
                     }
                     let on = usize::from(s.value());
-                    if run(DeduceRule::EqualCountSelfRef) && LETTERS[on] == answer {
+                    if run(DeduceRule::EqualCountSelfRef) && on == answer.idx() {
                         push(
                             DeduceAction::Eliminate { qi, oi },
                             DeduceRule::EqualCountSelfRef,
                         );
                     }
                     if run(DeduceRule::EqualCountRangeElim) {
-                        let claimed = LETTERS[on];
+                        let claimed = Answer::from(on as u8);
                         if claimed != answer {
                             // Impossible iff max-possible for one letter is below
                             // known for the other. (rc+rr == letter_max[answer],
@@ -1398,7 +1403,10 @@ fn deduce_impl(
                     }
                     let s = fp.options[qi][oi];
                     if s.is_none() {
-                        if run(none_rule) && range.clone().any(|j| answers[j] == Some(LETTERS[oi]))
+                        if run(none_rule)
+                            && range
+                                .clone()
+                                .any(|j| answers[j] == Some(Answer::from(oi as u8)))
                         {
                             push(DeduceAction::Eliminate { qi, oi }, none_rule);
                         }
@@ -1417,7 +1425,7 @@ fn deduce_impl(
                                 (qi + 1)..pos
                             };
                             if run(closer_rule)
-                                && closer_range.any(|j| answers[j] == Some(LETTERS[oi]))
+                                && closer_range.any(|j| answers[j] == Some(Answer::from(oi as u8)))
                             {
                                 push(DeduceAction::Eliminate { qi, oi }, closer_rule);
                             }
@@ -1462,7 +1470,7 @@ fn deduce_impl(
                     let s = fp.options[qi][oi];
                     if s.is_none() {
                         if run(DeduceRule::OnlySameNoneMatch)
-                            && (0..n).any(|j| j != qi && answers[j] == Some(LETTERS[oi]))
+                            && (0..n).any(|j| j != qi && answers[j] == Some(Answer::from(oi as u8)))
                         {
                             push(
                                 DeduceAction::Eliminate { qi, oi },
@@ -1493,7 +1501,7 @@ fn deduce_impl(
                         {
                             // qi is unanswered, so it doesn't contribute to letter_known.
                             // Subtract pos's contribution to check for any OTHER match.
-                            let letter = LETTERS[oi];
+                            let letter = Answer::from(oi as u8);
                             let (letter_known, _) = letter_counts.get();
                             let pos_contrib = u8::from(answers[pos] == Some(letter));
                             if letter_known[oi] > pos_contrib {
@@ -1582,7 +1590,7 @@ fn deduce_impl(
                             push(
                                 DeduceAction::Force {
                                     qi,
-                                    answer: LETTERS[oi],
+                                    answer: Answer::from(oi as u8),
                                 },
                                 force_rule,
                             );
@@ -1602,7 +1610,7 @@ fn deduce_impl(
                             return false;
                         };
                         let mut hyp = *state;
-                        hyp.answers[qi] = Some(LETTERS[oi]);
+                        hyp.answers[qi] = Some(Answer::from(oi as u8));
                         hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
                         crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, claim)
                             != crate::check_answer::Validity::Invalid
@@ -1611,7 +1619,7 @@ fn deduce_impl(
                     push(
                         DeduceAction::Force {
                             qi,
-                            answer: LETTERS[oi],
+                            answer: Answer::from(oi as u8),
                         },
                         DeduceRule::TrueStatementClaimValid,
                     );
@@ -1638,7 +1646,7 @@ fn deduce_impl(
                     push(
                         DeduceAction::Force {
                             qi,
-                            answer: LETTERS[oi],
+                            answer: Answer::from(oi as u8),
                         },
                         DeduceRule::TrueStatementClaimKnownTrue,
                     );
@@ -1681,7 +1689,7 @@ fn deduce_impl(
                                 && tqi < n
                                 && answers[tqi].is_none()
                             {
-                                let letter = LETTERS[usize::from(claim.value.value())];
+                                let letter = Answer::from(claim.value.value());
                                 if !is_elim(eliminated, tqi, letter.idx()) {
                                     push(
                                         DeduceAction::Force {
@@ -1831,14 +1839,14 @@ fn deduce_impl(
                             push(
                                 DeduceAction::Force {
                                     qi: p,
-                                    answer: LETTERS[oi],
+                                    answer: Answer::from(oi as u8),
                                 },
                                 DeduceRule::ConsecIdentForwardBothForce,
                             );
                             push(
                                 DeduceAction::Force {
                                     qi: p + 1,
-                                    answer: LETTERS[oi],
+                                    answer: Answer::from(oi as u8),
                                 },
                                 DeduceRule::ConsecIdentForwardBothForce,
                             );
@@ -1969,13 +1977,13 @@ fn deduce_impl(
                         QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
                             claim.value.is_num()
                                 && usize::from(claim.value.value()) == qi
-                                && answer != LETTERS[oi]
+                                && answer != Answer::from(oi as u8)
                         }
                         QuestionType::AnswerOf { question_index } => {
                             question_index as usize == qi
                                 && claim.value.is_num()
                                 && claim.value.value() <= 4
-                                && LETTERS[usize::from(claim.value.value())] != LETTERS[oi]
+                                && Answer::from(claim.value.value()) != Answer::from(oi as u8)
                         }
                         _ => false,
                     };
@@ -2105,7 +2113,7 @@ mod tests {
                 for ch in s.chars() {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
-                        answers[i] = Some(LETTERS[oi]);
+                        answers[i] = Some(Answer::from(oi as u8));
                         eliminated[i] = 0b11111 ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;
@@ -2359,7 +2367,7 @@ mod tests {
                         let count = rng.int(1, 3) as usize;
                         for _ in 0..count {
                             let oi = rng.int(0, 4) as usize;
-                            if LETTERS[oi] != solution[qi] {
+                            if Answer::from(oi as u8) != solution[qi] {
                                 eliminated[qi] |= 1 << oi;
                             }
                         }
@@ -2376,7 +2384,7 @@ mod tests {
                 for dr in &drs {
                     let bad = match dr.action {
                         DeduceAction::Force { qi, answer } => answer != solution[qi],
-                        DeduceAction::Eliminate { qi, oi } => LETTERS[oi] == solution[qi],
+                        DeduceAction::Eliminate { qi, oi } => oi == solution[qi].idx(),
                         DeduceAction::EliminateMulti {
                             question_mask,
                             option_mask,

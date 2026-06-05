@@ -261,7 +261,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     let value = claim.value;
     let qi = opt.qi;
     let si = opt.oi;
-    let self_letter = LETTERS[si];
+    let self_letter = Answer::from(si as u8);
     let answers = &state.answers;
     let eliminated = &state.eliminated;
     let n = fp.n;
@@ -341,7 +341,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
             }
             match answers[question_index as usize] {
                 Some(target) => {
-                    if target.idx() as u8 == value.value() {
+                    if target as u8 == value.value() {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -356,7 +356,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if !value.is_num() {
                     return Validity::Invalid;
                 }
-                let dist = (si as u8).abs_diff(other.idx() as u8);
+                let dist = (si as u8).abs_diff(other as u8);
                 if dist == value.value() {
                     Validity::Valid
                 } else {
@@ -436,7 +436,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
             if !value.is_num() || value.value() > 4 {
                 return Validity::Invalid;
             }
-            let letter = LETTERS[value.value() as usize];
+            let letter = Answer::from(value.value());
             let amask = 1u8 << value.value();
             let mut others: u8 = 0;
             let mut could_match: u8 = 0;
@@ -689,7 +689,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if value.value() > 4 {
                     return Validity::Invalid;
                 }
-                let claimed = LETTERS[value.value() as usize];
+                let claimed = Answer::from(value.value());
                 if claimed == answer {
                     return Validity::Invalid;
                 }
@@ -807,7 +807,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
                 continue;
             }
             let mut hyp = state;
-            hyp.answers[qi] = Some(LETTERS[oi]);
+            hyp.answers[qi] = Some(Answer::from(oi as u8));
             if check_claim(fp, hyp, OptionPos { qi, oi }, selected_claim) != Validity::Valid {
                 return Validity::Consistent;
             }
@@ -964,7 +964,7 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             if !value.is_num() {
                 return false;
             }
-            let letter = LETTERS[value.value() as usize];
+            let letter = Answer::from(value.value());
             (0..n).filter(|&j| j != qi).all(|j| answers[j] != letter)
         }
         QuestionType::EqualCount { answer } => {
@@ -976,7 +976,11 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
                 return false;
             }
             let ref_count = answers.iter().filter(|&&a| a == answer).count();
-            answers.iter().filter(|&&a| a == LETTERS[v]).count() == ref_count
+            answers
+                .iter()
+                .filter(|&&a| a == Answer::from(v as u8))
+                .count()
+                == ref_count
         }
         QuestionType::ConsecIdent => pos_matches(
             value,
@@ -1039,8 +1043,7 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             v < n && v != qi && v != question_index as usize && answers[v] == ref_ans
         }
         QuestionType::LetterDist { question_index } => {
-            let dist =
-                (answers[qi].idx() as u8).abs_diff(answers[question_index as usize].idx() as u8);
+            let dist = (answers[qi] as u8).abs_diff(answers[question_index as usize] as u8);
             count_matches(value, dist as usize)
         }
         QuestionType::AnswerIsSelf | QuestionType::TrueStmt => false,
@@ -1088,7 +1091,7 @@ mod tests {
                 for ch in s.chars() {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
-                        answers[i] = Some(LETTERS[oi]);
+                        answers[i] = Some(Answer::from(oi as u8));
                         eliminated[i] = 0b11111 ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;
@@ -1159,7 +1162,7 @@ mod tests {
             let answer_arr = test["answers"].as_array().unwrap();
             for i in 0..n {
                 if let Some(s) = answer_arr[i].as_str() {
-                    answers[i] = Some(LETTERS[(s.as_bytes()[0] - b'A') as usize]);
+                    answers[i] = Some(Answer::from(s.as_bytes()[0] - b'A'));
                 }
             }
 

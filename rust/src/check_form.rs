@@ -200,7 +200,7 @@ fn check_correct_claim_form(
     if v >= oc {
         return None; // out-of-range letter caught by check_claim_form
     }
-    let self_ans = LETTERS[v];
+    let self_ans = Answer::from(v as u8);
     for letter in LETTERS.iter().take(oc) {
         if *letter != self_ans
             && !solution
@@ -334,7 +334,7 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
             // for other types the function no-ops so we pass a placeholder value.
             if let Some(sol) = solution {
                 let value = match qt {
-                    QuestionType::NoOtherHasAnswer => OptionValue::num(sol[qi].idx() as u8),
+                    QuestionType::NoOtherHasAnswer => OptionValue::num(sol[qi] as u8),
                     _ => OptionValue::num(0),
                 };
                 if let Some((msg, sev)) =
