@@ -517,7 +517,7 @@ export function checkAnswers(fp: FlatPuzzle, answers: (Answer | null)[]): boolea
   return true;
 }
 
-/// Like checkClaim, but assumes answers is fully populated; returns bool.
+/** Like checkClaim, but assumes answers is fully populated; returns bool. */
 export function checkClaimFast(
   optionCount: number,
   answers: Answer[],

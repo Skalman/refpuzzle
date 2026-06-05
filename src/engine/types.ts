@@ -26,9 +26,11 @@ export interface Puzzle {
   difficulty: string;
   questions: QuestionDef[];
   optionCount?: number;
-  /// Question types for the TrueStmt question's claims, indexed by option.
-  /// Present iff the puzzle has a TrueStmt question; its `options[oi].value`
-  /// then holds the claim's value (null = NONE).
+  /**
+   * Question types for the TrueStmt question's claims, indexed by option.
+   * Present iff the puzzle has a TrueStmt question; its `options[oi].value`
+   * then holds the claim's value (null = NONE).
+   */
   trueStmtQuestionTypes?: QuestionType[];
 }
 
@@ -41,10 +43,12 @@ export interface OptionDef {
   value: number | null;
 }
 
-/// Helper carrier for the `(question_type, value)` pair. Used as a function
-/// return/argument by `checkClaim`, `checkClaimFast`, `renderClaimLabel`, and
-/// the generator's claim builders. Never persisted — claims live in the
-/// puzzle as `trueStmtQuestionTypes[oi]` + `options[oi].value`.
+/**
+ * Helper carrier for the `(question_type, value)` pair. Used as a function
+ * return/argument by `checkClaim`, `checkClaimFast`, `renderClaimLabel`, and
+ * the generator's claim builders. Never persisted — claims live in the
+ * puzzle as `trueStmtQuestionTypes[oi]` + `options[oi].value`.
+ */
 export interface Claim {
   questionType: QuestionType;
   value: number;
@@ -225,12 +229,16 @@ export function flattenQuestion(t: QuestionType): FlatQuestion {
 // Pre-flattened puzzle for solver/evaluator
 export interface FlatPuzzle {
   questions: FlatQuestion[];
-  /// [questionIdx][optionIdx] → semantic value. For TrueStmt rows this stores
-  /// the per-claim values; the matching claim question types live in
-  /// `trueStmtQuestionTypes`.
+  /**
+   * [questionIdx][optionIdx] → semantic value. For TrueStmt rows this stores
+   * the per-claim values; the matching claim question types live in
+   * `trueStmtQuestionTypes`.
+   */
   optionValues: (number | null)[][];
-  /// Question types for the TrueStmt's claims, indexed by option. `null` if the
-  /// puzzle has no TrueStmt question.
+  /**
+   * Question types for the TrueStmt's claims, indexed by option. `null` if the
+   * puzzle has no TrueStmt question.
+   */
   trueStmtQuestionTypes: QuestionType[] | null;
   affectedBy: number[][]; // affectedBy[j] = question indices to re-check when Q_j changes
   globalIndices: number[]; // indices of questions with global rules (need all answers)
@@ -238,10 +246,12 @@ export interface FlatPuzzle {
   optionCount: number;
 }
 
-/// Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if
-/// `qi` is not the TrueStmt question, if the puzzle has no TrueStmt, or if
-/// `oi` is outside the active option count. Maps the in-memory `null = NONE`
-/// convention to the Claim helper's `-1 = NONE` sentinel.
+/**
+ * Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if
+ * `qi` is not the TrueStmt question, if the puzzle has no TrueStmt, or if
+ * `oi` is outside the active option count. Maps the in-memory `null = NONE`
+ * convention to the Claim helper's `-1 = NONE` sentinel.
+ */
 export function claimAt(fp: FlatPuzzle, qi: number, oi: number): Claim | null {
   if (fp.questions[qi].t !== QT_TRUE_STMT) return null;
   const types = fp.trueStmtQuestionTypes;

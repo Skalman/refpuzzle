@@ -25,11 +25,13 @@ function error(msg: string): [string, Severity] {
   return [msg, "error"];
 }
 
-/** Per-qt structural checks (value-independent): question_index references in
- *  range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer letter
- *  within option count for types that carry an `answer` field. `qi` is the
- *  owning question — when checking one of a TrueStmt's per-option claims,
- *  this is the TrueStmt's qi. */
+/**
+ * Per-qt structural checks (value-independent): question_index references in
+ * range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer letter
+ * within option count for types that carry an `answer` field. `qi` is the
+ * owning question — when checking one of a TrueStmt's per-option claims,
+ * this is the TrueStmt's qi.
+ */
 function checkQuestionForm(
   n: number,
   oc: number,
@@ -55,10 +57,12 @@ function checkQuestionForm(
   return null;
 }
 
-/** Per-(qt, value) wellformedness. Answer-letter and reference checks live in
- *  `checkQuestionForm`; this function focuses on value-level checks (range,
- *  parity, EqualCount self-reference, per-option self-reference for SameAs /
- *  OnlySame). Returns the first error found. */
+/**
+ * Per-(qt, value) wellformedness. Answer-letter and reference checks live in
+ * `checkQuestionForm`; this function focuses on value-level checks (range,
+ * parity, EqualCount self-reference, per-option self-reference for SameAs /
+ * OnlySame). Returns the first error found.
+ */
 function checkClaimForm(
   n: number,
   oc: number,
@@ -153,8 +157,10 @@ function checkClaimForm(
   return null;
 }
 
-/** Per-(qt, value) checks that depend on the puzzle's solution. Currently only
- *  `NoOtherHasAnswer` ambiguity. */
+/**
+ * Per-(qt, value) checks that depend on the puzzle's solution. Currently only
+ * `NoOtherHasAnswer` ambiguity.
+ */
 function checkCorrectClaimForm(
   oc: number,
   solution: Answer[],

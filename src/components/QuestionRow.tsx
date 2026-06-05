@@ -14,8 +14,10 @@ interface Props {
   disabled?: boolean;
   focusedOption?: number | null;
   defaultFocus?: boolean;
-  /// Question types for the TrueStmt's per-option claims. Matching values
-  /// live in `question.options[oi].value`. Omitted for non-TrueStmt rows.
+  /**
+   * Question types for the TrueStmt's per-option claims. Matching values
+   * live in `question.options[oi].value`. Omitted for non-TrueStmt rows.
+   */
   trueStmtQuestionTypes?: QuestionType[];
   onOptionClick: (questionIndex: number, optionIndex: number) => void;
 }

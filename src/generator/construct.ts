@@ -1432,8 +1432,10 @@ function computeValue(rule: QuestionType, qi: number, sol: Answer[]): number | n
   throw new Error(`computeValue: ${rule.type}`);
 }
 
-/// Build the TrueStmt question's claims as SoA: per-option values land in
-/// `options[oi].value` (null = NONE), per-option question types in `types[oi]`.
+/**
+ * Build the TrueStmt question's claims as SoA: per-option values land in
+ * `options[oi].value` (null = NONE), per-option question types in `types[oi]`.
+ */
 function buildClaims(
   qi: number,
   solution: Answer[],
