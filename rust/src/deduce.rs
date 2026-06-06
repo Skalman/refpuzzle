@@ -374,25 +374,42 @@ fn deduce_impl(
         results.push(DeduceResult { action, rule });
     };
 
-    // Precompute count_matching once per count-typed qi. Used by
-    // CountSaturated (answered qis), CountAllAnswered, and the Eliminations
-    // count-family arms (both unanswered) — the latter two previously called
-    // count_matching independently with identical args for the same qi.
+    // Per-qi metadata consulted by multiple downstream rule blocks. Computing
+    // once here keeps each rule block from recomputing the same view:
+    //  - `count_results[qi]`: count_matching result for count-typed qis.
+    //  - `*_qis`: index lists for types that drive their own rule loops, so
+    //    those loops iterate only relevant qis (and `question_index` targets
+    //    are stored alongside where the loop body needs them).
     let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
+    let mut truestmt_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
+    let mut consec_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
+    let mut letterdist_qis: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
+    let mut sameaswhich_qis: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
     for qi in 0..n {
         let t = &fp.question_types[qi];
         if let Some(pred) = count_pred(t) {
             let (from, to) = count_range(t, n);
             count_results[qi] = Some(count_matching(answers, eliminated, pred, from, to));
         }
+        match *t {
+            QuestionType::TrueStmt => truestmt_qis.push(qi),
+            QuestionType::ConsecIdent => consec_qis.push(qi),
+            QuestionType::LetterDist { question_index } => {
+                letterdist_qis.push((qi, question_index));
+            }
+            QuestionType::SameAsWhich { question_index } => {
+                sameaswhich_qis.push((qi, question_index));
+            }
+            _ => {}
+        }
     }
 
     let mut letter_counts = Lazy::new(|| compute_letter_counts(answers, eliminated, n));
 
     // ── Count-family rules (per-question dispatch) ──
-    // Consolidates what used to live in three separate loops: CountSaturated
-    // family (answered count qis), CountAllAnswered (unanswered count qis),
-    // and the count-family + MostCommonCount Eliminations arms (per option).
+    // Per count-typed qi, dispatches to: CountSaturated family (when answered),
+    // CountAllAnswered (when unanswered), and the count-family + MostCommonCount
+    // Eliminations arms (per option).
     for qi in 0..n {
         let t = &fp.question_types[qi];
 
@@ -821,10 +838,7 @@ fn deduce_impl(
 
     // ── LetterDist reverse: each LetterDist src constrains its target qi ──
     // One pass per LetterDist src; the target qi is derived from src's type.
-    for src in 0..n {
-        let QuestionType::LetterDist { question_index } = fp.question_types[src] else {
-            continue;
-        };
+    for &(src, question_index) in &letterdist_qis {
         let qi = question_index as usize;
         if qi >= n || src == qi || answers[qi].is_some() {
             continue;
@@ -1861,11 +1875,8 @@ fn deduce_impl(
 
     // ── SameAsWhich reverse ──
     if !fast && run(DeduceRule::SameAsWhichReverse) {
-        for src in 0..n {
+        for &(src, question_index) in &sameaswhich_qis {
             let Some(src_ans) = answers[src] else {
-                continue;
-            };
-            let QuestionType::SameAsWhich { question_index } = fp.question_types[src] else {
                 continue;
             };
             let s = fp.options[src][src_ans.idx()];
@@ -1907,10 +1918,7 @@ fn deduce_impl(
 
     // ── ConsecIdent reverse: eliminate matching neighbors for impossible pairs ──
     if run(DeduceRule::ConsecIdentReverse) {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::ConsecIdent) {
-                continue;
-            }
+        for &qi in &consec_qis {
             let mut possible_pairs = 0u16;
             for oi in 0..5usize {
                 if is_elim(eliminated, qi, oi) {
@@ -1960,10 +1968,7 @@ fn deduce_impl(
     if !fast
         && (run(DeduceRule::TrueStatementSelfRef) || run(DeduceRule::TrueStatementClaimInvalid))
     {
-        for qi in 0..n {
-            if !matches!(fp.question_types[qi], QuestionType::TrueStmt) {
-                continue;
-            }
+        for &qi in &truestmt_qis {
             for oi in 0..5usize {
                 if is_elim(eliminated, qi, oi) {
                     continue;
