@@ -114,6 +114,16 @@ const ALL_DEDUCE_RULES_INTERNAL = [
 export type DeduceRule = (typeof ALL_DEDUCE_RULES_INTERNAL)[number];
 export const ALL_DEDUCE_RULES: readonly DeduceRule[] = ALL_DEDUCE_RULES_INTERNAL;
 
+/** Position of each rule in the canonical order — mirrors the discriminant of
+ *  Rust's `enum DeduceRule` so `sortDeduceResults` produces output that matches
+ *  Rust's `sort_by_key(|dr| dr.rule as u8)`. */
+const RULE_ORDER = new Map<DeduceRule, number>(ALL_DEDUCE_RULES_INTERNAL.map((r, i) => [r, i]));
+
+/** Stable sort by rule order in place. */
+export function sortDeduceResults(drs: DeduceResult[]): void {
+  drs.sort((a, b) => (RULE_ORDER.get(a.rule) ?? 0) - (RULE_ORDER.get(b.rule) ?? 0));
+}
+
 export type DeduceAction =
   | { type: "force"; qi: number; answer: Answer }
   | { type: "eliminate"; qi: number; oi: number }

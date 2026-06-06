@@ -42,7 +42,7 @@ pub fn lookahead(
             let mut chain = ArrayVec::new();
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
-                let drs = if fast {
+                let mut drs = if fast {
                     deduce_fast(fp, &hyp)
                 } else {
                     deduce(fp, &hyp)
@@ -50,6 +50,7 @@ pub fn lookahead(
                 if drs.is_empty() {
                     break;
                 }
+                drs.sort_by_key(|dr| dr.rule as u8);
                 for dr in &drs {
                     if has_contradiction(&dr.action, &hyp) {
                         contradiction = true;

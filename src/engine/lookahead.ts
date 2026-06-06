@@ -1,6 +1,6 @@
 import type { Answer, FlatPuzzle, State } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import { deduce, deduceFast } from "./deduce.ts";
+import { deduce, deduceFast, sortDeduceResults } from "./deduce.ts";
 import type { DeduceAction, DeduceResult } from "./deduce.ts";
 import { checkAnswer } from "./check-answer.ts";
 
@@ -55,6 +55,7 @@ function tryAssumption(
   while (chain.length < stopDeducingAfterNResults) {
     const drs = fast ? deduceFast(fp, hyp) : deduce(fp, hyp);
     if (drs.length === 0) break;
+    sortDeduceResults(drs);
     for (const dr of drs) {
       if (hasContradiction(dr.action, hyp)) {
         contradiction = true;
