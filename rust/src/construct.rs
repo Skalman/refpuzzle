@@ -118,11 +118,15 @@ pub fn generate(
 ) -> Option<GenerateResult> {
     let n = profile.question_count;
     let oc = profile.option_count;
-    let letters = &LETTERS[..oc];
 
     // Solution is fixed across retries; only the rule-placement attempts vary.
-    let mut solution: [Answer; MAX_N] =
-        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
+    let mut solution: [Answer; MAX_N] = std::array::from_fn(|i| {
+        if i < n {
+            rng.pick_letter(oc)
+        } else {
+            Answer::A
+        }
+    });
     bias_consecutive_pair(&mut solution, n, profile, rng);
 
     for attempt in 0..max_attempts {
@@ -144,9 +148,13 @@ pub fn flat_construct(
     oc: usize,
     rng: &mut Rng,
 ) -> Option<([QuestionType; MAX_N], [Answer; MAX_N])> {
-    let letters = &LETTERS[..oc];
-    let solution: [Answer; MAX_N] =
-        std::array::from_fn(|i| if i < n { rng.pick(letters) } else { Answer::A });
+    let solution: [Answer; MAX_N] = std::array::from_fn(|i| {
+        if i < n {
+            rng.pick_letter(oc)
+        } else {
+            Answer::A
+        }
+    });
 
     let mut types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut assigned: u16 = 0;
@@ -808,10 +816,9 @@ pub(crate) fn random_type_params(
     assigned: u16,
     rng: &mut Rng,
 ) -> Option<QuestionType> {
-    let letters = &LETTERS[..option_count];
     match kind {
         QuestionTypeKind::CountAnswer => Some(QuestionType::CountAnswer {
-            answer: rng.pick(letters),
+            answer: rng.pick_letter(option_count),
         }),
         QuestionTypeKind::CountAnswerBefore => {
             // Need before_index with at least oc distinct count values (0..=before_index).
@@ -819,7 +826,7 @@ pub(crate) fn random_type_params(
                 return None;
             }
             Some(QuestionType::CountAnswerBefore {
-                answer: rng.pick(letters),
+                answer: rng.pick_letter(option_count),
                 before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
             })
         }
@@ -829,7 +836,7 @@ pub(crate) fn random_type_params(
                 return None;
             }
             Some(QuestionType::CountAnswerAfter {
-                answer: rng.pick(letters),
+                answer: rng.pick_letter(option_count),
                 after_index: rng.int(0, n as i32 - option_count as i32) as u8,
             })
         }
@@ -881,7 +888,7 @@ pub(crate) fn random_type_params(
             }
             Some(QuestionType::ClosestAfter {
                 after_index: rng.int(0, n as i32 - option_count as i32) as u8,
-                answer: rng.pick(letters),
+                answer: rng.pick_letter(option_count),
             })
         }
         QuestionTypeKind::ClosestBefore => {
@@ -892,14 +899,14 @@ pub(crate) fn random_type_params(
             }
             Some(QuestionType::ClosestBefore {
                 before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
-                answer: rng.pick(letters),
+                answer: rng.pick_letter(option_count),
             })
         }
         QuestionTypeKind::FirstWith => Some(QuestionType::FirstWith {
-            answer: rng.pick(letters),
+            answer: rng.pick_letter(option_count),
         }),
         QuestionTypeKind::LastWith => Some(QuestionType::LastWith {
-            answer: rng.pick(letters),
+            answer: rng.pick_letter(option_count),
         }),
         QuestionTypeKind::PrevSame => {
             // Need oc distinct option values; pool size is qi + 1 (positions [0, qi) + null).
@@ -927,7 +934,7 @@ pub(crate) fn random_type_params(
         }
         QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
-            let answer = rng.pick(letters);
+            let answer = rng.pick_letter(option_count);
             Some(if kind == QuestionTypeKind::OnlyOdd {
                 QuestionType::OnlyOdd { answer }
             } else {
@@ -938,7 +945,7 @@ pub(crate) fn random_type_params(
         QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
         QuestionTypeKind::NoOtherHasAnswer => Some(QuestionType::NoOtherHasAnswer),
         QuestionTypeKind::EqualCount => {
-            let ref_letter = rng.pick(letters);
+            let ref_letter = rng.pick_letter(option_count);
             let ref_count = count_letter(solution, ref_letter, n);
             let has_match = LETTERS
                 .iter()
