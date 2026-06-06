@@ -87,7 +87,7 @@ impl Answer {
 }
 
 impl From<u8> for Answer {
-    /// Panics if `v >= 5` — the same out-of-range behavior as `Answer::from(v as u8)`.
+    /// Panics if `v >= 5`.
     fn from(v: u8) -> Answer {
         match v {
             0 => Answer::A,
