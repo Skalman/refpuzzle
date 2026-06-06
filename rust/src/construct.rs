@@ -648,7 +648,7 @@ fn bias_consecutive_pair(
             if k != keep {
                 let pos = pair_positions[k] as usize + 1;
                 loop {
-                    let new_letter = rng.pick(&LETTERS[..profile.option_count]);
+                    let new_letter = rng.pick_letter(profile.option_count);
                     if new_letter != solution[pos - 1]
                         && (pos + 1 >= n || new_letter != solution[pos + 1])
                     {

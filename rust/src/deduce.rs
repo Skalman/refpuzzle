@@ -2220,14 +2220,14 @@ mod tests {
         fn random_question_type(rng: &mut Rng, qi: usize, n: usize) -> QuestionType {
             match rng.int(0, 24) {
                 0 => QuestionType::CountAnswer {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 1 => QuestionType::CountAnswerBefore {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                     before_index: rng.int(2, n as i32 - 1) as u8,
                 },
                 2 => QuestionType::CountAnswerAfter {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                     after_index: rng.int(0, n as i32 - 3) as u8,
                 },
                 3 => QuestionType::CountVowel,
@@ -2235,27 +2235,27 @@ mod tests {
                 5 => QuestionType::MostCommonCount,
                 6 => QuestionType::ClosestAfter {
                     after_index: rng.int(0, n as i32 - 3) as u8,
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 7 => QuestionType::ClosestBefore {
                     before_index: rng.int(2, n as i32 - 1) as u8,
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 8 => QuestionType::FirstWith {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 9 => QuestionType::LastWith {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 10 if qi >= 2 => QuestionType::PrevSame,
                 11 if qi + 2 < n => QuestionType::NextSame,
                 12 => QuestionType::OnlySame,
                 13 => QuestionType::SameAs,
                 14 => QuestionType::OnlyOdd {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 15 => QuestionType::OnlyEven {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 16 => QuestionType::ConsecIdent,
                 17 => {
@@ -2270,7 +2270,7 @@ mod tests {
                 19 => QuestionType::MostCommon,
                 20 => QuestionType::NoOtherHasAnswer,
                 21 => QuestionType::EqualCount {
-                    answer: rng.pick(&LETTERS),
+                    answer: rng.pick_letter(5),
                 },
                 22 => QuestionType::AnswerIsSelf,
                 23 => {
@@ -2308,7 +2308,7 @@ mod tests {
             let n = rng.int(4, 8) as usize;
 
             let solution: [Answer; MAX_N] =
-                std::array::from_fn(|i| if i < n { rng.pick(&LETTERS) } else { Answer::A });
+                std::array::from_fn(|i| if i < n { rng.pick_letter(5) } else { Answer::A });
 
             let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
             for qi in 0..n {

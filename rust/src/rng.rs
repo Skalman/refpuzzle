@@ -1,3 +1,5 @@
+use crate::types::Answer;
+
 pub struct Rng {
     s: u32,
 }
@@ -25,6 +27,18 @@ impl Rng {
 
     pub fn pick<T: Copy>(&mut self, arr: &[T]) -> T {
         arr[self.int(0, arr.len() as i32 - 1) as usize]
+    }
+
+    /// Uniform random `Answer` from the first `oc` letters
+    /// (the puzzle's active option range, `LETTERS[..oc]`).
+    pub fn pick_letter(&mut self, oc: usize) -> Answer {
+        self.pick_letter_from(0, oc)
+    }
+
+    /// Uniform random `Answer` from `LETTERS[start..end]` (half-open).
+    pub fn pick_letter_from(&mut self, start: usize, end: usize) -> Answer {
+        debug_assert!(start < end && end <= 5);
+        Answer::from(self.int(start as i32, end as i32 - 1) as u8)
     }
 
     pub fn state(&self) -> u32 {

@@ -1514,11 +1514,17 @@ const _: () = {
     }
 };
 
-fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> Option<Claim> {
+fn try_make_claim(
+    sol: &[Answer; MAX_N],
+    qi: usize,
+    n: usize,
+    rng: &mut Rng,
+    option_count: usize,
+) -> Option<Claim> {
     let kind = rng.pick(CLAIM_TYPES);
     match kind {
         QuestionTypeKind::CountAnswer => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             Some(Claim {
                 question_type: QuestionType::CountAnswer { answer: a },
                 value: OptionValue::num(count_letter(sol, a, n) as u8),
@@ -1533,7 +1539,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             value: OptionValue::num((0..n).filter(|&i| sol[i].is_vowel()).count() as u8),
         }),
         QuestionTypeKind::CountAnswerAfter => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let ai = rng.int(0, (n as i32 - 5).max(0)) as u8;
             Some(Claim {
                 question_type: QuestionType::CountAnswerAfter {
@@ -1549,7 +1555,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             if n < 5 {
                 return None;
             }
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let bi = rng.int(4, n as i32 - 1) as u8;
             Some(Claim {
                 question_type: QuestionType::CountAnswerBefore {
@@ -1576,7 +1582,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::FirstWith => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let first = (0..n).find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::FirstWith { answer: a },
@@ -1584,7 +1590,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::LastWith => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let last = (0..n).rev().find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::LastWith { answer: a },
@@ -1608,7 +1614,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::ClosestAfter => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let ai = rng.int(0, (n as i32 - 2).max(0)) as u8;
             let target = ((ai as usize + 1)..n).find(|&i| sol[i] == a)?;
             Some(Claim {
@@ -1620,7 +1626,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::ClosestBefore => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let bi = rng.int(2, n as i32 - 1) as u8;
             let target = (0..bi as usize).rev().find(|&i| sol[i] == a)?;
             Some(Claim {
@@ -1652,7 +1658,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::EqualCount => {
-            let ref_ans = rng.pick(&LETTERS);
+            let ref_ans = rng.pick_letter(option_count);
             let ref_count = count_letter(sol, ref_ans, n);
             let mut candidates = ArrayVec::<Answer, 5>::new();
             for &l in &LETTERS {
@@ -1689,7 +1695,7 @@ fn try_make_claim(sol: &[Answer; MAX_N], qi: usize, n: usize, rng: &mut Rng) -> 
             })
         }
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
-            let a = rng.pick(&LETTERS);
+            let a = rng.pick_letter(option_count);
             let parity = if kind == QuestionTypeKind::OnlyOdd {
                 1
             } else {
@@ -1756,12 +1762,12 @@ fn make_true_claim(
     option_count: usize,
 ) -> Claim {
     for _ in 0..20 {
-        if let Some(claim) = try_make_claim(sol, qi, n, rng) {
+        if let Some(claim) = try_make_claim(sol, qi, n, rng, option_count) {
             debug_assert!(check_claim_fast(option_count, &sol[..n], qi, &claim));
             return claim;
         }
     }
-    let a = rng.pick(&LETTERS);
+    let a = rng.pick_letter(option_count);
     Claim {
         question_type: QuestionType::CountAnswer { answer: a },
         value: OptionValue::num(count_letter(sol, a, n) as u8),
@@ -1777,7 +1783,7 @@ fn make_false_claim(
 ) -> Claim {
     for _ in 0..30 {
         let base = make_true_claim(sol, qi, n, rng, option_count);
-        let fc = perturb_claim(base, n, rng);
+        let fc = perturb_claim(base, n, rng, option_count);
         if let Some(fc) = fc
             && !check_claim_fast(option_count, &sol[..n], qi, &fc)
         {
@@ -1791,7 +1797,7 @@ fn make_false_claim(
     }
 }
 
-fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
+fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng, option_count: usize) -> Option<Claim> {
     // Count-type perturbation: offset the existing claim value. Done in i8
     // because the offset is signed (-2..=2) and the base may be NONE
     // (treated as -1 for "the count was null"). Range is [-3, MAX_N+2].
@@ -1855,9 +1861,9 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng) -> Option<Claim> {
         QuestionType::AnswerOf { .. }
         | QuestionType::MostCommon
         | QuestionType::LeastCommon
-        | QuestionType::NoOtherHasAnswer => rng.pick(&LETTERS) as u8,
+        | QuestionType::NoOtherHasAnswer => rng.pick_letter(option_count) as u8,
         QuestionType::EqualCount { answer } => {
-            let v = rng.pick(&LETTERS) as u8;
+            let v = rng.pick_letter(option_count) as u8;
             if v == answer as u8 {
                 return None;
             }
