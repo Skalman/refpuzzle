@@ -312,13 +312,35 @@ fn compute_letter_counts(
 
 pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 
+#[derive(Clone, Copy)]
+enum RuleFilter {
+    All,
+    #[cfg(test)]
+    Only(DeduceRule),
+    #[cfg(test)]
+    Except(DeduceRule),
+}
+
+impl RuleFilter {
+    #[inline(always)]
+    fn matches(self, #[cfg_attr(not(test), allow(unused_variables))] r: DeduceRule) -> bool {
+        match self {
+            RuleFilter::All => true,
+            #[cfg(test)]
+            RuleFilter::Only(o) => r == o,
+            #[cfg(test)]
+            RuleFilter::Except(e) => r != e,
+        }
+    }
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
 /// true in any valid extension of the current state, regardless of whether the
 /// puzzle has a unique solution.
 pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, true, false)
+    deduce_impl(fp, state, RuleFilter::All, true, false)
 }
 
 /// Deduction that may apply uniqueness-assuming rules (e.g. "TrueStmt has
@@ -326,49 +348,42 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// when the puzzle is known to have a unique solution — use for play, check,
 /// or tests; NOT during generation.
 pub fn deduce_assuming_unique(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, true, true)
+    deduce_impl(fp, state, RuleFilter::All, true, true)
 }
 
 /// Fast-path variant of `deduce`: skips expensive non-fast rules. Sound-only
 /// (does NOT apply uniqueness-assuming rules); used by lookahead's
 /// hypothesis-testing where the hypothesis may be inconsistent.
 pub fn deduce_fast(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, false, false)
+    deduce_impl(fp, state, RuleFilter::All, false, false)
 }
 
 #[cfg(test)]
 pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
-    deduce_impl(fp, state, Some(rule), None, true, true)
+    deduce_impl(fp, state, RuleFilter::Only(rule), true, true)
 }
 
 #[cfg(test)]
-pub fn deduce_with_rule_exclude(
+pub fn deduce_with_rule_except(
     fp: &FlatPuzzle,
     state: &State,
-    rule: DeduceRule,
-    exclude: Option<DeduceRule>,
+    exclude: DeduceRule,
 ) -> DeduceResults {
-    let rule_filter = if rule == DeduceRule::All {
-        None
-    } else {
-        Some(rule)
-    };
-    deduce_impl(fp, state, rule_filter, exclude, true, true)
+    deduce_impl(fp, state, RuleFilter::Except(exclude), true, true)
 }
 
 #[inline(always)]
 fn deduce_impl(
     fp: &FlatPuzzle,
     state: &State,
-    rule: Option<DeduceRule>,
-    exclude: Option<DeduceRule>,
+    filter: RuleFilter,
     full: bool,
     assume_unique: bool,
 ) -> DeduceResults {
     let n = fp.n;
     let answers = &state.answers;
     let eliminated = &state.eliminated;
-    let run = |r: DeduceRule| (rule.is_none() || rule == Some(r)) && exclude != Some(r);
+    let run = |r: DeduceRule| filter.matches(r);
     let mut results = DeduceResults::new();
     let mut push = |action: DeduceAction, rule: DeduceRule| {
         results.push(DeduceResult { action, rule });
@@ -2180,7 +2195,7 @@ mod tests {
                 && !drs.is_empty()
                 && got == expected
             {
-                let without = deduce_with_rule_exclude(&fp, &state, DeduceRule::All, Some(r));
+                let without = deduce_with_rule_except(&fp, &state, r);
                 let without_got = format_result(without.first());
                 if without_got == got {
                     dry_failed += 1;
