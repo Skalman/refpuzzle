@@ -1148,27 +1148,22 @@ fn deduce_impl(
                             }
                         }
                     }
-                    {
-                        for voi in 0..5 {
-                            if (vowel_valid >> voi) & 1 == 1 && (vowel_has_partner >> voi) & 1 == 0
-                            {
-                                push(
-                                    DeduceRule::VowelCrossElim,
-                                    DeduceAction::Eliminate { qi, oi: voi },
-                                );
-                            }
+                    for voi in 0..5 {
+                        if (vowel_valid >> voi) & 1 == 1 && (vowel_has_partner >> voi) & 1 == 0 {
+                            push(
+                                DeduceRule::VowelCrossElim,
+                                DeduceAction::Eliminate { qi, oi: voi },
+                            );
                         }
                     }
-                    {
-                        for coi in 0..5 {
-                            if (consonant_valid >> coi) & 1 == 1
-                                && (consonant_has_partner >> coi) & 1 == 0
-                            {
-                                push(
-                                    DeduceRule::ConsonantCrossElim,
-                                    DeduceAction::Eliminate { qi: cq, oi: coi },
-                                );
-                            }
+                    for coi in 0..5 {
+                        if (consonant_valid >> coi) & 1 == 1
+                            && (consonant_has_partner >> coi) & 1 == 0
+                        {
+                            push(
+                                DeduceRule::ConsonantCrossElim,
+                                DeduceAction::Eliminate { qi: cq, oi: coi },
+                            );
                         }
                     }
                 }
@@ -1595,21 +1590,19 @@ fn deduce_impl(
                             DeduceAction::Eliminate { qi, oi },
                         );
                     }
-                    {
-                        let claimed = Answer::from(on as u8);
-                        if claimed != answer {
-                            // Impossible iff max-possible for one letter is below
-                            // known for the other. (rc+rr == letter_max[answer],
-                            // sc+sr == letter_max[claimed].)
-                            let (letter_known, letter_max) = letter_counts.get();
-                            if letter_max[answer.idx()] < letter_known[claimed.idx()]
-                                || letter_max[claimed.idx()] < letter_known[answer.idx()]
-                            {
-                                push(
-                                    DeduceRule::EqualCountRangeElim,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
+                    let claimed = Answer::from(on as u8);
+                    if claimed != answer {
+                        // Impossible iff max-possible for one letter is below
+                        // known for the other. (rc+rr == letter_max[answer],
+                        // sc+sr == letter_max[claimed].)
+                        let (letter_known, letter_max) = letter_counts.get();
+                        if letter_max[answer.idx()] < letter_known[claimed.idx()]
+                            || letter_max[claimed.idx()] < letter_known[answer.idx()]
+                        {
+                            push(
+                                DeduceRule::EqualCountRangeElim,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
                         }
                     }
                 }
@@ -1822,12 +1815,11 @@ fn deduce_impl(
                         continue;
                     }
                     let claimed = v as usize;
-                    let self_letter = oi;
 
                     let mut adj_min = min_count;
                     let mut adj_max = max_count;
-                    adj_min[self_letter] += 1;
-                    adj_max[self_letter] += 1;
+                    adj_min[oi] += 1;
+                    adj_max[oi] += 1;
 
                     // For least: claimed could/must be ≤ every other letter.
                     // For most: claimed could/must be ≥ every other letter.
@@ -1856,23 +1848,21 @@ fn deduce_impl(
                     }
                 }
 
-                {
-                    for oi in 0..5usize {
-                        if !must_be_extreme_opt[oi] {
-                            continue;
-                        }
-                        let only_viable = (0..5usize).all(|oj| {
-                            oj == oi || is_elim(eliminated, qi, oj) || !can_be_extreme_opt[oj]
-                        });
-                        if only_viable {
-                            push(
-                                force_rule,
-                                DeduceAction::Force {
-                                    qi,
-                                    answer: Answer::from(oi as u8),
-                                },
-                            );
-                        }
+                for oi in 0..5usize {
+                    if !must_be_extreme_opt[oi] {
+                        continue;
+                    }
+                    let only_viable = (0..5usize).all(|oj| {
+                        oj == oi || is_elim(eliminated, qi, oj) || !can_be_extreme_opt[oj]
+                    });
+                    if only_viable {
+                        push(
+                            force_rule,
+                            DeduceAction::Force {
+                                qi,
+                                answer: Answer::from(oi as u8),
+                            },
+                        );
                     }
                 }
             }
