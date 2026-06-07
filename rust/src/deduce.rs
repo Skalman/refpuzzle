@@ -1456,29 +1456,29 @@ fn deduce_impl(
                             let poss_a = !eliminated[p] & 0b11111u8;
                             let poss_b = !eliminated[p + 1] & 0b11111u8;
 
-                            if answers[p].is_some() && answers[p + 1].is_none() {
-                                let letter = answers[p].unwrap();
-                                if !is_elim(eliminated, p + 1, letter.idx()) {
-                                    push(
-                                        DeduceRule::ConsecIdentForwardForce,
-                                        DeduceAction::Force {
-                                            qi: p + 1,
-                                            answer: letter,
-                                        },
-                                    );
-                                }
+                            if let Some(letter) = answers[p]
+                                && answers[p + 1].is_none()
+                                && !is_elim(eliminated, p + 1, letter.idx())
+                            {
+                                push(
+                                    DeduceRule::ConsecIdentForwardForce,
+                                    DeduceAction::Force {
+                                        qi: p + 1,
+                                        answer: letter,
+                                    },
+                                );
                             }
-                            if answers[p + 1].is_some() && answers[p].is_none() {
-                                let letter = answers[p + 1].unwrap();
-                                if !is_elim(eliminated, p, letter.idx()) {
-                                    push(
-                                        DeduceRule::ConsecIdentForwardForce,
-                                        DeduceAction::Force {
-                                            qi: p,
-                                            answer: letter,
-                                        },
-                                    );
-                                }
+                            if let Some(letter) = answers[p + 1]
+                                && answers[p].is_none()
+                                && !is_elim(eliminated, p, letter.idx())
+                            {
+                                push(
+                                    DeduceRule::ConsecIdentForwardForce,
+                                    DeduceAction::Force {
+                                        qi: p,
+                                        answer: letter,
+                                    },
+                                );
                             }
 
                             for oi in 0..5usize {
