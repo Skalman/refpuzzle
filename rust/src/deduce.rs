@@ -798,8 +798,8 @@ fn apply_same_shared(
     let ans = answers[qi];
 
     if let Some(a) = ans {
-        // Reverse: qi answered with an index → force that target qi to qi's letter.
         let s = fp.options[qi][a.idx()];
+        // Reverse: qi answered with an index → force that target qi to qi's letter.
         if s.is_num() {
             let target_qi = usize::from(s.value());
             if target_qi < n && answers[target_qi].is_none() {
@@ -815,7 +815,7 @@ fn apply_same_shared(
 
         // OnlySameNoneForward: an answered None means qi's answer is unique,
         // so no other question can have that letter. Sound, ungated.
-        if full && fp.options[qi][a.idx()].is_none() {
+        if full && s.is_none() {
             for j in 0..n {
                 if j == qi {
                     continue;
@@ -1272,24 +1272,21 @@ fn deduce_impl(
                 }
             }
             QuestionType::AnswerOf { question_index } => {
+                let target_qi = question_index as usize;
                 if let Some(a) = ans {
                     // Reverse: qi answered → force the target qi.
                     let implied = fp.options[qi][a.idx()].value();
-                    if implied <= 4 {
-                        let target_qi = question_index as usize;
-                        if target_qi < n && answers[target_qi].is_none() {
-                            push(
-                                DeduceRule::AnswerOfReverse,
-                                DeduceAction::Force {
-                                    qi: target_qi,
-                                    answer: Answer::from(implied),
-                                },
-                            );
-                        }
+                    if implied <= 4 && target_qi < n && answers[target_qi].is_none() {
+                        push(
+                            DeduceRule::AnswerOfReverse,
+                            DeduceAction::Force {
+                                qi: target_qi,
+                                answer: Answer::from(implied),
+                            },
+                        );
                     }
                 } else {
                     // Forward + per-option elim (qi unanswered).
-                    let target_qi = question_index as usize;
                     let target_ans = answers[target_qi];
                     if let Some(target) = target_ans {
                         let mut best: Option<usize> = None;
