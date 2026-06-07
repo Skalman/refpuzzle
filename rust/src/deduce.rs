@@ -1081,22 +1081,23 @@ fn apply_vowel_consonant_cross_elim(
     let consonant_valid = valid_mask(cq);
 
     // 5×5 cross-product: find (voi, coi) pairs whose option values sum to n.
+    // Iterate only set bits of `*_valid` via trailing_zeros + clear-lowest-bit.
     let nn = n as u8;
     let mut vowel_has_partner = 0u8;
     let mut consonant_has_partner = 0u8;
-    for voi in 0..5 {
-        if (vowel_valid >> voi) & 1 == 0 {
-            continue;
-        }
+    let mut v_iter = vowel_valid;
+    while v_iter != 0 {
+        let voi = v_iter.trailing_zeros() as usize;
+        v_iter &= v_iter - 1;
         let vs = fp.options[vq][voi];
         if !vs.is_num() {
             continue;
         }
         let v = vs.value();
-        for coi in 0..5 {
-            if (consonant_valid >> coi) & 1 == 0 {
-                continue;
-            }
+        let mut c_iter = consonant_valid;
+        while c_iter != 0 {
+            let coi = c_iter.trailing_zeros() as usize;
+            c_iter &= c_iter - 1;
             let cs = fp.options[cq][coi];
             if !cs.is_num() {
                 continue;
@@ -1110,10 +1111,11 @@ fn apply_vowel_consonant_cross_elim(
 
     // Emit eliminations for valid options that found no partner.
     let mut emit_unpaired = |q: usize, valid: u8, has_partner: u8, rule: DeduceRule| {
-        for oi in 0..5 {
-            if (valid >> oi) & 1 == 1 && (has_partner >> oi) & 1 == 0 {
-                push(rule, DeduceAction::Eliminate { qi: q, oi });
-            }
+        let mut unpaired = valid & !has_partner;
+        while unpaired != 0 {
+            let oi = unpaired.trailing_zeros() as usize;
+            unpaired &= unpaired - 1;
+            push(rule, DeduceAction::Eliminate { qi: q, oi });
         }
     };
     emit_unpaired(
@@ -1600,20 +1602,24 @@ fn deduce_impl(
                                 );
                             }
 
-                            for oi in 0..5usize {
-                                if ans_a.is_none()
-                                    && !is_elim(eliminated, p, oi)
-                                    && (poss_b & (1 << oi)) == 0
-                                {
+                            // Options at p that are remaining for p but impossible at p+1
+                            // (and vice versa) can't be in a consec-identical pair → eliminate.
+                            if ans_a.is_none() {
+                                let mut to_elim = poss_a & !poss_b & 0b11111u8;
+                                while to_elim != 0 {
+                                    let oi = to_elim.trailing_zeros() as usize;
+                                    to_elim &= to_elim - 1;
                                     push(
                                         DeduceRule::ConsecIdentForwardElim,
                                         DeduceAction::Eliminate { qi: p, oi },
                                     );
                                 }
-                                if ans_b.is_none()
-                                    && !is_elim(eliminated, p + 1, oi)
-                                    && (poss_a & (1 << oi)) == 0
-                                {
+                            }
+                            if ans_b.is_none() {
+                                let mut to_elim = poss_b & !poss_a & 0b11111u8;
+                                while to_elim != 0 {
+                                    let oi = to_elim.trailing_zeros() as usize;
+                                    to_elim &= to_elim - 1;
                                     push(
                                         DeduceRule::ConsecIdentForwardElim,
                                         DeduceAction::Eliminate { qi: p + 1, oi },
