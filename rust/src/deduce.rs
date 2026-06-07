@@ -780,6 +780,87 @@ fn apply_positional_backward(
     }
 }
 
+/// Rules shared by `SameAs` and `OnlySame` arms: reverse force, NoneForward
+/// (answered qi), and the common per-option elims (NoneMatch / SelfRef /
+/// RuledOut) for unanswered qi. `reverse_rule` distinguishes the two arms'
+/// reverse-force rule name (SameAsReverse vs PrevNextOnlySameReverse).
+fn apply_same_shared(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    reverse_rule: DeduceRule,
+    full: bool,
+) {
+    let n = fp.n;
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let ans = answers[qi];
+
+    if let Some(a) = ans {
+        // Reverse: qi answered with an index → force that target qi to qi's letter.
+        let s = fp.options[qi][a.idx()];
+        if s.is_num() {
+            let target_qi = usize::from(s.value());
+            if target_qi < n && answers[target_qi].is_none() {
+                push(
+                    reverse_rule,
+                    DeduceAction::Force {
+                        qi: target_qi,
+                        answer: a,
+                    },
+                );
+            }
+        }
+
+        // OnlySameNoneForward: an answered None means qi's answer is unique,
+        // so no other question can have that letter. Sound, ungated.
+        if full && fp.options[qi][a.idx()].is_none() {
+            for j in 0..n {
+                if j == qi {
+                    continue;
+                }
+                if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
+                    push(
+                        DeduceRule::OnlySameNoneForward,
+                        DeduceAction::Eliminate { qi: j, oi: a.idx() },
+                    );
+                }
+            }
+        }
+    } else {
+        // Per-option elim (qi unanswered): rules shared by both arms.
+        for oi in 0..5usize {
+            if is_elim(eliminated, qi, oi) {
+                continue;
+            }
+            let s = fp.options[qi][oi];
+            if s.is_none() {
+                if (0..n).any(|j| j != qi && answers[j] == Some(Answer::from(oi as u8))) {
+                    push(
+                        DeduceRule::OnlySameNoneMatch,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+            } else if s.is_num() {
+                let pos = usize::from(s.value());
+                if pos == qi {
+                    push(
+                        DeduceRule::OnlySameSelfRef,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if pos < n && is_elim(eliminated, pos, oi) {
+                    push(
+                        DeduceRule::OnlySameRuledOut,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+            }
+        }
+    }
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
@@ -1602,126 +1683,87 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::OnlySame | QuestionType::SameAs => {
-                if let Some(a) = ans {
-                    // Reverse: qi answered with an index → force that target qi to qi's letter.
-                    let s = fp.options[qi][a.idx()];
-                    if s.is_num() {
-                        let target_qi = usize::from(s.value());
-                        if target_qi < n && answers[target_qi].is_none() {
-                            let rule = match *t {
-                                QuestionType::SameAs => DeduceRule::SameAsReverse,
-                                _ => DeduceRule::PrevNextOnlySameReverse,
-                            };
+            QuestionType::SameAs => {
+                apply_same_shared(fp, state, &mut push, qi, DeduceRule::SameAsReverse, full);
+
+                // SameAs negative: non-selected option targets cannot share qi's
+                // answer. Uniqueness-assuming, answered-qi only.
+                if assume_unique && let Some(a) = ans {
+                    let ai = a.idx();
+                    let selected_s = fp.options[qi][ai];
+                    // The "none" answer's sound inference is handled in
+                    // apply_same_shared (OnlySameNoneForward); this rule is for
+                    // the index case.
+                    if selected_s.is_num() {
+                        let selected = selected_s.value();
+                        let mut q_mask = 0u16;
+                        for oi in 0..fp.option_count {
+                            if oi == ai {
+                                continue;
+                            }
+                            let ts = fp.options[qi][oi];
+                            if !ts.is_num() {
+                                continue;
+                            }
+                            let target = usize::from(ts.value());
+                            if target >= n || target == qi {
+                                continue;
+                            }
+                            if ts.value() != selected
+                                && answers[target].is_none()
+                                && !is_elim(eliminated, target, ai)
+                            {
+                                q_mask |= 1 << target;
+                            }
+                        }
+                        if q_mask != 0 {
                             push(
-                                rule,
-                                DeduceAction::Force {
-                                    qi: target_qi,
-                                    answer: a,
+                                DeduceRule::SameAsNegative,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: q_mask,
+                                    option_mask: 1 << ai,
                                 },
                             );
                         }
                     }
+                }
+            }
+            QuestionType::OnlySame => {
+                apply_same_shared(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    DeduceRule::PrevNextOnlySameReverse,
+                    full,
+                );
 
-                    // OnlySame/SameAs None forward: an answered None means qi's
-                    // answer is unique, so no other question can have that letter.
-                    // Sound, ungated.
-                    if full && fp.options[qi][a.idx()].is_none() {
-                        for j in 0..n {
-                            if j == qi {
-                                continue;
-                            }
-                            if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
-                                push(
-                                    DeduceRule::OnlySameNoneForward,
-                                    DeduceAction::Eliminate { qi: j, oi: a.idx() },
-                                );
-                            }
-                        }
-                    }
-
-                    // SameAs negative (SameAs only): non-selected option targets
-                    // cannot share qi's answer. Uniqueness-assuming.
-                    if assume_unique && matches!(*t, QuestionType::SameAs) {
-                        let ai = a.idx();
-                        let selected_s = fp.options[qi][ai];
-                        // The "none" answer's sound inference is handled above; this
-                        // rule is for the index case.
-                        if selected_s.is_num() {
-                            let selected = selected_s.value();
-                            let mut q_mask = 0u16;
-                            for oi in 0..fp.option_count {
-                                if oi == ai {
-                                    continue;
-                                }
-                                let ts = fp.options[qi][oi];
-                                if !ts.is_num() {
-                                    continue;
-                                }
-                                let target = usize::from(ts.value());
-                                if target >= n || target == qi {
-                                    continue;
-                                }
-                                if ts.value() != selected
-                                    && answers[target].is_none()
-                                    && !is_elim(eliminated, target, ai)
-                                {
-                                    q_mask |= 1 << target;
-                                }
-                            }
-                            if q_mask != 0 {
-                                push(
-                                    DeduceRule::SameAsNegative,
-                                    DeduceAction::EliminateMulti {
-                                        question_mask: q_mask,
-                                        option_mask: 1 << ai,
-                                    },
-                                );
-                            }
-                        }
-                    }
-                } else {
-                    // Per-option elim (qi unanswered).
+                // OnlySameOtherMatch: per-option elim, OnlySame only. If pos is
+                // pointing at a position where some OTHER qi (not pos) already
+                // has letter `oi`, then qi can't be "only same as pos" via oi.
+                if ans.is_none() {
                     for oi in 0..5usize {
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
                         let s = fp.options[qi][oi];
-                        if s.is_none() {
-                            if (0..n).any(|j| j != qi && answers[j] == Some(Answer::from(oi as u8)))
-                            {
-                                push(
-                                    DeduceRule::OnlySameNoneMatch,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                        } else if s.is_num() {
-                            let pos = usize::from(s.value());
-                            if pos == qi {
-                                push(
-                                    DeduceRule::OnlySameSelfRef,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if pos < n && is_elim(eliminated, pos, oi) {
-                                push(
-                                    DeduceRule::OnlySameRuledOut,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if matches!(*t, QuestionType::OnlySame) && pos < n && pos != qi {
-                                // qi is unanswered, so it doesn't contribute to letter_known.
-                                // Subtract pos's contribution to check for any OTHER match.
-                                let letter = Answer::from(oi as u8);
-                                let (letter_known, _) = letter_counts.get();
-                                let pos_contrib = u8::from(answers[pos] == Some(letter));
-                                if letter_known[oi] > pos_contrib {
-                                    push(
-                                        DeduceRule::OnlySameOtherMatch,
-                                        DeduceAction::Eliminate { qi, oi },
-                                    );
-                                }
-                            }
+                        if !s.is_num() {
+                            continue;
+                        }
+                        let pos = usize::from(s.value());
+                        if pos >= n || pos == qi {
+                            continue;
+                        }
+                        // qi is unanswered, so it doesn't contribute to letter_known.
+                        // Subtract pos's contribution to check for any OTHER match.
+                        let letter = Answer::from(oi as u8);
+                        let (letter_known, _) = letter_counts.get();
+                        let pos_contrib = u8::from(answers[pos] == Some(letter));
+                        if letter_known[oi] > pos_contrib {
+                            push(
+                                DeduceRule::OnlySameOtherMatch,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
                         }
                     }
                 }
