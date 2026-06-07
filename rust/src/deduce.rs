@@ -399,6 +399,12 @@ fn deduce_impl(
     let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
     let mut truestmt_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
     let mut consec_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
+    // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
+    // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
+    // fires exactly once per deduce call regardless of how many of each type
+    // exist in the puzzle.
+    let mut vowel_qi: Option<usize> = None;
+    let mut consonant_qi: Option<usize> = None;
     for qi in 0..n {
         let t = &fp.question_types[qi];
         if let Some(pred) = count_pred(t) {
@@ -408,6 +414,8 @@ fn deduce_impl(
         match *t {
             QuestionType::TrueStmt => truestmt_qis.push(qi),
             QuestionType::ConsecIdent => consec_qis.push(qi),
+            QuestionType::CountVowel if answers[qi].is_none() => vowel_qi = Some(qi),
+            QuestionType::CountConsonant if answers[qi].is_none() => consonant_qi = Some(qi),
             _ => {}
         }
     }
@@ -769,23 +777,6 @@ fn deduce_impl(
                     },
                 );
             }
-        }
-    }
-
-    // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
-    // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
-    // fires exactly once per deduce call regardless of how many of each type
-    // exist in the puzzle.
-    let mut vowel_qi: Option<usize> = None;
-    let mut consonant_qi: Option<usize> = None;
-    for i in 0..n {
-        if answers[i].is_some() {
-            continue;
-        }
-        match fp.question_types[i] {
-            QuestionType::CountVowel => vowel_qi = Some(i),
-            QuestionType::CountConsonant => consonant_qi = Some(i),
-            _ => {}
         }
     }
 
