@@ -797,47 +797,6 @@ fn deduce_impl(
         }
     }
 
-    // ── Cross-question reverse forces ──
-    // For each ANSWERED `other`, dispatch on its type and emit a Force on its
-    // target qi (if that target is still unanswered). Replaces an O(m·n) inner
-    // loop (per unanswered qi, rescan all answered) with one O(n) sweep.
-    for other in 0..n {
-        let Some(other_ans) = answers[other] else {
-            continue;
-        };
-        let (target_qi, letter, rule) = match fp.question_types[other] {
-            QuestionType::SameAs => {
-                let s = fp.options[other][other_ans.idx()];
-                if !s.is_num() {
-                    continue;
-                }
-                (usize::from(s.value()), other_ans, DeduceRule::SameAsReverse)
-            }
-            QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame => {
-                let s = fp.options[other][other_ans.idx()];
-                if !s.is_num() {
-                    continue;
-                }
-                (
-                    usize::from(s.value()),
-                    other_ans,
-                    DeduceRule::PrevNextOnlySameReverse,
-                )
-            }
-            _ => continue,
-        };
-        if target_qi >= n || answers[target_qi].is_some() {
-            continue;
-        }
-        push(
-            rule,
-            DeduceAction::Force {
-                qi: target_qi,
-                answer: letter,
-            },
-        );
-    }
-
     // ── LetterDist reverse: each LetterDist src constrains its target qi ──
     // One pass per LetterDist src; the target qi is derived from src's type.
     for &(src, question_index) in &letterdist_qis {
@@ -1677,6 +1636,25 @@ fn deduce_impl(
             }
 
             QuestionType::OnlySame | QuestionType::SameAs => {
+                // Reverse: qi answered with an index → force that target qi to qi's letter.
+                let s = fp.options[qi][a.idx()];
+                if s.is_num() {
+                    let target_qi = usize::from(s.value());
+                    if target_qi < n && answers[target_qi].is_none() {
+                        let rule = match *t {
+                            QuestionType::SameAs => DeduceRule::SameAsReverse,
+                            _ => DeduceRule::PrevNextOnlySameReverse,
+                        };
+                        push(
+                            rule,
+                            DeduceAction::Force {
+                                qi: target_qi,
+                                answer: a,
+                            },
+                        );
+                    }
+                }
+
                 // OnlySame/SameAs None forward: an answered None means qi's
                 // answer is unique, so no other question can have that letter.
                 // Sound, ungated.
@@ -1732,6 +1710,22 @@ fn deduce_impl(
                                 },
                             );
                         }
+                    }
+                }
+            }
+
+            QuestionType::PrevSame | QuestionType::NextSame => {
+                let s = fp.options[qi][a.idx()];
+                if s.is_num() {
+                    let target_qi = usize::from(s.value());
+                    if target_qi < n && answers[target_qi].is_none() {
+                        push(
+                            DeduceRule::PrevNextOnlySameReverse,
+                            DeduceAction::Force {
+                                qi: target_qi,
+                                answer: a,
+                            },
+                        );
                     }
                 }
             }
