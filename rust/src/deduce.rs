@@ -1053,6 +1053,83 @@ fn apply_extremum_count<const IS_LEAST: bool>(
     }
 }
 
+/// Vowel + Consonant = n cross-elim. Fires once per deduce call from the
+/// canonical CountVowel arm. The two CountVowel/CountConsonant sides are
+/// structurally symmetric; the local closures capture that.
+fn apply_vowel_consonant_cross_elim(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    vq: usize,
+    cq: usize,
+    n: usize,
+) {
+    let eliminated = &state.eliminated;
+
+    // NONE counts as "valid" (still a candidate option) but can't partner —
+    // leaving it in `valid` without a partner is what triggers the cross-elim.
+    let valid_mask = |q: usize| -> u8 {
+        let mut mask = 0u8;
+        for oi in 0..5 {
+            if !is_elim(eliminated, q, oi) && !fp.options[q][oi].is_unused() {
+                mask |= 1 << oi;
+            }
+        }
+        mask
+    };
+    let vowel_valid = valid_mask(vq);
+    let consonant_valid = valid_mask(cq);
+
+    // 5×5 cross-product: find (voi, coi) pairs whose option values sum to n.
+    let nn = n as u8;
+    let mut vowel_has_partner = 0u8;
+    let mut consonant_has_partner = 0u8;
+    for voi in 0..5 {
+        if (vowel_valid >> voi) & 1 == 0 {
+            continue;
+        }
+        let vs = fp.options[vq][voi];
+        if !vs.is_num() {
+            continue;
+        }
+        let v = vs.value();
+        for coi in 0..5 {
+            if (consonant_valid >> coi) & 1 == 0 {
+                continue;
+            }
+            let cs = fp.options[cq][coi];
+            if !cs.is_num() {
+                continue;
+            }
+            if v + cs.value() == nn {
+                vowel_has_partner |= 1 << voi;
+                consonant_has_partner |= 1 << coi;
+            }
+        }
+    }
+
+    // Emit eliminations for valid options that found no partner.
+    let mut emit_unpaired = |q: usize, valid: u8, has_partner: u8, rule: DeduceRule| {
+        for oi in 0..5 {
+            if (valid >> oi) & 1 == 1 && (has_partner >> oi) & 1 == 0 {
+                push(rule, DeduceAction::Eliminate { qi: q, oi });
+            }
+        }
+    };
+    emit_unpaired(
+        vq,
+        vowel_valid,
+        vowel_has_partner,
+        DeduceRule::VowelCrossElim,
+    );
+    emit_unpaired(
+        cq,
+        consonant_valid,
+        consonant_has_partner,
+        DeduceRule::ConsonantCrossElim,
+    );
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
@@ -1201,74 +1278,11 @@ fn deduce_impl(
             }
             QuestionType::CountVowel => {
                 apply_count(fp, state, &mut push, qi, VOWEL_MASK, 0, n, full);
-                // vowel + consonant = n. Run the 5×5 cross-product once,
-                // emitting eliminations on both qi (vowel) and cq (consonant).
-                // Only the canonical (last) CountVowel question fires this; the
-                // CountConsonant arm would compute the same pairings from the
-                // other side.
                 if full
                     && Some(qi) == vowel_qi
                     && let Some(cq) = consonant_qi
                 {
-                    let nn = n as u8;
-                    let mut vowel_valid = 0u8;
-                    let mut consonant_valid = 0u8;
-                    // NONE counts as "valid" (still a candidate option) but can't
-                    // partner — leaving it in vowel_valid without a partner is
-                    // what triggers VowelCrossElim on it.
-                    for voi in 0..5 {
-                        if !is_elim(eliminated, qi, voi) && !fp.options[qi][voi].is_unused() {
-                            vowel_valid |= 1 << voi;
-                        }
-                    }
-                    for coi in 0..5 {
-                        if !is_elim(eliminated, cq, coi) && !fp.options[cq][coi].is_unused() {
-                            consonant_valid |= 1 << coi;
-                        }
-                    }
-                    let mut vowel_has_partner = 0u8;
-                    let mut consonant_has_partner = 0u8;
-                    for voi in 0..5 {
-                        if (vowel_valid >> voi) & 1 == 0 {
-                            continue;
-                        }
-                        let vs = fp.options[qi][voi];
-                        if !vs.is_num() {
-                            continue;
-                        }
-                        let v = vs.value();
-                        for coi in 0..5 {
-                            if (consonant_valid >> coi) & 1 == 0 {
-                                continue;
-                            }
-                            let cs = fp.options[cq][coi];
-                            if !cs.is_num() {
-                                continue;
-                            }
-                            if v + cs.value() == nn {
-                                vowel_has_partner |= 1 << voi;
-                                consonant_has_partner |= 1 << coi;
-                            }
-                        }
-                    }
-                    for voi in 0..5 {
-                        if (vowel_valid >> voi) & 1 == 1 && (vowel_has_partner >> voi) & 1 == 0 {
-                            push(
-                                DeduceRule::VowelCrossElim,
-                                DeduceAction::Eliminate { qi, oi: voi },
-                            );
-                        }
-                    }
-                    for coi in 0..5 {
-                        if (consonant_valid >> coi) & 1 == 1
-                            && (consonant_has_partner >> coi) & 1 == 0
-                        {
-                            push(
-                                DeduceRule::ConsonantCrossElim,
-                                DeduceAction::Eliminate { qi: cq, oi: coi },
-                            );
-                        }
-                    }
+                    apply_vowel_consonant_cross_elim(fp, state, &mut push, qi, cq, n);
                 }
             }
             QuestionType::AnswerOf { question_index } => {
