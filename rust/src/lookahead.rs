@@ -21,7 +21,7 @@ pub fn lookahead(
     fp: &FlatPuzzle,
     state: &State,
     stop_deducing_after_n_results: usize,
-    fast: bool,
+    full: bool,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
     let answers = &state.answers;
@@ -42,10 +42,10 @@ pub fn lookahead(
             let mut chain = ArrayVec::new();
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
-                let mut drs = if fast {
-                    deduce_fast(fp, &hyp)
-                } else {
+                let mut drs = if full {
                     deduce(fp, &hyp)
+                } else {
+                    deduce_fast(fp, &hyp)
                 };
                 if drs.is_empty() {
                     break;
@@ -209,7 +209,7 @@ mod tests {
                     eliminated,
                 },
                 usize::MAX,
-                false,
+                true,
             );
             let got = match result {
                 Some(r) => format!(

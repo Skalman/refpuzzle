@@ -318,7 +318,7 @@ pub type DeduceResults = ArrayVec<DeduceResult, 80>;
 /// true in any valid extension of the current state, regardless of whether the
 /// puzzle has a unique solution.
 pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, false, false)
+    deduce_impl(fp, state, None, None, true, false)
 }
 
 /// Deduction that may apply uniqueness-assuming rules (e.g. "TrueStmt has
@@ -326,19 +326,19 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// when the puzzle is known to have a unique solution — use for play, check,
 /// or tests; NOT during generation.
 pub fn deduce_assuming_unique(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, false, true)
+    deduce_impl(fp, state, None, None, true, true)
 }
 
 /// Fast-path variant of `deduce`: skips expensive non-fast rules. Sound-only
 /// (does NOT apply uniqueness-assuming rules); used by lookahead's
 /// hypothesis-testing where the hypothesis may be inconsistent.
 pub fn deduce_fast(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, None, None, true, false)
+    deduce_impl(fp, state, None, None, false, false)
 }
 
 #[cfg(test)]
 pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
-    deduce_impl(fp, state, Some(rule), None, false, true)
+    deduce_impl(fp, state, Some(rule), None, true, true)
 }
 
 #[cfg(test)]
@@ -353,7 +353,7 @@ pub fn deduce_with_rule_exclude(
     } else {
         Some(rule)
     };
-    deduce_impl(fp, state, rule_filter, exclude, false, true)
+    deduce_impl(fp, state, rule_filter, exclude, true, true)
 }
 
 #[inline(always)]
@@ -362,7 +362,7 @@ fn deduce_impl(
     state: &State,
     rule: Option<DeduceRule>,
     exclude: Option<DeduceRule>,
-    fast: bool,
+    full: bool,
     assume_unique: bool,
 ) -> DeduceResults {
     let n = fp.n;
@@ -489,7 +489,7 @@ fn deduce_impl(
                 }
             } else {
                 // Unanswered count qi: CountAllAnswered + per-option CountExceeded/Impossible.
-                if !fast && run(DeduceRule::CountAllAnswered) && cr.possible == 0 {
+                if full && run(DeduceRule::CountAllAnswered) && cr.possible == 0 {
                     let target_val = OptionValue::num(cr.min());
                     if let Some(oi) = exactly_one(0..fp.option_count, |oi| {
                         !is_elim(eliminated, qi, oi) && fp.options[qi][oi] == target_val
@@ -711,7 +711,7 @@ fn deduce_impl(
     }
 
     // ── OnlyOdd/OnlyEven range elimination ──
-    if !fast && run(DeduceRule::OnlyOddEvenRangeElim) {
+    if full && run(DeduceRule::OnlyOddEvenRangeElim) {
         for src in 0..n {
             if answers[src].is_some() {
                 continue;
@@ -930,7 +930,7 @@ fn deduce_impl(
         }
 
         match *t {
-            QuestionType::CountVowel if !fast && Some(qi) == vowel_qi => {
+            QuestionType::CountVowel if full && Some(qi) == vowel_qi => {
                 // vowel + consonant = n. Run the 5×5 cross-product once,
                 // emitting eliminations on both qi (vowel) and cq (consonant).
                 // Only the canonical (last) CountVowel question fires this; the
@@ -1528,7 +1528,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LeastCommon | QuestionType::MostCommon if !fast => {
+            QuestionType::LeastCommon | QuestionType::MostCommon if full => {
                 let is_least = matches!(*t, QuestionType::LeastCommon);
                 let (elim_rule, force_rule) = if is_least {
                     (DeduceRule::LeastCommonElim, DeduceRule::LeastCommonForce)
@@ -1612,7 +1612,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::TrueStmt if !fast => {
+            QuestionType::TrueStmt if full => {
                 // TrueStatement claim valid: if exactly one non-eliminated claim is
                 // not provably false, force it.
                 if run(DeduceRule::TrueStatementClaimValid)
@@ -1677,7 +1677,7 @@ fn deduce_impl(
 
         match *t {
             QuestionType::TrueStmt => {
-                if !fast
+                if full
                     && run(DeduceRule::TrueStatementForward)
                     && let Some(claim) = fp.claim_at(qi, a.idx())
                 {
@@ -1724,9 +1724,7 @@ fn deduce_impl(
                 // OnlySame/SameAs None forward: an answered None means qi's
                 // answer is unique, so no other question can have that letter.
                 // Sound, ungated.
-                if !fast
-                    && run(DeduceRule::OnlySameNoneForward)
-                    && fp.options[qi][a.idx()].is_none()
+                if full && run(DeduceRule::OnlySameNoneForward) && fp.options[qi][a.idx()].is_none()
                 {
                     for j in 0..n {
                         if j == qi {
@@ -1786,7 +1784,7 @@ fn deduce_impl(
                 }
             }
 
-            QuestionType::ConsecIdent if !fast => {
+            QuestionType::ConsecIdent if full => {
                 let s = fp.options[qi][a.idx()];
                 if s.is_num() && usize::from(s.value()) + 1 < n {
                     let p = usize::from(s.value());
@@ -1874,7 +1872,7 @@ fn deduce_impl(
     }
 
     // ── SameAsWhich reverse ──
-    if !fast && run(DeduceRule::SameAsWhichReverse) {
+    if full && run(DeduceRule::SameAsWhichReverse) {
         for &(src, question_index) in &sameaswhich_qis {
             let Some(src_ans) = answers[src] else {
                 continue;
@@ -1965,8 +1963,7 @@ fn deduce_impl(
     // ── TrueStatement claim-checking (any-state) ──
     // SelfRef and ClaimInvalid both iterate TrueStmt qis and check each claim
     // regardless of qi's answered state.
-    if !fast
-        && (run(DeduceRule::TrueStatementSelfRef) || run(DeduceRule::TrueStatementClaimInvalid))
+    if full && (run(DeduceRule::TrueStatementSelfRef) || run(DeduceRule::TrueStatementClaimInvalid))
     {
         for &qi in &truestmt_qis {
             for oi in 0..5usize {

@@ -1034,7 +1034,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
             }
             continue;
         }
-        if let Some(lr) = lookahead::lookahead(fp, &state, usize::MAX, false) {
+        if let Some(lr) = lookahead::lookahead(fp, &state, usize::MAX, true) {
             action_log.push(CheckAction::LookaheadEliminate {
                 trace: LookaheadTrace {
                     eliminate_qi: lr.eliminate_qi,

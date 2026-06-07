@@ -224,7 +224,7 @@ fn run_hint_engine_from(
 
         stats.lookahead_calls += 1;
         let t_la = std::time::Instant::now();
-        let lr = lookahead(fp, &state, 6, true);
+        let lr = lookahead(fp, &state, 6, false);
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             stats.lookahead_hits += 1;
