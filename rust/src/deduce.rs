@@ -157,92 +157,6 @@ impl CountResult {
     }
 }
 
-#[derive(Clone, Copy)]
-#[allow(clippy::enum_variant_names)]
-enum CountPred {
-    IsAnswer(Answer),
-    IsVowel,
-    IsConsonant,
-}
-
-impl CountPred {
-    #[inline(always)]
-    fn matches(self, a: Answer) -> bool {
-        match self {
-            CountPred::IsAnswer(t) => a == t,
-            CountPred::IsVowel => a.is_vowel(),
-            CountPred::IsConsonant => !a.is_vowel(),
-        }
-    }
-    fn mask(self) -> u8 {
-        match self {
-            CountPred::IsAnswer(t) => 1u8 << t.idx(),
-            CountPred::IsVowel => 0b10001,
-            CountPred::IsConsonant => 0b01110,
-        }
-    }
-}
-
-fn count_matching(
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    pred: CountPred,
-    from: usize,
-    to: usize,
-) -> CountResult {
-    let mask = pred.mask();
-    let non_mask = !mask & 0b11111u8;
-    let mut count: u8 = 0;
-    let mut guaranteed: u8 = 0;
-    let mut possible: u8 = 0;
-    for i in from..to {
-        if let Some(a) = answers[i] {
-            if pred.matches(a) {
-                count += 1;
-            }
-        } else {
-            let remaining_bits = !eliminated[i] & 0b11111u8;
-            let matching = remaining_bits & mask;
-            if matching == 0 {
-                continue;
-            }
-            if remaining_bits & non_mask == 0 {
-                guaranteed += 1;
-            } else {
-                possible += 1;
-            }
-        }
-    }
-    CountResult {
-        count,
-        guaranteed,
-        possible,
-    }
-}
-
-fn count_pred(t: &QuestionType) -> Option<CountPred> {
-    match *t {
-        QuestionType::CountAnswer { answer }
-        | QuestionType::CountAnswerBefore { answer, .. }
-        | QuestionType::CountAnswerAfter { answer, .. } => Some(CountPred::IsAnswer(answer)),
-        QuestionType::CountVowel => Some(CountPred::IsVowel),
-        QuestionType::CountConsonant => Some(CountPred::IsConsonant),
-        _ => None,
-    }
-}
-
-fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
-    match *t {
-        QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
-        QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
-        _ => (0, n),
-    }
-}
-
-fn can_still_match(pred: CountPred, eliminated: u8) -> bool {
-    eliminated & pred.mask() != pred.mask()
-}
-
 /// Return Some(i) if exactly one i in the range satisfies the predicate; None otherwise.
 /// Used by rules that fire only when a single candidate remains.
 fn exactly_one(
@@ -334,6 +248,179 @@ impl RuleFilter {
     }
 }
 
+const VOWEL_MASK: u8 = 0b10001;
+const CONSONANT_MASK: u8 = 0b01110;
+
+#[inline(always)]
+fn mask_contains(mask: u8, oi: usize) -> bool {
+    (mask >> oi) & 1 != 0
+}
+
+/// Compute (count, guaranteed, possible) for a mask-selected predicate over [from, to).
+fn count_matching_mask(
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    mask: u8,
+    from: usize,
+    to: usize,
+) -> CountResult {
+    let non_mask = !mask & 0b11111u8;
+    let mut count: u8 = 0;
+    let mut guaranteed: u8 = 0;
+    let mut possible: u8 = 0;
+    for i in from..to {
+        if let Some(a) = answers[i] {
+            if mask_contains(mask, a.idx()) {
+                count += 1;
+            }
+        } else {
+            let remaining_bits = !eliminated[i] & 0b11111u8;
+            let matching = remaining_bits & mask;
+            if matching == 0 {
+                continue;
+            }
+            if remaining_bits & non_mask == 0 {
+                guaranteed += 1;
+            } else {
+                possible += 1;
+            }
+        }
+    }
+    CountResult {
+        count,
+        guaranteed,
+        possible,
+    }
+}
+
+/// Per-qi count-family dispatch (CountAnswer/Before/After/Vowel/Consonant).
+/// Handles the answered case (CountSaturated / CountMustMatch{Force,Elim}) and
+/// the unanswered case (CountAllAnswered + per-option CountExceeded/Impossible).
+#[allow(clippy::too_many_arguments)]
+fn apply_count(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    mask: u8,
+    from: usize,
+    to: usize,
+    full: bool,
+) {
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let cr = count_matching_mask(answers, eliminated, mask, from, to);
+
+    if let Some(a) = answers[qi] {
+        // Answered count qi: CountSaturated / CountMustMatch{Force,Elim}.
+        let s = fp.options[qi][a.idx()];
+        if !s.is_num() {
+            return;
+        }
+        let on = s.value();
+
+        if cr.min() == on && cr.possible > 0 {
+            for j in from..to {
+                if answers[j].is_none() {
+                    let remaining_bits = !eliminated[j] & 0b11111u8;
+                    if remaining_bits & (!mask & 0b11111u8) == 0 {
+                        continue;
+                    }
+                    for oi in 0..5usize {
+                        if !is_elim(eliminated, j, oi) && mask_contains(mask, oi) {
+                            push(
+                                DeduceRule::CountSaturated,
+                                DeduceAction::Eliminate { qi: j, oi },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
+        if cr.max() == on && cr.possible > 0 {
+            if cr.possible == 1 {
+                for j in from..to {
+                    if answers[j].is_none()
+                        && eliminated[j] & mask != mask
+                        && let Some(oi) = exactly_one(0..5, |oi| {
+                            !is_elim(eliminated, j, oi) && mask_contains(mask, oi)
+                        })
+                    {
+                        push(
+                            DeduceRule::CountMustMatchForce,
+                            DeduceAction::Force {
+                                qi: j,
+                                answer: Answer::from(oi as u8),
+                            },
+                        );
+                    }
+                }
+            }
+
+            for j in from..to {
+                if answers[j].is_none() && eliminated[j] & mask != mask {
+                    for oi in 0..5usize {
+                        if !is_elim(eliminated, j, oi) && !mask_contains(mask, oi) {
+                            push(
+                                DeduceRule::CountMustMatchElim,
+                                DeduceAction::Eliminate { qi: j, oi },
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    } else {
+        // Unanswered count qi: CountAllAnswered + per-option CountExceeded/Impossible.
+        if full && cr.possible == 0 {
+            let target_val = OptionValue::num(cr.min());
+            if let Some(oi) = exactly_one(0..fp.option_count, |oi| {
+                !is_elim(eliminated, qi, oi) && fp.options[qi][oi] == target_val
+            }) {
+                push(
+                    DeduceRule::CountAllAnswered,
+                    DeduceAction::Force {
+                        qi,
+                        answer: Answer::from(oi as u8),
+                    },
+                );
+            }
+        }
+
+        for oi in 0..5usize {
+            if is_elim(eliminated, qi, oi) {
+                continue;
+            }
+            let s = fp.options[qi][oi];
+            if !s.is_num() {
+                // NONE/UNUSED on a count option is meaningless: any
+                // claim that count == null is impossible.
+                if s.is_none() {
+                    push(
+                        DeduceRule::CountExceeded,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                continue;
+            }
+            let on = s.value();
+            if cr.min() > on {
+                push(
+                    DeduceRule::CountExceeded,
+                    DeduceAction::Eliminate { qi, oi },
+                );
+            }
+            if cr.max() < on {
+                push(
+                    DeduceRule::CountImpossible,
+                    DeduceAction::Eliminate { qi, oi },
+                );
+            }
+        }
+    }
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
@@ -390,13 +477,6 @@ fn deduce_impl(
         }
     };
 
-    // Per-qi metadata consulted by multiple downstream rule blocks. Computing
-    // once here keeps each rule block from recomputing the same view:
-    //  - `count_results[qi]`: count_matching result for count-typed qis.
-    //  - `*_qis`: index lists for types that drive their own rule loops, so
-    //    those loops iterate only relevant qis (and `question_index` targets
-    //    are stored alongside where the loop body needs them).
-    let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
     // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
     // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
     // fires exactly once per deduce call regardless of how many of each type
@@ -404,12 +484,7 @@ fn deduce_impl(
     let mut vowel_qi: Option<usize> = None;
     let mut consonant_qi: Option<usize> = None;
     for qi in 0..n {
-        let t = &fp.question_types[qi];
-        if let Some(pred) = count_pred(t) {
-            let (from, to) = count_range(t, n);
-            count_results[qi] = Some(count_matching(answers, eliminated, pred, from, to));
-        }
-        match *t {
+        match fp.question_types[qi] {
             QuestionType::CountVowel if answers[qi].is_none() => vowel_qi = Some(qi),
             QuestionType::CountConsonant if answers[qi].is_none() => consonant_qi = Some(qi),
             _ => {}
@@ -417,166 +492,6 @@ fn deduce_impl(
     }
 
     let mut letter_counts = Lazy::new(|| compute_letter_counts(answers, eliminated, n));
-
-    // ── Count-family rules (per-question dispatch) ──
-    // Per count-typed qi, dispatches to: CountSaturated family (when answered),
-    // CountAllAnswered (when unanswered), and the count-family + MostCommonCount
-    // Eliminations arms (per option).
-    for qi in 0..n {
-        let t = &fp.question_types[qi];
-
-        if let Some(pred) = count_pred(t) {
-            let Some(cr) = count_results[qi] else {
-                continue;
-            };
-            let (from, to) = count_range(t, n);
-
-            if let Some(a) = answers[qi] {
-                // Answered count qi: CountSaturated / CountMustMatch{Force,Elim}.
-                let s = fp.options[qi][a.idx()];
-                if !s.is_num() {
-                    continue;
-                }
-                let on = s.value();
-
-                if cr.min() == on && cr.possible > 0 {
-                    let mask = pred.mask();
-                    for j in from..to {
-                        if answers[j].is_none() {
-                            let remaining_bits = !eliminated[j] & 0b11111u8;
-                            if remaining_bits & (!mask & 0b11111u8) == 0 {
-                                continue;
-                            }
-                            for oi in 0..5usize {
-                                if !is_elim(eliminated, j, oi)
-                                    && pred.matches(Answer::from(oi as u8))
-                                {
-                                    push(
-                                        DeduceRule::CountSaturated,
-                                        DeduceAction::Eliminate { qi: j, oi },
-                                    );
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if cr.max() == on && cr.possible > 0 {
-                    if cr.possible == 1 {
-                        for j in from..to {
-                            if answers[j].is_none()
-                                && can_still_match(pred, eliminated[j])
-                                && let Some(oi) = exactly_one(0..5, |oi| {
-                                    !is_elim(eliminated, j, oi)
-                                        && pred.matches(Answer::from(oi as u8))
-                                })
-                            {
-                                push(
-                                    DeduceRule::CountMustMatchForce,
-                                    DeduceAction::Force {
-                                        qi: j,
-                                        answer: Answer::from(oi as u8),
-                                    },
-                                );
-                            }
-                        }
-                    }
-
-                    {
-                        for j in from..to {
-                            if answers[j].is_none() && can_still_match(pred, eliminated[j]) {
-                                for oi in 0..5usize {
-                                    if !is_elim(eliminated, j, oi)
-                                        && !pred.matches(Answer::from(oi as u8))
-                                    {
-                                        push(
-                                            DeduceRule::CountMustMatchElim,
-                                            DeduceAction::Eliminate { qi: j, oi },
-                                        );
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Unanswered count qi: CountAllAnswered + per-option CountExceeded/Impossible.
-                if full && cr.possible == 0 {
-                    let target_val = OptionValue::num(cr.min());
-                    if let Some(oi) = exactly_one(0..fp.option_count, |oi| {
-                        !is_elim(eliminated, qi, oi) && fp.options[qi][oi] == target_val
-                    }) {
-                        push(
-                            DeduceRule::CountAllAnswered,
-                            DeduceAction::Force {
-                                qi,
-                                answer: Answer::from(oi as u8),
-                            },
-                        );
-                    }
-                }
-
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let s = fp.options[qi][oi];
-                    if !s.is_num() {
-                        // NONE/UNUSED on a count option is meaningless: any
-                        // claim that count == null is impossible.
-                        if s.is_none() {
-                            push(
-                                DeduceRule::CountExceeded,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
-                        continue;
-                    }
-                    let on = s.value();
-                    if cr.min() > on {
-                        push(
-                            DeduceRule::CountExceeded,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if cr.max() < on {
-                        push(
-                            DeduceRule::CountImpossible,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                }
-            }
-        } else if matches!(*t, QuestionType::MostCommonCount) && answers[qi].is_none() {
-            let mut max_known: u8 = 0;
-            let mut max_possible: u8 = 0;
-            for &letter in &LETTERS[..fp.option_count] {
-                let cr = count_matching(answers, eliminated, CountPred::IsAnswer(letter), 0, n);
-                if cr.min() > max_known {
-                    max_known = cr.min();
-                }
-                if cr.max() > max_possible {
-                    max_possible = cr.max();
-                }
-            }
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let s = fp.options[qi][oi];
-                if !s.is_num() {
-                    continue;
-                }
-                let on = s.value();
-                if on < max_known || on > max_possible {
-                    push(
-                        DeduceRule::MostCommonCountElim,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-            }
-        }
-    }
 
     // ── Positional range elimination ──
     {
@@ -785,13 +700,82 @@ fn deduce_impl(
         let ans = answers[qi];
 
         match *t {
-            QuestionType::CountVowel if full && Some(qi) == vowel_qi => {
+            QuestionType::CountAnswer { answer } => {
+                apply_count(fp, state, &mut push, qi, 1 << answer.idx(), 0, n, full);
+            }
+            QuestionType::CountAnswerBefore {
+                answer,
+                before_index,
+            } => {
+                apply_count(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    1 << answer.idx(),
+                    0,
+                    before_index as usize,
+                    full,
+                );
+            }
+            QuestionType::CountAnswerAfter {
+                answer,
+                after_index,
+            } => {
+                apply_count(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    1 << answer.idx(),
+                    after_index as usize + 1,
+                    n,
+                    full,
+                );
+            }
+            QuestionType::CountConsonant => {
+                apply_count(fp, state, &mut push, qi, CONSONANT_MASK, 0, n, full);
+            }
+            QuestionType::MostCommonCount if ans.is_none() => {
+                let mut max_known: u8 = 0;
+                let mut max_possible: u8 = 0;
+                for li in 0..fp.option_count {
+                    let cr = count_matching_mask(answers, eliminated, 1 << li, 0, n);
+                    if cr.min() > max_known {
+                        max_known = cr.min();
+                    }
+                    if cr.max() > max_possible {
+                        max_possible = cr.max();
+                    }
+                }
+                for oi in 0..5usize {
+                    if is_elim(eliminated, qi, oi) {
+                        continue;
+                    }
+                    let s = fp.options[qi][oi];
+                    if !s.is_num() {
+                        continue;
+                    }
+                    let on = s.value();
+                    if on < max_known || on > max_possible {
+                        push(
+                            DeduceRule::MostCommonCountElim,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                }
+            }
+            QuestionType::CountVowel => {
+                apply_count(fp, state, &mut push, qi, VOWEL_MASK, 0, n, full);
                 // vowel + consonant = n. Run the 5×5 cross-product once,
                 // emitting eliminations on both qi (vowel) and cq (consonant).
                 // Only the canonical (last) CountVowel question fires this; the
                 // CountConsonant arm would compute the same pairings from the
                 // other side.
-                if let Some(cq) = consonant_qi {
+                if full
+                    && Some(qi) == vowel_qi
+                    && let Some(cq) = consonant_qi
+                {
                     let nn = n as u8;
                     let mut vowel_valid = 0u8;
                     let mut consonant_valid = 0u8;
