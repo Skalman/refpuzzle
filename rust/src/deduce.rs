@@ -399,7 +399,6 @@ fn deduce_impl(
     let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
     let mut truestmt_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
     let mut consec_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
-    let mut sameaswhich_qis: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
     for qi in 0..n {
         let t = &fp.question_types[qi];
         if let Some(pred) = count_pred(t) {
@@ -409,9 +408,6 @@ fn deduce_impl(
         match *t {
             QuestionType::TrueStmt => truestmt_qis.push(qi),
             QuestionType::ConsecIdent => consec_qis.push(qi),
-            QuestionType::SameAsWhich { question_index } => {
-                sameaswhich_qis.push((qi, question_index));
-            }
             _ => {}
         }
     }
@@ -1680,6 +1676,40 @@ fn deduce_impl(
                 }
             }
 
+            QuestionType::SameAsWhich { question_index } if full => {
+                let s = fp.options[qi][a.idx()];
+                if s.is_num() {
+                    let j = usize::from(s.value());
+                    let qi_ref = question_index as usize;
+                    if j < n {
+                        if let Some(ref_ans) = answers[qi_ref]
+                            && answers[j].is_none()
+                            && !is_elim(eliminated, j, ref_ans.idx())
+                        {
+                            push(
+                                DeduceRule::SameAsWhichReverse,
+                                DeduceAction::Force {
+                                    qi: j,
+                                    answer: ref_ans,
+                                },
+                            );
+                        }
+                        if let Some(j_ans) = answers[j]
+                            && answers[qi_ref].is_none()
+                            && !is_elim(eliminated, qi_ref, j_ans.idx())
+                        {
+                            push(
+                                DeduceRule::SameAsWhichReverse,
+                                DeduceAction::Force {
+                                    qi: qi_ref,
+                                    answer: j_ans,
+                                },
+                            );
+                        }
+                    }
+                }
+            }
+
             QuestionType::LetterDist { question_index } => {
                 let target_qi = question_index as usize;
                 if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
@@ -1806,49 +1836,6 @@ fn deduce_impl(
             }
 
             _ => {}
-        }
-    }
-
-    // ── SameAsWhich reverse ──
-    if full {
-        for &(src, question_index) in &sameaswhich_qis {
-            let Some(src_ans) = answers[src] else {
-                continue;
-            };
-            let s = fp.options[src][src_ans.idx()];
-            if !s.is_num() {
-                continue;
-            }
-            let j = usize::from(s.value());
-            if j >= n {
-                continue;
-            }
-            let qi_ref = question_index as usize;
-
-            if let Some(ref_ans) = answers[qi_ref]
-                && answers[j].is_none()
-                && !is_elim(eliminated, j, ref_ans.idx())
-            {
-                push(
-                    DeduceRule::SameAsWhichReverse,
-                    DeduceAction::Force {
-                        qi: j,
-                        answer: ref_ans,
-                    },
-                );
-            }
-            if let Some(j_ans) = answers[j]
-                && answers[qi_ref].is_none()
-                && !is_elim(eliminated, qi_ref, j_ans.idx())
-            {
-                push(
-                    DeduceRule::SameAsWhichReverse,
-                    DeduceAction::Force {
-                        qi: qi_ref,
-                        answer: j_ans,
-                    },
-                );
-            }
         }
     }
 
