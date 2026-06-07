@@ -806,17 +806,6 @@ fn deduce_impl(
             continue;
         };
         let (target_qi, letter, rule) = match fp.question_types[other] {
-            QuestionType::AnswerOf { question_index } => {
-                let implied = fp.options[other][other_ans.idx()].value();
-                if implied > 4 {
-                    continue;
-                }
-                (
-                    question_index as usize,
-                    Answer::from(implied),
-                    DeduceRule::AnswerOfReverse,
-                )
-            }
             QuestionType::SameAs => {
                 let s = fp.options[other][other_ans.idx()];
                 if !s.is_num() {
@@ -1631,6 +1620,21 @@ fn deduce_impl(
         let t = &fp.question_types[qi];
 
         match *t {
+            QuestionType::AnswerOf { question_index } => {
+                let implied = fp.options[qi][a.idx()].value();
+                if implied <= 4 {
+                    let target_qi = question_index as usize;
+                    if target_qi < n && answers[target_qi].is_none() {
+                        push(
+                            DeduceRule::AnswerOfReverse,
+                            DeduceAction::Force {
+                                qi: target_qi,
+                                answer: Answer::from(implied),
+                            },
+                        );
+                    }
+                }
+            }
             QuestionType::TrueStmt => {
                 if full && let Some(claim) = fp.claim_at(qi, a.idx()) {
                     match claim.question_type {
