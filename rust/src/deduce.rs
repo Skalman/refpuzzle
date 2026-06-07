@@ -950,6 +950,109 @@ fn apply_prev_or_next_same(
     }
 }
 
+/// LeastCommon / MostCommon dispatch. Per-option, check whether `oi`'s claimed
+/// count "could be" the extremum (others' max within reach) and "must be" the
+/// extremum (others' min strictly past). Emit Elim for ¬could, Force when
+/// exactly one option could-be AND it must-be.
+///
+/// The Least/Most asymmetry reduces to swapping the (subject, other) pair:
+/// for Least, `oi`'s claimed letter is the "other" that other letters bound;
+/// for Most, it's the "subject" being bounded by others' min.
+#[allow(clippy::too_many_arguments)]
+fn apply_extremum_count<const IS_LEAST: bool>(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    letter_known: [u8; 5],
+    letter_max: [u8; 5],
+    elim_rule: DeduceRule,
+    force_rule: DeduceRule,
+) {
+    let eliminated = &state.eliminated;
+
+    // qi is unanswered; remove its contribution to letter_max so adj_*
+    // doesn't double-count when we test "if qi were `oi`".
+    let min_count = letter_known;
+    let mut max_count = letter_max;
+    for li in 0..5usize {
+        if !is_elim(eliminated, qi, li) {
+            max_count[li] -= 1;
+        }
+    }
+
+    // Single pass: emit Elims AND track which options could-be / must-be
+    // the extremum, as bitmasks.
+    let mut can_mask = 0u8;
+    let mut must_mask = 0u8;
+    for oi in 0..5usize {
+        if is_elim(eliminated, qi, oi) {
+            continue;
+        }
+        let v = fp.options[qi][oi].value();
+        if v >= 5 {
+            continue;
+        }
+        let claimed = v as usize;
+
+        let mut adj_min = min_count;
+        let mut adj_max = max_count;
+        adj_min[oi] += 1;
+        adj_max[oi] += 1;
+
+        // `pair(li)` returns (a, b) such that the comparison reduces to
+        // `adj_max[a] ≥ adj_min[b]` (for could-be) and `adj_min[a] > adj_max[b]`
+        // (for must-be) regardless of Least vs Most. `IS_LEAST` is a const
+        // generic so the compiler monomorphizes the branch away at each call site.
+        let pair = |li: usize| -> (usize, usize) {
+            if IS_LEAST {
+                (li, claimed)
+            } else {
+                (claimed, li)
+            }
+        };
+
+        let can_be_extreme = (0..fp.option_count).all(|li| {
+            if li == claimed {
+                return true;
+            }
+            let (a, b) = pair(li);
+            adj_max[a] >= adj_min[b]
+        });
+        let must_be_extreme = (0..fp.option_count).all(|li| {
+            if li == claimed {
+                return true;
+            }
+            let (a, b) = pair(li);
+            adj_min[a] > adj_max[b]
+        });
+
+        if can_be_extreme {
+            can_mask |= 1 << oi;
+        }
+        if must_be_extreme {
+            must_mask |= 1 << oi;
+        }
+        if !can_be_extreme {
+            push(elim_rule, DeduceAction::Eliminate { qi, oi });
+        }
+    }
+
+    // Force when exactly one option could-be the extremum AND it must-be.
+    if can_mask.count_ones() == 1 {
+        let oi = can_mask.trailing_zeros() as usize;
+        if must_mask & (1 << oi) != 0 {
+            push(
+                force_rule,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
+        }
+    }
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
@@ -1785,86 +1888,31 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LeastCommon | QuestionType::MostCommon if full && ans.is_none() => {
-                let is_least = matches!(*t, QuestionType::LeastCommon);
-                let (elim_rule, force_rule) = if is_least {
-                    (DeduceRule::LeastCommonElim, DeduceRule::LeastCommonForce)
-                } else {
-                    (DeduceRule::MostCommonElim, DeduceRule::MostCommonForce)
-                };
-
-                // qi is unanswered here; remove its contribution to letter_max.
-                let (letter_known, letter_max) = letter_counts.get();
-                let min_count = letter_known;
-                let mut max_count = letter_max;
-                for li in 0..5usize {
-                    if !is_elim(eliminated, qi, li) {
-                        max_count[li] -= 1;
-                    }
-                }
-
-                let mut can_be_extreme_opt = [false; 5];
-                let mut must_be_extreme_opt = [false; 5];
-
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let v = fp.options[qi][oi].value();
-                    if v >= 5 {
-                        continue;
-                    }
-                    let claimed = v as usize;
-
-                    let mut adj_min = min_count;
-                    let mut adj_max = max_count;
-                    adj_min[oi] += 1;
-                    adj_max[oi] += 1;
-
-                    // For least: claimed could/must be ≤ every other letter.
-                    // For most: claimed could/must be ≥ every other letter.
-                    let can_be_extreme = (0..fp.option_count).all(|li| {
-                        li == claimed
-                            || if is_least {
-                                adj_max[li] >= adj_min[claimed]
-                            } else {
-                                adj_max[claimed] >= adj_min[li]
-                            }
-                    });
-                    let must_be_extreme = (0..fp.option_count).all(|li| {
-                        li == claimed
-                            || if is_least {
-                                adj_min[li] > adj_max[claimed]
-                            } else {
-                                adj_min[claimed] > adj_max[li]
-                            }
-                    });
-
-                    can_be_extreme_opt[oi] = can_be_extreme;
-                    must_be_extreme_opt[oi] = must_be_extreme;
-
-                    if !can_be_extreme {
-                        push(elim_rule, DeduceAction::Eliminate { qi, oi });
-                    }
-                }
-
-                for oi in 0..5usize {
-                    if !must_be_extreme_opt[oi] {
-                        continue;
-                    }
-                    let only_viable = (0..5usize).all(|oj| {
-                        oj == oi || is_elim(eliminated, qi, oj) || !can_be_extreme_opt[oj]
-                    });
-                    if only_viable {
-                        push(
-                            force_rule,
-                            DeduceAction::Force {
-                                qi,
-                                answer: Answer::from(oi as u8),
-                            },
-                        );
-                    }
-                }
+            QuestionType::LeastCommon if full && ans.is_none() => {
+                let (known, max) = letter_counts.get();
+                apply_extremum_count::<true>(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    known,
+                    max,
+                    DeduceRule::LeastCommonElim,
+                    DeduceRule::LeastCommonForce,
+                );
+            }
+            QuestionType::MostCommon if full && ans.is_none() => {
+                let (known, max) = letter_counts.get();
+                apply_extremum_count::<false>(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    known,
+                    max,
+                    DeduceRule::MostCommonElim,
+                    DeduceRule::MostCommonForce,
+                );
             }
             QuestionType::TrueStmt if full => {
                 // SelfRef + ClaimInvalid: any qi state. Per-option scan.
