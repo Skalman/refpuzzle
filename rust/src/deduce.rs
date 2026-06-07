@@ -1645,43 +1645,42 @@ fn deduce_impl(
                 );
             }
             QuestionType::SameAsWhich { question_index } => {
+                let qi_ref = question_index as usize;
+                let ref_ans = answers[qi_ref];
                 if let Some(a) = ans {
                     // Reverse (full only).
                     if full {
                         let s = fp.options[qi][a.idx()];
                         if s.is_num() {
                             let j = usize::from(s.value());
-                            let qi_ref = question_index as usize;
                             if j < n {
-                                if let Some(ref_ans) = answers[qi_ref]
-                                    && answers[j].is_none()
-                                    && !is_elim(eliminated, j, ref_ans.idx())
+                                let j_ans = answers[j];
+                                if let Some(ra) = ref_ans
+                                    && j_ans.is_none()
+                                    && !is_elim(eliminated, j, ra.idx())
                                 {
                                     push(
                                         DeduceRule::SameAsWhichReverse,
-                                        DeduceAction::Force {
-                                            qi: j,
-                                            answer: ref_ans,
-                                        },
+                                        DeduceAction::Force { qi: j, answer: ra },
                                     );
                                 }
-                                if let Some(j_ans) = answers[j]
-                                    && answers[qi_ref].is_none()
-                                    && !is_elim(eliminated, qi_ref, j_ans.idx())
+                                if let Some(ja) = j_ans
+                                    && ref_ans.is_none()
+                                    && !is_elim(eliminated, qi_ref, ja.idx())
                                 {
                                     push(
                                         DeduceRule::SameAsWhichReverse,
                                         DeduceAction::Force {
                                             qi: qi_ref,
-                                            answer: j_ans,
+                                            answer: ja,
                                         },
                                     );
                                 }
                             }
                         }
                     }
-                } else {
-                    // Forward per-option elim (qi unanswered).
+                } else if let Some(ra) = ref_ans {
+                    // Forward per-option elim (qi unanswered, target known).
                     for oi in 0..5usize {
                         if is_elim(eliminated, qi, oi) {
                             continue;
@@ -1691,14 +1690,10 @@ fn deduce_impl(
                             continue;
                         }
                         let j = usize::from(s.value());
-                        if let Some(ref_ans) = answers[question_index as usize]
-                            && j < n
-                            && j != qi
-                            && j != question_index as usize
-                        {
+                        if j < n && j != qi && j != qi_ref {
                             let wrong = match answers[j] {
-                                Some(ja) => ja != ref_ans,
-                                None => is_elim(eliminated, j, ref_ans.idx()),
+                                Some(ja) => ja != ra,
+                                None => is_elim(eliminated, j, ra.idx()),
                             };
                             if wrong {
                                 push(
