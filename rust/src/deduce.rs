@@ -1424,8 +1424,10 @@ fn deduce_impl(
                     if possible_pairs & (1 << j) != 0 {
                         continue;
                     }
-                    if let Some(ja) = answers[j]
-                        && answers[j + 1].is_none()
+                    let aj = answers[j];
+                    let aj1 = answers[j + 1];
+                    if let Some(ja) = aj
+                        && aj1.is_none()
                         && !is_elim(eliminated, j + 1, ja.idx())
                     {
                         push(
@@ -1436,8 +1438,8 @@ fn deduce_impl(
                             },
                         );
                     }
-                    if let Some(jb) = answers[j + 1]
-                        && answers[j].is_none()
+                    if let Some(jb) = aj1
+                        && aj.is_none()
                         && !is_elim(eliminated, j, jb.idx())
                     {
                         push(
@@ -1458,9 +1460,11 @@ fn deduce_impl(
                             let p = usize::from(s.value());
                             let poss_a = !eliminated[p] & 0b11111u8;
                             let poss_b = !eliminated[p + 1] & 0b11111u8;
+                            let ans_a = answers[p];
+                            let ans_b = answers[p + 1];
 
-                            if let Some(letter) = answers[p]
-                                && answers[p + 1].is_none()
+                            if let Some(letter) = ans_a
+                                && ans_b.is_none()
                                 && !is_elim(eliminated, p + 1, letter.idx())
                             {
                                 push(
@@ -1471,8 +1475,8 @@ fn deduce_impl(
                                     },
                                 );
                             }
-                            if let Some(letter) = answers[p + 1]
-                                && answers[p].is_none()
+                            if let Some(letter) = ans_b
+                                && ans_a.is_none()
                                 && !is_elim(eliminated, p, letter.idx())
                             {
                                 push(
@@ -1485,7 +1489,7 @@ fn deduce_impl(
                             }
 
                             for oi in 0..5usize {
-                                if answers[p].is_none()
+                                if ans_a.is_none()
                                     && !is_elim(eliminated, p, oi)
                                     && (poss_b & (1 << oi)) == 0
                                 {
@@ -1494,7 +1498,7 @@ fn deduce_impl(
                                         DeduceAction::Eliminate { qi: p, oi },
                                     );
                                 }
-                                if answers[p + 1].is_none()
+                                if ans_b.is_none()
                                     && !is_elim(eliminated, p + 1, oi)
                                     && (poss_a & (1 << oi)) == 0
                                 {
@@ -1505,7 +1509,7 @@ fn deduce_impl(
                                 }
                             }
 
-                            if answers[p].is_none() && answers[p + 1].is_none() {
+                            if ans_a.is_none() && ans_b.is_none() {
                                 let common = poss_a & poss_b;
                                 if common.count_ones() == 1 {
                                     let oi = common.trailing_zeros() as usize;
@@ -1541,17 +1545,15 @@ fn deduce_impl(
                                     DeduceRule::ConsecIdentOutOfRange,
                                     DeduceAction::Eliminate { qi, oi },
                                 );
-                            }
-                            if pos + 1 < n {
-                                let possible_a = !eliminated[pos] & 0b11111u8;
-                                let possible_b = !eliminated[pos + 1] & 0b11111u8;
-                                if possible_a & possible_b == 0 {
+                            } else {
+                                let common = (!eliminated[pos] & 0b11111u8)
+                                    & (!eliminated[pos + 1] & 0b11111u8);
+                                if common == 0 {
                                     push(
                                         DeduceRule::ConsecIdentNoCommon,
                                         DeduceAction::Eliminate { qi, oi },
                                     );
-                                }
-                                if possible_a & possible_b != 0 && (pos == qi || pos + 1 == qi) {
+                                } else if pos == qi || pos + 1 == qi {
                                     let partner = if pos == qi { pos + 1 } else { pos };
                                     if is_elim(eliminated, partner, oi) {
                                         push(
