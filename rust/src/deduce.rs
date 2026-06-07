@@ -861,6 +861,95 @@ fn apply_same_shared(
     }
 }
 
+/// PrevSame / NextSame dispatch. Reverse force (when answered) into the
+/// referenced position, PositionalRangeAnswered over the open interval between
+/// qi and the target, plus per-option elims for unanswered qi.
+///
+/// `range` is the candidate range (`0..qi` for PrevSame, `(qi+1)..n` for
+/// NextSame). `between(x)` is the open interval between qi and x — i.e.
+/// `(x+1)..qi` for PrevSame, `(qi+1)..x` for NextSame. Direction lives in the
+/// closure, baked in by monomorphization; no runtime branch.
+fn apply_prev_or_next_same(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    range: std::ops::Range<usize>,
+    between: impl Fn(usize) -> std::ops::Range<usize>,
+    rules: (DeduceRule, DeduceRule, DeduceRule, DeduceRule),
+) {
+    let n = fp.n;
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let (none_rule, out_rule, ruled_out_rule, closer_rule) = rules;
+
+    if let Some(a) = answers[qi] {
+        let s = fp.options[qi][a.idx()];
+        if s.is_num() {
+            let target_qi = usize::from(s.value());
+            if target_qi < n && answers[target_qi].is_none() {
+                push(
+                    DeduceRule::PrevNextOnlySameReverse,
+                    DeduceAction::Force {
+                        qi: target_qi,
+                        answer: a,
+                    },
+                );
+            }
+            // PositionalRangeAnswered: positions strictly between qi and target
+            // can't hold qi's letter.
+            let letter_oi = a.idx();
+            let mut q_mask = 0u16;
+            for j in between(target_qi) {
+                if answers[j].is_some() {
+                    continue;
+                }
+                if !is_elim(eliminated, j, letter_oi) {
+                    q_mask |= 1 << j;
+                }
+            }
+            if q_mask != 0 {
+                push(
+                    DeduceRule::PositionalRangeAnswered,
+                    DeduceAction::EliminateMulti {
+                        question_mask: q_mask,
+                        option_mask: 1 << letter_oi,
+                    },
+                );
+            }
+        }
+    } else {
+        // Per-option elim (qi unanswered).
+        for oi in 0..5usize {
+            if is_elim(eliminated, qi, oi) {
+                continue;
+            }
+            let s = fp.options[qi][oi];
+            if s.is_none() {
+                if range
+                    .clone()
+                    .any(|j| answers[j] == Some(Answer::from(oi as u8)))
+                {
+                    push(none_rule, DeduceAction::Eliminate { qi, oi });
+                }
+            } else if s.is_num() {
+                let pos = usize::from(s.value());
+                if !range.contains(&pos) {
+                    push(out_rule, DeduceAction::Eliminate { qi, oi });
+                }
+                if range.contains(&pos) {
+                    if is_elim(eliminated, pos, oi) {
+                        push(ruled_out_rule, DeduceAction::Eliminate { qi, oi });
+                    }
+                    if between(pos).any(|j| answers[j] == Some(Answer::from(oi as u8))) {
+                        push(closer_rule, DeduceAction::Eliminate { qi, oi });
+                    }
+                }
+            }
+        }
+    }
+}
+
 // ── Main functions ──
 
 /// Sound-only deduction. Safe to use during generation: every conclusion is
@@ -1520,102 +1609,37 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::PrevSame | QuestionType::NextSame => {
-                if let Some(a) = ans {
-                    // Reverse: qi answered → force target.
-                    let s = fp.options[qi][a.idx()];
-                    if s.is_num() {
-                        let target_qi = usize::from(s.value());
-                        if target_qi < n && answers[target_qi].is_none() {
-                            push(
-                                DeduceRule::PrevNextOnlySameReverse,
-                                DeduceAction::Force {
-                                    qi: target_qi,
-                                    answer: a,
-                                },
-                            );
-                        }
-                        // PositionalRangeAnswered: positions between qi and the target can't
-                        // hold qi's own letter (otherwise qi wouldn't be the closest match).
-                        let v = usize::from(s.value());
-                        let (range_start, range_end) = if matches!(*t, QuestionType::NextSame) {
-                            (qi + 1, v)
-                        } else {
-                            (v + 1, qi)
-                        };
-                        let letter_oi = a.idx();
-                        let mut q_mask = 0u16;
-                        for j in range_start..range_end {
-                            if answers[j].is_some() {
-                                continue;
-                            }
-                            if !is_elim(eliminated, j, letter_oi) {
-                                q_mask |= 1 << j;
-                            }
-                        }
-                        if q_mask != 0 {
-                            push(
-                                DeduceRule::PositionalRangeAnswered,
-                                DeduceAction::EliminateMulti {
-                                    question_mask: q_mask,
-                                    option_mask: 1 << letter_oi,
-                                },
-                            );
-                        }
-                    }
-                } else {
-                    // Per-option elim (qi unanswered).
-                    let is_prev = matches!(*t, QuestionType::PrevSame);
-                    let range = if is_prev { 0..qi } else { (qi + 1)..n };
-                    let (none_rule, out_rule, ruled_out_rule, closer_rule) = if is_prev {
-                        (
-                            DeduceRule::PrevSameNoneMatch,
-                            DeduceRule::PrevSameNotBefore,
-                            DeduceRule::PrevSameRuledOut,
-                            DeduceRule::PrevSameCloser,
-                        )
-                    } else {
-                        (
-                            DeduceRule::NextSameNoneMatch,
-                            DeduceRule::NextSameNotAfter,
-                            DeduceRule::NextSameRuledOut,
-                            DeduceRule::NextSameCloser,
-                        )
-                    };
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let s = fp.options[qi][oi];
-                        if s.is_none() {
-                            if range
-                                .clone()
-                                .any(|j| answers[j] == Some(Answer::from(oi as u8)))
-                            {
-                                push(none_rule, DeduceAction::Eliminate { qi, oi });
-                            }
-                        } else if s.is_num() {
-                            let pos = usize::from(s.value());
-                            if !range.contains(&pos) {
-                                push(out_rule, DeduceAction::Eliminate { qi, oi });
-                            }
-                            if range.contains(&pos) {
-                                if is_elim(eliminated, pos, oi) {
-                                    push(ruled_out_rule, DeduceAction::Eliminate { qi, oi });
-                                }
-                                let mut closer_range = if is_prev {
-                                    (pos + 1)..qi
-                                } else {
-                                    (qi + 1)..pos
-                                };
-                                if closer_range.any(|j| answers[j] == Some(Answer::from(oi as u8)))
-                                {
-                                    push(closer_rule, DeduceAction::Eliminate { qi, oi });
-                                }
-                            }
-                        }
-                    }
-                }
+            QuestionType::PrevSame => {
+                apply_prev_or_next_same(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    0..qi,
+                    |x| (x + 1)..qi,
+                    (
+                        DeduceRule::PrevSameNoneMatch,
+                        DeduceRule::PrevSameNotBefore,
+                        DeduceRule::PrevSameRuledOut,
+                        DeduceRule::PrevSameCloser,
+                    ),
+                );
+            }
+            QuestionType::NextSame => {
+                apply_prev_or_next_same(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    (qi + 1)..n,
+                    |x| (qi + 1)..x,
+                    (
+                        DeduceRule::NextSameNoneMatch,
+                        DeduceRule::NextSameNotAfter,
+                        DeduceRule::NextSameRuledOut,
+                        DeduceRule::NextSameCloser,
+                    ),
+                );
             }
             QuestionType::SameAsWhich { question_index } => {
                 if let Some(a) = ans {
