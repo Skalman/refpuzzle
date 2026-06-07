@@ -1529,10 +1529,13 @@ fn deduce_impl(
                         possible_pairs |= 1 << pos;
                     }
                 }
-                for j in 0..n.saturating_sub(1) {
-                    if possible_pairs & (1 << j) != 0 {
-                        continue;
-                    }
+                // Iterate only impossible-pair positions (bits cleared in
+                // `possible_pairs`), masked to the valid j range `0..n-1`.
+                let mut impossible =
+                    !possible_pairs & ((1u16 << n.saturating_sub(1)).saturating_sub(1));
+                while impossible != 0 {
+                    let j = impossible.trailing_zeros() as usize;
+                    impossible &= impossible - 1;
                     let aj = answers[j];
                     let aj1 = answers[j + 1];
                     if let Some(ja) = aj
