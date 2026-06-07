@@ -493,204 +493,6 @@ fn deduce_impl(
 
     let mut letter_counts = Lazy::new(|| compute_letter_counts(answers, eliminated, n));
 
-    // ── Positional range elimination ──
-    {
-        for src in 0..n {
-            let Some(src_ans) = answers[src] else {
-                continue;
-            };
-            let t = &fp.question_types[src];
-            let s = fp.options[src][src_ans.idx()];
-            if !s.is_num() {
-                continue;
-            }
-            let v = usize::from(s.value());
-
-            let (letter, range_start, range_end) = match *t {
-                QuestionType::FirstWith { answer } => (answer, 0usize, v),
-                QuestionType::ClosestAfter {
-                    answer,
-                    after_index,
-                } => (answer, after_index as usize + 1, v),
-                QuestionType::LastWith { answer } => (answer, v + 1, n),
-                QuestionType::ClosestBefore {
-                    answer,
-                    before_index,
-                } => (answer, v + 1, before_index as usize),
-                QuestionType::NextSame => (src_ans, src + 1, v),
-                QuestionType::PrevSame => (src_ans, v + 1, src),
-                _ => continue,
-            };
-
-            let letter_oi = letter.idx();
-            let mut q_mask = 0u16;
-            for j in range_start..range_end {
-                if answers[j].is_some() {
-                    continue;
-                }
-                if !is_elim(eliminated, j, letter_oi) {
-                    q_mask |= 1 << j;
-                }
-            }
-            if q_mask != 0 {
-                push(
-                    DeduceRule::PositionalRangeAnswered,
-                    DeduceAction::EliminateMulti {
-                        question_mask: q_mask,
-                        option_mask: 1 << letter_oi,
-                    },
-                );
-            }
-        }
-    }
-
-    {
-        // Unanswered positional rules: min/max of remaining options defines exclusion range
-        for src in 0..n {
-            if answers[src].is_some() {
-                continue;
-            }
-            let t = &fp.question_types[src];
-            match *t {
-                QuestionType::FirstWith { answer } | QuestionType::ClosestAfter { answer, .. } => {
-                    let scan_start = match *t {
-                        QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
-                        _ => 0,
-                    };
-                    let mut min_pos = n;
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, src, oi) {
-                            continue;
-                        }
-                        let s = fp.options[src][oi];
-                        if s.is_num() {
-                            let v = usize::from(s.value());
-                            if v < min_pos {
-                                min_pos = v;
-                            }
-                        }
-                    }
-                    let letter_oi = answer.idx();
-                    let mut q_mask = 0u16;
-                    for j in scan_start..min_pos {
-                        if answers[j].is_some() {
-                            continue;
-                        }
-                        if !is_elim(eliminated, j, letter_oi) {
-                            q_mask |= 1 << j;
-                        }
-                    }
-                    if q_mask != 0 {
-                        push(
-                            DeduceRule::PositionalRangeUnanswered,
-                            DeduceAction::EliminateMulti {
-                                question_mask: q_mask,
-                                option_mask: 1 << letter_oi,
-                            },
-                        );
-                    }
-                }
-                QuestionType::LastWith { answer } | QuestionType::ClosestBefore { answer, .. } => {
-                    let scan_end = match *t {
-                        QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
-                        _ => n,
-                    };
-                    let mut max_pos: Option<usize> = None;
-                    for oi in 0..5usize {
-                        if is_elim(eliminated, src, oi) {
-                            continue;
-                        }
-                        let s = fp.options[src][oi];
-                        if s.is_num() {
-                            let v = usize::from(s.value());
-                            if max_pos.is_none_or(|m| v > m) {
-                                max_pos = Some(v);
-                            }
-                        }
-                    }
-                    let letter_oi = answer.idx();
-                    let mut q_mask = 0u16;
-                    let scan_start = max_pos.map_or(0, |p| p + 1);
-                    for j in scan_start..scan_end {
-                        if answers[j].is_some() {
-                            continue;
-                        }
-                        if !is_elim(eliminated, j, letter_oi) {
-                            q_mask |= 1 << j;
-                        }
-                    }
-                    if q_mask != 0 {
-                        push(
-                            DeduceRule::PositionalRangeUnanswered,
-                            DeduceAction::EliminateMulti {
-                                question_mask: q_mask,
-                                option_mask: 1 << letter_oi,
-                            },
-                        );
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    // ── OnlyOdd/OnlyEven range elimination ──
-    if full {
-        for src in 0..n {
-            if answers[src].is_some() {
-                continue;
-            }
-            let (answer, parity) = match fp.question_types[src] {
-                QuestionType::OnlyOdd { answer } => (answer, 1usize),
-                QuestionType::OnlyEven { answer } => (answer, 0usize),
-                _ => continue,
-            };
-            let answer_oi = answer.idx();
-
-            let mut claimed = 0u16;
-            for oi in 0..5usize {
-                if is_elim(eliminated, src, oi) {
-                    continue;
-                }
-                let s = fp.options[src][oi];
-                if s.is_num() {
-                    let v = usize::from(s.value());
-                    if v < n {
-                        claimed |= 1 << v;
-                    }
-                }
-            }
-
-            let mut q_mask = 0u16;
-            for j in 0..n {
-                if j == src {
-                    continue;
-                }
-                if (j + 1) % 2 != parity {
-                    continue;
-                }
-                if answers[j].is_some() {
-                    continue;
-                }
-                if (claimed >> j) & 1 == 1 {
-                    continue;
-                }
-                if !is_elim(eliminated, j, answer_oi) {
-                    q_mask |= 1 << j;
-                }
-            }
-            if q_mask != 0 {
-                push(
-                    DeduceRule::OnlyOddEvenRangeElim,
-                    DeduceAction::EliminateMulti {
-                        question_mask: q_mask,
-                        option_mask: 1 << answer_oi,
-                    },
-                );
-            }
-        }
-    }
-
     // ── Per-qi dispatch ──
     // For each qi, dispatch on its type. Each arm owns all rules whose source
     // is qi (regardless of qi's answered state). The type-agnostic
@@ -1038,42 +840,67 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ClosestAfter { answer, .. } | QuestionType::FirstWith { answer }
-                if ans.is_none() =>
-            {
+            QuestionType::ClosestAfter { answer, .. } | QuestionType::FirstWith { answer } => {
                 let scan_start = match *t {
                     QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
                     _ => 0,
                 };
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let s = fp.options[qi][oi];
+                if let Some(a) = ans {
+                    // PositionalRangeAnswered: positions before the claimed target can't have `answer`.
+                    let s = fp.options[qi][a.idx()];
                     if s.is_num() {
-                        let pos = usize::from(s.value());
-                        if pos < scan_start || pos >= n {
+                        let v = usize::from(s.value());
+                        let letter_oi = answer.idx();
+                        let mut q_mask = 0u16;
+                        for j in scan_start..v {
+                            if answers[j].is_some() {
+                                continue;
+                            }
+                            if !is_elim(eliminated, j, letter_oi) {
+                                q_mask |= 1 << j;
+                            }
+                        }
+                        if q_mask != 0 {
                             push(
-                                DeduceRule::FirstClosestAfterOutOfRange,
-                                DeduceAction::Eliminate { qi, oi },
+                                DeduceRule::PositionalRangeAnswered,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: q_mask,
+                                    option_mask: 1 << letter_oi,
+                                },
                             );
                         }
-                        if pos >= scan_start && pos < n {
-                            if let Some(pa) = answers[pos]
-                                && pa != answer
-                            {
+                    }
+                } else {
+                    // Per-option elim.
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let pos = usize::from(s.value());
+                            if pos < scan_start || pos >= n {
                                 push(
-                                    DeduceRule::FirstClosestAfterWrongAnswer,
+                                    DeduceRule::FirstClosestAfterOutOfRange,
                                     DeduceAction::Eliminate { qi, oi },
                                 );
                             }
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceRule::FirstClosestAfterRuledOut,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            {
+                            if pos >= scan_start && pos < n {
+                                if let Some(pa) = answers[pos]
+                                    && pa != answer
+                                {
+                                    push(
+                                        DeduceRule::FirstClosestAfterWrongAnswer,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                                if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx())
+                                {
+                                    push(
+                                        DeduceRule::FirstClosestAfterRuledOut,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
                                 for j in scan_start..pos {
                                     if answers[j] == Some(answer) {
                                         push(
@@ -1082,77 +909,173 @@ fn deduce_impl(
                                         );
                                     }
                                 }
+                                if oi == answer.idx() && qi >= scan_start && qi < pos {
+                                    push(
+                                        DeduceRule::FirstClosestAfterSelfRef,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
                             }
-                            if oi == answer.idx() && qi >= scan_start && qi < pos {
-                                push(
-                                    DeduceRule::FirstClosestAfterSelfRef,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
+                        } else if s.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer))
+                        {
+                            push(
+                                DeduceRule::FirstClosestAfterNoneMatch,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                        }
+                    }
+                    // PositionalRangeUnanswered: positions before the minimum remaining claim can't have `answer`.
+                    let mut min_pos = n;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let v = usize::from(s.value());
+                            if v < min_pos {
+                                min_pos = v;
                             }
                         }
-                    } else if s.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+                    }
+                    let letter_oi = answer.idx();
+                    let mut q_mask = 0u16;
+                    for j in scan_start..min_pos {
+                        if answers[j].is_some() {
+                            continue;
+                        }
+                        if !is_elim(eliminated, j, letter_oi) {
+                            q_mask |= 1 << j;
+                        }
+                    }
+                    if q_mask != 0 {
                         push(
-                            DeduceRule::FirstClosestAfterNoneMatch,
-                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::PositionalRangeUnanswered,
+                            DeduceAction::EliminateMulti {
+                                question_mask: q_mask,
+                                option_mask: 1 << letter_oi,
+                            },
                         );
                     }
                 }
             }
-            QuestionType::ClosestBefore { answer, .. } | QuestionType::LastWith { answer }
-                if ans.is_none() =>
-            {
+            QuestionType::ClosestBefore { answer, .. } | QuestionType::LastWith { answer } => {
                 let before_idx = match *t {
                     QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
                     _ => n,
                 };
-                for oi in 0..5usize {
-                    if is_elim(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let s = fp.options[qi][oi];
+                if let Some(a) = ans {
+                    // PositionalRangeAnswered: positions after the claimed target can't have `answer`.
+                    let s = fp.options[qi][a.idx()];
                     if s.is_num() {
-                        let pos = usize::from(s.value());
-                        if pos >= before_idx {
+                        let v = usize::from(s.value());
+                        let letter_oi = answer.idx();
+                        let mut q_mask = 0u16;
+                        for j in (v + 1)..before_idx {
+                            if answers[j].is_some() {
+                                continue;
+                            }
+                            if !is_elim(eliminated, j, letter_oi) {
+                                q_mask |= 1 << j;
+                            }
+                        }
+                        if q_mask != 0 {
                             push(
-                                DeduceRule::LastClosestBeforeOutOfRange,
+                                DeduceRule::PositionalRangeAnswered,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: q_mask,
+                                    option_mask: 1 << letter_oi,
+                                },
+                            );
+                        }
+                    }
+                } else {
+                    // Per-option elim.
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let pos = usize::from(s.value());
+                            if pos >= before_idx {
+                                push(
+                                    DeduceRule::LastClosestBeforeOutOfRange,
+                                    DeduceAction::Eliminate { qi, oi },
+                                );
+                            }
+                            if pos < before_idx {
+                                if let Some(pa) = answers[pos]
+                                    && pa != answer
+                                {
+                                    push(
+                                        DeduceRule::LastClosestBeforeWrongAnswer,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                                if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx())
+                                {
+                                    push(
+                                        DeduceRule::LastClosestBeforeRuledOut,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                                if ((pos + 1)..before_idx)
+                                    .rev()
+                                    .any(|j| answers[j] == Some(answer))
+                                {
+                                    push(
+                                        DeduceRule::LastClosestBeforeLaterMatch,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                                if oi == answer.idx() && qi > pos && qi < before_idx {
+                                    push(
+                                        DeduceRule::LastClosestBeforeSelfRef,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                            }
+                        } else if s.is_none() && (0..before_idx).any(|j| answers[j] == Some(answer))
+                        {
+                            push(
+                                DeduceRule::LastClosestBeforeNoneMatch,
                                 DeduceAction::Eliminate { qi, oi },
                             );
                         }
-                        if pos < before_idx {
-                            if let Some(pa) = answers[pos]
-                                && pa != answer
-                            {
-                                push(
-                                    DeduceRule::LastClosestBeforeWrongAnswer,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if answers[pos].is_none() && is_elim(eliminated, pos, answer.idx()) {
-                                push(
-                                    DeduceRule::LastClosestBeforeRuledOut,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if ((pos + 1)..before_idx)
-                                .rev()
-                                .any(|j| answers[j] == Some(answer))
-                            {
-                                push(
-                                    DeduceRule::LastClosestBeforeLaterMatch,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if oi == answer.idx() && qi > pos && qi < before_idx {
-                                push(
-                                    DeduceRule::LastClosestBeforeSelfRef,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
+                    }
+                    // PositionalRangeUnanswered: positions after the maximum remaining claim can't have `answer`.
+                    let mut max_pos: Option<usize> = None;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let v = usize::from(s.value());
+                            if max_pos.is_none_or(|m| v > m) {
+                                max_pos = Some(v);
                             }
                         }
-                    } else if s.is_none() && (0..before_idx).any(|j| answers[j] == Some(answer)) {
+                    }
+                    let letter_oi = answer.idx();
+                    let mut q_mask = 0u16;
+                    let scan_start = max_pos.map_or(0, |p| p + 1);
+                    for j in scan_start..before_idx {
+                        if answers[j].is_some() {
+                            continue;
+                        }
+                        if !is_elim(eliminated, j, letter_oi) {
+                            q_mask |= 1 << j;
+                        }
+                    }
+                    if q_mask != 0 {
                         push(
-                            DeduceRule::LastClosestBeforeNoneMatch,
-                            DeduceAction::Eliminate { qi, oi },
+                            DeduceRule::PositionalRangeUnanswered,
+                            DeduceAction::EliminateMulti {
+                                question_mask: q_mask,
+                                option_mask: 1 << letter_oi,
+                            },
                         );
                     }
                 }
@@ -1161,7 +1084,7 @@ fn deduce_impl(
                 if ans.is_none() =>
             {
                 let parity = match t {
-                    QuestionType::OnlyOdd { .. } => 1,
+                    QuestionType::OnlyOdd { .. } => 1usize,
                     _ => 0,
                 };
                 for oi in 0..5usize {
@@ -1199,6 +1122,53 @@ fn deduce_impl(
                         push(
                             DeduceRule::OnlyOddEvenNoneMatch,
                             DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                }
+
+                // OnlyOddEvenRangeElim (full mode): positions with the right parity
+                // that aren't reachable from this OnlyOdd/Even's remaining options
+                // can't hold `answer`.
+                if full {
+                    let answer_oi = answer.idx();
+                    let mut claimed = 0u16;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let v = usize::from(s.value());
+                            if v < n {
+                                claimed |= 1 << v;
+                            }
+                        }
+                    }
+                    let mut q_mask = 0u16;
+                    for j in 0..n {
+                        if j == qi {
+                            continue;
+                        }
+                        if (j + 1) % 2 != parity {
+                            continue;
+                        }
+                        if answers[j].is_some() {
+                            continue;
+                        }
+                        if (claimed >> j) & 1 == 1 {
+                            continue;
+                        }
+                        if !is_elim(eliminated, j, answer_oi) {
+                            q_mask |= 1 << j;
+                        }
+                    }
+                    if q_mask != 0 {
+                        push(
+                            DeduceRule::OnlyOddEvenRangeElim,
+                            DeduceAction::EliminateMulti {
+                                question_mask: q_mask,
+                                option_mask: 1 << answer_oi,
+                            },
                         );
                     }
                 }
@@ -1424,6 +1394,33 @@ fn deduce_impl(
                                 DeduceAction::Force {
                                     qi: target_qi,
                                     answer: a,
+                                },
+                            );
+                        }
+                        // PositionalRangeAnswered: positions between qi and the target can't
+                        // hold qi's own letter (otherwise qi wouldn't be the closest match).
+                        let v = usize::from(s.value());
+                        let (range_start, range_end) = if matches!(*t, QuestionType::NextSame) {
+                            (qi + 1, v)
+                        } else {
+                            (v + 1, qi)
+                        };
+                        let letter_oi = a.idx();
+                        let mut q_mask = 0u16;
+                        for j in range_start..range_end {
+                            if answers[j].is_some() {
+                                continue;
+                            }
+                            if !is_elim(eliminated, j, letter_oi) {
+                                q_mask |= 1 << j;
+                            }
+                        }
+                        if q_mask != 0 {
+                            push(
+                                DeduceRule::PositionalRangeAnswered,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: q_mask,
+                                    option_mask: 1 << letter_oi,
                                 },
                             );
                         }
