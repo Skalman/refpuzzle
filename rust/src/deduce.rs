@@ -1191,7 +1191,9 @@ fn deduce_impl(
                     }
                 } else {
                     // Forward + per-option elim (qi unanswered).
-                    if let Some(target) = answers[question_index as usize] {
+                    let target_qi = question_index as usize;
+                    let target_ans = answers[target_qi];
+                    if let Some(target) = target_ans {
                         let mut best: Option<usize> = None;
                         for oi in 0..5usize {
                             if fp.options[qi][oi].value() == target as u8 {
@@ -1220,14 +1222,14 @@ fn deduce_impl(
                         }
                         let ov = fp.options[qi][oi].value();
                         if ov <= 4 {
-                            if let Some(target) = answers[question_index as usize] {
+                            if let Some(target) = target_ans {
                                 if target as u8 != ov {
                                     push(
                                         DeduceRule::AnswerOfTargetRuledOut,
                                         DeduceAction::Eliminate { qi, oi },
                                     );
                                 }
-                            } else if is_elim(eliminated, question_index as usize, ov as usize) {
+                            } else if is_elim(eliminated, target_qi, ov as usize) {
                                 push(
                                     DeduceRule::AnswerOfTargetRuledOut,
                                     DeduceAction::Eliminate { qi, oi },
@@ -1284,7 +1286,8 @@ fn deduce_impl(
                     }
                 } else {
                     // Forward + per-option elim (qi unanswered).
-                    if let Some(other_ans) = answers[target_qi] {
+                    let target_ans = answers[target_qi];
+                    if let Some(other_ans) = target_ans {
                         let other_idx = other_ans as u8;
                         if let Some(oi) = exactly_one(0..5, |oi| {
                             let s = fp.options[qi][oi];
@@ -1313,7 +1316,7 @@ fn deduce_impl(
                                 DeduceAction::Eliminate { qi, oi },
                             );
                         }
-                        if let Some(other) = answers[target_qi] {
+                        if let Some(other) = target_ans {
                             // s is NONE/UNUSED: dist (always ≥ 0) can never equal it.
                             // s is num: literal distance comparison.
                             let dist = (oi as u8).abs_diff(other as u8);
@@ -1325,7 +1328,7 @@ fn deduce_impl(
                                 );
                             }
                         }
-                        if s.is_num() && answers[target_qi].is_none() && s.value() <= max_dist {
+                        if s.is_num() && target_ans.is_none() && s.value() <= max_dist {
                             let on = s.value();
                             let no_match = !(0..5usize).any(|ti| {
                                 !is_elim(eliminated, target_qi, ti)
@@ -1341,7 +1344,7 @@ fn deduce_impl(
                     }
 
                     // Reverse (src unanswered): narrow target by what's compatible from src's remaining options.
-                    if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
+                    if target_qi < n && target_qi != qi && target_ans.is_none() {
                         let mut elim_mask = 0u8;
                         for oi in 0..5usize {
                             if is_elim(eliminated, target_qi, oi) {
