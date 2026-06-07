@@ -398,7 +398,6 @@ fn deduce_impl(
     //    are stored alongside where the loop body needs them).
     let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
     let mut truestmt_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
-    let mut consec_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
     // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
     // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
     // fires exactly once per deduce call regardless of how many of each type
@@ -413,7 +412,6 @@ fn deduce_impl(
         }
         match *t {
             QuestionType::TrueStmt => truestmt_qis.push(qi),
-            QuestionType::ConsecIdent => consec_qis.push(qi),
             QuestionType::CountVowel if answers[qi].is_none() => vowel_qi = Some(qi),
             QuestionType::CountConsonant if answers[qi].is_none() => consonant_qi = Some(qi),
             _ => {}
@@ -1162,51 +1160,177 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ConsecIdent if ans.is_none() => {
+            QuestionType::ConsecIdent => {
+                // Reverse: any qi state. Eliminate matching neighbors at positions
+                // that this ConsecIdent's remaining options can't claim.
+                let mut possible_pairs = 0u16;
                 for oi in 0..5usize {
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
                     let s = fp.options[qi][oi];
-                    if s.is_num() {
-                        let pos = usize::from(s.value());
-                        if pos + 1 >= n {
-                            push(
-                                DeduceRule::ConsecIdentOutOfRange,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
-                        if pos + 1 < n {
-                            let possible_a = !eliminated[pos] & 0b11111u8;
-                            let possible_b = !eliminated[pos + 1] & 0b11111u8;
-                            if possible_a & possible_b == 0 {
-                                push(
-                                    DeduceRule::ConsecIdentNoCommon,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            }
-                            if possible_a & possible_b != 0 && (pos == qi || pos + 1 == qi) {
-                                let partner = if pos == qi { pos + 1 } else { pos };
-                                if is_elim(eliminated, partner, oi) {
+                    if !s.is_num() {
+                        continue;
+                    }
+                    let pos = usize::from(s.value());
+                    if pos + 1 < n {
+                        possible_pairs |= 1 << pos;
+                    }
+                }
+                for j in 0..n.saturating_sub(1) {
+                    if possible_pairs & (1 << j) != 0 {
+                        continue;
+                    }
+                    if let Some(ja) = answers[j]
+                        && answers[j + 1].is_none()
+                        && !is_elim(eliminated, j + 1, ja.idx())
+                    {
+                        push(
+                            DeduceRule::ConsecIdentReverse,
+                            DeduceAction::Eliminate {
+                                qi: j + 1,
+                                oi: ja.idx(),
+                            },
+                        );
+                    }
+                    if let Some(jb) = answers[j + 1]
+                        && answers[j].is_none()
+                        && !is_elim(eliminated, j, jb.idx())
+                    {
+                        push(
+                            DeduceRule::ConsecIdentReverse,
+                            DeduceAction::Eliminate {
+                                qi: j,
+                                oi: jb.idx(),
+                            },
+                        );
+                    }
+                }
+
+                if let Some(a) = ans {
+                    // Forward force/elim/both (qi answered, full mode only).
+                    if full {
+                        let s = fp.options[qi][a.idx()];
+                        if s.is_num() && usize::from(s.value()) + 1 < n {
+                            let p = usize::from(s.value());
+                            let poss_a = !eliminated[p] & 0b11111u8;
+                            let poss_b = !eliminated[p + 1] & 0b11111u8;
+
+                            if answers[p].is_some() && answers[p + 1].is_none() {
+                                let letter = answers[p].unwrap();
+                                if !is_elim(eliminated, p + 1, letter.idx()) {
                                     push(
-                                        DeduceRule::ConsecIdentSelfRef,
-                                        DeduceAction::Eliminate { qi, oi },
+                                        DeduceRule::ConsecIdentForwardForce,
+                                        DeduceAction::Force {
+                                            qi: p + 1,
+                                            answer: letter,
+                                        },
+                                    );
+                                }
+                            }
+                            if answers[p + 1].is_some() && answers[p].is_none() {
+                                let letter = answers[p + 1].unwrap();
+                                if !is_elim(eliminated, p, letter.idx()) {
+                                    push(
+                                        DeduceRule::ConsecIdentForwardForce,
+                                        DeduceAction::Force {
+                                            qi: p,
+                                            answer: letter,
+                                        },
+                                    );
+                                }
+                            }
+
+                            for oi in 0..5usize {
+                                if answers[p].is_none()
+                                    && !is_elim(eliminated, p, oi)
+                                    && (poss_b & (1 << oi)) == 0
+                                {
+                                    push(
+                                        DeduceRule::ConsecIdentForwardElim,
+                                        DeduceAction::Eliminate { qi: p, oi },
+                                    );
+                                }
+                                if answers[p + 1].is_none()
+                                    && !is_elim(eliminated, p + 1, oi)
+                                    && (poss_a & (1 << oi)) == 0
+                                {
+                                    push(
+                                        DeduceRule::ConsecIdentForwardElim,
+                                        DeduceAction::Eliminate { qi: p + 1, oi },
+                                    );
+                                }
+                            }
+
+                            if answers[p].is_none() && answers[p + 1].is_none() {
+                                let common = poss_a & poss_b;
+                                if common.count_ones() == 1 {
+                                    let oi = common.trailing_zeros() as usize;
+                                    push(
+                                        DeduceRule::ConsecIdentForwardBothForce,
+                                        DeduceAction::Force {
+                                            qi: p,
+                                            answer: Answer::from(oi as u8),
+                                        },
+                                    );
+                                    push(
+                                        DeduceRule::ConsecIdentForwardBothForce,
+                                        DeduceAction::Force {
+                                            qi: p + 1,
+                                            answer: Answer::from(oi as u8),
+                                        },
                                     );
                                 }
                             }
                         }
-                    } else if s.is_none()
-                        && (0..n.saturating_sub(1)).any(|i| {
-                            matches!(
-                                (answers[i], answers[i + 1]),
-                                (Some(a), Some(b)) if a == b
-                            )
-                        })
-                    {
-                        push(
-                            DeduceRule::ConsecIdentNonePair,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
+                    }
+                } else {
+                    // Per-option elim (qi unanswered): OOR, NoCommon, SelfRef, NonePair.
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let s = fp.options[qi][oi];
+                        if s.is_num() {
+                            let pos = usize::from(s.value());
+                            if pos + 1 >= n {
+                                push(
+                                    DeduceRule::ConsecIdentOutOfRange,
+                                    DeduceAction::Eliminate { qi, oi },
+                                );
+                            }
+                            if pos + 1 < n {
+                                let possible_a = !eliminated[pos] & 0b11111u8;
+                                let possible_b = !eliminated[pos + 1] & 0b11111u8;
+                                if possible_a & possible_b == 0 {
+                                    push(
+                                        DeduceRule::ConsecIdentNoCommon,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                                if possible_a & possible_b != 0 && (pos == qi || pos + 1 == qi) {
+                                    let partner = if pos == qi { pos + 1 } else { pos };
+                                    if is_elim(eliminated, partner, oi) {
+                                        push(
+                                            DeduceRule::ConsecIdentSelfRef,
+                                            DeduceAction::Eliminate { qi, oi },
+                                        );
+                                    }
+                                }
+                            }
+                        } else if s.is_none()
+                            && (0..n.saturating_sub(1)).any(|i| {
+                                matches!(
+                                    (answers[i], answers[i + 1]),
+                                    (Some(a), Some(b)) if a == b
+                                )
+                            })
+                        {
+                            push(
+                                DeduceRule::ConsecIdentNonePair,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                        }
                     }
                 }
             }
@@ -1742,83 +1866,6 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ConsecIdent if full => {
-                if let Some(a) = ans {
-                    let s = fp.options[qi][a.idx()];
-                    if s.is_num() && usize::from(s.value()) + 1 < n {
-                        let p = usize::from(s.value());
-                        let poss_a = !eliminated[p] & 0b11111u8;
-                        let poss_b = !eliminated[p + 1] & 0b11111u8;
-
-                        if answers[p].is_some() && answers[p + 1].is_none() {
-                            let letter = answers[p].unwrap();
-                            if !is_elim(eliminated, p + 1, letter.idx()) {
-                                push(
-                                    DeduceRule::ConsecIdentForwardForce,
-                                    DeduceAction::Force {
-                                        qi: p + 1,
-                                        answer: letter,
-                                    },
-                                );
-                            }
-                        }
-                        if answers[p + 1].is_some() && answers[p].is_none() {
-                            let letter = answers[p + 1].unwrap();
-                            if !is_elim(eliminated, p, letter.idx()) {
-                                push(
-                                    DeduceRule::ConsecIdentForwardForce,
-                                    DeduceAction::Force {
-                                        qi: p,
-                                        answer: letter,
-                                    },
-                                );
-                            }
-                        }
-
-                        for oi in 0..5usize {
-                            if answers[p].is_none()
-                                && !is_elim(eliminated, p, oi)
-                                && (poss_b & (1 << oi)) == 0
-                            {
-                                push(
-                                    DeduceRule::ConsecIdentForwardElim,
-                                    DeduceAction::Eliminate { qi: p, oi },
-                                );
-                            }
-                            if answers[p + 1].is_none()
-                                && !is_elim(eliminated, p + 1, oi)
-                                && (poss_a & (1 << oi)) == 0
-                            {
-                                push(
-                                    DeduceRule::ConsecIdentForwardElim,
-                                    DeduceAction::Eliminate { qi: p + 1, oi },
-                                );
-                            }
-                        }
-
-                        if answers[p].is_none() && answers[p + 1].is_none() {
-                            let common = poss_a & poss_b;
-                            if common.count_ones() == 1 {
-                                let oi = common.trailing_zeros() as usize;
-                                push(
-                                    DeduceRule::ConsecIdentForwardBothForce,
-                                    DeduceAction::Force {
-                                        qi: p,
-                                        answer: Answer::from(oi as u8),
-                                    },
-                                );
-                                push(
-                                    DeduceRule::ConsecIdentForwardBothForce,
-                                    DeduceAction::Force {
-                                        qi: p + 1,
-                                        answer: Answer::from(oi as u8),
-                                    },
-                                );
-                            }
-                        }
-                    }
-                }
-            }
             _ => {}
         }
 
@@ -1832,52 +1879,6 @@ fn deduce_impl(
                     answer: Answer::from(oi as u8),
                 },
             );
-        }
-    }
-
-    // ── ConsecIdent reverse: eliminate matching neighbors for impossible pairs ──
-    {
-        for &qi in &consec_qis {
-            let mut possible_pairs = 0u16;
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let s = fp.options[qi][oi];
-                if !s.is_num() {
-                    continue;
-                }
-                let pos = usize::from(s.value());
-                if pos + 1 < n {
-                    possible_pairs |= 1 << pos;
-                }
-            }
-            for j in 0..n.saturating_sub(1) {
-                if possible_pairs & (1 << j) != 0 {
-                    continue;
-                }
-                if let Some(a) = answers[j]
-                    && answers[j + 1].is_none()
-                    && !is_elim(eliminated, j + 1, a.idx())
-                {
-                    push(
-                        DeduceRule::ConsecIdentReverse,
-                        DeduceAction::Eliminate {
-                            qi: j + 1,
-                            oi: a.idx(),
-                        },
-                    );
-                }
-                if let Some(b) = answers[j + 1]
-                    && answers[j].is_none()
-                    && !is_elim(eliminated, j, b.idx())
-                {
-                    push(
-                        DeduceRule::ConsecIdentReverse,
-                        DeduceAction::Eliminate { qi: j, oi: b.idx() },
-                    );
-                }
-            }
         }
     }
 
