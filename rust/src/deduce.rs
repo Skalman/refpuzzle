@@ -399,7 +399,6 @@ fn deduce_impl(
     let mut count_results: [Option<CountResult>; MAX_N] = [None; MAX_N];
     let mut truestmt_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
     let mut consec_qis: ArrayVec<usize, MAX_N> = ArrayVec::new();
-    let mut letterdist_qis: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
     let mut sameaswhich_qis: ArrayVec<(usize, u8), MAX_N> = ArrayVec::new();
     for qi in 0..n {
         let t = &fp.question_types[qi];
@@ -410,9 +409,6 @@ fn deduce_impl(
         match *t {
             QuestionType::TrueStmt => truestmt_qis.push(qi),
             QuestionType::ConsecIdent => consec_qis.push(qi),
-            QuestionType::LetterDist { question_index } => {
-                letterdist_qis.push((qi, question_index));
-            }
             QuestionType::SameAsWhich { question_index } => {
                 sameaswhich_qis.push((qi, question_index));
             }
@@ -797,81 +793,6 @@ fn deduce_impl(
         }
     }
 
-    // ── LetterDist reverse: each LetterDist src constrains its target qi ──
-    // One pass per LetterDist src; the target qi is derived from src's type.
-    for &(src, question_index) in &letterdist_qis {
-        let qi = question_index as usize;
-        if qi >= n || src == qi || answers[qi].is_some() {
-            continue;
-        }
-        let mut elim_mask = 0u8;
-        if let Some(src_ans) = answers[src] {
-            let s = fp.options[src][src_ans.idx()];
-            if s.is_unused() {
-                continue;
-            }
-            // NONE distance is unsatisfiable: every non-eliminated option ends
-            // up in elim_mask (the `actual == s.value()` check is skipped when
-            // the source's distance value is null).
-            let mut valid_count = 0u8;
-            let mut valid_oi = 0usize;
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let actual = (oi as u8).abs_diff(src_ans as u8);
-                if s.is_num() && actual == s.value() {
-                    valid_count += 1;
-                    valid_oi = oi;
-                } else {
-                    elim_mask |= 1 << oi;
-                }
-            }
-            if valid_count == 1 && elim_mask != 0 {
-                push(
-                    DeduceRule::LetterDistReverseForce,
-                    DeduceAction::Force {
-                        qi,
-                        answer: Answer::from(valid_oi as u8),
-                    },
-                );
-            }
-            if elim_mask != 0 && valid_count != 1 {
-                push(
-                    DeduceRule::LetterDistReverseElim,
-                    DeduceAction::EliminateMulti {
-                        question_mask: 1 << qi,
-                        option_mask: elim_mask,
-                    },
-                );
-            }
-        } else {
-            for oi in 0..5usize {
-                if is_elim(eliminated, qi, oi) {
-                    continue;
-                }
-                let compatible = (0..5usize).any(|si| {
-                    let s = fp.options[src][si];
-                    !is_elim(eliminated, src, si)
-                        && s.is_num()
-                        && (oi as u8).abs_diff(si as u8) == s.value()
-                });
-                if !compatible {
-                    elim_mask |= 1 << oi;
-                }
-            }
-            if elim_mask != 0 {
-                push(
-                    DeduceRule::LetterDistReverseElim,
-                    DeduceAction::EliminateMulti {
-                        question_mask: 1 << qi,
-                        option_mask: elim_mask,
-                    },
-                );
-            }
-        }
-    }
-
     // ── Per-question rules (forward force + per-option elim) ──
     for qi in 0..n {
         if answers[qi].is_some() {
@@ -1067,6 +988,35 @@ fn deduce_impl(
                                 DeduceAction::Eliminate { qi, oi },
                             );
                         }
+                    }
+                }
+
+                // Reverse: src (this qi) is unanswered; narrows target qi's options.
+                let target_qi = question_index as usize;
+                if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
+                    let mut elim_mask = 0u8;
+                    for oi in 0..5usize {
+                        if is_elim(eliminated, target_qi, oi) {
+                            continue;
+                        }
+                        let compatible = (0..5usize).any(|si| {
+                            let s = fp.options[qi][si];
+                            !is_elim(eliminated, qi, si)
+                                && s.is_num()
+                                && (oi as u8).abs_diff(si as u8) == s.value()
+                        });
+                        if !compatible {
+                            elim_mask |= 1 << oi;
+                        }
+                    }
+                    if elim_mask != 0 {
+                        push(
+                            DeduceRule::LetterDistReverseElim,
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << target_qi,
+                                option_mask: elim_mask,
+                            },
+                        );
                     }
                 }
             }
@@ -1726,6 +1676,51 @@ fn deduce_impl(
                                 answer: a,
                             },
                         );
+                    }
+                }
+            }
+
+            QuestionType::LetterDist { question_index } => {
+                let target_qi = question_index as usize;
+                if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
+                    let s = fp.options[qi][a.idx()];
+                    if !s.is_unused() {
+                        // NONE distance is unsatisfiable: every non-eliminated option
+                        // ends up in elim_mask (the `actual == s.value()` check is
+                        // skipped when the source's distance value is null).
+                        let mut elim_mask = 0u8;
+                        let mut valid_count = 0u8;
+                        let mut valid_oi = 0usize;
+                        for oi in 0..5usize {
+                            if is_elim(eliminated, target_qi, oi) {
+                                continue;
+                            }
+                            let actual = (oi as u8).abs_diff(a as u8);
+                            if s.is_num() && actual == s.value() {
+                                valid_count += 1;
+                                valid_oi = oi;
+                            } else {
+                                elim_mask |= 1 << oi;
+                            }
+                        }
+                        if valid_count == 1 && elim_mask != 0 {
+                            push(
+                                DeduceRule::LetterDistReverseForce,
+                                DeduceAction::Force {
+                                    qi: target_qi,
+                                    answer: Answer::from(valid_oi as u8),
+                                },
+                            );
+                        }
+                        if elim_mask != 0 && valid_count != 1 {
+                            push(
+                                DeduceRule::LetterDistReverseElim,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: 1 << target_qi,
+                                    option_mask: elim_mask,
+                                },
+                            );
+                        }
                     }
                 }
             }
