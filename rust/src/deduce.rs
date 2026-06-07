@@ -780,23 +780,13 @@ fn deduce_impl(
         }
     }
 
-    // ── Per-question rules (forward force + per-option elim) ──
+    // ── Per-qi dispatch ──
+    // For each qi, dispatch on its type. Each arm owns all rules whose source
+    // is qi (regardless of qi's answered state). The type-agnostic
+    // OnlyOptionLeft fires at the end of each iteration.
     for qi in 0..n {
-        if answers[qi].is_some() {
-            continue;
-        }
         let t = &fp.question_types[qi];
-
-        if remaining_count(eliminated[qi]) == 1 {
-            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
-            push(
-                DeduceRule::OnlyOptionLeft,
-                DeduceAction::Force {
-                    qi,
-                    answer: Answer::from(oi as u8),
-                },
-            );
-        }
+        let ans = answers[qi];
 
         match *t {
             QuestionType::CountVowel if full && Some(qi) == vowel_qi => {
@@ -872,7 +862,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::AnswerOf { question_index } => {
+            QuestionType::AnswerOf { question_index } if ans.is_none() => {
                 if let Some(target) = answers[question_index as usize] {
                     let mut best: Option<usize> = None;
                     for oi in 0..5usize {
@@ -918,7 +908,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LetterDist { question_index } => {
+            QuestionType::LetterDist { question_index } if ans.is_none() => {
                 if let Some(other_ans) = answers[question_index as usize] {
                     let other_idx = other_ans as u8;
                     if let Some(oi) = exactly_one(0..5, |oi| {
@@ -1007,7 +997,9 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ClosestAfter { answer, .. } | QuestionType::FirstWith { answer } => {
+            QuestionType::ClosestAfter { answer, .. } | QuestionType::FirstWith { answer }
+                if ans.is_none() =>
+            {
                 let scan_start = match *t {
                     QuestionType::ClosestAfter { after_index, .. } => after_index as usize + 1,
                     _ => 0,
@@ -1065,7 +1057,9 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ClosestBefore { answer, .. } | QuestionType::LastWith { answer } => {
+            QuestionType::ClosestBefore { answer, .. } | QuestionType::LastWith { answer }
+                if ans.is_none() =>
+            {
                 let before_idx = match *t {
                     QuestionType::ClosestBefore { before_index, .. } => before_index as usize,
                     _ => n,
@@ -1122,7 +1116,9 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
+            QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer }
+                if ans.is_none() =>
+            {
                 let parity = match t {
                     QuestionType::OnlyOdd { .. } => 1,
                     _ => 0,
@@ -1166,7 +1162,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::ConsecIdent => {
+            QuestionType::ConsecIdent if ans.is_none() => {
                 for oi in 0..5usize {
                     if is_elim(eliminated, qi, oi) {
                         continue;
@@ -1214,7 +1210,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::EqualCount { answer } => {
+            QuestionType::EqualCount { answer } if ans.is_none() => {
                 for oi in 0..5usize {
                     if is_elim(eliminated, qi, oi) {
                         continue;
@@ -1249,7 +1245,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::PrevSame | QuestionType::NextSame => {
+            QuestionType::PrevSame | QuestionType::NextSame if ans.is_none() => {
                 let is_prev = matches!(*t, QuestionType::PrevSame);
                 let range = if is_prev { 0..qi } else { (qi + 1)..n };
                 let (none_rule, out_rule, ruled_out_rule, closer_rule) = if is_prev {
@@ -1300,7 +1296,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::SameAsWhich { question_index } => {
+            QuestionType::SameAsWhich { question_index } if ans.is_none() => {
                 for oi in 0..5usize {
                     if is_elim(eliminated, qi, oi) {
                         continue;
@@ -1328,7 +1324,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::OnlySame | QuestionType::SameAs => {
+            QuestionType::OnlySame | QuestionType::SameAs if ans.is_none() => {
                 for oi in 0..5usize {
                     if is_elim(eliminated, qi, oi) {
                         continue;
@@ -1371,7 +1367,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LeastCommon | QuestionType::MostCommon if full => {
+            QuestionType::LeastCommon | QuestionType::MostCommon if full && ans.is_none() => {
                 let is_least = matches!(*t, QuestionType::LeastCommon);
                 let (elim_rule, force_rule) = if is_least {
                     (DeduceRule::LeastCommonElim, DeduceRule::LeastCommonForce)
@@ -1455,7 +1451,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::TrueStmt if full => {
+            QuestionType::TrueStmt if full && ans.is_none() => {
                 // TrueStatement claim valid: if exactly one non-eliminated claim is
                 // not provably false, force it.
                 if let Some(oi) = exactly_one(0..5, |oi| {
@@ -1507,6 +1503,18 @@ fn deduce_impl(
                 }
             }
             _ => {}
+        }
+
+        // OnlyOptionLeft is type-agnostic — fires when only one option remains.
+        if ans.is_none() && remaining_count(eliminated[qi]) == 1 {
+            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
+            push(
+                DeduceRule::OnlyOptionLeft,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
         }
     }
 
