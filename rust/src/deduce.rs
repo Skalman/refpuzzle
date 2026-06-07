@@ -1502,45 +1502,30 @@ fn deduce_impl(
                     );
                 }
             }
-            _ => {}
-        }
 
-        // OnlyOptionLeft is type-agnostic — fires when only one option remains.
-        if ans.is_none() && remaining_count(eliminated[qi]) == 1 {
-            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
-            push(
-                DeduceRule::OnlyOptionLeft,
-                DeduceAction::Force {
-                    qi,
-                    answer: Answer::from(oi as u8),
-                },
-            );
-        }
-    }
-
-    // ── Per-question rules for ANSWERED qis ──
-    for qi in 0..n {
-        let Some(a) = answers[qi] else { continue };
-        let t = &fp.question_types[qi];
-
-        match *t {
+            // ── Answered-source arms ──
             QuestionType::AnswerOf { question_index } => {
-                let implied = fp.options[qi][a.idx()].value();
-                if implied <= 4 {
-                    let target_qi = question_index as usize;
-                    if target_qi < n && answers[target_qi].is_none() {
-                        push(
-                            DeduceRule::AnswerOfReverse,
-                            DeduceAction::Force {
-                                qi: target_qi,
-                                answer: Answer::from(implied),
-                            },
-                        );
+                if let Some(a) = ans {
+                    let implied = fp.options[qi][a.idx()].value();
+                    if implied <= 4 {
+                        let target_qi = question_index as usize;
+                        if target_qi < n && answers[target_qi].is_none() {
+                            push(
+                                DeduceRule::AnswerOfReverse,
+                                DeduceAction::Force {
+                                    qi: target_qi,
+                                    answer: Answer::from(implied),
+                                },
+                            );
+                        }
                     }
                 }
             }
             QuestionType::TrueStmt => {
-                if full && let Some(claim) = fp.claim_at(qi, a.idx()) {
+                if let Some(a) = ans
+                    && full
+                    && let Some(claim) = fp.claim_at(qi, a.idx())
+                {
                     match claim.question_type {
                         QuestionType::FirstWith { answer } | QuestionType::LastWith { answer }
                             if claim.value.is_num() =>
@@ -1579,189 +1564,192 @@ fn deduce_impl(
                     }
                 }
             }
-
             QuestionType::OnlySame | QuestionType::SameAs => {
-                // Reverse: qi answered with an index → force that target qi to qi's letter.
-                let s = fp.options[qi][a.idx()];
-                if s.is_num() {
-                    let target_qi = usize::from(s.value());
-                    if target_qi < n && answers[target_qi].is_none() {
-                        let rule = match *t {
-                            QuestionType::SameAs => DeduceRule::SameAsReverse,
-                            _ => DeduceRule::PrevNextOnlySameReverse,
-                        };
-                        push(
-                            rule,
-                            DeduceAction::Force {
-                                qi: target_qi,
-                                answer: a,
-                            },
-                        );
-                    }
-                }
-
-                // OnlySame/SameAs None forward: an answered None means qi's
-                // answer is unique, so no other question can have that letter.
-                // Sound, ungated.
-                if full && fp.options[qi][a.idx()].is_none() {
-                    for j in 0..n {
-                        if j == qi {
-                            continue;
-                        }
-                        if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
-                            push(
-                                DeduceRule::OnlySameNoneForward,
-                                DeduceAction::Eliminate { qi: j, oi: a.idx() },
-                            );
-                        }
-                    }
-                }
-
-                // SameAs negative (SameAs only): non-selected option targets
-                // cannot share qi's answer. Uniqueness-assuming.
-                if assume_unique && matches!(*t, QuestionType::SameAs) {
-                    let ai = a.idx();
-                    let selected_s = fp.options[qi][ai];
-                    // The "none" answer's sound inference is handled above; this
-                    // rule is for the index case.
-                    if selected_s.is_num() {
-                        let selected = selected_s.value();
-                        let mut q_mask = 0u16;
-                        for oi in 0..fp.option_count {
-                            if oi == ai {
-                                continue;
-                            }
-                            let ts = fp.options[qi][oi];
-                            if !ts.is_num() {
-                                continue;
-                            }
-                            let target = usize::from(ts.value());
-                            if target >= n || target == qi {
-                                continue;
-                            }
-                            if ts.value() != selected
-                                && answers[target].is_none()
-                                && !is_elim(eliminated, target, ai)
-                            {
-                                q_mask |= 1 << target;
-                            }
-                        }
-                        if q_mask != 0 {
-                            push(
-                                DeduceRule::SameAsNegative,
-                                DeduceAction::EliminateMulti {
-                                    question_mask: q_mask,
-                                    option_mask: 1 << ai,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-
-            QuestionType::PrevSame | QuestionType::NextSame => {
-                let s = fp.options[qi][a.idx()];
-                if s.is_num() {
-                    let target_qi = usize::from(s.value());
-                    if target_qi < n && answers[target_qi].is_none() {
-                        push(
-                            DeduceRule::PrevNextOnlySameReverse,
-                            DeduceAction::Force {
-                                qi: target_qi,
-                                answer: a,
-                            },
-                        );
-                    }
-                }
-            }
-
-            QuestionType::SameAsWhich { question_index } if full => {
-                let s = fp.options[qi][a.idx()];
-                if s.is_num() {
-                    let j = usize::from(s.value());
-                    let qi_ref = question_index as usize;
-                    if j < n {
-                        if let Some(ref_ans) = answers[qi_ref]
-                            && answers[j].is_none()
-                            && !is_elim(eliminated, j, ref_ans.idx())
-                        {
-                            push(
-                                DeduceRule::SameAsWhichReverse,
-                                DeduceAction::Force {
-                                    qi: j,
-                                    answer: ref_ans,
-                                },
-                            );
-                        }
-                        if let Some(j_ans) = answers[j]
-                            && answers[qi_ref].is_none()
-                            && !is_elim(eliminated, qi_ref, j_ans.idx())
-                        {
-                            push(
-                                DeduceRule::SameAsWhichReverse,
-                                DeduceAction::Force {
-                                    qi: qi_ref,
-                                    answer: j_ans,
-                                },
-                            );
-                        }
-                    }
-                }
-            }
-
-            QuestionType::LetterDist { question_index } => {
-                let target_qi = question_index as usize;
-                if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
+                if let Some(a) = ans {
+                    // Reverse: qi answered with an index → force that target qi to qi's letter.
                     let s = fp.options[qi][a.idx()];
-                    if !s.is_unused() {
-                        // NONE distance is unsatisfiable: every non-eliminated option
-                        // ends up in elim_mask (the `actual == s.value()` check is
-                        // skipped when the source's distance value is null).
-                        let mut elim_mask = 0u8;
-                        let mut valid_count = 0u8;
-                        let mut valid_oi = 0usize;
-                        for oi in 0..5usize {
-                            if is_elim(eliminated, target_qi, oi) {
-                                continue;
-                            }
-                            let actual = (oi as u8).abs_diff(a as u8);
-                            if s.is_num() && actual == s.value() {
-                                valid_count += 1;
-                                valid_oi = oi;
-                            } else {
-                                elim_mask |= 1 << oi;
-                            }
-                        }
-                        if valid_count == 1 && elim_mask != 0 {
+                    if s.is_num() {
+                        let target_qi = usize::from(s.value());
+                        if target_qi < n && answers[target_qi].is_none() {
+                            let rule = match *t {
+                                QuestionType::SameAs => DeduceRule::SameAsReverse,
+                                _ => DeduceRule::PrevNextOnlySameReverse,
+                            };
                             push(
-                                DeduceRule::LetterDistReverseForce,
+                                rule,
                                 DeduceAction::Force {
                                     qi: target_qi,
-                                    answer: Answer::from(valid_oi as u8),
+                                    answer: a,
                                 },
                             );
                         }
-                        if elim_mask != 0 && valid_count != 1 {
+                    }
+
+                    // OnlySame/SameAs None forward: an answered None means qi's
+                    // answer is unique, so no other question can have that letter.
+                    // Sound, ungated.
+                    if full && fp.options[qi][a.idx()].is_none() {
+                        for j in 0..n {
+                            if j == qi {
+                                continue;
+                            }
+                            if answers[j].is_none() && !is_elim(eliminated, j, a.idx()) {
+                                push(
+                                    DeduceRule::OnlySameNoneForward,
+                                    DeduceAction::Eliminate { qi: j, oi: a.idx() },
+                                );
+                            }
+                        }
+                    }
+
+                    // SameAs negative (SameAs only): non-selected option targets
+                    // cannot share qi's answer. Uniqueness-assuming.
+                    if assume_unique && matches!(*t, QuestionType::SameAs) {
+                        let ai = a.idx();
+                        let selected_s = fp.options[qi][ai];
+                        // The "none" answer's sound inference is handled above; this
+                        // rule is for the index case.
+                        if selected_s.is_num() {
+                            let selected = selected_s.value();
+                            let mut q_mask = 0u16;
+                            for oi in 0..fp.option_count {
+                                if oi == ai {
+                                    continue;
+                                }
+                                let ts = fp.options[qi][oi];
+                                if !ts.is_num() {
+                                    continue;
+                                }
+                                let target = usize::from(ts.value());
+                                if target >= n || target == qi {
+                                    continue;
+                                }
+                                if ts.value() != selected
+                                    && answers[target].is_none()
+                                    && !is_elim(eliminated, target, ai)
+                                {
+                                    q_mask |= 1 << target;
+                                }
+                            }
+                            if q_mask != 0 {
+                                push(
+                                    DeduceRule::SameAsNegative,
+                                    DeduceAction::EliminateMulti {
+                                        question_mask: q_mask,
+                                        option_mask: 1 << ai,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            QuestionType::PrevSame | QuestionType::NextSame => {
+                if let Some(a) = ans {
+                    let s = fp.options[qi][a.idx()];
+                    if s.is_num() {
+                        let target_qi = usize::from(s.value());
+                        if target_qi < n && answers[target_qi].is_none() {
                             push(
-                                DeduceRule::LetterDistReverseElim,
-                                DeduceAction::EliminateMulti {
-                                    question_mask: 1 << target_qi,
-                                    option_mask: elim_mask,
+                                DeduceRule::PrevNextOnlySameReverse,
+                                DeduceAction::Force {
+                                    qi: target_qi,
+                                    answer: a,
                                 },
                             );
                         }
                     }
                 }
             }
-
+            QuestionType::SameAsWhich { question_index } if full => {
+                if let Some(a) = ans {
+                    let s = fp.options[qi][a.idx()];
+                    if s.is_num() {
+                        let j = usize::from(s.value());
+                        let qi_ref = question_index as usize;
+                        if j < n {
+                            if let Some(ref_ans) = answers[qi_ref]
+                                && answers[j].is_none()
+                                && !is_elim(eliminated, j, ref_ans.idx())
+                            {
+                                push(
+                                    DeduceRule::SameAsWhichReverse,
+                                    DeduceAction::Force {
+                                        qi: j,
+                                        answer: ref_ans,
+                                    },
+                                );
+                            }
+                            if let Some(j_ans) = answers[j]
+                                && answers[qi_ref].is_none()
+                                && !is_elim(eliminated, qi_ref, j_ans.idx())
+                            {
+                                push(
+                                    DeduceRule::SameAsWhichReverse,
+                                    DeduceAction::Force {
+                                        qi: qi_ref,
+                                        answer: j_ans,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            QuestionType::LetterDist { question_index } => {
+                if let Some(a) = ans {
+                    let target_qi = question_index as usize;
+                    if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
+                        let s = fp.options[qi][a.idx()];
+                        if !s.is_unused() {
+                            // NONE distance is unsatisfiable: every non-eliminated option
+                            // ends up in elim_mask (the `actual == s.value()` check is
+                            // skipped when the source's distance value is null).
+                            let mut elim_mask = 0u8;
+                            let mut valid_count = 0u8;
+                            let mut valid_oi = 0usize;
+                            for oi in 0..5usize {
+                                if is_elim(eliminated, target_qi, oi) {
+                                    continue;
+                                }
+                                let actual = (oi as u8).abs_diff(a as u8);
+                                if s.is_num() && actual == s.value() {
+                                    valid_count += 1;
+                                    valid_oi = oi;
+                                } else {
+                                    elim_mask |= 1 << oi;
+                                }
+                            }
+                            if valid_count == 1 && elim_mask != 0 {
+                                push(
+                                    DeduceRule::LetterDistReverseForce,
+                                    DeduceAction::Force {
+                                        qi: target_qi,
+                                        answer: Answer::from(valid_oi as u8),
+                                    },
+                                );
+                            }
+                            if elim_mask != 0 && valid_count != 1 {
+                                push(
+                                    DeduceRule::LetterDistReverseElim,
+                                    DeduceAction::EliminateMulti {
+                                        question_mask: 1 << target_qi,
+                                        option_mask: elim_mask,
+                                    },
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             QuestionType::ConsecIdent if full => {
-                let s = fp.options[qi][a.idx()];
-                if s.is_num() && usize::from(s.value()) + 1 < n {
-                    let p = usize::from(s.value());
-                    let poss_a = !eliminated[p] & 0b11111u8;
-                    let poss_b = !eliminated[p + 1] & 0b11111u8;
+                if let Some(a) = ans {
+                    let s = fp.options[qi][a.idx()];
+                    if s.is_num() && usize::from(s.value()) + 1 < n {
+                        let p = usize::from(s.value());
+                        let poss_a = !eliminated[p] & 0b11111u8;
+                        let poss_b = !eliminated[p + 1] & 0b11111u8;
 
-                    {
                         if answers[p].is_some() && answers[p + 1].is_none() {
                             let letter = answers[p].unwrap();
                             if !is_elim(eliminated, p + 1, letter.idx()) {
@@ -1786,9 +1774,7 @@ fn deduce_impl(
                                 );
                             }
                         }
-                    }
 
-                    {
                         for oi in 0..5usize {
                             if answers[p].is_none()
                                 && !is_elim(eliminated, p, oi)
@@ -1809,32 +1795,43 @@ fn deduce_impl(
                                 );
                             }
                         }
-                    }
 
-                    if answers[p].is_none() && answers[p + 1].is_none() {
-                        let common = poss_a & poss_b;
-                        if common.count_ones() == 1 {
-                            let oi = common.trailing_zeros() as usize;
-                            push(
-                                DeduceRule::ConsecIdentForwardBothForce,
-                                DeduceAction::Force {
-                                    qi: p,
-                                    answer: Answer::from(oi as u8),
-                                },
-                            );
-                            push(
-                                DeduceRule::ConsecIdentForwardBothForce,
-                                DeduceAction::Force {
-                                    qi: p + 1,
-                                    answer: Answer::from(oi as u8),
-                                },
-                            );
+                        if answers[p].is_none() && answers[p + 1].is_none() {
+                            let common = poss_a & poss_b;
+                            if common.count_ones() == 1 {
+                                let oi = common.trailing_zeros() as usize;
+                                push(
+                                    DeduceRule::ConsecIdentForwardBothForce,
+                                    DeduceAction::Force {
+                                        qi: p,
+                                        answer: Answer::from(oi as u8),
+                                    },
+                                );
+                                push(
+                                    DeduceRule::ConsecIdentForwardBothForce,
+                                    DeduceAction::Force {
+                                        qi: p + 1,
+                                        answer: Answer::from(oi as u8),
+                                    },
+                                );
+                            }
                         }
                     }
                 }
             }
-
             _ => {}
+        }
+
+        // OnlyOptionLeft is type-agnostic — fires when only one option remains.
+        if ans.is_none() && remaining_count(eliminated[qi]) == 1 {
+            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
+            push(
+                DeduceRule::OnlyOptionLeft,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
         }
     }
 
