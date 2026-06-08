@@ -445,7 +445,7 @@ fn main() {
         tasks.len()
     );
     eprintln!(
-        "  Time:    {:.1}s ({:.2}ms per day)",
+        "  Time:    {:.2}s ({:.3}ms per day)",
         elapsed.as_secs_f64(),
         elapsed.as_secs_f64() * 1000.0 / day_count as f64
     );
