@@ -849,6 +849,36 @@ function explainMultiElim(
       }
     }
   }
+  if (rule === "CountSaturated" || rule === "CountMustMatchElim") {
+    // Find first sample option in mask to pass to explainCountSaturation.
+    let sampleOi = 0;
+    for (let b = 0; b < 5; b++) {
+      if ((_optionMask >> b) & 1) {
+        sampleOi = b;
+        break;
+      }
+    }
+    const sat = explainCountSaturation(fp, answers, _eliminated, qi, sampleOi);
+    if (sat) return { text: sat.text, otherQi: sat.srcQi };
+  }
+  if (rule === "CountExceeded" || rule === "CountImpossible") {
+    const q = fp.questions[qi];
+    const pred = countPred(q);
+    if (pred) {
+      const [from, to] = countRange(q, n);
+      const cr = countAnswers(answers, _eliminated, pred, from, to);
+      if (rule === "CountExceeded") {
+        return {
+          text: `${Q(qi)} claims a count below what's already found (${cr.count} ${countRuleLabel(q, cr.count)}).`,
+          otherQi: null,
+        };
+      }
+      return {
+        text: `${Q(qi)} claims a count above what's possible (at most ${cr.count + cr.remaining} ${countRuleLabel(q, cr.count + cr.remaining)}).`,
+        otherQi: null,
+      };
+    }
+  }
   throw new Error(`No explainMultiElim handler for rule ${rule} at ${Q(qi)}`);
 }
 

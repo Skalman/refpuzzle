@@ -326,13 +326,15 @@ fn apply_count(
                     if remaining_bits & (!mask & 0b11111u8) == 0 {
                         continue;
                     }
-                    for oi in 0..5usize {
-                        if !is_elim(eliminated, j, oi) && mask_contains(mask, oi) {
-                            push(
-                                DeduceRule::CountSaturated,
-                                DeduceAction::Eliminate { qi: j, oi },
-                            );
-                        }
+                    let option_mask = remaining_bits & mask;
+                    if option_mask != 0 {
+                        push(
+                            DeduceRule::CountSaturated,
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << j,
+                                option_mask,
+                            },
+                        );
                     }
                 }
             }
@@ -360,13 +362,15 @@ fn apply_count(
 
             for j in from..to {
                 if answers[j].is_none() && eliminated[j] & mask != mask {
-                    for oi in 0..5usize {
-                        if !is_elim(eliminated, j, oi) && !mask_contains(mask, oi) {
-                            push(
-                                DeduceRule::CountMustMatchElim,
-                                DeduceAction::Eliminate { qi: j, oi },
-                            );
-                        }
+                    let option_mask = !eliminated[j] & !mask & 0b11111u8;
+                    if option_mask != 0 {
+                        push(
+                            DeduceRule::CountMustMatchElim,
+                            DeduceAction::EliminateMulti {
+                                question_mask: 1 << j,
+                                option_mask,
+                            },
+                        );
                     }
                 }
             }
@@ -388,6 +392,8 @@ fn apply_count(
             }
         }
 
+        let mut exceeded_mask = 0u8;
+        let mut impossible_mask = 0u8;
         for oi in 0..5usize {
             if is_elim(eliminated, qi, oi) {
                 continue;
@@ -397,26 +403,34 @@ fn apply_count(
                 // NONE/UNUSED on a count option is meaningless: any
                 // claim that count == null is impossible.
                 if s.is_none() {
-                    push(
-                        DeduceRule::CountExceeded,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
+                    exceeded_mask |= 1 << oi;
                 }
                 continue;
             }
             let on = s.value();
             if cr.min() > on {
-                push(
-                    DeduceRule::CountExceeded,
-                    DeduceAction::Eliminate { qi, oi },
-                );
+                exceeded_mask |= 1 << oi;
+            } else if cr.max() < on {
+                impossible_mask |= 1 << oi;
             }
-            if cr.max() < on {
-                push(
-                    DeduceRule::CountImpossible,
-                    DeduceAction::Eliminate { qi, oi },
-                );
-            }
+        }
+        if exceeded_mask != 0 {
+            push(
+                DeduceRule::CountExceeded,
+                DeduceAction::EliminateMulti {
+                    question_mask: 1 << qi,
+                    option_mask: exceeded_mask,
+                },
+            );
+        }
+        if impossible_mask != 0 {
+            push(
+                DeduceRule::CountImpossible,
+                DeduceAction::EliminateMulti {
+                    question_mask: 1 << qi,
+                    option_mask: impossible_mask,
+                },
+            );
         }
     }
 }

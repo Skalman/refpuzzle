@@ -264,10 +264,13 @@ function applyCount(
         if (answers[j] != null) continue;
         const remBits = ~eliminated[j] & 0b11111;
         if ((remBits & (~mask & 0b11111)) === 0) continue;
-        for (let oi = 0; oi < 5; oi++) {
-          if (!isElim(eliminated, j, oi) && maskContains(mask, oi)) {
-            push("CountSaturated", { type: "eliminate", qi: j, oi });
-          }
+        const optionMask = remBits & mask;
+        if (optionMask !== 0) {
+          push("CountSaturated", {
+            type: "eliminateMulti",
+            questionMask: 1 << j,
+            optionMask,
+          });
         }
       }
     }
@@ -287,10 +290,13 @@ function applyCount(
       for (let j = from; j < to; j++) {
         if (answers[j] != null) continue;
         if ((eliminated[j] & mask) === mask) continue;
-        for (let oi = 0; oi < 5; oi++) {
-          if (!isElim(eliminated, j, oi) && !maskContains(mask, oi)) {
-            push("CountMustMatchElim", { type: "eliminate", qi: j, oi });
-          }
+        const optionMask = ~eliminated[j] & ~mask & 0b11111;
+        if (optionMask !== 0) {
+          push("CountMustMatchElim", {
+            type: "eliminateMulti",
+            questionMask: 1 << j,
+            optionMask,
+          });
         }
       }
     }
@@ -308,21 +314,36 @@ function applyCount(
       }
     }
 
+    let exceededMask = 0;
+    let impossibleMask = 0;
     for (let oi = 0; oi < 5; oi++) {
       if (isElim(eliminated, qi, oi)) continue;
       const sv = fp.optionValues[qi][oi];
       if (sv == null) {
         // NONE on a count option is meaningless: any claim that count == null
         // is impossible.
-        push("CountExceeded", { type: "eliminate", qi, oi });
+        exceededMask |= 1 << oi;
         continue;
       }
       if (crMin(cr) > sv) {
-        push("CountExceeded", { type: "eliminate", qi, oi });
+        exceededMask |= 1 << oi;
+      } else if (crMax(cr) < sv) {
+        impossibleMask |= 1 << oi;
       }
-      if (crMax(cr) < sv) {
-        push("CountImpossible", { type: "eliminate", qi, oi });
-      }
+    }
+    if (exceededMask !== 0) {
+      push("CountExceeded", {
+        type: "eliminateMulti",
+        questionMask: 1 << qi,
+        optionMask: exceededMask,
+      });
+    }
+    if (impossibleMask !== 0) {
+      push("CountImpossible", {
+        type: "eliminateMulti",
+        questionMask: 1 << qi,
+        optionMask: impossibleMask,
+      });
     }
   }
 }

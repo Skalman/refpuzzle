@@ -30,7 +30,7 @@
         ]
       },
       "state": ["C", "A", "", ""],
-      "expect": "3a"
+      "expect": "qm100o00001"
     },
     {
       "name": "Count + remaining = value: eliminate non-matches",
@@ -59,7 +59,7 @@
         ]
       },
       "state": ["D", "B", "", ""],
-      "expect": "3b"
+      "expect": "qm100o11110"
     },
     {
       "name": "Count saturation: vowel count met",
@@ -87,7 +87,7 @@
         ]
       },
       "state": ["C", "A", "", ""],
-      "expect": "3a"
+      "expect": "qm100o10001"
     },
     {
       "section": "=== Forced values ==="
@@ -359,7 +359,7 @@
         ]
       },
       "state": ["", "A", "B", "B"],
-      "expect": "1a"
+      "expect": "qm1o00011"
     },
     {
       "name": "MostCommonCount: value below current max → eliminate",
@@ -1202,7 +1202,7 @@
         ]
       },
       "state": ["", "B", "B", "B"],
-      "expect": "1a"
+      "expect": "qm1o00111"
     },
     {
       "name": "CountVowel elim: vowel count impossible",
@@ -1230,7 +1230,7 @@
         ]
       },
       "state": ["", "B", "B", "B"],
-      "expect": "1a"
+      "expect": "qm1o00111"
     },
     {
       "name": "CountConsonant elim: consonant count impossible",
@@ -1258,7 +1258,7 @@
         ]
       },
       "state": ["", "A", "A", "A"],
-      "expect": "1a"
+      "expect": "qm1o00111"
     },
     {
       "name": "ClosestBefore: answer eliminated from target → eliminate",
@@ -2090,7 +2090,7 @@
         ]
       },
       "state": ["A", "", "B", ""],
-      "expect": "2a"
+      "expect": "qm10o00001"
     },
     {
       "name": "Count saturation: consonant count met",
@@ -2118,7 +2118,7 @@
         ]
       },
       "state": ["C", "A", "", ""],
-      "expect": "3b"
+      "expect": "qm100o01110"
     },
     {
       "section": "=== Forced values: additional ==="
@@ -2233,7 +2233,7 @@
         ]
       },
       "state": ["B", "B", "A", ""],
-      "expect": "4a"
+      "expect": "qm1000o00001"
     },
     {
       "name": "Count sat: no saturation when count between 0 and value",
@@ -2291,7 +2291,7 @@
         ]
       },
       "state": ["C", "A", "a", ""],
-      "expect": "4a"
+      "expect": "qm1000o00001"
     },
     {
       "section": "=== Forced values: more coverage ==="
@@ -2464,7 +2464,7 @@
         ]
       },
       "state": ["B", "", "C", "D"],
-      "expect": "2a"
+      "expect": "qm10o00111"
     },
     {
       "name": "Counting elim: count_answer_after option impossible",
@@ -2494,7 +2494,7 @@
         ]
       },
       "state": ["D", "", "B", "B"],
-      "expect": "2a"
+      "expect": "qm10o01111"
     },
     {
       "name": "Counting elim: all option values reachable → no elimination",
@@ -3382,7 +3382,7 @@
         ]
       },
       "state": ["", "A", "A", ""],
-      "expect": "1a"
+      "expect": "qm1o00011"
     },
     {
       "name": "PrevNextOnlySameReverse: PrevSame answered, forces target question",
@@ -4059,7 +4059,7 @@
         ]
       },
       "state": ["C", "A", "", ""],
-      "expect": "3a"
+      "expect": "qm100o00001"
     },
     {
       "section": "=== PrevSameNoneMatch ==="

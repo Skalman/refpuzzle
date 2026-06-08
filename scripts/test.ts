@@ -355,8 +355,10 @@ function testHints() {
     const dr = deduceAssumingUnique(fp, { answers, eliminated });
     assert(dr.length > 0, "elimination: deduce returns a result");
     assert(
-      dr[0].action.type === "eliminate" || dr[0].action.type === "force",
-      `elimination: action is eliminate or force (got ${dr[0].action.type})`,
+      dr[0].action.type === "eliminate" ||
+        dr[0].action.type === "force" ||
+        dr[0].action.type === "eliminateMulti",
+      `elimination: action is eliminate/eliminateMulti or force (got ${dr[0].action.type})`,
     );
   }
 
