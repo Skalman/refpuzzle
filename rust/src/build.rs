@@ -207,10 +207,11 @@ fn run_hint_engine_from(
                         question_mask,
                         option_mask,
                     } => {
-                        for i in 0..MAX_N {
-                            if (question_mask >> i) & 1 == 1 {
-                                state.eliminated[i] |= option_mask;
-                            }
+                        let mut qm = question_mask;
+                        while qm != 0 {
+                            let i = qm.trailing_zeros() as usize;
+                            qm &= qm - 1;
+                            state.eliminated[i] |= option_mask;
                         }
                     }
                 }

@@ -118,9 +118,11 @@ fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
             question_mask,
             option_mask,
         } => {
-            for i in 0..MAX_N {
-                if (question_mask >> i) & 1 == 1
-                    && let Some(a) = hyp.answers[i]
+            let mut qm = question_mask;
+            while qm != 0 {
+                let i = qm.trailing_zeros() as usize;
+                qm &= qm - 1;
+                if let Some(a) = hyp.answers[i]
                     && (option_mask >> a.idx()) & 1 == 1
                 {
                     return true;
@@ -144,10 +146,11 @@ fn apply_action(action: &DeduceAction, hyp: &mut State) {
             question_mask,
             option_mask,
         } => {
-            for i in 0..MAX_N {
-                if (question_mask >> i) & 1 == 1 {
-                    hyp.eliminated[i] |= option_mask;
-                }
+            let mut qm = question_mask;
+            while qm != 0 {
+                let i = qm.trailing_zeros() as usize;
+                qm &= qm - 1;
+                hyp.eliminated[i] |= option_mask;
             }
         }
     }
