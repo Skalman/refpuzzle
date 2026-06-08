@@ -79,8 +79,27 @@ impl Stats {
     }
 }
 
-fn us(t: std::time::Instant) -> u64 {
+#[cfg(not(target_arch = "wasm32"))]
+type WasmInstant = std::time::Instant;
+#[cfg(not(target_arch = "wasm32"))]
+fn wasm_now() -> WasmInstant {
+    std::time::Instant::now()
+}
+#[cfg(not(target_arch = "wasm32"))]
+fn us(t: WasmInstant) -> u64 {
     t.elapsed().as_micros() as u64
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Copy, Clone)]
+struct WasmInstant;
+#[cfg(target_arch = "wasm32")]
+fn wasm_now() -> WasmInstant {
+    WasmInstant
+}
+#[cfg(target_arch = "wasm32")]
+fn us(_t: WasmInstant) -> u64 {
+    0
 }
 
 pub struct GenerateResult {
@@ -224,7 +243,7 @@ fn run_hint_engine_from(
         }
 
         stats.lookahead_calls += 1;
-        let t_la = std::time::Instant::now();
+        let t_la = wasm_now();
         let lr = lookahead(fp, &state, 6, false);
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
@@ -540,7 +559,7 @@ pub fn validate_and_repair(
     if trace {
         eprintln!("{}", json!({"t": "solve", "label": "initial"}));
     }
-    let t0 = std::time::Instant::now();
+    let t0 = wasm_now();
     let (ok, stuck_state) = run_hint_engine(fp, stats, trace);
     stats.hint_us += us(t0);
     if trace {
@@ -551,7 +570,7 @@ pub fn validate_and_repair(
         );
     }
     if ok {
-        let t0 = std::time::Instant::now();
+        let t0 = wasm_now();
         let solutions = solve(fp, None, 2);
         stats.solve_us += us(t0);
         if trace {
@@ -565,7 +584,7 @@ pub fn validate_and_repair(
     }
 
     // Step 3: Repair — tweak distractors and retry
-    let repair_t0 = std::time::Instant::now();
+    let repair_t0 = wasm_now();
     let solved_before = (0..n).filter(|&i| stuck_state.answers[i].is_some()).count();
     stats.fail_solve += 1;
     if solved_before == 0 {
@@ -601,7 +620,7 @@ pub fn validate_and_repair(
         if trace {
             eprintln!("{}", json!({"t": "solve", "label": "after_repair"}));
         }
-        let t0 = std::time::Instant::now();
+        let t0 = wasm_now();
         let (ok, _) = if solved_before == 0 {
             run_hint_engine(fp, stats, trace)
         } else {
@@ -630,7 +649,7 @@ pub fn validate_and_repair(
     if trace {
         eprintln!("{}", json!({"t": "solve", "label": "final"}));
     }
-    let t0 = std::time::Instant::now();
+    let t0 = wasm_now();
     let (ok, _) = run_hint_engine(fp, stats, trace);
     stats.hint_us += us(t0);
     if !ok {
@@ -641,7 +660,7 @@ pub fn validate_and_repair(
     validate_option_values(fp);
 
     // Step 4: After repair, verify uniqueness
-    let t0 = std::time::Instant::now();
+    let t0 = wasm_now();
     let solutions = solve(fp, None, 2);
     stats.solve_us += us(t0);
     stats.repair_us += us(t0);
