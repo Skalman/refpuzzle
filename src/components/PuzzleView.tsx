@@ -299,6 +299,7 @@ export function PuzzleView({
     pushHintMarker,
     completed,
     questions,
+    handleRef,
   });
 
   function applyChange(next: QuestionState[]) {

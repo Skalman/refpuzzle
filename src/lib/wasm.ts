@@ -4,6 +4,8 @@ import init, {
 } from "../../rust/pkg/refpuzzle.js";
 import type { Puzzle, QuestionType, Marks, Answer } from "../engine/types.ts";
 import { L2I } from "../engine/types.ts";
+import type { DeduceResult } from "../engine/deduce.ts";
+import type { LookaheadResult } from "../engine/lookahead.ts";
 import type { Validity } from "../engine/state.ts";
 import {
   V_NEUTRAL,
@@ -108,7 +110,16 @@ const handleRegistry = new FinalizationRegistry<WasmPuzzle>((wasm) => wasm.free(
 
 export interface PuzzleHandle {
   checkAllAnswers(marks: Marks[], optionCount: number): Validity[];
+  solve(): (Answer | null)[];
+  deduce(marks: Marks[], optionCount: number): DeduceResult[];
+  lookaheadShortest(marks: Marks[], optionCount: number): LookaheadResult | null;
   free(): void;
+}
+
+function answerIndicesFromMarks(marks: Marks[], optionCount: number) {
+  const { answers, eliminated } = deriveState(marks, optionCount);
+  // Rust's Answer enum serializes as u8 (A=0..E=4); convert before sending.
+  return { answers: answers.map((a) => (a === null ? null : L2I[a])), eliminated };
 }
 
 export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
@@ -116,13 +127,25 @@ export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
   const wasm = new WasmPuzzle(json);
   const wrapper: PuzzleHandle = {
     checkAllAnswers(marks, optionCount) {
-      const { answers, eliminated } = deriveState(marks, optionCount);
-      // Rust's Answer enum serializes as u8 (A=0..E=4); convert before sending.
-      const answerIndices = answers.map((a) => (a === null ? null : L2I[a]));
-      const out = wasm.checkAllAnswers({ answers: answerIndices, eliminated });
+      const state = answerIndicesFromMarks(marks, optionCount);
+      const out = wasm.checkAllAnswers(state);
       const result: Validity[] = new Array(out.length);
       for (let i = 0; i < out.length; i++) result[i] = validityFromU8(out[i]);
       return result;
+    },
+    solve() {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return wasm.solve() as (Answer | null)[];
+    },
+    deduce(marks, optionCount) {
+      const state = answerIndicesFromMarks(marks, optionCount);
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return wasm.deduce(state) as DeduceResult[];
+    },
+    lookaheadShortest(marks, optionCount) {
+      const state = answerIndicesFromMarks(marks, optionCount);
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return wasm.lookaheadShortest(state) as LookaheadResult | null;
     },
     free() {
       handleRegistry.unregister(wrapper);
