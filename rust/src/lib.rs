@@ -19,6 +19,13 @@ pub mod solve_brute;
 pub mod solve_deduce;
 pub mod types;
 
+// Smaller allocator (~1–2 KB vs dlmalloc's ~10 KB) for the wasm bundle.
+// AssumeSingleThreaded is sound because wasm32-unknown-unknown has no threads.
+#[cfg(target_arch = "wasm32")]
+#[global_allocator]
+static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> =
+    unsafe { lol_alloc::AssumeSingleThreaded::new(lol_alloc::FreeListAllocator::new()) };
+
 #[cfg(target_arch = "wasm32")]
 mod wasm_api {
     use crate::build;
