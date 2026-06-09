@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import type { Marks, Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
-import { checkAnswer } from "../engine/check-answer.ts";
-import { deriveState } from "../engine/state.ts";
+import { V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { collectTutorialSteps } from "../engine/tutorial.ts";
 import type { TutorialStep } from "../engine/tutorial.ts";
 import { cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { HighlightInfo } from "./TutorialHighlight.ts";
+import type { PuzzleHandle } from "../lib/wasm.ts";
 
 interface UseTutorialOpts {
   level: number;
@@ -22,6 +22,7 @@ interface UseTutorialOpts {
   autoStartTutorial?: boolean;
   onTutorialConsumed?: () => void;
   onStartTutorial?: () => void;
+  handleRef: { current: PuzzleHandle | null };
 }
 
 export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
@@ -52,14 +53,14 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
 
   function updatePuzzleState(qs: QuestionState[]) {
     optsRef.current.setQuestions(qs);
-    const fp = getFlatPuzzle(puzzle);
-    const { answers, eliminated } = deriveState(
-      qs.map((q) => q.marks),
-      puzzle.optionCount,
-    );
-    optsRef.current.setValidity(
-      answers.map((_a, qi) => checkAnswer(fp, { answers, eliminated }, qi)),
-    );
+    const handle = optsRef.current.handleRef.current;
+    const validity: Validity[] = handle
+      ? handle.checkAllAnswers(
+          qs.map((q) => q.marks),
+          puzzle.optionCount ?? 5,
+        )
+      : new Array(qs.length).fill(V_NEUTRAL);
+    optsRef.current.setValidity(validity);
   }
 
   function applyStep(step: TutorialStep) {

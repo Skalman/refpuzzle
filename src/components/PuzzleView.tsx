@@ -279,6 +279,7 @@ export function PuzzleView({
     autoStartTutorial,
     onTutorialConsumed,
     onStartTutorial,
+    handleRef,
   });
 
   useEffect(() => {
