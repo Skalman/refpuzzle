@@ -4,8 +4,7 @@ import init, {
 } from "../../rust/pkg/refpuzzle.js";
 import type { Puzzle, QuestionType, Marks, Answer } from "../engine/types.ts";
 import { L2I } from "../engine/types.ts";
-import type { DeduceResult } from "../engine/deduce.ts";
-import type { LookaheadResult } from "../engine/lookahead.ts";
+import type { DeduceResult, LookaheadResult } from "../engine/hint-types.ts";
 import type { Validity } from "../engine/state.ts";
 import {
   V_NEUTRAL,
@@ -112,6 +111,9 @@ export interface PuzzleHandle {
   checkAllAnswers(marks: Marks[], optionCount: number): Validity[];
   solve(): (Answer | null)[];
   deduce(marks: Marks[], optionCount: number): DeduceResult[];
+  /** Like {@link deduce} but takes the derived state directly. Used by
+   *  the tutorial which walks the puzzle synthetically. */
+  deduceWithState(answers: (Answer | null)[], eliminated: number[]): DeduceResult[];
   lookaheadShortest(marks: Marks[], optionCount: number): LookaheadResult | null;
   free(): void;
 }
@@ -141,6 +143,11 @@ export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
       const state = answerIndicesFromMarks(marks, optionCount);
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return wasm.deduce(state) as DeduceResult[];
+    },
+    deduceWithState(answers, eliminated) {
+      const answerIndices = answers.map((a) => (a === null ? null : L2I[a]));
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return wasm.deduce({ answers: answerIndices, eliminated }) as DeduceResult[];
     },
     lookaheadShortest(marks, optionCount) {
       const state = answerIndicesFromMarks(marks, optionCount);

@@ -1,9 +1,9 @@
 import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import { deduceAssumingUnique, sortDeduceResults } from "./deduce.ts";
-import type { DeduceResult } from "./deduce.ts";
+import type { DeduceResult } from "./hint-types.ts";
 import { explainDeduce } from "./explain.ts";
 import type { ExplainStep } from "./explain.ts";
+import type { PuzzleHandle } from "../lib/wasm.ts";
 
 export type TutorialStep =
   | {
@@ -27,7 +27,11 @@ export type TutorialStep =
       isForce: boolean;
     };
 
-export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialStep[] {
+export function collectTutorialSteps(
+  puzzle: Puzzle,
+  fp: FlatPuzzle,
+  handle: PuzzleHandle,
+): TutorialStep[] {
   const n = fp.n;
   const oc = fp.optionCount;
   const phantomMask = 0b11111 & ~((1 << oc) - 1);
@@ -76,9 +80,10 @@ export function collectTutorialSteps(puzzle: Puzzle, fp: FlatPuzzle): TutorialSt
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.every((a) => a != null)) break;
 
-    const drs = deduceAssumingUnique(fp, { answers, eliminated });
+    // wasm `deduce` already returns sorted (matches the TS engine's
+    // canonical rule order, see `Puzzle::deduce` in rust/src/lib.rs).
+    const drs = handle.deduceWithState(answers, eliminated);
     if (drs.length === 0) break;
-    sortDeduceResults(drs);
 
     const dr = drs[0];
     let explain: ExplainStep[];

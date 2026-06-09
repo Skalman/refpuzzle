@@ -9,6 +9,7 @@ import { cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { HighlightInfo } from "./TutorialHighlight.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
+import { wasmReady } from "../lib/wasm.ts";
 
 interface UseTutorialOpts {
   level: number;
@@ -37,9 +38,24 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
   });
   const [done, setDone] = useState(false);
   const [highlight, setHighlight] = useState<HighlightInfo | null>(null);
-  const [steps] = useState<TutorialStep[]>(() =>
-    isIntro ? collectTutorialSteps(puzzle, getFlatPuzzle(puzzle)) : [],
-  );
+  // Tutorial steps need wasm `deduce` to plan the scripted sequence; build
+  // them once wasm is ready. Intro puzzles are short — the welcome dialog
+  // gives wasm plenty of time to finish initializing before the user starts.
+  const [steps, setSteps] = useState<TutorialStep[]>([]);
+  useEffect(() => {
+    if (!isIntro) return undefined;
+    let cancelled = false;
+    void (async () => {
+      await wasmReady();
+      if (cancelled) return;
+      const handle = optsRef.current.handleRef.current;
+      if (!handle) return;
+      setSteps(collectTutorialSteps(puzzle, getFlatPuzzle(puzzle), handle));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [puzzle, isIntro]);
 
   const snapshotsRef = useRef<QuestionState[][]>([]);
   const preTutorialRef = useRef<{

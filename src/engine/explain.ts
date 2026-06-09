@@ -42,8 +42,7 @@ import {
   QT_SAME_AS_WHICH,
   claimAt,
 } from "./types.ts";
-import type { DeduceResult, DeduceRule } from "./deduce.ts";
-import type { LookaheadResult } from "./lookahead.ts";
+import type { DeduceResult, DeduceRule, LookaheadResult } from "./hint-types.ts";
 
 // ── Formatting helpers ──
 
