@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "wasm": "wasm-pack build rust/ --target web --release",
+    "wasm": "wasm-pack build rust/ --target web --profile release-wasm",
     "build": "pnpm wasm && pnpm lint && vite build",
     "preview": "vite preview",
     "lint": "oxlint --type-aware --type-check src/",

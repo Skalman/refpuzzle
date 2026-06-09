@@ -5,3 +5,13 @@ resolver = "3"
 [profile.release]
 lto = false
 codegen-units = 16
+panic = "abort"
+
+# Size-optimized profile for `pnpm wasm` (wasm-pack --profile release-wasm).
+# Native `release` stays fast-compile + opt=3 for the CLI generator.
+[profile.release-wasm]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+panic = "abort"

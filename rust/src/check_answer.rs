@@ -866,7 +866,9 @@ fn count_matches(value: OptionValue, count: usize) -> bool {
 /// Like `check_claim`, but assumes `answers` is fully populated; returns bool.
 /// Same caveat applies: this is a **semantic** check (does the claim hold given
 /// these answers?), not a wellformedness check.
-#[inline(always)]
+// Inlined on native for the generator's inner loop; outlined on wasm
+// where every duplicated body shows up in the download.
+#[cfg_attr(not(target_arch = "wasm32"), inline(always))]
 pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
     let n = answers.len();
     let value = claim.value;

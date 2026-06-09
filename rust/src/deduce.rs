@@ -1184,7 +1184,10 @@ pub fn deduce_with_rule_except(
     deduce_impl(fp, state, RuleFilter::Except(exclude), true, true)
 }
 
-#[inline(always)]
+// Inlining specializes per caller — the bool/RuleFilter args become
+// constants and large match arms get DCE'd. Native generator benefits;
+// wasm pays in size since each specialization is a full copy.
+#[cfg_attr(not(target_arch = "wasm32"), inline(always))]
 fn deduce_impl(
     fp: &FlatPuzzle,
     state: &State,
