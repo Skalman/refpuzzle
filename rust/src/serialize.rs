@@ -1,6 +1,53 @@
-use serde_json::Value;
+use serde_json::{Value, json};
 
 use crate::types::*;
+
+/// Inverse of `parse_puzzle`: serialize an in-memory `FlatPuzzle` (plus its
+/// original `question_types` slice) back to the compact `{q, o, t?}` JSON
+/// shape stored on disk and accepted by the parser.
+pub fn puzzle_to_compact_value(question_types: &[QuestionType; MAX_N], fp: &FlatPuzzle) -> Value {
+    let n = fp.n;
+    let oc = fp.option_count;
+    let mut obj = serde_json::Map::new();
+
+    let qs: Vec<Value> = (0..n)
+        .map(|qi| serde_json::to_value(question_types[qi]).unwrap())
+        .collect();
+    obj.insert("q".into(), json!(qs));
+
+    let opts: Vec<Value> = (0..n)
+        .map(|qi| option_row_json(&question_types[qi], qi, oc, fp))
+        .collect();
+    obj.insert("o".into(), json!(opts));
+
+    if let Some(types) = fp.true_stmt_question_types.as_ref() {
+        let arr: Vec<Value> = types
+            .iter()
+            .map(|qt| serde_json::to_value(qt).unwrap())
+            .collect();
+        obj.insert("t".into(), json!(arr));
+    }
+
+    Value::Object(obj)
+}
+
+fn option_row_json(qt: &QuestionType, qi: usize, oc: usize, fp: &FlatPuzzle) -> Value {
+    if qt.has_identity_options() {
+        let row: Vec<Value> = (0..oc).map(|oi| json!(oi)).collect();
+        return json!(row);
+    }
+    let row: Vec<Value> = (0..oc)
+        .map(|oi| {
+            let s = fp.options[qi][oi];
+            if !s.is_num() {
+                Value::Null
+            } else {
+                json!(s.value())
+            }
+        })
+        .collect();
+    json!(row)
+}
 
 pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     let qs = v.get("q")?.as_array()?;

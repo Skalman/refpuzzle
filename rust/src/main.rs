@@ -20,8 +20,9 @@ mod types;
 use build::GenerateResult;
 use difficulty::PROFILES;
 use rng::Rng;
-use serde_json::{Value, json};
+use serde_json::Value;
 use std::time::Instant;
+#[cfg(test)]
 use types::*;
 
 struct DateRange {
@@ -509,48 +510,8 @@ fn format_year(year: &serde_json::Map<String, Value>) -> String {
     out
 }
 
-fn option_row_json(qt: &QuestionType, qi: usize, oc: usize, fp: &FlatPuzzle) -> Value {
-    // Identity-option types persist their letter indices verbatim (the parser
-    // would rebuild them anyway, but emitting them explicitly keeps the wire
-    // shape stable across the SoA migration).
-    if qt.has_identity_options() {
-        let row: Vec<Value> = (0..oc).map(|oi| json!(oi)).collect();
-        return json!(row);
-    }
-    let row: Vec<Value> = (0..oc)
-        .map(|oi| {
-            let s = fp.options[qi][oi];
-            if !s.is_num() {
-                Value::Null
-            } else {
-                json!(s.value())
-            }
-        })
-        .collect();
-    json!(row)
-}
-
 fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
-    let n = result.n;
-    let oc = result.fp.option_count;
-    let mut obj = serde_json::Map::new();
-
-    let qs: Vec<Value> = (0..n)
-        .map(|qi| question_type_to_json(&result.question_types[qi]))
-        .collect();
-    obj.insert("q".into(), json!(qs));
-
-    let opts: Vec<Value> = (0..n)
-        .map(|qi| option_row_json(&result.question_types[qi], qi, oc, &result.fp))
-        .collect();
-    obj.insert("o".into(), json!(opts));
-
-    if let Some(types) = result.fp.true_stmt_question_types.as_ref() {
-        let arr: Vec<Value> = types.iter().map(question_type_to_json).collect();
-        obj.insert("t".into(), json!(arr));
-    }
-
-    Value::Object(obj)
+    serialize::puzzle_to_compact_value(&result.question_types, &result.fp)
 }
 
 fn dates_in_year(
@@ -590,10 +551,6 @@ fn dates_in_year(
         dd = 1;
     }
     result
-}
-
-fn question_type_to_json(qt: &QuestionType) -> Value {
-    serde_json::to_value(qt).unwrap()
 }
 
 #[cfg(test)]

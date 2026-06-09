@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
 import type { Marks, Puzzle } from "../engine/types.ts";
-import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
-import { checkAnswer } from "../engine/check-answer.ts";
-import { deriveState, isValid } from "../engine/state.ts";
+import { FRESH_MARKS } from "../engine/types.ts";
+import { isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
+import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts";
 import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl } from "../lib/share.ts";
@@ -99,14 +99,29 @@ export function PuzzleView({
     questionsRef.current = qs;
     setQuestionsRaw(qs);
   }
-  const [validity, setValidity] = useState<Validity[]>(() => {
-    const fp = getFlatPuzzle(puzzle);
-    const { answers, eliminated } = deriveState(
-      initState.questions.map((q) => q.marks),
-      puzzle.optionCount,
-    );
-    return answers.map((_a, qi) => checkAnswer(fp, { answers, eliminated }, qi));
-  });
+  const [validity, setValidity] = useState<Validity[]>(() =>
+    new Array(initState.questions.length).fill(V_NEUTRAL),
+  );
+  const handleRef = useRef<PuzzleHandle | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      await wasmReady();
+      if (cancelled) return;
+      const handle = createPuzzleHandle(puzzle);
+      handleRef.current = handle;
+      const initial = handle.checkAllAnswers(
+        questionsRef.current.map((q) => q.marks),
+        puzzle.optionCount ?? 5,
+      );
+      setValidity(initial);
+    })();
+    return () => {
+      cancelled = true;
+      handleRef.current?.free();
+      handleRef.current = null;
+    };
+  }, [puzzle]);
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
   const forceHistoryUpdate = useForceUpdate();
@@ -220,14 +235,13 @@ export function PuzzleView({
 
   const revalidate = useCallback(
     (qs: QuestionState[]) => {
-      const fp = getFlatPuzzle(puzzle);
-      const { answers, eliminated } = deriveState(
-        qs.map((q) => q.marks),
-        puzzle.optionCount,
-      );
-      const result: Validity[] = answers.map((_a, qi) =>
-        checkAnswer(fp, { answers, eliminated }, qi),
-      );
+      const handle = handleRef.current;
+      const result: Validity[] = handle
+        ? handle.checkAllAnswers(
+            qs.map((q) => q.marks),
+            puzzle.optionCount ?? 5,
+          )
+        : new Array(qs.length).fill(V_NEUTRAL);
       setValidity(result);
 
       const isCompleted = result.every(isValid);

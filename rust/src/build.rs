@@ -105,6 +105,7 @@ fn us(_t: WasmInstant) -> u64 {
 pub struct GenerateResult {
     pub question_types: [QuestionType; MAX_N],
     pub fp: FlatPuzzle,
+    #[allow(dead_code)]
     pub n: usize,
 }
 

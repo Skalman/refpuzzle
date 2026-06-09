@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import { preact } from "@preact/preset-vite";
+import wasm from "vite-plugin-wasm";
 import { brotliCompressSync, constants } from "node:zlib";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -45,7 +46,7 @@ function brotliPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [preact(), versionPlugin(), brotliPlugin()],
+  plugins: [preact(), wasm(), versionPlugin(), brotliPlugin()],
   build: {
     target: "es2018",
   },

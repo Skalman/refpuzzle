@@ -7,10 +7,9 @@ import {
   markStale,
   unmarkStale,
 } from "./store.ts";
-import { deriveState, isValid } from "../engine/state.ts";
-import { checkAnswer } from "../engine/check-answer.ts";
-import { flattenPuzzle } from "../engine/types.ts";
+import { isValid } from "../engine/state.ts";
 import { fetchDaily } from "../puzzles/daily.ts";
+import { wasmReady, createPuzzleHandle } from "./wasm.ts";
 
 const BATCH_SIZE = 20;
 
@@ -29,6 +28,7 @@ export function revalidateIfNeeded(): void {
 }
 
 async function processAll(ids: string[]): Promise<void> {
+  await wasmReady();
   for (let start = 0; start < ids.length; start += BATCH_SIZE) {
     // oxlint-disable-next-line no-await-in-loop
     await Promise.all(ids.slice(start, start + BATCH_SIZE).map(revalidateOne));
@@ -53,20 +53,14 @@ async function revalidateOne(puzzleId: string): Promise<void> {
     const state = loadState(puzzleId, n);
     if (!state || !state.completed) return;
 
-    const fp = flattenPuzzle(puzzle);
-    const { answers, eliminated } = deriveState(
+    const handle = createPuzzleHandle(puzzle);
+    const validities = handle.checkAllAnswers(
       state.questions.map((q) => q.marks),
-      puzzle.optionCount,
+      puzzle.optionCount ?? 5,
     );
+    handle.free();
 
-    let valid = true;
-    for (let qi = 0; qi < n; qi++) {
-      if (!isValid(checkAnswer(fp, { answers, eliminated }, qi))) {
-        valid = false;
-        break;
-      }
-    }
-
+    const valid = validities.every(isValid);
     if (valid && state.stale) unmarkStale(puzzleId);
     if (!valid && !state.stale) markStale(puzzleId);
   } catch {
