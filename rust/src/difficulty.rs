@@ -4,14 +4,51 @@ use crate::types::QuestionTypeKind::*;
 pub struct DifficultyProfile {
     pub question_count: usize,
     pub option_count: usize,
+
+    // ── Type budget: what may appear and how often ──
     pub allowed_types: &'static [QuestionTypeKind],
+    /// Per-type max occurrences (default 3 for anything not listed).
+    pub caps: &'static [(QuestionTypeKind, u8)],
+    /// Max CountAnswer questions sharing one answer letter, sampled per puzzle.
+    pub count_letter_cap: &'static [u8],
+    /// Cap on the vowel/consonant question group, sampled per puzzle.
+    pub vowel_consonant_cap: &'static [u8],
+
+    // ── Placement recipe: counts are sampled per puzzle (len-1 = fixed, no
+    //    draw; len>1 = uniform pick, byte-for-byte the original coin) ──
+    pub phase_1_n_counting: &'static [usize],
+    pub phase_2_n_answer_of: &'static [usize],
+    /// When true, lengthen the AnswerOf chain to 3 and suppress LetterDist
+    /// (a longer self-reference spine). Sampled; gated to LetterDist levels.
+    pub extra_chain: &'static [bool],
+    /// Attempts to place one PrevSame/NextSame at an edge slot (phase 3).
+    pub phase_3_n_adjacent_same: &'static [usize],
+    pub phase_4_n_positional: &'static [usize],
+    /// Rare types to try to include at least once (phase 5), in order.
+    pub phase_5_featured: &'static [QuestionTypeKind],
 }
+
+// Shared recipe values (identical across levels for now).
+const DEFAULT_CAPS: &[(QuestionTypeKind, u8)] = &[(LetterDist, 1), (AnswerOf, 2)];
+const COUNT_LETTER_CAP: &[u8] = &[2, 1, 1, 1]; // 25% chance of 2 (draw==0), else 1
+const ADJACENT_SAME: &[usize] = &[1, 0]; // 50% attempt one (draw==0), else none
+const NO_EXTRA_CHAIN: &[bool] = &[false];
+const EXTRA_CHAIN_25: &[bool] = &[true, false, false, false]; // 25% (draw==0)
 
 pub static PROFILES: [DifficultyProfile; 6] = [
     // Level 1: Intro
     DifficultyProfile {
         question_count: 3,
         option_count: 3,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1],
+        phase_1_n_counting: &[0, 1],
+        phase_2_n_answer_of: &[1, 0],
+        extra_chain: NO_EXTRA_CHAIN,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[0],
+        phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
             CountAnswerBefore,
@@ -33,11 +70,29 @@ pub static PROFILES: [DifficultyProfile; 6] = [
     DifficultyProfile {
         question_count: 4,
         option_count: 5,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1],
+        phase_1_n_counting: &[1],
+        phase_2_n_answer_of: &[1, 2],
+        extra_chain: NO_EXTRA_CHAIN,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[2],
+        phase_5_featured: &[],
         allowed_types: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
     },
     DifficultyProfile {
         question_count: 5,
         option_count: 5,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1],
+        phase_1_n_counting: &[1],
+        phase_2_n_answer_of: &[1, 2],
+        extra_chain: NO_EXTRA_CHAIN,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[2],
+        phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
             CountAnswerBefore,
@@ -56,6 +111,15 @@ pub static PROFILES: [DifficultyProfile; 6] = [
     DifficultyProfile {
         question_count: 8,
         option_count: 5,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1],
+        phase_1_n_counting: &[1],
+        phase_2_n_answer_of: &[2],
+        extra_chain: NO_EXTRA_CHAIN,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[2],
+        phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
             AnswerOf,
@@ -80,6 +144,15 @@ pub static PROFILES: [DifficultyProfile; 6] = [
     DifficultyProfile {
         question_count: 10,
         option_count: 5,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1, 2],
+        phase_1_n_counting: &[1],
+        phase_2_n_answer_of: &[2],
+        extra_chain: EXTRA_CHAIN_25,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[2],
+        phase_5_featured: &[LetterDist, ConsecIdent],
         allowed_types: &[
             CountAnswer,
             AnswerOf,
@@ -111,6 +184,15 @@ pub static PROFILES: [DifficultyProfile; 6] = [
     DifficultyProfile {
         question_count: 12,
         option_count: 5,
+        caps: DEFAULT_CAPS,
+        count_letter_cap: COUNT_LETTER_CAP,
+        vowel_consonant_cap: &[1, 2],
+        phase_1_n_counting: &[1],
+        phase_2_n_answer_of: &[2],
+        extra_chain: EXTRA_CHAIN_25,
+        phase_3_n_adjacent_same: ADJACENT_SAME,
+        phase_4_n_positional: &[2],
+        phase_5_featured: &[LetterDist, TrueStmt, ConsecIdent],
         allowed_types: &[
             CountAnswer,
             AnswerOf,

@@ -197,24 +197,19 @@ struct PlacementState {
 }
 
 impl PlacementState {
-    fn new(n: usize, rng: &mut Rng) -> Self {
+    fn new(profile: &DifficultyProfile, rng: &mut Rng) -> Self {
+        let n = profile.question_count;
         let mut slots: [u8; MAX_N] = std::array::from_fn(|i| i as u8);
         rng.shuffle(&mut slots[..n]);
 
         let mut caps = [3u8; 32];
-        caps[QuestionTypeKind::LetterDist as u8 as usize] = 1;
-        caps[QuestionTypeKind::AnswerOf as u8 as usize] = 2;
+        for &(kind, c) in profile.caps {
+            caps[kind as u8 as usize] = c;
+        }
 
         let mut group_caps = [3u8; 8];
         let vc_group = symmetric_group(QuestionTypeKind::CountVowel).unwrap() as usize;
-        #[allow(clippy::if_same_then_else)]
-        if n <= 8 {
-            group_caps[vc_group] = 1;
-        } else if rng.int(0, 1) == 0 {
-            group_caps[vc_group] = 1;
-        } else {
-            group_caps[vc_group] = 2;
-        }
+        group_caps[vc_group] = sample(profile.vowel_consonant_cap, rng);
 
         PlacementState {
             question_types: [QuestionType::AnswerIsSelf; MAX_N],
@@ -228,7 +223,7 @@ impl PlacementState {
             group_caps,
             caps,
             count_letter_counts: [0; 5],
-            count_letter_cap: if rng.int(0, 3) == 0 { 2 } else { 1 },
+            count_letter_cap: sample(profile.count_letter_cap, rng),
         }
     }
 
@@ -319,6 +314,17 @@ impl PlacementState {
 
 // ── Main construction ──
 
+/// Sample a recipe value: a length-1 array is a fixed value (no RNG draw); a
+/// longer array is a uniform pick — byte-for-byte equivalent to the original
+/// `rng.int(0, len-1)`-indexed coin, so element order encodes the mapping.
+fn sample<T: Copy>(arr: &[T], rng: &mut Rng) -> T {
+    if arr.len() == 1 {
+        arr[0]
+    } else {
+        rng.pick(arr)
+    }
+}
+
 fn try_construct(
     profile: &DifficultyProfile,
     rng: &mut Rng,
@@ -331,12 +337,9 @@ fn try_construct(
     let n = profile.question_count;
     let oc = profile.option_count;
 
-    let mut state = PlacementState::new(n, rng);
+    let mut state = PlacementState::new(profile, rng);
 
-    let extra_chain = profile
-        .allowed_types
-        .contains(&QuestionTypeKind::LetterDist)
-        && rng.int(0, 3) == 0;
+    let extra_chain = sample(profile.extra_chain, rng);
     if extra_chain {
         state.set_extra_chain();
     }
@@ -360,12 +363,10 @@ fn try_construct(
         }
     };
 
-    // Phase 1: Counting entry point (skip 50% of the time for small puzzles)
-    let skip_counting = n <= 3 && rng.int(0, 1) == 0;
-    if !skip_counting
-        && (av_counting.is_empty()
-            || !state.try_place(rng.pick(&av_counting), solution, n, oc, rng))
-    {
+    // Phase 1: counting anchor (profile sets the count; family pick per slot)
+    let n_counting = sample(profile.phase_1_n_counting, rng);
+    for _ in 0..n_counting {
+        if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), solution, n, oc, rng)
         {
             if trace {
                 eprintln!(
@@ -379,15 +380,11 @@ fn try_construct(
 
     trace_phase("p1", &state);
 
-    // Phase 2: answer_of backbone
+    // Phase 2: answer_of chain (self-reference backbone)
     let chain_count = if extra_chain {
         3
-    } else if n <= 3 {
-        if rng.int(0, 1) == 0 { 1 } else { 0 }
-    } else if n <= 5 && rng.int(0, 1) == 0 {
-        1
     } else {
-        2
+        sample(profile.phase_2_n_answer_of, rng)
     }
     .min(n - state.assigned_count);
     for _ in 0..chain_count {
@@ -404,9 +401,10 @@ fn try_construct(
 
     trace_phase("p2", &state);
 
-    // Phase 3: Optional prev_same/next_same at edge positions
-    let p3_check = rng.int(0, 1);
-    if p3_check == 0 && state.assigned_count < n {
+    // Phase 3: optionally place one PrevSame/NextSame at an edge slot. The
+    // count is profile-controlled; the edge-vs-edge pick stays internal.
+    let n_adjacent = sample(profile.phase_3_n_adjacent_same, rng);
+    if n_adjacent >= 1 && state.assigned_count < n {
         let candidates: &[(QuestionTypeKind, usize)] = &[
             (QuestionTypeKind::PrevSame, n - 1),
             (QuestionTypeKind::NextSame, 0),
@@ -421,11 +419,11 @@ fn try_construct(
 
     trace_phase("p3", &state);
 
-    // Phase 4: Positional types (skip for tiny puzzles)
-    let pos_count = if av_positional.is_empty() || n <= 3 {
+    // Phase 4: Positional types (count from profile; family pick per slot)
+    let pos_count = if av_positional.is_empty() {
         0
     } else {
-        2.max(n / 5).min(n - state.assigned_count)
+        sample(profile.phase_4_n_positional, rng).min(n - state.assigned_count)
     };
     for _ in 0..pos_count {
         if !av_positional.is_empty() && state.assigned_count < n {
@@ -435,19 +433,12 @@ fn try_construct(
 
     trace_phase("p4", &state);
 
-    // Phase 5: Exotic guaranteed types
-    let exotic: &[QuestionTypeKind] = &[
-        QuestionTypeKind::LetterDist,
-        QuestionTypeKind::TrueStmt,
-        QuestionTypeKind::ConsecIdent,
-    ];
-    for &kind in exotic {
+    // Phase 5: Featured rare types — try for at least one of each, in order.
+    for &kind in profile.phase_5_featured {
         if state.assigned_count >= n {
             break;
         }
-        if profile.allowed_types.contains(&kind) {
-            state.try_place(kind, solution, n, oc, rng);
-        }
+        state.try_place(kind, solution, n, oc, rng);
     }
 
     trace_phase("p5", &state);
