@@ -998,7 +998,11 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
                     count += 1;
                 }
             }
-            count == 1 && pos_matches(value, found)
+            match count {
+                0 => value.is_none(),
+                1 => pos_matches(value, found),
+                _ => false,
+            }
         }
         QuestionType::PrevSame => {
             let self_ans = answers[qi];
