@@ -30,6 +30,10 @@ pub struct Stats {
     pub lookahead_calls: u32,
     pub lookahead_hits: u32,
     pub lookahead_us: u64,
+    // deduce/deduce_fast calls made inside lookahead's probe loops. Not folded
+    // into deduce_calls (which counts only the outer hint-loop `deduce`) so the
+    // two propagation paths stay distinguishable.
+    pub deduce_calls_in_lookahead: u32,
 }
 
 impl Stats {
@@ -51,12 +55,13 @@ impl Stats {
         self.lookahead_calls += other.lookahead_calls;
         self.lookahead_hits += other.lookahead_hits;
         self.lookahead_us += other.lookahead_us;
+        self.deduce_calls_in_lookahead += other.deduce_calls_in_lookahead;
     }
 
     pub fn print(&self) {
         let ok = self.attempts - self.fail_unique - self.fail_solve;
         eprintln!(
-            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {} hits, {}ms\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
+            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {} hits, {}ms ({} deduce calls)\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
             self.attempts,
             ok,
             self.fail_unique,
@@ -71,6 +76,7 @@ impl Stats {
             self.lookahead_calls,
             self.lookahead_hits,
             self.lookahead_us / 1000,
+            self.deduce_calls_in_lookahead,
             self.repair_us / 1000,
             self.repair_fail_no_candidates,
             self.repair_fail_no_change,
@@ -245,7 +251,7 @@ fn run_hint_engine_from(
 
         stats.lookahead_calls += 1;
         let t_la = wasm_now();
-        let lr = lookahead(fp, &state, 6, false);
+        let lr = lookahead(fp, &state, 6, false, &mut stats.deduce_calls_in_lookahead);
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             stats.lookahead_hits += 1;

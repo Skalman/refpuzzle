@@ -22,6 +22,7 @@ pub fn lookahead(
     state: &State,
     stop_deducing_after_n_results: usize,
     full: bool,
+    deduce_calls: &mut u32,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
     let answers = &state.answers;
@@ -42,6 +43,7 @@ pub fn lookahead(
             let mut chain = ArrayVec::new();
             let mut contradiction = false;
             while chain.len() < stop_deducing_after_n_results {
+                *deduce_calls += 1;
                 let mut drs = if full {
                     deduce(fp, &hyp)
                 } else {
@@ -213,6 +215,7 @@ mod tests {
                 },
                 usize::MAX,
                 true,
+                &mut 0,
             );
             let got = match result {
                 Some(r) => format!(

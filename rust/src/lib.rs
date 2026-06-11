@@ -212,7 +212,7 @@ mod wasm_api {
         pub fn lookahead_shortest(&self, state: JsValue) -> Result<JsValue, JsError> {
             let s = parse_state(state, self.fp.n)?;
             // `lookahead(.., .., 1, false)` is the "shortest" mode the TS engine uses.
-            let Some(lr) = lookahead(&self.fp, &s, 1, false) else {
+            let Some(lr) = lookahead(&self.fp, &s, 1, false, &mut 0) else {
                 return Ok(JsValue::NULL);
             };
             let chain: Vec<DeduceResultApi> = lr.chain.iter().copied().map(result_to_api).collect();

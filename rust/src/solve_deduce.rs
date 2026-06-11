@@ -44,7 +44,7 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &state, usize::MAX, true) {
+        if let Some(lr) = lookahead(fp, &state, usize::MAX, true, &mut 0) {
             state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             steps.push(SolveStep::Lookahead {
                 eliminate_qi: lr.eliminate_qi,
