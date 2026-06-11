@@ -132,7 +132,7 @@ pub fn solution_satisfies_type(
                     matches += 1;
                 }
             }
-            matches == 1
+            matches <= 1
         }
         QuestionType::ConsecIdent => {
             let mut pairs = 0;
@@ -141,7 +141,7 @@ pub fn solution_satisfies_type(
                     pairs += 1;
                 }
             }
-            pairs == 1
+            pairs <= 1
         }
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = match qt {
@@ -154,7 +154,7 @@ pub fn solution_satisfies_type(
                     matches += 1;
                 }
             }
-            matches == 1
+            matches <= 1
         }
         QuestionType::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionType::EqualCount { .. } => true,

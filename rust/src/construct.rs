@@ -322,6 +322,14 @@ impl PlacementState {
                 if !solution_satisfies_type(&qt, qi, solution, n, oc) {
                     continue;
                 }
+                // Damp the "no match" outcome for Only*/ConsecIdent so the
+                // correct%/distractor% ratio for None stays near 1.0 — without
+                // damping it's >2x because matches==0 is naturally common.
+                if is_only_no_match(&qt, qi, solution, n)
+                    && rng.next_f64() < no_match_reject_prob(&qt)
+                {
+                    continue;
+                }
 
                 if let Some(a) = count_type_answer(&qt) {
                     self.count_letter_counts[a.idx()] += 1;
@@ -775,7 +783,7 @@ fn solution_satisfies_type_for_kind(
                     pairs += 1;
                 }
             }
-            pairs == 1
+            pairs <= 1
         }
         QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
         QuestionTypeKind::OnlySame => {
@@ -785,7 +793,7 @@ fn solution_satisfies_type_for_kind(
                     m += 1;
                 }
             }
-            m == 1
+            m <= 1
         }
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
             let parity = if kind == QuestionTypeKind::OnlyOdd {
@@ -800,10 +808,37 @@ fn solution_satisfies_type_for_kind(
                         m += 1;
                     }
                 }
-                m == 1
+                m <= 1
             })
         }
         _ => true,
+    }
+}
+
+/// For `OnlySame`/`OnlyOdd`/`OnlyEven`/`ConsecIdent`, the correct answer is
+/// `None` precisely when no other question (or pair) matches. We allow both
+/// the matching and non-matching cases so players see "no match" outcomes,
+/// but the natural rate of non-match cases is high enough at small n that
+/// without damping it would dominate. `try_place` consults this.
+fn is_only_no_match(qt: &QuestionType, qi: usize, sol: &[Answer; MAX_N], n: usize) -> bool {
+    match *qt {
+        QuestionType::OnlySame => !(0..n).any(|j| j != qi && sol[j] == sol[qi]),
+        QuestionType::OnlyOdd { answer } => !(0..n).any(|i| (i + 1) % 2 == 1 && sol[i] == answer),
+        QuestionType::OnlyEven { answer } => !(0..n).any(|i| (i + 1) % 2 == 0 && sol[i] == answer),
+        QuestionType::ConsecIdent => !(0..n.saturating_sub(1)).any(|i| sol[i] == sol[i + 1]),
+        _ => false,
+    }
+}
+
+/// Rejection probability for the "no match" outcome, tuned so the resulting
+/// correct%/distractor% ratio for None lands near 1.0. Values derived
+/// empirically from the type-stats analysis at 10k puzzles/level.
+fn no_match_reject_prob(qt: &QuestionType) -> f64 {
+    match qt {
+        QuestionType::OnlySame => 0.96,
+        QuestionType::ConsecIdent => 0.94,
+        QuestionType::OnlyOdd { .. } | QuestionType::OnlyEven { .. } => 0.85,
+        _ => 0.0,
     }
 }
 
