@@ -1,5 +1,24 @@
+use crate::rng::Rng;
 use crate::types::QuestionTypeKind;
 use crate::types::QuestionTypeKind::*;
+use Dist::{Choices, Fixed};
+
+/// A per-puzzle sampled value. `Fixed` never draws; `Choices` picks one listed
+/// value uniformly — repeat a value to weight it (e.g. `[1, 1, 1, 2]` is a 25%
+/// chance of 2).
+pub enum Dist<T: Copy + 'static> {
+    Fixed(T),
+    Choices(&'static [T]),
+}
+
+impl<T: Copy> Dist<T> {
+    pub fn sample(&self, rng: &mut Rng) -> T {
+        match self {
+            Dist::Fixed(v) => *v,
+            Dist::Choices(vs) => rng.pick(vs),
+        }
+    }
+}
 
 pub struct DifficultyProfile {
     pub question_count: usize,
@@ -7,33 +26,42 @@ pub struct DifficultyProfile {
 
     // ── Type budget: what may appear and how often ──
     pub allowed_types: &'static [QuestionTypeKind],
-    /// Per-type max occurrences (default 3 for anything not listed).
-    pub caps: &'static [(QuestionTypeKind, u8)],
-    /// Max CountAnswer questions sharing one answer letter, sampled per puzzle.
-    pub count_letter_cap: &'static [u8],
-    /// Cap on the vowel/consonant question group, sampled per puzzle.
-    pub vowel_consonant_cap: &'static [u8],
+    /// Per-type max occurrences, indexed by `QuestionTypeKind`. Built at
+    /// compile time from sparse overrides via `expand_caps` (default 3).
+    pub caps: [u8; 32],
+    /// Max CountAnswer questions sharing one answer letter.
+    pub count_letter_cap: Dist<u8>,
+    /// Cap on the vowel/consonant question group.
+    pub vowel_consonant_cap: Dist<u8>,
 
-    // ── Placement recipe: counts are sampled per puzzle (len-1 = fixed, no
-    //    draw; len>1 = uniform pick, byte-for-byte the original coin) ──
-    pub phase_1_n_counting: &'static [usize],
-    pub phase_2_n_answer_of: &'static [usize],
-    /// When true, lengthen the AnswerOf chain to 3 and suppress LetterDist
-    /// (a longer self-reference spine). Sampled; gated to LetterDist levels.
-    pub extra_chain: &'static [bool],
+    // ── Placement recipe ──
+    pub phase_1_n_counting: Dist<usize>,
+    /// AnswerOf self-reference chain length. A sampled value of 3 is the "long
+    /// chain": phase 2 raises the AnswerOf cap to fit it and suppresses LetterDist.
+    pub phase_2_n_answer_of: Dist<usize>,
     /// Attempts to place one PrevSame/NextSame at an edge slot (phase 3).
-    pub phase_3_n_adjacent_same: &'static [usize],
-    pub phase_4_n_positional: &'static [usize],
+    pub phase_3_n_adjacent_same: Dist<usize>,
+    pub phase_4_n_positional: Dist<usize>,
     /// Rare types to try to include at least once (phase 5), in order.
     pub phase_5_featured: &'static [QuestionTypeKind],
 }
 
+/// Expand sparse per-type cap overrides into a dense `[u8; 32]` (default 3),
+/// evaluated at compile time so `new()` just copies the array.
+const fn expand_caps(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
+    let mut caps = [3u8; 32];
+    let mut i = 0;
+    while i < overrides.len() {
+        caps[overrides[i].0 as usize] = overrides[i].1;
+        i += 1;
+    }
+    caps
+}
+
 // Shared recipe values (identical across levels for now).
-const DEFAULT_CAPS: &[(QuestionTypeKind, u8)] = &[(LetterDist, 1), (AnswerOf, 2)];
-const COUNT_LETTER_CAP: &[u8] = &[2, 1, 1, 1]; // 25% chance of 2 (draw==0), else 1
-const ADJACENT_SAME: &[usize] = &[1, 0]; // 50% attempt one (draw==0), else none
-const NO_EXTRA_CHAIN: &[bool] = &[false];
-const EXTRA_CHAIN_25: &[bool] = &[true, false, false, false]; // 25% (draw==0)
+const DEFAULT_CAPS: [u8; 32] = expand_caps(&[(LetterDist, 1), (AnswerOf, 2)]);
+const COUNT_LETTER_CAP: Dist<u8> = Choices(&[1, 1, 1, 2]); // 25% chance of 2
+const ADJACENT_SAME: Dist<usize> = Choices(&[0, 1]); // 50% attempt one
 
 pub static PROFILES: [DifficultyProfile; 6] = [
     // Level 1: Intro
@@ -42,12 +70,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 3,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1],
-        phase_1_n_counting: &[0, 1],
-        phase_2_n_answer_of: &[1, 0],
-        extra_chain: NO_EXTRA_CHAIN,
+        vowel_consonant_cap: Fixed(1),
+        phase_1_n_counting: Choices(&[0, 1]),
+        phase_2_n_answer_of: Choices(&[0, 1]),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[0],
+        phase_4_n_positional: Fixed(0),
         phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
@@ -72,12 +99,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1],
-        phase_1_n_counting: &[1],
-        phase_2_n_answer_of: &[1, 2],
-        extra_chain: NO_EXTRA_CHAIN,
+        vowel_consonant_cap: Fixed(1),
+        phase_1_n_counting: Fixed(1),
+        phase_2_n_answer_of: Choices(&[1, 2]),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[2],
+        phase_4_n_positional: Fixed(2),
         phase_5_featured: &[],
         allowed_types: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
     },
@@ -86,12 +112,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1],
-        phase_1_n_counting: &[1],
-        phase_2_n_answer_of: &[1, 2],
-        extra_chain: NO_EXTRA_CHAIN,
+        vowel_consonant_cap: Fixed(1),
+        phase_1_n_counting: Fixed(1),
+        phase_2_n_answer_of: Choices(&[1, 2]),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[2],
+        phase_4_n_positional: Fixed(2),
         phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
@@ -113,12 +138,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1],
-        phase_1_n_counting: &[1],
-        phase_2_n_answer_of: &[2],
-        extra_chain: NO_EXTRA_CHAIN,
+        vowel_consonant_cap: Fixed(1),
+        phase_1_n_counting: Fixed(1),
+        phase_2_n_answer_of: Fixed(2),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[2],
+        phase_4_n_positional: Fixed(2),
         phase_5_featured: &[],
         allowed_types: &[
             CountAnswer,
@@ -146,12 +170,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1, 2],
-        phase_1_n_counting: &[1],
-        phase_2_n_answer_of: &[2],
-        extra_chain: EXTRA_CHAIN_25,
+        vowel_consonant_cap: Choices(&[1, 2]),
+        phase_1_n_counting: Fixed(1),
+        phase_2_n_answer_of: Choices(&[2, 2, 2, 3]),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[2],
+        phase_4_n_positional: Fixed(2),
         phase_5_featured: &[LetterDist, ConsecIdent],
         allowed_types: &[
             CountAnswer,
@@ -186,12 +209,11 @@ pub static PROFILES: [DifficultyProfile; 6] = [
         option_count: 5,
         caps: DEFAULT_CAPS,
         count_letter_cap: COUNT_LETTER_CAP,
-        vowel_consonant_cap: &[1, 2],
-        phase_1_n_counting: &[1],
-        phase_2_n_answer_of: &[2],
-        extra_chain: EXTRA_CHAIN_25,
+        vowel_consonant_cap: Choices(&[1, 2]),
+        phase_1_n_counting: Fixed(1),
+        phase_2_n_answer_of: Choices(&[2, 2, 2, 3]),
         phase_3_n_adjacent_same: ADJACENT_SAME,
-        phase_4_n_positional: &[2],
+        phase_4_n_positional: Fixed(2),
         phase_5_featured: &[LetterDist, TrueStmt, ConsecIdent],
         allowed_types: &[
             CountAnswer,

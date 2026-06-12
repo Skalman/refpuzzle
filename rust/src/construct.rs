@@ -202,14 +202,11 @@ impl PlacementState {
         let mut slots: [u8; MAX_N] = std::array::from_fn(|i| i as u8);
         rng.shuffle(&mut slots[..n]);
 
-        let mut caps = [3u8; 32];
-        for &(kind, c) in profile.caps {
-            caps[kind as u8 as usize] = c;
-        }
+        let caps = profile.caps;
 
         let mut group_caps = [3u8; 8];
         let vc_group = symmetric_group(QuestionTypeKind::CountVowel).unwrap() as usize;
-        group_caps[vc_group] = sample(profile.vowel_consonant_cap, rng);
+        group_caps[vc_group] = profile.vowel_consonant_cap.sample(rng);
 
         PlacementState {
             question_types: [QuestionType::AnswerIsSelf; MAX_N],
@@ -223,7 +220,7 @@ impl PlacementState {
             group_caps,
             caps,
             count_letter_counts: [0; 5],
-            count_letter_cap: sample(profile.count_letter_cap, rng),
+            count_letter_cap: profile.count_letter_cap.sample(rng),
         }
     }
 
@@ -306,24 +303,17 @@ impl PlacementState {
         }
     }
 
-    fn set_extra_chain(&mut self) {
-        self.caps[QuestionTypeKind::AnswerOf as u8 as usize] = 3;
-        self.caps[QuestionTypeKind::LetterDist as u8 as usize] = 0;
+    /// A long AnswerOf chain (>=3) needs its cap raised to fit, and suppresses
+    /// LetterDist — the chain already supplies the self-reference spine.
+    fn prepare_chain(&mut self, chain_count: usize) {
+        if chain_count >= 3 {
+            self.caps[QuestionTypeKind::AnswerOf as usize] = chain_count as u8;
+            self.caps[QuestionTypeKind::LetterDist as usize] = 0;
+        }
     }
 }
 
 // ── Main construction ──
-
-/// Sample a recipe value: a length-1 array is a fixed value (no RNG draw); a
-/// longer array is a uniform pick — byte-for-byte equivalent to the original
-/// `rng.int(0, len-1)`-indexed coin, so element order encodes the mapping.
-fn sample<T: Copy>(arr: &[T], rng: &mut Rng) -> T {
-    if arr.len() == 1 {
-        arr[0]
-    } else {
-        rng.pick(arr)
-    }
-}
 
 fn try_construct(
     profile: &DifficultyProfile,
@@ -338,11 +328,6 @@ fn try_construct(
     let oc = profile.option_count;
 
     let mut state = PlacementState::new(profile, rng);
-
-    let extra_chain = sample(profile.extra_chain, rng);
-    if extra_chain {
-        state.set_extra_chain();
-    }
 
     let av_counting = filter_allowed(COUNTING_TYPES, profile);
     let av_positional = filter_allowed(POSITIONAL_TYPES, profile);
@@ -364,7 +349,7 @@ fn try_construct(
     };
 
     // Phase 1: counting anchor (profile sets the count; family pick per slot)
-    let n_counting = sample(profile.phase_1_n_counting, rng);
+    let n_counting = profile.phase_1_n_counting.sample(rng);
     for _ in 0..n_counting {
         if av_counting.is_empty() || !state.try_place(rng.pick(&av_counting), solution, n, oc, rng)
         {
@@ -380,13 +365,12 @@ fn try_construct(
 
     trace_phase("p1", &state);
 
-    // Phase 2: answer_of chain (self-reference backbone)
-    let chain_count = if extra_chain {
-        3
-    } else {
-        sample(profile.phase_2_n_answer_of, rng)
-    }
-    .min(n - state.assigned_count);
+    // Phase 2: answer_of chain (self-reference backbone).
+    let chain_count = profile
+        .phase_2_n_answer_of
+        .sample(rng)
+        .min(n - state.assigned_count);
+    state.prepare_chain(chain_count);
     for _ in 0..chain_count {
         if !state.try_place(QuestionTypeKind::AnswerOf, solution, n, oc, rng) {
             if trace {
@@ -403,7 +387,7 @@ fn try_construct(
 
     // Phase 3: optionally place one PrevSame/NextSame at an edge slot. The
     // count is profile-controlled; the edge-vs-edge pick stays internal.
-    let n_adjacent = sample(profile.phase_3_n_adjacent_same, rng);
+    let n_adjacent = profile.phase_3_n_adjacent_same.sample(rng);
     if n_adjacent >= 1 && state.assigned_count < n {
         let candidates: &[(QuestionTypeKind, usize)] = &[
             (QuestionTypeKind::PrevSame, n - 1),
@@ -423,7 +407,10 @@ fn try_construct(
     let pos_count = if av_positional.is_empty() {
         0
     } else {
-        sample(profile.phase_4_n_positional, rng).min(n - state.assigned_count)
+        profile
+            .phase_4_n_positional
+            .sample(rng)
+            .min(n - state.assigned_count)
     };
     for _ in 0..pos_count {
         if !av_positional.is_empty() && state.assigned_count < n {
