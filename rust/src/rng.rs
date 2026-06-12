@@ -29,6 +29,11 @@ impl Rng {
         arr[self.int(0, arr.len() as i32 - 1) as usize]
     }
 
+    pub fn pick_kv<T: Copy>(&mut self, arr: &[T]) -> (usize, T) {
+        let k = self.int(0, arr.len() as i32 - 1) as usize;
+        (k, arr[k])
+    }
+
     /// Uniform random `Answer` from the first `oc` letters
     /// (the puzzle's active option range, `LETTERS[..oc]`).
     pub fn pick_letter(&mut self, oc: usize) -> Answer {

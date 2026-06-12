@@ -5,6 +5,7 @@ mod check;
 mod check_answer;
 mod check_form;
 mod construct;
+mod construct_v2;
 mod deduce;
 mod difficulty;
 mod format;
