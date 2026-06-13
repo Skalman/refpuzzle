@@ -1,27 +1,28 @@
 //! v2 generation pipeline — parallel track. See docs/generation-redesign.md.
 //!
-//! `compose()` = SELECT + FORCE + PLACE, returning a puzzle skeleton (slotted
-//! types + forced solution) *before* `fill_options` / `validate` / `repair`.
-//! Built alongside the live generator (`construct.rs`); not yet wired into
-//! production.
-//!
-//! Scaffold status: SELECT and PLACE work; FORCE is randomize-only — per-type
-//! solution forcing (ConsecIdent pair, OnlySame exactly-twice, …) lands here
-//! next. Until then the shape-types will be under-represented; that's the
-//! signal the FORCE work will close.
-#![allow(dead_code)] // scaffold; wired into the CLI / type-stats next
+//! `compose()` runs SELECT → ASSIGN → PARAMETRIZE: pick the question kinds,
+//! decide the answer key plus a kind per slot (shape-types seed the structure
+//! they need), then turn each kind into a full `QuestionType` against that key.
+//! `generate()` wraps that with `fill_options` + `validate_and_repair`.
+//! Runs alongside the live generator (`construct.rs`); reachable via
+//! `type-stats --v2` for comparison, not yet the production path.
+#![allow(dead_code)] // not yet the production generator; reachable via `type-stats --v2`
 
 use arrayvec::ArrayVec;
 
-use crate::build::solution_satisfies_type;
+use crate::build::{
+    ComposeStats, FallbackCounts, GenerateResult, Stats, fill_options, solution_satisfies_type,
+    validate_and_repair,
+};
+use crate::check_form::check_form;
 use crate::construct::{random_type_params, solution_fits_type};
 use crate::rng::Rng;
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
 
 /// v2 per-level recipe — selection-shaped, deliberately separate from
-/// `DifficultyProfile`. The fill pool is the level's `allowed_types` (passed to
-/// `compose`) for now; weighted overrides land here when we tune.
+/// `DifficultyProfile`. `required` + `allowed` + `caps` fully describe selection;
+/// weighted overrides land here when we tune.
 pub struct LevelRecipe {
     /// Types that must appear, with how many of each.
     pub required: &'static [(QuestionTypeKind, usize)],
@@ -208,29 +209,75 @@ pub struct Composed {
     pub n: usize,
 }
 
-/// SELECT → FORCE → PLACE. Always succeeds (fallbacks guarantee a skeleton);
-/// uniqueness is checked later by the caller.
-pub fn compose(recipe: &LevelRecipe, n: usize, oc: usize, rng: &mut Rng) -> Composed {
+/// SELECT the kinds, ASSIGN each a slot + answer, then PARAMETRIZE the kinds
+/// against the finished answer key. Always succeeds
+/// (fallbacks guarantee a result); uniqueness is checked later by the caller.
+/// Telemetry (compose count + per-phase AnswerOf fallbacks) is tallied into `cs`.
+pub fn compose(
+    recipe: &LevelRecipe,
+    n: usize,
+    oc: usize,
+    rng: &mut Rng,
+    cs: &mut ComposeStats,
+) -> Composed {
+    cs.compose_count += 1;
+    let fb = &mut cs.fallbacks;
     let kinds = select_kinds(recipe, n, rng);
+    let SolutionAndKinds { solution, kind_of } =
+        SolutionAndKindsBuilder::new(n, oc).build(&kinds, rng, fb);
+    let types = parametrize(n, oc, &solution, &kind_of, rng, fb);
 
-    // FORCE: author the answer-key vector + pin the shape-types it can satisfy;
-    // anything it can't pin flows to PLACE as `unpinned`.
-    let mut b = Builder::new(n, oc);
-    let mut unpinned = ArrayVec::<QuestionTypeKind, MAX_N>::new();
-    for &k in &kinds {
-        if !b.try_pin_shape(k, rng) {
-            unpinned.push(k);
+    Composed { types, solution, n }
+}
+
+/// Full v2 generation: `compose` a fresh skeleton, encode its option values
+/// (`fill_options`), and validate (`validate_and_repair` — solvable + unique).
+/// Retries with a fresh skeleton each attempt until one validates or the budget
+/// runs out. Mirrors `construct::generate`'s tail, but re-composes per attempt
+/// because `compose` authors the solution itself (not just the rule placement).
+pub fn generate(
+    recipe: &LevelRecipe,
+    n: usize,
+    oc: usize,
+    rng: &mut Rng,
+    max_attempts: usize,
+    stats: &mut Stats,
+    label: &str,
+) -> Option<GenerateResult> {
+    for _ in 0..max_attempts {
+        let c = compose(recipe, n, oc, rng, &mut stats.v2_compose);
+        let mut fp = fill_options(&c.types, &c.solution, c.n, oc, rng, false);
+        // compose should never produce a malformed answer key: references are
+        // in range by construction, fill_options encodes values in range, and
+        // NoOtherHasAnswer's `cover_all` keeps every letter present (the one
+        // construct-side hazard). Assert it — a malformed key panics deep in
+        // validate_and_repair otherwise, and a silent reject would mask the bug.
+        let form_errors = check_form(&fp, Some(&c.solution[..c.n]));
+        assert!(
+            form_errors.is_empty(),
+            "compose produced a malformed answer key (n={}, oc={oc}): {form_errors:?}\n  types={:?}\n  sol={:?}",
+            c.n,
+            &c.types[..c.n],
+            &c.solution[..c.n]
+        );
+        if validate_and_repair(
+            &c.types,
+            &c.solution,
+            &mut fp,
+            c.n,
+            rng,
+            stats,
+            false,
+            label,
+        ) {
+            return Some(GenerateResult {
+                question_types: c.types,
+                fp,
+                n: c.n,
+            });
         }
     }
-    b.fill_answers(rng); // decide the remaining answers without breaking forced ones
-    b.place_unpinned_kinds(&unpinned, rng); // PLACE the rest into the unpinned slots
-    b.replace_unsatisfiable_types(); // demote any slot the (rare) fill_answers corner left unsatisfiable
-
-    Composed {
-        types: b.types,
-        solution: b.sol,
-        n,
-    }
+    None
 }
 
 /// Required types first, then fill remaining slots from `allowed` (uniform for
@@ -309,292 +356,398 @@ impl KindSelection {
     }
 }
 
-/// Hardest-to-place-first ranking (see docs): edge-preferring Prev/Next before
-/// the place-anywhere types. (OnlySame/NoOther are FORCE-pinned, so they don't
-/// reach PLACE.)
-fn place_rank(kind: QuestionTypeKind) -> u8 {
-    match kind {
-        PrevSame | NextSame => 0,
-        _ => 1,
-    }
-}
-
-/// Builds the answer-key vector and the type per slot. FORCE authors the answer
-/// key + pins the shape-types it can satisfy; `fill_answers` decides the rest of the
-/// answers without breaking the forced structure; `place_rest` assigns the rest.
-struct Builder {
+/// Scratch for the first compose phase: decides the answer key and the kind per
+/// slot. `build` consumes it and returns a `SolutionAndKinds`; `parametrize`
+/// turns those kinds into full `QuestionType`s next. The fields below `decided`
+/// are the in-progress constraints the shapes impose on the fill.
+struct SolutionAndKindsBuilder {
     n: usize,
     oc: usize,
-    sol: [Answer; MAX_N],
-    set: u16,    // bit p: sol[p] is decided
-    pinned: u16, // bit p: types[p] is a forced shape-type
-    types: [QuestionType; MAX_N],
-    used: [u8; 5],                         // letter -> count among decided answers
-    banned: [bool; 5], // letter `fill_answers` must avoid (reserved exact-count letter)
-    suppress_pairs: bool, // ConsecIdent pinned → fill_answers adds no new adjacent pairs
-    placed: ArrayVec<QuestionType, MAX_N>, // every assigned type — no duplicates
+    solution: [Answer; MAX_N],
+    decided: u16,                 // bit qi: solution[qi] is decided
+    open: ArrayVec<usize, MAX_N>, // qi slots not yet claimed by a kind, shuffled
+    banned: [bool; 5],            // letters the fill must avoid (reserved at an exact count)
+    no_pairs: bool,               // ConsecIdent pinned → no new adjacent equal pairs
+    cover_all: bool,              // NoOther pinned → every letter must appear
 }
 
-impl Builder {
+struct SolutionAndKinds {
+    solution: [Answer; MAX_N],
+    kind_of: [QuestionTypeKind; MAX_N],
+}
+
+impl SolutionAndKindsBuilder {
     fn new(n: usize, oc: usize) -> Self {
-        Builder {
+        SolutionAndKindsBuilder {
             n,
             oc,
-            sol: [Answer::A; MAX_N],
-            set: 0,
-            pinned: 0,
-            types: [QuestionType::AnswerIsSelf; MAX_N],
-            used: [0; 5],
+            solution: [Answer::A; MAX_N],
+            decided: 0,
+            open: ArrayVec::new(),
             banned: [false; 5],
-            suppress_pairs: false,
-            placed: ArrayVec::new(),
+            no_pairs: false,
+            cover_all: false,
         }
     }
 
-    fn is_set(&self, p: usize) -> bool {
-        self.set & (1 << p) != 0
+    fn is_decided(&self, qi: usize) -> bool {
+        self.decided & (1 << qi) != 0
     }
-    fn is_pinned(&self, p: usize) -> bool {
-        self.pinned & (1 << p) != 0
-    }
-    fn put(&mut self, p: usize, l: Answer) {
-        self.sol[p] = l;
-        self.set |= 1 << p;
-        self.used[l.idx()] += 1;
-    }
-    fn pin(&mut self, p: usize, qt: QuestionType) {
-        self.types[p] = qt;
-        self.pinned |= 1 << p;
-        self.placed.push(qt);
+    fn put(&mut self, qi: usize, l: Answer) {
+        self.solution[qi] = l;
+        self.decided |= 1 << qi;
     }
 
-    /// A letter not yet used and not banned, within the option range.
+    /// Whether `l` appears in any decided slot of the answer key so far.
+    fn present(&self, l: Answer) -> bool {
+        (0..self.n).any(|qi| self.is_decided(qi) && self.solution[qi] == l)
+    }
+
+    /// A letter not yet present and not banned, within the option range.
     fn fresh_letter(&self) -> Option<Answer> {
         (0..self.oc as u8)
             .map(Answer::from)
-            .find(|&l| self.used[l.idx()] == 0 && !self.banned[l.idx()])
+            .find(|&l| !self.present(l) && !self.banned[l.idx()])
     }
 
-    /// Positions with neither a decided answer nor a pinned type, shuffled.
-    fn open_positions(&self, rng: &mut Rng) -> ArrayVec<usize, MAX_N> {
-        let mut v: ArrayVec<usize, MAX_N> = (0..self.n)
-            .filter(|&p| !self.is_set(p) && !self.is_pinned(p))
-            .collect();
-        rng.shuffle(&mut v);
-        v
-    }
+    /// Decide the answer key and the kind per slot (returned as `SolutionAndKinds`).
+    /// One pass over the selected kinds trickiest-first: a shape-type seeds its
+    /// structure and claims its own slot; any other kind (or a shape that can't
+    /// seed) takes a leftover slot and gets a randomized answer. The constraints
+    /// the shapes impose — reserved letters (`banned`), no new adjacent pairs
+    /// (`no_pairs`, ConsecIdent), every letter present (`cover_all`, NoOther) —
+    /// are locals, threaded into the fill.
+    fn build(
+        mut self,
+        kinds: &[QuestionTypeKind],
+        rng: &mut Rng,
+        fb: &mut FallbackCounts,
+    ) -> SolutionAndKinds {
+        let mut kind_of = [QuestionTypeKind::AnswerIsSelf; MAX_N];
+        self.open = (0..self.n).collect();
+        rng.shuffle(&mut self.open);
 
-    /// Pin a selected shape-type by authoring the answer key so the kind holds,
-    /// then writing the type to a slot. These kinds depend on the global answer
-    /// distribution (counts, adjacency), so they can't be slotted into an
-    /// arbitrary solution — they must be built in here. Returns false for any
-    /// kind we don't (yet) build, so the caller routes it to PLACE instead.
-    fn try_pin_shape(&mut self, k: QuestionTypeKind, rng: &mut Rng) -> bool {
-        match k {
-            OnlySame => self.pin_only_same(rng),
-            NoOtherHasAnswer => self.pin_no_other(rng),
-            ConsecIdent => self.pin_consec(rng),
-            _ => false,
+        // Seed shapes trickiest-first; ConsecIdent before the pair-sharers
+        // (Next/Prev) so it owns the single pair they reuse. Next/Prev share a
+        // rank — they reuse the same pair, so their order doesn't matter.
+        let mut ordered: ArrayVec<QuestionTypeKind, MAX_N> = kinds.iter().copied().collect();
+        ordered.sort_by_key(|&k| match k {
+            OnlySame | NoOtherHasAnswer => 0,
+            ConsecIdent => 1,
+            NextSame | PrevSame => 2,
+            _ => 3,
+        });
+        for &k in &ordered {
+            let qi = match k {
+                OnlySame => self.seed_only_same(),
+                NoOtherHasAnswer => self.seed_no_other(),
+                ConsecIdent => self.seed_consec(rng),
+                NextSame => self.seed_next_same(rng),
+                PrevSame => self.seed_prev_same(rng),
+                _ => Some(self.fill_one(rng)),
+            };
+
+            if let Some(qi) = qi {
+                kind_of[qi] = k;
+            } else {
+                let qi = self.fill_one(rng);
+                kind_of[qi] = AnswerOf;
+                fb.assign_kinds += 1;
+            }
+        }
+        SolutionAndKinds {
+            solution: self.solution,
+            kind_of,
         }
     }
 
-    /// OnlySame holds when exactly one *other* slot shares this answer. Put a
-    /// fresh letter on two open slots, ban it from the rest of `fill_answers` (keeping
-    /// the count at exactly two), and pin OnlySame on one of them.
-    fn pin_only_same(&mut self, rng: &mut Rng) -> bool {
-        let Some(l) = self.fresh_letter() else {
-            return false;
-        };
-        let open = self.open_positions(rng);
-        if open.len() < 2 {
-            return false;
+    /// Claim a leftover open slot for a non-shape kind and decide its answer —
+    /// unless a shape already pre-set it (OnlySame's partner, a pair slot). The
+    /// answer avoids banned letters and (under `no_pairs`) new adjacent pairs;
+    /// when coverage still owes letters and the free slots are running out, it
+    /// forces a still-absent one. Returns the slot.
+    fn fill_one(&mut self, rng: &mut Rng) -> usize {
+        let qi = self.open.pop().expect("a leftover slot per kind");
+        if !self.is_decided(qi) {
+            let missing: ArrayVec<Answer, 5> = if self.cover_all {
+                (0..self.oc as u8)
+                    .map(Answer::from)
+                    .filter(|&l| !self.present(l))
+                    .collect()
+            } else {
+                ArrayVec::new()
+            };
+            // `open` now holds only future fill slots, so its unset count plus
+            // this slot is exactly how many free choices remain for coverage.
+            let free_left = self.open.iter().filter(|&&s| !self.is_decided(s)).count() + 1;
+            let must_cover = free_left <= missing.len();
+            let l = self.pick_answer(qi, must_cover, &missing, rng);
+            self.put(qi, l);
         }
-        self.put(open[0], l);
-        self.put(open[1], l);
-        self.banned[l.idx()] = true; // keep it at exactly two
-        self.pin(open[0], QuestionType::OnlySame);
-        true
+        qi
     }
 
-    /// NoOtherHasAnswer holds when this answer is unique. Put a fresh letter on
-    /// one open slot, ban it everywhere else, and pin NoOtherHasAnswer there.
-    fn pin_no_other(&mut self, rng: &mut Rng) -> bool {
-        let Some(l) = self.fresh_letter() else {
-            return false;
-        };
-        let open = self.open_positions(rng);
-        let Some(&host) = open.first() else {
-            return false;
-        };
+    /// Seed OnlySame: a fresh letter on two still-open slots (banned → it stays
+    /// at exactly two). Returns the host to pin; the partner keeps its answer and
+    /// is left open for a later kind.
+    fn seed_only_same(&mut self) -> Option<usize> {
+        let l = self.fresh_letter()?;
+        let mut free = self.open.iter().copied().filter(|&s| !self.is_decided(s));
+        let host = free.next()?;
+        let partner = free.next()?;
+        self.put(host, l);
+        self.put(partner, l);
+        self.banned[l.idx()] = true;
+        self.open.retain(|s| *s != host);
+        Some(host)
+    }
+
+    /// Seed NoOtherHasAnswer: a fresh unique letter (banned → stays at one), and
+    /// set `cover_all` so pass 2 places every other letter (else an absent letter
+    /// is also vacuously "held by no other" → ambiguous). Returns the host to pin.
+    fn seed_no_other(&mut self) -> Option<usize> {
+        let l = self.fresh_letter()?;
+        let host = self.open.iter().copied().find(|&s| !self.is_decided(s))?;
         self.put(host, l);
         self.banned[l.idx()] = true;
-        self.pin(host, QuestionType::NoOtherHasAnswer);
-        true
+        self.cover_all = true;
+        self.open.retain(|s| *s != host);
+        Some(host)
     }
 
-    /// ConsecIdent needs at most one adjacent-equal pair: its answer is that
-    /// pair, or None when there are zero. ~10% of the time we leave the solution
-    /// pair-free (answer None); otherwise we seed exactly one pair (`make_pair`).
-    /// Either way `suppress_pairs` then stops `fill_answers` adding more. Pins on `host`.
-    fn pin_consec(&mut self, rng: &mut Rng) -> bool {
-        let open = self.open_positions(rng);
-        let Some(&host) = open.first() else {
-            return false;
-        };
+    /// Seed ConsecIdent: ensure one adjacent equal pair (or none ~10% → answer
+    /// None), pinned on a *separate* host whose own answer doesn't start a pair.
+    /// `no_pairs` then stops pass 2 (and the pair-sharers) adding another, so the
+    /// pair count stays ≤ 1. Returns the host to pin.
+    fn seed_consec(&mut self, rng: &mut Rng) -> Option<usize> {
         let want_none = rng.next_f64() < 0.10;
-        if !want_none && !self.make_pair(host) {
-            return false;
-        }
-        self.suppress_pairs = true;
-        self.pin(host, QuestionType::ConsecIdent);
-        true
+        let host = if want_none {
+            self.open.iter().copied().find(|&s| !self.is_decided(s))?
+        } else {
+            let a = self.ensure_pair(rng)?;
+            self.open
+                .iter()
+                .copied()
+                .find(|&s| s != a && s != a + 1 && !self.is_decided(s))?
+        };
+        let l = (0..self.oc as u8)
+            .map(Answer::from)
+            .find(|&l| !self.banned[l.idx()] && !self.would_pair(host, l))
+            .unwrap_or(Answer::A);
+        self.put(host, l);
+        self.no_pairs = true;
+        self.open.retain(|s| *s != host);
+        Some(host)
     }
 
-    /// Set an adjacent open pair (≠ `avoid`) to a letter chosen so it doesn't
-    /// touch an existing equal neighbour (which would create a second pair).
-    fn make_pair(&mut self, avoid: usize) -> bool {
-        for i in 0..self.n.saturating_sub(1) {
-            let (a, b) = (i, i + 1);
-            if a == avoid || b == avoid || self.is_set(a) || self.is_set(b) {
-                continue;
-            }
-            if self.is_pinned(a) || self.is_pinned(b) {
-                continue;
-            }
-            let l = (0..self.oc as u8).map(Answer::from).find(|&l| {
-                !self.banned[l.idx()]
-                    && (a == 0 || !self.is_set(a - 1) || self.sol[a - 1] != l)
-                    && (b + 1 >= self.n || !self.is_set(b + 1) || self.sol[b + 1] != l)
-            });
-            let Some(l) = l else { continue };
-            self.put(a, l);
-            self.put(b, l);
-            return true;
-        }
-        false
+    /// Seed NextSame on an open slot with room for `oc` distinct options. Its
+    /// answer is the nearest *later* same-answer question (or "none"), drawn from
+    /// `{qi+1..n}` plus "none" = `n - qi` values, so the host needs `qi <= n - oc`.
+    /// No referent is planted — "none" is a fine answer. None if oc > n.
+    fn seed_next_same(&mut self, rng: &mut Rng) -> Option<usize> {
+        assert!(
+            self.oc <= self.n,
+            "NextSame is impossible at oc={} > n={} — bad recipe",
+            self.oc,
+            self.n
+        );
+        self.seed_positional(0, self.n - self.oc, rng)
     }
 
-    /// Decide every still-open answer, avoiding banned letters. Adjacent equal
-    /// answers are suppressed only when ConsecIdent is pinned (`suppress_pairs`),
-    /// to hold its pair count; otherwise repeats are left to chance.
-    fn fill_answers(&mut self, rng: &mut Rng) {
-        for p in 0..self.n {
-            if self.is_set(p) {
-                continue;
-            }
-            let mut cands: ArrayVec<Answer, 5> = (0..self.oc as u8)
-                .map(Answer::from)
-                .filter(|&l| {
-                    !(self.banned[l.idx()] || self.suppress_pairs && self.would_pair(p, l))
-                })
+    /// Seed PrevSame: mirror of [`Self::seed_next_same`], referent on the *left*.
+    /// Options are `{0..qi}` plus "none" = `qi + 1` values, so `qi >= oc - 1`.
+    fn seed_prev_same(&mut self, rng: &mut Rng) -> Option<usize> {
+        assert!(
+            self.oc <= self.n,
+            "PrevSame is impossible at oc={} > n={} — bad recipe",
+            self.oc,
+            self.n
+        );
+        self.seed_positional(self.oc - 1, self.n - 1, rng)
+    }
+
+    /// Claim a random open, undecided slot in `lo..=hi` and give it a plain
+    /// non-banned answer (the position-referent shapes only need enough referent
+    /// slots on one side; whether a match exists is left to chance). None if no
+    /// open slot falls in range.
+    fn seed_positional(&mut self, lo: usize, hi: usize, rng: &mut Rng) -> Option<usize> {
+        let cands: ArrayVec<usize, MAX_N> = self
+            .open
+            .iter()
+            .copied()
+            .filter(|&qi| (lo..=hi).contains(&qi) && !self.is_decided(qi))
+            .collect();
+        if cands.is_empty() {
+            return None;
+        }
+        let qi = rng.pick(&cands);
+        let l = self.pick_answer(qi, false, &[], rng);
+        self.put(qi, l);
+        self.open.retain(|s| *s != qi);
+        Some(qi)
+    }
+
+    /// Pick an answer for an open slot under the active constraints: never a
+    /// banned letter, no new adjacent pair while `no_pairs`, and — when coverage
+    /// still owes letters and the free slots are running out — a `missing` one.
+    fn pick_answer(
+        &self,
+        qi: usize,
+        must_cover: bool,
+        missing: &[Answer],
+        rng: &mut Rng,
+    ) -> Answer {
+        let mut cands: ArrayVec<Answer, 5> = (0..self.oc as u8)
+            .map(Answer::from)
+            .filter(|&l| !(self.banned[l.idx()] || self.no_pairs && self.would_pair(qi, l)))
+            .collect();
+        if must_cover {
+            cands = cands
+                .iter()
+                .copied()
+                .filter(|l| missing.contains(l))
                 .collect();
-            if cands.is_empty() {
-                // relax the no-new-pair rule rather than fail (`repair` catches
-                // any constraint this breaks)
-                cands = (0..self.oc as u8)
+        }
+        if cands.is_empty() {
+            // Relax the no-pair rule (if the new pair breaks a shape, parametrize's
+            // satisfy-check drops it to AnswerOf); a still-owed coverage letter keeps priority.
+            cands = if must_cover {
+                missing.iter().copied().collect()
+            } else {
+                (0..self.oc as u8)
                     .map(Answer::from)
                     .filter(|&l| !self.banned[l.idx()])
-                    .collect();
-            }
-            let l = if cands.is_empty() {
-                Answer::A
-            } else {
-                rng.pick(&cands)
+                    .collect()
             };
-            self.put(p, l);
         }
+        // Always non-empty after the relax: only OnlySame + NoOther ban a letter
+        // (≤2), and oc ≥ 3, so an unbanned letter always remains.
+        assert!(!cands.is_empty(), "no candidate answer (oc={})", self.oc);
+        rng.pick(&cands)
     }
 
-    fn would_pair(&self, p: usize, l: Answer) -> bool {
-        (p > 0 && self.is_set(p - 1) && self.sol[p - 1] == l)
-            || (p + 1 < self.n && self.is_set(p + 1) && self.sol[p + 1] == l)
-    }
-
-    /// Safety net: if the (rare) fill_answers corner left a slot's type unsatisfiable
-    /// against the final answer key, demote it to a fresh AnswerOf (every slot
-    /// is assigned by now, so we dedup against the live types directly).
-    fn replace_unsatisfiable_types(&mut self) {
-        for qi in 0..self.n {
-            if !solution_satisfies_type(&self.types[qi], qi, &self.sol, self.n, self.oc) {
-                let qt = (0..self.n)
-                    .filter(|&j| j != qi)
-                    .map(|j| QuestionType::AnswerOf {
-                        question_index: j as u8,
-                    })
-                    .find(|qt| !self.types[..self.n].contains(qt))
-                    .expect("a broken slot always has a free AnswerOf target (AnswerOf count ≪ n)");
-                self.types[qi] = qt;
+    /// The left index of an adjacent equal pair shared by the pair-shapes: an
+    /// existing one if any, else a new one on two open slots (its letter chosen
+    /// so it doesn't extend a neighbour into a triple). None if none exists and
+    /// `no_pairs` forbids making one (ConsecIdent chose "no pair"). The position
+    /// is randomized — a fixed pair slot biases which slot each pair-shape lands
+    /// on, which in turn skews their survival through validation.
+    fn ensure_pair(&mut self, rng: &mut Rng) -> Option<usize> {
+        if let Some(a) = self.find_pair() {
+            return Some(a);
+        }
+        if self.no_pairs {
+            return None;
+        }
+        let mut starts: ArrayVec<usize, MAX_N> = (0..self.n.saturating_sub(1))
+            .filter(|&a| !self.is_decided(a) && !self.is_decided(a + 1))
+            .collect();
+        rng.shuffle(&mut starts);
+        for a in starts {
+            let b = a + 1;
+            let l = (0..self.oc as u8).map(Answer::from).find(|&l| {
+                !self.banned[l.idx()]
+                    && (a == 0 || !self.is_decided(a - 1) || self.solution[a - 1] != l)
+                    && (b + 1 >= self.n || !self.is_decided(b + 1) || self.solution[b + 1] != l)
+            });
+            if let Some(l) = l {
+                self.put(a, l);
+                self.put(b, l);
+                return Some(a);
             }
         }
+        None
     }
 
-    /// PLACE the kinds FORCE didn't pin into the unpinned slots, hardest-first,
-    /// with a fresh AnswerOf as the backup when a kind won't fit.
-    fn place_unpinned_kinds(&mut self, unpinned: &[QuestionTypeKind], rng: &mut Rng) {
-        let mut order: ArrayVec<QuestionTypeKind, MAX_N> = unpinned.iter().copied().collect();
-        order.sort_unstable_by_key(|&k| place_rank(k));
-
-        let mut free: ArrayVec<usize, MAX_N> =
-            (0..self.n).filter(|&p| !self.is_pinned(p)).collect();
-        rng.shuffle(&mut free);
-
-        let mut assigned = self.pinned;
-        for kind in order {
-            if self.try_assign(kind, &mut free, &mut assigned, rng) {
-                continue;
-            }
-            // Backup: a fresh AnswerOf — always satisfiable, never a duplicate.
-            let qi = free.pop().expect("a free slot per unpinned kind");
-            let qt = self.fresh_safe_type(qi);
-            self.types[qi] = qt;
-            self.placed.push(qt);
-            assigned |= 1 << qi;
-        }
+    /// Left index of an existing adjacent equal pair among the decided answers.
+    fn find_pair(&self) -> Option<usize> {
+        (0..self.n.saturating_sub(1)).find(|&a| {
+            self.is_decided(a) && self.is_decided(a + 1) && self.solution[a] == self.solution[a + 1]
+        })
     }
 
-    /// A satisfiable, not-yet-placed type for `qi`: a fresh AnswerOf to some
-    /// other question (always valid — `solution_satisfies` is unconditional for
-    /// it). At most a handful of AnswerOf are ever placed, so a free target
-    /// always exists for any `n`.
-    fn fresh_safe_type(&self, qi: usize) -> QuestionType {
-        (0..self.n)
-            .filter(|&j| j != qi)
-            .map(|j| QuestionType::AnswerOf {
-                question_index: j as u8,
-            })
-            .find(|qt| !self.placed.contains(qt))
-            .expect("a free AnswerOf target always exists (AnswerOf count ≪ n)")
+    fn would_pair(&self, qi: usize, l: Answer) -> bool {
+        (qi > 0 && self.is_decided(qi - 1) && self.solution[qi - 1] == l)
+            || (qi + 1 < self.n && self.is_decided(qi + 1) && self.solution[qi + 1] == l)
     }
+}
 
-    /// First unpinned free slot where `kind` fits and a random parametrization
-    /// satisfies the (now fixed) solution. Consumes the slot on success.
-    fn try_assign(
-        &mut self,
-        kind: QuestionTypeKind,
-        free: &mut ArrayVec<usize, MAX_N>,
-        assigned: &mut u16,
-        rng: &mut Rng,
-    ) -> bool {
-        for idx in 0..free.len() {
-            let qi = free[idx];
-            if !solution_fits_type(kind, qi, &self.sol, self.n, self.oc) {
-                continue;
-            }
+/// PARAMETRIZE: turn each slot's kind into a full QuestionType against the
+/// finished answer key. Each kind is drawn against the solution (parameter-free
+/// shapes map straight to their unit variant); a kind that won't fit its slot
+/// (e.g. ClosestAfter on the last slot) is replaced with a fresh AnswerOf
+/// (tallied into `fb.parametrize`). Shape-types were authored to fit, so they
+/// never fall back here.
+fn parametrize(
+    n: usize,
+    oc: usize,
+    sol: &[Answer; MAX_N],
+    kind_of: &[QuestionTypeKind; MAX_N],
+    rng: &mut Rng,
+    fb: &mut FallbackCounts,
+) -> [QuestionType; MAX_N] {
+    // Every answer is decided now, so reference types may target any question.
+    let all = if n >= 16 { u16::MAX } else { (1u16 << n) - 1 };
+    let mut types = [QuestionType::AnswerIsSelf; MAX_N];
+    let mut placed: ArrayVec<QuestionType, MAX_N> = ArrayVec::new();
+    for qi in 0..n {
+        let kind = kind_of[qi];
+        let mut chosen = None;
+        // The kind must *fit* this slot (e.g. MostCommon needs a unique extreme);
+        // if not, it's replaced rather than relocated.
+        if solution_fits_type(kind, qi, sol, n, oc) {
+            // measured: 10 draws saturates the fallback rate; more won't help.
             for _ in 0..10 {
-                if let Some(qt) =
-                    random_type_params(kind, qi, self.n, self.oc, &self.sol, *assigned, rng)
-                    && !self.placed.contains(&qt)
-                    && solution_satisfies_type(&qt, qi, &self.sol, self.n, self.oc)
+                if let Some(qt) = random_type_params(kind, qi, n, oc, sol, all, rng)
+                    && !placed.contains(&qt)
+                    && solution_satisfies_type(&qt, qi, sol, n, oc)
                 {
-                    self.types[qi] = qt;
-                    self.placed.push(qt);
-                    *assigned |= 1 << qi;
-                    free.swap_remove(idx);
-                    return true;
+                    chosen = Some(qt);
+                    break;
                 }
             }
         }
-        false
+        let qt = chosen.unwrap_or_else(|| {
+            fb.parametrize += 1;
+            fresh_safe_type(n, qi, &placed, rng)
+        });
+        types[qi] = qt;
+        placed.push(qt);
+    }
+    types
+}
+
+/// A satisfiable, not-yet-placed reference type for `qi`: a random AnswerOf to
+/// another question, falling back to a random LetterDist once every AnswerOf
+/// target is taken (small `n`). Both are unconditionally solution-satisfiable
+/// (AnswerOf trivially; LetterDist's answer is `|sol[qi] - sol[j]| < oc`, always
+/// in range). The exit is unreachable: blocking a target needs *both* its
+/// AnswerOf and LetterDist placed, i.e. `2·(n-1)` types, but `placed` holds only
+/// `qi ≤ n-1` here — so some target is always free.
+fn fresh_safe_type(n: usize, qi: usize, placed: &[QuestionType], rng: &mut Rng) -> QuestionType {
+    for make_qt in [make_answer_of, make_letter_dist] {
+        let mut targets: ArrayVec<u8, MAX_N> =
+            (0..n).filter(|&i| i != qi).map(|i| i as u8).collect();
+        while !targets.is_empty() {
+            let (k, target_qi) = rng.pick_kv_arrayvec(&targets);
+            let qt = make_qt(target_qi);
+            if !placed.contains(&qt) {
+                return qt;
+            }
+            targets.swap_remove(k);
+        }
+    }
+    unreachable!("not possible: no free AnswerOf/LetterDist target");
+
+    fn make_answer_of(target: u8) -> QuestionType {
+        QuestionType::AnswerOf {
+            question_index: target,
+        }
+    }
+    fn make_letter_dist(target: u8) -> QuestionType {
+        QuestionType::LetterDist {
+            question_index: target,
+        }
     }
 }
 
@@ -610,7 +763,13 @@ mod tests {
             let p = &PROFILES[level];
             let mut rng = Rng::new(level as u32 * 7919 + 1);
             for _ in 0..500 {
-                let c = compose(&RECIPES[level], p.question_count, p.option_count, &mut rng);
+                let c = compose(
+                    &RECIPES[level],
+                    p.question_count,
+                    p.option_count,
+                    &mut rng,
+                    &mut ComposeStats::default(),
+                );
                 assert_eq!(c.n, p.question_count);
                 // Every placed type must be satisfied by the composed answer
                 // key — otherwise fill_options couldn't build a valid puzzle.

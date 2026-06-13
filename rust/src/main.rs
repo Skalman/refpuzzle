@@ -130,7 +130,7 @@ fn print_help() {
     eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
-    eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
+    eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S] [--v2]");
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -o FILE       output file (required, - for stdout)");
@@ -195,6 +195,7 @@ fn main() {
             let mut attempts: u32 = 10000;
             let mut seed: u32 = 1;
             let mut output: Option<String> = None;
+            let mut use_v2 = false;
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
@@ -210,6 +211,9 @@ fn main() {
                         i += 1;
                         output = Some(args[i].clone());
                     }
+                    "--v2" => {
+                        use_v2 = true;
+                    }
                     other => {
                         eprintln!("Unknown option: {other}");
                         std::process::exit(1);
@@ -218,11 +222,11 @@ fn main() {
                 i += 1;
             }
             let Some(output) = output else {
-                eprintln!("Usage: refpuzzle type-stats -o FILE [--attempts N] [--seed N]");
+                eprintln!("Usage: refpuzzle type-stats -o FILE [--attempts N] [--seed N] [--v2]");
                 eprintln!("  -o FILE   output file (required, - for stdout)");
                 std::process::exit(1);
             };
-            type_stats::type_stats(attempts, seed, &output);
+            type_stats::type_stats(attempts, seed, &output, use_v2);
             return;
         }
         _ => {

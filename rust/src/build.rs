@@ -11,6 +11,24 @@ use crate::rng::Rng;
 use crate::solve_brute::solve;
 use crate::types::*;
 
+/// Slots demoted to AnswerOf during a `compose`, by phase — a shape that
+/// couldn't seed (`assign_kinds`), a kind that wouldn't parametrize
+/// (`parametrize`), or a pinned shape left unsatisfiable (`repair`).
+#[derive(Default)]
+pub struct FallbackCounts {
+    pub assign_kinds: u32,
+    pub parametrize: u32,
+}
+
+/// v2 `compose` telemetry, accumulated across every attempt: how many composes
+/// ran and the AnswerOf fallbacks they incurred. `compose_count` is the
+/// denominator for per-compose fallback rates.
+#[derive(Default)]
+pub struct ComposeStats {
+    pub compose_count: u32,
+    pub fallbacks: FallbackCounts,
+}
+
 #[derive(Default)]
 pub struct Stats {
     pub attempts: u32,
@@ -34,6 +52,7 @@ pub struct Stats {
     // into deduce_calls (which counts only the outer hint-loop `deduce`) so the
     // two propagation paths stay distinguishable.
     pub deduce_calls_in_lookahead: u32,
+    pub v2_compose: ComposeStats,
 }
 
 impl Stats {
@@ -56,6 +75,9 @@ impl Stats {
         self.lookahead_hits += other.lookahead_hits;
         self.lookahead_us += other.lookahead_us;
         self.deduce_calls_in_lookahead += other.deduce_calls_in_lookahead;
+        self.v2_compose.compose_count += other.v2_compose.compose_count;
+        self.v2_compose.fallbacks.assign_kinds += other.v2_compose.fallbacks.assign_kinds;
+        self.v2_compose.fallbacks.parametrize += other.v2_compose.fallbacks.parametrize;
     }
 
     pub fn print(&self) {
@@ -81,6 +103,12 @@ impl Stats {
             self.repair_fail_no_candidates,
             self.repair_fail_no_change,
             self.repair_fail_changed,
+        );
+        eprintln!(
+            "  v2 composes={} | AnswerOf fallbacks: assign_kinds={} parametrize={}",
+            self.v2_compose.compose_count,
+            self.v2_compose.fallbacks.assign_kinds,
+            self.v2_compose.fallbacks.parametrize,
         );
     }
 }

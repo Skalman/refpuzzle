@@ -1,5 +1,6 @@
 use crate::build::{self, GenerateResult};
 use crate::construct;
+use crate::construct_v2;
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::solve_deduce::solve;
@@ -35,19 +36,29 @@ struct LevelData {
     successes: u32,
     total_calls: u32,
     per_type: BTreeMap<QuestionTypeKind, TypeStats>,
+    /// v2 telemetry across all compose attempts: total composes + AnswerOf
+    /// fallbacks by phase.
+    composes: u32,
+    fallback_assign_kinds: u32,
+    fallback_parametrize: u32,
 }
 
-/// `output` is a file path, or `-` for stdout.
-pub fn type_stats(attempts: u32, seed: u32, output: &str) {
+/// `output` is a file path, or `-` for stdout. `use_v2` selects the v2
+/// `compose` pipeline (`construct_v2::generate`) instead of the live generator.
+pub fn type_stats(attempts: u32, seed: u32, output: &str, use_v2: bool) {
     let levels: Vec<LevelData> = (1..=6u8)
-        .map(|l| collect_level(l, attempts, seed))
+        .map(|l| collect_level(l, attempts, seed, use_v2))
         .collect();
 
     let mut md = String::new();
+    let pipeline = if use_v2 { " (v2 pipeline)" } else { "" };
     md.push_str(&format!(
-        "# Puzzle generation statistics\n\nUp to {attempts} attempts per level. Base seed {seed}.\n\n"
+        "# Puzzle generation statistics{pipeline}\n\nUp to {attempts} attempts per level. Base seed {seed}.\n\n"
     ));
     write_overview(&mut md, &levels);
+    if use_v2 {
+        write_fallbacks(&mut md, &levels);
+    }
     write_multiplicity(&mut md, &levels);
     write_answer_freq(&mut md, &levels);
 
@@ -63,13 +74,14 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
 /// Mirrors production: retry with fresh seeds until a generation succeeds, so
 /// `attempts` is the target *puzzle* count, not the generate()-call count.
 /// Capped at 100× calls as a backstop against an infeasible profile.
-fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
+fn collect_level(level: u8, attempts: u32, seed: u32, use_v2: bool) -> LevelData {
     let profile = &PROFILES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
     let mut attempt = 0u32;
     let mut total_calls = 0u32;
     let max_calls = attempts.saturating_mul(100);
+    let mut bstats = build::Stats::default(); // accumulates across accepted puzzles
 
     while successes < attempts && total_calls < max_calls {
         let s = seed
@@ -80,9 +92,20 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
         attempt = attempt.wrapping_add(1);
         total_calls += 1;
         let mut rng = Rng::new(s);
-        let mut bstats = build::Stats::default();
-        let Some(result) = construct::generate(profile, &mut rng, 100, &mut bstats, false, "stats")
-        else {
+        let result = if use_v2 {
+            construct_v2::generate(
+                &construct_v2::RECIPES[(level - 1) as usize],
+                profile.question_count,
+                profile.option_count,
+                &mut rng,
+                100,
+                &mut bstats,
+                "stats",
+            )
+        } else {
+            construct::generate(profile, &mut rng, 100, &mut bstats, false, "stats")
+        };
+        let Some(result) = result else {
             continue;
         };
         successes += 1;
@@ -107,7 +130,44 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
         successes,
         total_calls,
         per_type,
+        composes: bstats.v2_compose.compose_count,
+        fallback_assign_kinds: bstats.v2_compose.fallbacks.assign_kinds,
+        fallback_parametrize: bstats.v2_compose.fallbacks.parametrize,
     }
+}
+
+/// Per-level v2 compose telemetry: total composes (with attempts-per-accepted-
+/// puzzle, i.e. the rejection ratio), and AnswerOf fallbacks per phase as a
+/// per-compose rate.
+fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
+    md.push_str(
+        "## Compose telemetry (v2)\n\n`composes` is total compose calls (with attempts per accepted puzzle); fallback columns are totals (with per-compose rate).\n\n",
+    );
+    let header: Vec<String> = ["Level", "composes", "assign_kinds", "parametrize"]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+    let rows: Vec<Vec<String>> = levels
+        .iter()
+        .map(|l| {
+            let per_puzzle = |c: u32| match l.successes {
+                0 => c.to_string(),
+                s => format!("{c} ({:.1}/pz)", c as f64 / s as f64),
+            };
+            let per_compose = |c: u32| match l.composes {
+                0 => c.to_string(),
+                composes => format!("{c} ({:.2}/c)", c as f64 / composes as f64),
+            };
+            vec![
+                format!("L{}", l.level),
+                per_puzzle(l.composes),
+                per_compose(l.fallback_assign_kinds),
+                per_compose(l.fallback_parametrize),
+            ]
+        })
+        .collect();
+    render_table(md, &header, &rows);
+    md.push('\n');
 }
 
 /// Fold one generated puzzle into the running per-type tallies.
