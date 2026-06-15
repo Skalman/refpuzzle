@@ -1323,7 +1323,7 @@ fn deduce_impl(
                     let target_ans = answers[target_qi];
                     if let Some(target) = target_ans {
                         let mut best: Option<usize> = None;
-                        for oi in 0..5usize {
+                        for oi in 0..fp.option_count {
                             if fp.options[qi][oi].value() == target as u8 {
                                 if !is_elim(eliminated, qi, oi) {
                                     best = Some(oi);

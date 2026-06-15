@@ -7,6 +7,7 @@ mod check_form;
 mod construct;
 mod construct_v2;
 mod deduce;
+mod diagnose; // TEMPORARY: `stuck` subcommand for rebuilding repair
 mod difficulty;
 mod format;
 mod lookahead;
@@ -131,6 +132,9 @@ fn print_help() {
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S] [--v2]");
+    eprintln!(
+        "       refpuzzle stuck [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (v2 stuck histogram + links)"
+    );
     eprintln!();
     eprintln!("Options:");
     eprintln!("  -o FILE       output file (required, - for stdout)");
@@ -141,10 +145,12 @@ fn print_help() {
     eprintln!("  -t, --threads N  worker threads (default: all cores)");
     eprintln!("  --stats       show generation statistics");
     eprintln!("  --trace       show trace output");
+    eprintln!("  --v2          use the v2 compose+repair pipeline (default: v1)");
     eprintln!("  --json        output check results as JSON");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  refpuzzle gen 2051 -o out.json");
+    eprintln!("  refpuzzle gen 2051 -o out.json --v2");
     eprintln!("  refpuzzle gen 2051-03 -o out.json -l 4");
     eprintln!("  refpuzzle gen 2051-01..2051-06 -o out.json -m");
     eprintln!("  refpuzzle check puzzles/daily/2051.json");
@@ -229,6 +235,49 @@ fn main() {
             type_stats::type_stats(attempts, seed, &output, use_v2);
             return;
         }
+        // TEMPORARY: stuck-puzzle diagnostic — remove with src/diagnose.rs once
+        // validate_and_repair does real repair.
+        "stuck" => {
+            let mut seed: u32 = 1;
+            let mut attempts: usize = 200;
+            let mut count: usize = 5;
+            let mut level: Option<usize> = None;
+            let mut origin = "http://localhost:5173".to_string();
+            let mut i = 2;
+            while i < args.len() {
+                match args[i].as_str() {
+                    "--seed" => {
+                        i += 1;
+                        seed = args[i].parse().expect("invalid seed");
+                    }
+                    "--attempts" | "-a" => {
+                        i += 1;
+                        attempts = args[i].parse().expect("invalid attempts");
+                    }
+                    "--count" | "-n" => {
+                        i += 1;
+                        count = args[i].parse().expect("invalid count");
+                    }
+                    "--level" | "-l" => {
+                        i += 1;
+                        let l = args[i].parse().expect("invalid level");
+                        assert!((1..=6).contains(&l), "level must be 1-6");
+                        level = Some(l);
+                    }
+                    "--origin" => {
+                        i += 1;
+                        origin = args[i].clone();
+                    }
+                    other => {
+                        eprintln!("Unknown option: {other}");
+                        std::process::exit(1);
+                    }
+                }
+                i += 1;
+            }
+            diagnose::stuck(seed, attempts, count, level, &origin);
+            return;
+        }
         _ => {
             eprintln!(
                 "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', or 'type-stats'.",
@@ -248,6 +297,7 @@ fn main() {
     let mut merge = false;
     let mut overwrite = false;
     let mut threads: Option<usize> = None;
+    let mut use_v2 = false;
 
     let mut i = 2;
     while i < args.len() {
@@ -281,6 +331,9 @@ fn main() {
             }
             "--trace" => {
                 trace = true;
+            }
+            "--v2" => {
+                use_v2 = true;
             }
             "--help" | "-h" => {
                 print_help();
@@ -389,9 +442,20 @@ fn main() {
             let mut stats = build::Stats::default();
             for &s in seeds {
                 let mut rng = Rng::new(s);
-                if let Some(r) =
+                let r = if use_v2 {
+                    construct_v2::generate(
+                        &construct_v2::RECIPES[level as usize - 1],
+                        profile.question_count,
+                        profile.option_count,
+                        &mut rng,
+                        max_attempts,
+                        &mut stats,
+                        &label,
+                    )
+                } else {
                     construct::generate(profile, &mut rng, max_attempts, &mut stats, trace, &label)
-                {
+                };
+                if let Some(r) = r {
                     result = Some(r);
                     break;
                 }

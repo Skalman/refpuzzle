@@ -194,7 +194,7 @@ fn propagate_forces(
             {
                 let target_oi = current[qi].unwrap() as u8;
                 let mut found: Option<usize> = None;
-                for oi in 0..5usize {
+                for oi in 0..fp.option_count {
                     if fp.options[j][oi].value() == target_oi {
                         if found.is_some() {
                             found = None;

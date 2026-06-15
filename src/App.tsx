@@ -726,6 +726,7 @@ function PlaygroundRoute() {
       dateStr="playground"
       level={1}
       initialHash={state.stateHash}
+      ephemeral
       onNextPuzzle={() => {}}
       onChanged={() => {}}
     />

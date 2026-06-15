@@ -203,8 +203,13 @@ pub fn solution_satisfies_type(
     }
 }
 
-fn run_hint_engine(fp: &FlatPuzzle, stats: &mut Stats, trace: bool) -> (bool, State) {
-    run_hint_engine_from(fp, fp.initial_state, stats, trace)
+pub(crate) fn run_hint_engine(
+    fp: &FlatPuzzle,
+    stats: &mut Stats,
+    trace: bool,
+    lookahead_depth: usize,
+) -> (bool, State) {
+    run_hint_engine_from(fp, fp.initial_state, stats, trace, lookahead_depth)
 }
 
 fn run_hint_engine_from(
@@ -212,6 +217,7 @@ fn run_hint_engine_from(
     mut state: State,
     stats: &mut Stats,
     trace: bool,
+    lookahead_depth: usize,
 ) -> (bool, State) {
     let n = fp.n;
     let mut batch = 0u32;
@@ -273,13 +279,21 @@ fn run_hint_engine_from(
             continue;
         }
 
-        if fp.option_count < 5 {
+        // `lookahead_depth` 0 disables lookahead (intro puzzles must be solvable
+        // by pure deduction); otherwise probe up to that many deductions deep
+        // for a contradiction. Set per level (recipe in v2; oc-based otherwise).
+        if lookahead_depth == 0 {
             return (false, state);
         }
-
         stats.lookahead_calls += 1;
         let t_la = wasm_now();
-        let lr = lookahead(fp, &state, 6, false, &mut stats.deduce_calls_in_lookahead);
+        let lr = lookahead(
+            fp,
+            &state,
+            lookahead_depth,
+            false,
+            &mut stats.deduce_calls_in_lookahead,
+        );
         stats.lookahead_us += us(t_la);
         if let Some(lr) = lr {
             stats.lookahead_hits += 1;
@@ -529,7 +543,7 @@ fn valid_values(qt: &QuestionType, qi: usize, n: usize, oc: usize) -> ArrayVec<O
     out
 }
 
-fn assert_accepted(
+pub(crate) fn assert_accepted(
     fp: &FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
@@ -590,12 +604,16 @@ pub fn validate_and_repair(
     #[cfg(debug_assertions)]
     validate_option_values(fp);
 
+    // Production (construct.rs) keeps the original rule: lookahead disabled for
+    // small option counts (L1), depth 6 otherwise. The v2 path is recipe-driven.
+    let lookahead_depth = if fp.option_count < 5 { 0 } else { 6 };
+
     // Step 1: Can the engine solve it?
     if trace {
         eprintln!("{}", json!({"t": "solve", "label": "initial"}));
     }
     let t0 = wasm_now();
-    let (ok, stuck_state) = run_hint_engine(fp, stats, trace);
+    let (ok, stuck_state) = run_hint_engine(fp, stats, trace, lookahead_depth);
     stats.hint_us += us(t0);
     if trace {
         let answered = (0..n).filter(|&i| stuck_state.answers[i].is_some()).count();
@@ -657,9 +675,9 @@ pub fn validate_and_repair(
         }
         let t0 = wasm_now();
         let (ok, _) = if solved_before == 0 {
-            run_hint_engine(fp, stats, trace)
+            run_hint_engine(fp, stats, trace, lookahead_depth)
         } else {
-            run_hint_engine_from(fp, stuck_state, stats, trace)
+            run_hint_engine_from(fp, stuck_state, stats, trace, lookahead_depth)
         };
         stats.hint_us += us(t0);
 
@@ -685,7 +703,7 @@ pub fn validate_and_repair(
         eprintln!("{}", json!({"t": "solve", "label": "final"}));
     }
     let t0 = wasm_now();
-    let (ok, _) = run_hint_engine(fp, stats, trace);
+    let (ok, _) = run_hint_engine(fp, stats, trace, lookahead_depth);
     stats.hint_us += us(t0);
     if !ok {
         return false;
@@ -715,7 +733,7 @@ pub fn validate_and_repair(
 // distractor values (0, max, edge positions). Prioritize counting types since
 // extreme counts are easy for the hint engine to disprove.
 
-fn rank_repair_candidates(
+pub(crate) fn rank_repair_candidates(
     fp: &FlatPuzzle,
     stuck_answers: &[Option<Answer>; MAX_N],
 ) -> ArrayVec<usize, MAX_N> {
@@ -973,7 +991,7 @@ pub fn repair_one_question(
 // ── Build FlatPuzzle with options ──
 
 #[allow(clippy::too_many_arguments)]
-fn fill_one_question(
+pub(crate) fn fill_one_question(
     qt: &QuestionType,
     qi: usize,
     solution: &[Answer; MAX_N],

@@ -11,12 +11,16 @@
 use arrayvec::ArrayVec;
 
 use crate::build::{
-    ComposeStats, FallbackCounts, GenerateResult, Stats, fill_options, solution_satisfies_type,
-    validate_and_repair,
+    ComposeStats, FallbackCounts, GenerateResult, Stats, assert_accepted, fill_one_question,
+    fill_options, rank_repair_candidates, repair_one_question, run_hint_engine,
+    solution_satisfies_type, to_optional,
 };
+use crate::check_answer::check_answer;
 use crate::check_form::check_form;
 use crate::construct::{random_type_params, solution_fits_type};
+use crate::deduce::deduce;
 use crate::rng::Rng;
+use crate::solve_brute::solve;
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
 
@@ -30,6 +34,10 @@ pub struct LevelRecipe {
     pub allowed: &'static [QuestionTypeKind],
     /// Per-type max occurrences (default 3; unit variants 1 — see `DEFAULT_CAPS`).
     pub caps: [u8; 32],
+    /// Lookahead search depth the engine may use to accept a puzzle (the
+    /// `stop_deducing_after_n_results` budget). 0 = pure deduction only; larger
+    /// admits harder puzzles. Ramps from intro (shallow) to late (deep).
+    pub lookahead_depth: usize,
 }
 
 const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
@@ -85,12 +93,14 @@ pub static RECIPES: [LevelRecipe; 6] = [
             NoOtherHasAnswer,
         ],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 1,
     },
     // L2
     LevelRecipe {
         required: &[],
         allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 1,
     },
     // L3
     LevelRecipe {
@@ -110,6 +120,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAs,
         ],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 6,
     },
     // L4
     LevelRecipe {
@@ -135,6 +146,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAs,
         ],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 6,
     },
     // L5
     LevelRecipe {
@@ -167,6 +179,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAsWhich,
         ],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 6,
     },
     // L6
     LevelRecipe {
@@ -200,6 +213,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAsWhich,
         ],
         caps: DEFAULT_CAPS,
+        lookahead_depth: 6,
     },
 ];
 
@@ -260,24 +274,272 @@ pub fn generate(
             &c.types[..c.n],
             &c.solution[..c.n]
         );
-        if validate_and_repair(
-            &c.types,
-            &c.solution,
+        if let Verdict::Accepted = validate_and_repair(
             &mut fp,
+            &c.solution,
             c.n,
+            recipe.lookahead_depth,
             rng,
             stats,
             false,
             label,
         ) {
+            // Use `fp.question_types`, not `c.types`: move #2 grafts can rewrite a
+            // question's rule, so the repaired puzzle's types live on `fp` now.
             return Some(GenerateResult {
-                question_types: c.types,
+                question_types: fp.question_types,
                 fp,
                 n: c.n,
             });
         }
     }
     None
+}
+
+/// Outcome of [`validate_and_repair`]. `Stuck` carries the engine's partial
+/// state (which questions it pinned) — the input repair will consume.
+pub enum Verdict {
+    Accepted,
+    Stuck { solved: usize, state: State },
+}
+
+/// Validate a composed puzzle, repairing it into an accepted one where possible.
+/// The answer key is held fixed throughout — repair edits distractors and, failing
+/// that, grafts whole rules, so the caller never has to re-author the key.
+///
+/// Engine-only first: assert the key is self-consistent, run deduce+lookahead, and
+/// on a full solve confirm uniqueness. If the engine stalls, two cheap-first repair
+/// moves run in order. The discipline that keeps them fast: a single-step `deduce`
+/// probe (or, for a graft, a construction-guaranteed anchor) decides whether to pay
+/// for a full engine run, and brute `solve` fires once — only on a completed puzzle.
+///   - **Move #1 — distractor edit:** perturb one distractor of a stuck question
+///     ([`repair_one_question`], legal-by-construction), gated by the probe.
+///   - **Move #2 — rule graft:** replace a stuck question's whole rule with
+///     `AnswerOf(j)`/`LetterDist(j)` aimed at an already-solved `j`. With `j` forced
+///     in every solution, the graft pins the stuck question (a deducible anchor) and
+///     kills any rival that diverged there. Capped, since it rewrites the question.
+///
+/// Both advance a working stuck position and accept the instant the puzzle
+/// completes. The key stays valid by construction (the correct option/answer is
+/// never touched). A puzzle neither move can crack is reported `Stuck` (move #3 —
+/// anchor injection for zero-progress puzzles — still to come).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn validate_and_repair(
+    fp: &mut FlatPuzzle,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    lookahead_depth: usize,
+    rng: &mut Rng,
+    stats: &mut Stats,
+    trace: bool,
+    label: &str,
+) -> Verdict {
+    stats.attempts += 1;
+
+    // The answer key must be self-consistent — a compose bug otherwise.
+    let opt_solution = to_optional(solution, n);
+    for qi in 0..n {
+        let state = State {
+            answers: opt_solution,
+            eliminated: [fp.phantom_mask(); MAX_N],
+        };
+        assert!(
+            check_answer(fp, state, qi).is_valid(),
+            "BUG: check_answer failed for Q{} type={:?} answer={:?} solution={:?}",
+            qi + 1,
+            fp.question_types[qi],
+            solution[qi],
+            &solution[..n]
+        );
+    }
+
+    let (solved, state) = run_hint_engine(fp, stats, trace, lookahead_depth);
+    if solved {
+        let solutions = solve(fp, None, 2);
+        assert_accepted(fp, solution, n, solutions.len(), label);
+        return Verdict::Accepted;
+    }
+
+    // Cheap-first repair: distractor edits, then rule grafts. Both advance `cur`
+    // (the working stuck position) and accept the moment the puzzle completes.
+    let mut cur = state;
+    if repair_distractors(
+        fp,
+        solution,
+        n,
+        lookahead_depth,
+        rng,
+        stats,
+        &mut cur,
+        label,
+    ) || repair_graft(
+        fp,
+        solution,
+        n,
+        lookahead_depth,
+        rng,
+        stats,
+        &mut cur,
+        label,
+    ) {
+        return Verdict::Accepted;
+    }
+
+    let solved = solved_count(&cur, n);
+    stats.fail_solve += 1;
+    if solved == 0 {
+        stats.fail_solve_zero_progress += 1;
+    }
+    Verdict::Stuck { solved, state: cur }
+}
+
+fn solved_count(state: &State, n: usize) -> usize {
+    (0..n).filter(|&qi| state.answers[qi].is_some()).count()
+}
+
+/// Move #1: walk stuck questions in heuristic order, perturb one distractor, gate
+/// the full engine behind a `deduce` probe, keep useful edits (advancing `cur`).
+/// True if an edit completed the puzzle.
+#[allow(clippy::too_many_arguments)]
+fn repair_distractors(
+    fp: &mut FlatPuzzle,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    lookahead_depth: usize,
+    rng: &mut Rng,
+    stats: &mut Stats,
+    cur: &mut State,
+    label: &str,
+) -> bool {
+    for qi in rank_repair_candidates(fp, &cur.answers) {
+        let before = fp.options[qi];
+        stats.repair_attempts += 1;
+        repair_one_question(fp, qi, solution, &cur.eliminated, rng);
+        // Skip a no-op edit, or one that collided two option values (the AnswerOf
+        // reshuffle can dup a letter into an untouched eliminated slot).
+        if fp.options[qi] == before || row_has_duplicate(fp, qi) {
+            fp.options[qi] = before;
+            continue;
+        }
+        // Cheap gate: did the edit let `deduce` make a move it couldn't before? If
+        // not, it's not worth a full engine run — revert and try the next.
+        if deduce(fp, cur).is_empty() {
+            fp.options[qi] = before;
+            continue;
+        }
+        let (solved, state2) = run_hint_engine(fp, stats, false, lookahead_depth);
+        if solved {
+            let solutions = solve(fp, None, 2);
+            assert_accepted(fp, solution, n, solutions.len(), label);
+            stats.repair_ok += 1;
+            return true;
+        }
+        *cur = state2; // useful edit — keep it and repair from the new position
+    }
+    false
+}
+
+/// Move #2: when distractor edits don't finish, graft `AnswerOf(j)`/`LetterDist(j)`
+/// (aimed at an already-solved `j`) onto a stuck question — an anchor that's
+/// deducible the instant `j` is known. Capped at `MAX_GRAFTS` since each rewrites a
+/// whole question. True if a graft completed the puzzle.
+#[allow(clippy::too_many_arguments)]
+fn repair_graft(
+    fp: &mut FlatPuzzle,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    lookahead_depth: usize,
+    rng: &mut Rng,
+    stats: &mut Stats,
+    cur: &mut State,
+    label: &str,
+) -> bool {
+    const MAX_GRAFTS: usize = 2;
+    let oc = fp.option_count;
+    for _ in 0..MAX_GRAFTS {
+        let Some((qi, new_type)) = pick_graft(fp, n, cur) else {
+            return false;
+        };
+        let (old_type, old_opts) = (fp.question_types[qi], fp.options[qi]);
+        stats.repair_attempts += 1;
+        fp.question_types[qi] = new_type;
+        let mut local_types = None;
+        fill_one_question(
+            &new_type,
+            qi,
+            solution,
+            n,
+            oc,
+            rng,
+            &mut fp.options[qi],
+            &mut local_types,
+        );
+        rebuild_deps(fp, n);
+
+        let (solved, state2) = run_hint_engine(fp, stats, false, lookahead_depth);
+        if solved {
+            let solutions = solve(fp, None, 2);
+            assert_accepted(fp, solution, n, solutions.len(), label);
+            stats.repair_ok += 1;
+            return true;
+        }
+        if solved_count(&state2, n) > solved_count(cur, n) {
+            *cur = state2; // graft pinned the question — keep it, try another
+        } else {
+            // The engine couldn't use the anchor — undo and stop (avoid spinning).
+            fp.question_types[qi] = old_type;
+            fp.options[qi] = old_opts;
+            rebuild_deps(fp, n);
+            return false;
+        }
+    }
+    false
+}
+
+/// A stuck question to graft and the rule to put on it: `AnswerOf(j)` (then
+/// `LetterDist(j)` as fallback) for an already-solved `j`, skipping any rule already
+/// present elsewhere. `None` if nothing is graftable (e.g. no question solved yet —
+/// that's move #3's job).
+fn pick_graft(fp: &FlatPuzzle, n: usize, cur: &State) -> Option<(usize, QuestionType)> {
+    for qi in 0..n {
+        if cur.answers[qi].is_some() || matches!(fp.question_types[qi], QuestionType::TrueStmt) {
+            continue;
+        }
+        for answer_of in [true, false] {
+            for j in 0..n {
+                if j == qi || cur.answers[j].is_none() {
+                    continue;
+                }
+                let t = if answer_of {
+                    QuestionType::AnswerOf {
+                        question_index: j as u8,
+                    }
+                } else {
+                    QuestionType::LetterDist {
+                        question_index: j as u8,
+                    }
+                };
+                if !(0..n).any(|qj| qj != qi && fp.question_types[qj] == t) {
+                    return Some((qi, t));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn rebuild_deps(fp: &mut FlatPuzzle, n: usize) {
+    let (affected_by, global_indices) = FlatPuzzle::build_deps(&fp.question_types, n);
+    fp.affected_by = affected_by;
+    fp.global_indices = global_indices;
+}
+
+/// True if two real option slots (`0..option_count`) share a value — the one
+/// well-formedness hazard `repair_one_question` can introduce. Cheap (≤ oc²), so
+/// it gates every edit; full `check_form` is left to the accept-time assert.
+fn row_has_duplicate(fp: &FlatPuzzle, qi: usize) -> bool {
+    let oc = fp.option_count;
+    (0..oc).any(|a| ((a + 1)..oc).any(|b| fp.options[qi][a] == fp.options[qi][b]))
 }
 
 /// Required types first, then fill remaining slots from `allowed` (uniform for

@@ -39,6 +39,8 @@ interface PuzzleViewProps {
   dateStr: string;
   level: number;
   initialHash?: string | null;
+  /** Playground mode: render from the URL only, never touch localStorage. */
+  ephemeral?: boolean;
   onNextPuzzle: () => void;
   onChanged: () => void;
   onStartTutorial?: () => void;
@@ -52,6 +54,7 @@ export function PuzzleView({
   dateStr,
   level,
   initialHash,
+  ephemeral,
   onNextPuzzle,
   onChanged,
   onStartTutorial,
@@ -65,10 +68,19 @@ export function PuzzleView({
     (new URLSearchParams(window.location.search).has("debug") ||
       sessionStorage.getItem("debug") === "1");
 
+  // Ephemeral (playground) mode persists nothing: the puzzle is fully described
+  // by the URL. Gating the two saveState calls is sufficient — saveMeta /
+  // clearMeta / loadMeta all no-op without an existing entry, and loadState
+  // returns null, so no other store touchpoint can write.
+
   // Initialize synchronously to avoid flicker
   const initState = (() => {
     const n = puzzle.questions.length;
-    const saved = initialHash ? decodeShareHash(initialHash, n) : loadState(puzzle.id, n);
+    const saved = initialHash
+      ? decodeShareHash(initialHash, n)
+      : ephemeral
+        ? null
+        : loadState(puzzle.id, n);
     if (saved && saved.history.length > 0) {
       return saved;
     }
@@ -132,7 +144,7 @@ export function PuzzleView({
     completed: initCompleted,
   });
   useEffect(() => {
-    if (initCompleted && !initState.completed) {
+    if (initCompleted && !initState.completed && !ephemeral) {
       saveState(puzzle.id, {
         questions: initState.questions,
         completed: true,
@@ -143,7 +155,7 @@ export function PuzzleView({
       });
       onChanged();
     }
-  }, [initCompleted, initState, puzzle.id, onChanged]);
+  }, [initCompleted, initState, puzzle.id, onChanged, ephemeral]);
   const historyBurstRef = useRef({ lastTime: 0 });
   const tutorialReachedEnd = useRef(false);
 
@@ -245,14 +257,16 @@ export function PuzzleView({
       setValidity(result);
 
       const isCompleted = result.every(isValid);
-      saveState(puzzle.id, {
-        questions: qs,
-        completed: isCompleted,
-        stale: false,
-        history: historyRef.current,
-        historyIdx: historyIdxRef.current,
-        hints: hintMarkers.current,
-      });
+      if (!ephemeral) {
+        saveState(puzzle.id, {
+          questions: qs,
+          completed: isCompleted,
+          stale: false,
+          history: historyRef.current,
+          historyIdx: historyIdxRef.current,
+          hints: hintMarkers.current,
+        });
+      }
       if (analytics.wasStarted.current && !analytics.wasCompleted.current)
         saveMeta(puzzle.id, analytics.meta.current);
       const nowStarted = historyRef.current.length > 1;
@@ -264,7 +278,7 @@ export function PuzzleView({
         onChanged();
       }
     },
-    [puzzle, onChanged, analytics.meta, analytics.wasStarted, analytics.wasCompleted],
+    [puzzle, onChanged, analytics.meta, analytics.wasStarted, analytics.wasCompleted, ephemeral],
   );
 
   const tutorial = useTutorial(puzzle, {
