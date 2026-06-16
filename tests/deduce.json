@@ -3984,6 +3984,117 @@
       "expect": "3C"
     },
     {
+      "section": "=== TrueStatementMatch (claim <-> matching question) ==="
+    },
+    {
+      "name": "TrueStatementMatchForce: CountVowel question = 2 forces the 'vowels == 2' claim",
+      "rule": "TrueStatementMatchForce",
+      "puzzle": {
+        "o": [
+          [4, 2, 1, 3, 0],
+          [2, 3, 4, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "TrueStmt" },
+          { "t": "CountVowel" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ],
+        "t": [
+          { "t": "PrevSame" },
+          { "t": "CountVowel" },
+          { "t": "NextSame" },
+          { "t": "OnlySame" },
+          { "t": "SameAs" }
+        ]
+      },
+      "state": ["", "A", "", ""],
+      "expect": "1B"
+    },
+    {
+      "name": "TrueStatementMatchForce: selecting the 'vowels == 2' claim forces the CountVowel question to 2",
+      "rule": "TrueStatementMatchForce",
+      "puzzle": {
+        "o": [
+          [4, 2, 1, 3, 0],
+          [2, 3, 4, 1, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "TrueStmt" },
+          { "t": "CountVowel" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ],
+        "t": [
+          { "t": "PrevSame" },
+          { "t": "CountVowel" },
+          { "t": "NextSame" },
+          { "t": "OnlySame" },
+          { "t": "SameAs" }
+        ]
+      },
+      "state": ["B", "", "", ""],
+      "expect": "2A"
+    },
+    {
+      "name": "TrueStatementMatchElim: AnswerOf(4) question = A refutes the 'AnswerOf(4) == C' claim",
+      "rule": "TrueStatementMatchElim",
+      "puzzle": {
+        "o": [
+          [2, 0, 1, 3, 4],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "TrueStmt" },
+          { "t": "AnswerOf", "q": 3 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ],
+        "t": [
+          { "t": "AnswerOf", "q": 3 },
+          { "t": "PrevSame" },
+          { "t": "NextSame" },
+          { "t": "OnlySame" },
+          { "t": "SameAs" }
+        ]
+      },
+      "state": ["", "A", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "TrueStatementMatchElim: ruling out the 'AnswerOf(4) == C' claim rules C out of the AnswerOf(4) question",
+      "rule": "TrueStatementMatchElim",
+      "puzzle": {
+        "o": [
+          [2, 0, 1, 3, 4],
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "TrueStmt" },
+          { "t": "AnswerOf", "q": 3 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ],
+        "t": [
+          { "t": "AnswerOf", "q": 3 },
+          { "t": "PrevSame" },
+          { "t": "NextSame" },
+          { "t": "OnlySame" },
+          { "t": "SameAs" }
+        ]
+      },
+      "state": ["a", "", "", ""],
+      "expect": "2c"
+    },
+    {
       "section": "=== No deduction / rule filter ==="
     },
     {
