@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
+import type { Answer, Claim, FlatPuzzle, Puzzle, QuestionType } from "./types.ts";
 
 export type ExplainStep =
   | { type: "simple"; text: string }
@@ -43,6 +43,7 @@ import {
   claimAt,
 } from "./types.ts";
 import type { DeduceResult, DeduceRule, LookaheadResult } from "./hint-types.ts";
+import { renderClaimLabel } from "./render.ts";
 
 // ── Formatting helpers ──
 
@@ -197,7 +198,7 @@ export function explainDeduce(
 }
 
 function explainForce(
-  _puzzle: Puzzle,
+  puzzle: Puzzle,
   fp: FlatPuzzle,
   answers: (Answer | null)[],
   eliminated: number[],
@@ -448,6 +449,32 @@ function explainForce(
     ];
   }
 
+  if (rule === "TrueStatementMatchForce") {
+    const selfClaim = claimAt(fp, qi, letterIdx(letter));
+    if (selfClaim != null) {
+      // qi is the TrueStmt: a matching question has settled this statement as true.
+      const k = findClaimMatchQuestion(puzzle, qi, selfClaim);
+      return [
+        simple(`Try looking at ${k != null ? Q(k) : Q(qi)}.`),
+        simple(
+          k != null
+            ? `${Q(k)} settles "${renderClaimLabel(selfClaim)}", making that statement true — so ${Q(qi)} must be ${letter}.`
+            : `Its statement is already settled as true, so ${Q(qi)} must be ${letter}.`,
+        ),
+      ];
+    }
+    // qi is the plain question that a chosen true statement points at.
+    const t = findTrueStmtClaimMatching(puzzle, fp, answers, qi);
+    return [
+      simple(`Try looking at ${t != null ? Q(t.tQi) : Q(qi)}.`),
+      simple(
+        t != null
+          ? `${Q(t.tQi)}'s true statement is "${renderClaimLabel(t.claim)}", so ${Q(qi)} must be ${letter}.`
+          : `The true statement forces ${Q(qi)} to be ${letter}.`,
+      ),
+    ];
+  }
+
   throw new Error(`explainForce: no explanation found for ${Q(qi)} = ${letter} (rule: ${rule})`);
 }
 
@@ -476,8 +503,115 @@ function findCountSatSource(
   return null;
 }
 
+/** Highest lower bound on the count of `letterIndex` implied by a sibling
+ * CountAnswer / CountAnswerBefore / CountAnswerAfter question (a sub-range
+ * floor still lower-bounds the total). Mirrors `CountBounds::floor` in
+ * `deduce.rs`. */
+function findCountFloorSource(
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  eliminated: number[],
+  letterIndex: number,
+): { srcQi: number; floor: number } | null {
+  const target = LETTERS[letterIndex];
+  let best: { srcQi: number; floor: number } | null = null;
+  for (let src = 0; src < fp.n; src++) {
+    const q = fp.questions[src];
+    if (q.t !== QT_COUNT_ANSWER && q.t !== QT_COUNT_ANSWER_BEFORE && q.t !== QT_COUNT_ANSWER_AFTER)
+      continue;
+    if (q.answer !== target) continue;
+    // Smallest still-possible option value = lower bound on this count.
+    let lo = Infinity;
+    const ans = answers[src];
+    if (ans != null) {
+      const val = fp.optionValues[src][letterIdx(ans)];
+      if (val != null) lo = val;
+    } else {
+      for (let oi = 0; oi < fp.optionCount; oi++) {
+        if (isElim(eliminated, src, oi)) continue;
+        const val = fp.optionValues[src][oi];
+        if (val != null && val < lo) lo = val;
+      }
+    }
+    if (lo !== Infinity && (best == null || lo > best.floor)) best = { srcQi: src, floor: lo };
+  }
+  return best;
+}
+
+/** Lowest upper bound on the count of `letterIndex` implied by a sibling
+ * full-range CountAnswer question. Mirrors `CountBounds::ceil` — Before/After
+ * bound only a sub-range, so they can't cap the total. */
+function findCountCeilSource(
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  eliminated: number[],
+  letterIndex: number,
+): { srcQi: number; ceil: number } | null {
+  const target = LETTERS[letterIndex];
+  let best: { srcQi: number; ceil: number } | null = null;
+  for (let src = 0; src < fp.n; src++) {
+    const q = fp.questions[src];
+    if (q.t !== QT_COUNT_ANSWER) continue;
+    if (q.answer !== target) continue;
+    // Largest still-possible option value = upper bound on this count.
+    let hi = -Infinity;
+    const ans = answers[src];
+    if (ans != null) {
+      const val = fp.optionValues[src][letterIdx(ans)];
+      if (val != null) hi = val;
+    } else {
+      for (let oi = 0; oi < fp.optionCount; oi++) {
+        if (isElim(eliminated, src, oi)) continue;
+        const val = fp.optionValues[src][oi];
+        if (val != null && val > hi) hi = val;
+      }
+    }
+    if (hi !== -Infinity && (best == null || hi < best.ceil)) best = { srcQi: src, ceil: hi };
+  }
+  return best;
+}
+
+/** Two question types express the same proposition (same kind and parameters). */
+function sameQuestionType(a: QuestionType, b: QuestionType): boolean {
+  if (a.type !== b.type) return false;
+  if ("answer" in a && "answer" in b && a.answer !== b.answer) return false;
+  if ("beforeIndex" in a && "beforeIndex" in b && a.beforeIndex !== b.beforeIndex) return false;
+  if ("afterIndex" in a && "afterIndex" in b && a.afterIndex !== b.afterIndex) return false;
+  if ("questionIndex" in a && "questionIndex" in b && a.questionIndex !== b.questionIndex)
+    return false;
+  return true;
+}
+
+/** The plain question that asks exactly what `claim` claims, if one exists. */
+function findClaimMatchQuestion(puzzle: Puzzle, excludeQi: number, claim: Claim): number | null {
+  for (let k = 0; k < puzzle.questions.length; k++) {
+    if (k === excludeQi) continue;
+    if (sameQuestionType(puzzle.questions[k].questionType, claim.questionType)) return k;
+  }
+  return null;
+}
+
+/** An answered TrueStmt whose selected statement matches question `qi`'s proposition. */
+function findTrueStmtClaimMatching(
+  puzzle: Puzzle,
+  fp: FlatPuzzle,
+  answers: (Answer | null)[],
+  qi: number,
+): { tQi: number; claim: Claim } | null {
+  for (let t = 0; t < fp.n; t++) {
+    if (fp.questions[t].t !== QT_TRUE_STMT) continue;
+    const ans = answers[t];
+    if (ans == null) continue;
+    const claim = claimAt(fp, t, letterIdx(ans));
+    if (claim && sameQuestionType(puzzle.questions[qi].questionType, claim.questionType)) {
+      return { tQi: t, claim };
+    }
+  }
+  return null;
+}
+
 function explainElimination(
-  _puzzle: Puzzle,
+  puzzle: Puzzle,
   fp: FlatPuzzle,
   answers: (Answer | null)[],
   eliminated: number[],
@@ -659,6 +793,55 @@ function explainElimination(
     steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
     steps.push(
       simple(`${Q(qi)} option ${letter}: no compatible option exists on the other counting rule.`),
+    );
+    return steps;
+  }
+
+  if (rule === "LeastCommonCountFloor" && v != null && v < 5) {
+    const claimed = LETTERS[v];
+    const src = findCountFloorSource(fp, answers, eliminated, v);
+    if (src != null) {
+      const srcQ = fp.questions[src.srcQi];
+      steps.push(tryLooking(qi, src.srcQi));
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(
+        simple(
+          `${Q(src.srcQi)} means there are at least ${src.floor} ${countRuleLabel(srcQ, src.floor)}, so ${claimed} appears too often to be the least common.`,
+        ),
+      );
+      return steps;
+    }
+    // No count-question floor: fall through to the cell-based explanation.
+  }
+
+  if (rule === "MostCommonCountCeil" && v != null && v < 5) {
+    const claimed = LETTERS[v];
+    const src = findCountCeilSource(fp, answers, eliminated, v);
+    if (src != null) {
+      const srcQ = fp.questions[src.srcQi];
+      steps.push(tryLooking(qi, src.srcQi));
+      steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+      steps.push(
+        simple(
+          `${Q(src.srcQi)} means there are at most ${src.ceil} ${countRuleLabel(srcQ, src.ceil)}, so ${claimed} appears too rarely to be the most common.`,
+        ),
+      );
+      return steps;
+    }
+    // No count-question ceiling: fall through to the cell-based explanation.
+  }
+
+  if (rule === "TrueStatementMatchElim") {
+    const claim = claimAt(fp, qi, oi);
+    const k = claim != null ? findClaimMatchQuestion(puzzle, qi, claim) : null;
+    if (k != null) steps.push(tryLooking(qi, k));
+    steps.push(simple(`What if ${Q(qi)} is ${letter}?`));
+    steps.push(
+      simple(
+        claim != null && k != null
+          ? `${Q(qi)}'s option ${letter} is the statement "${renderClaimLabel(claim)}", but ${Q(k)} rules that out — so it can't be the true statement.`
+          : `${Q(qi)} option ${letter}'s statement can't be true, so it's not the answer.`,
+      ),
     );
     return steps;
   }

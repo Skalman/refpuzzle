@@ -3510,11 +3510,11 @@
       "section": "=== LeastCommon ==="
     },
     {
-      "name": "LeastCommon: claimed letter already has more than another letter's max → eliminate",
+      "name": "LeastCommonElim: q1=A would put A at 1 while D/E stay at 0 → A can't be least (cells-only, pigeonhole-silent)",
       "rule": "LeastCommonElim",
       "puzzle": {
         "o": [
-          [1, 0, 2, 3, 4],
+          [0, 1, 2, 3, 4],
           [null, null, null, null, null],
           [null, null, null, null, null],
           [null, null, null, null, null],
@@ -3704,14 +3704,83 @@
       "expect": null
     },
     {
+      "section": "=== LeastCommonCountFloor (global pigeonhole) ==="
+    },
+    {
+      "name": "LeastCommonCountFloor: CountAnswer floor count(A)>=2 exceeds max-least(1) → A can't be uniquely least common",
+      "rule": "LeastCommonCountFloor",
+      "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [2, 3, 4],
+          [null, null, null],
+          [null, null, null],
+          [null, null, null]
+        ],
+        "q": [
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "", "", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "LeastCommonCountFloor boundary: count(A)>=1 equals max-least(1), still possibly least → no elim",
+      "rule": "LeastCommonCountFloor",
+      "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [1, 2, 3],
+          [null, null, null],
+          [null, null, null],
+          [null, null, null]
+        ],
+        "q": [
+          {
+            "t": "LeastCommon"
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "", "", "", ""],
+      "expect": null
+    },
+    {
       "section": "=== MostCommon ==="
     },
     {
-      "name": "MostCommon: claimed letter's max < another letter's min → eliminate",
+      "name": "MostCommonElim: B can reach only 2 while C is already 3 → B can't be most (cell-based, pigeonhole-silent)",
       "rule": "MostCommonElim",
       "puzzle": {
         "o": [
-          [2, 0, 1, 3, 4],
+          [1, 2, 0, 3, 4],
           [null, null, null, null, null],
           [null, null, null, null, null],
           [null, null, null, null, null],
@@ -3735,8 +3804,8 @@
           }
         ]
       },
-      "state": ["abde", "C", "C", "C", "B"],
-      "expect": "1c"
+      "state": ["", "C", "C", "C", "B"],
+      "expect": "1a"
     },
     {
       "name": "MostCommon: claimed letter could still be most → no elimination",
@@ -3876,6 +3945,75 @@
         ]
       },
       "state": ["", "A", "B", ""],
+      "expect": null
+    },
+    {
+      "section": "=== MostCommonCountCeil (global pigeonhole) ==="
+    },
+    {
+      "name": "MostCommonCountCeil: CountAnswer ceiling count(A)<=1 is below min-most(3) → A can't be uniquely most common",
+      "rule": "MostCommonCountCeil",
+      "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [0, 1, 2],
+          [null, null, null],
+          [null, null, null],
+          [null, null, null]
+        ],
+        "q": [
+          {
+            "t": "MostCommon"
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "c", "", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "MostCommonCountCeil boundary: count(A)<=3 equals min-most(3), still possibly most → no elim",
+      "rule": "MostCommonCountCeil",
+      "puzzle": {
+        "o": [
+          [0, 1, 2],
+          [1, 2, 3],
+          [null, null, null],
+          [null, null, null],
+          [null, null, null]
+        ],
+        "q": [
+          {
+            "t": "MostCommon"
+          },
+          {
+            "t": "CountAnswer",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "", "", "", ""],
       "expect": null
     },
     {

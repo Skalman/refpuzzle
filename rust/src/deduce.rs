@@ -92,10 +92,12 @@ deduce_rules! {
     UniqueAlreadyUsed,
     LeastCommonElim,
     LeastCommonForce,
+    LeastCommonCountFloor,
     TrueStatementForward,
     OnlyOddEvenRangeElim,
     MostCommonElim,
     MostCommonForce,
+    MostCommonCountCeil,
     ConsecIdentReverse,
     TrueStatementSelfRef,
     TrueStatementClaimInvalid,
@@ -201,29 +203,125 @@ impl<T: Copy, F: Fn() -> T> Lazy<T, F> {
     }
 }
 
-/// Whole-puzzle per-letter counts. `known[i]` = number of qi answered with
-/// letter i; `max[i]` = `known[i]` + number of unanswered qi where letter i
-/// is still possible.
-fn compute_letter_counts(
+/// Whole-puzzle per-letter cell accounting. Pure function of answers +
+/// eliminations: `filled[i]` = questions answered with letter i; `fillable[i]`
+/// = unanswered questions where letter i is not yet eliminated. The cell-based
+/// count of letter i therefore lies in `[filled[i], filled[i] + fillable[i]]`.
+///
+/// These are *cell* facts. Any rule that hypothesises "what if this one cell
+/// were letter X" — the extremum `±1`, OnlySame's per-cell subtract — must read
+/// these, never the abstract `CountBounds`: an external bound may already
+/// account for the very cell being adjusted, so adding to it would double-count.
+#[derive(Clone, Copy)]
+struct LetterCells {
+    filled: [u8; 5],
+    fillable: [u8; 5],
+}
+
+impl LetterCells {
+    /// Cell-based upper bound on count(i): placed + still-possible slots.
+    #[inline(always)]
+    fn cell_max(&self, i: usize) -> u8 {
+        self.filled[i] + self.fillable[i]
+    }
+}
+
+fn compute_letter_cells(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
-) -> ([u8; 5], [u8; 5]) {
-    let mut known = [0u8; 5];
-    let mut max = [0u8; 5];
+) -> LetterCells {
+    let mut filled = [0u8; 5];
+    let mut fillable = [0u8; 5];
     for j in 0..n {
         if let Some(a) = answers[j] {
-            known[a.idx()] += 1;
-            max[a.idx()] += 1;
+            filled[a.idx()] += 1;
         } else {
             for li in 0..5usize {
                 if !is_elim(eliminated, j, li) {
-                    max[li] += 1;
+                    fillable[li] += 1;
                 }
             }
         }
     }
-    (known, max)
+    LetterCells { filled, fillable }
+}
+
+/// Whole-puzzle per-letter bounds derived purely from sibling Count questions
+/// (`CountAnswer` / `CountAnswerBefore` / `CountAnswerAfter`), independent of
+/// answered cells. `floor[i]` is a lower bound on the total count of letter i;
+/// `ceil[i]` an upper bound.
+///
+/// Floors come from all three count kinds — a sub-range floor still
+/// lower-bounds the total. Ceilings come from full-range `CountAnswer` only: a
+/// `Before`/`After` ceiling bounds a sub-range and says nothing about the rest
+/// of the puzzle. Consumers combine these with `LetterCells` via `lower`/`upper`
+/// — never feed them into a per-cell `±1`, which would double-count.
+#[derive(Clone, Copy)]
+struct CountBounds {
+    floor: [u8; 5],
+    ceil: [u8; 5],
+}
+
+impl CountBounds {
+    /// Combined lower bound on count(i): the tighter of placed cells and the
+    /// Count-question floor.
+    #[inline(always)]
+    fn lower(&self, cells: &LetterCells, i: usize) -> u8 {
+        cells.filled[i].max(self.floor[i])
+    }
+
+    /// Combined upper bound on count(i): the tighter of the cell ceiling and
+    /// the Count-question ceiling.
+    #[inline(always)]
+    fn upper(&self, cells: &LetterCells, i: usize) -> u8 {
+        cells.cell_max(i).min(self.ceil[i])
+    }
+}
+
+fn compute_count_bounds(
+    fp: &FlatPuzzle,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    n: usize,
+) -> CountBounds {
+    let oc = fp.option_count;
+    let mut floor = [0u8; 5];
+    let mut ceil = [n as u8; 5];
+    for k in 0..n {
+        let (li, full_range) = match fp.question_types[k] {
+            QuestionType::CountAnswer { answer } => (answer.idx(), true),
+            QuestionType::CountAnswerBefore { answer, .. }
+            | QuestionType::CountAnswerAfter { answer, .. } => (answer.idx(), false),
+            _ => continue,
+        };
+        // Range of surviving option values: if k is answered only that option
+        // survives; else every non-eliminated numeric option.
+        let mut lo = u8::MAX;
+        let mut hi = 0u8;
+        for oi in 0..oc {
+            if let Some(a) = answers[k] {
+                if oi != a.idx() {
+                    continue;
+                }
+            } else if is_elim(eliminated, k, oi) {
+                continue;
+            }
+            let v = fp.options[k][oi];
+            if v.is_num() {
+                lo = lo.min(v.value());
+                hi = hi.max(v.value());
+            }
+        }
+        if lo == u8::MAX {
+            continue; // no surviving numeric option
+        }
+        floor[li] = floor[li].max(lo);
+        if full_range {
+            ceil[li] = ceil[li].min(hi);
+        }
+    }
+    CountBounds { floor, ceil }
 }
 
 pub type DeduceResults = ArrayVec<DeduceResult, 80>;
@@ -1302,18 +1400,18 @@ fn apply_extremum_count<const IS_LEAST: bool>(
     state: &State,
     mut push: impl FnMut(DeduceRule, DeduceAction),
     qi: usize,
-    letter_known: [u8; 5],
-    letter_max: [u8; 5],
+    cells: &LetterCells,
     elim_rule: DeduceRule,
     force_rule: DeduceRule,
 ) {
     let eliminated = &state.eliminated;
 
-    // qi is unanswered; remove its contribution to letter_max so adj_*
+    // qi is unanswered; remove its contribution to the cell ceiling so adj_*
     // doesn't double-count when we test "if qi were `oi`".
-    let min_count = letter_known;
-    let mut max_count = letter_max;
+    let min_count = cells.filled;
+    let mut max_count = cells.filled;
     for li in 0..5usize {
+        max_count[li] += cells.fillable[li];
         if !is_elim(eliminated, qi, li) {
             max_count[li] -= 1;
         }
@@ -1543,7 +1641,8 @@ fn deduce_impl(
         }
     }
 
-    let mut letter_counts = Lazy::new(|| compute_letter_counts(answers, eliminated, n));
+    let mut letter_cells = Lazy::new(|| compute_letter_cells(answers, eliminated, n));
+    let mut count_bounds = Lazy::new(|| compute_count_bounds(fp, answers, eliminated, n));
 
     // ── Per-qi dispatch ──
     // For each qi, dispatch on its type. Each arm owns all rules whose source
@@ -2056,12 +2155,16 @@ fn deduce_impl(
                     }
                     let claimed = Answer::from(on as u8);
                     if claimed != answer {
-                        // Impossible iff max-possible for one letter is below
-                        // known for the other. (rc+rr == letter_max[answer],
-                        // sc+sr == letter_max[claimed].)
-                        let (letter_known, letter_max) = letter_counts.get();
-                        if letter_max[answer.idx()] < letter_known[claimed.idx()]
-                            || letter_max[claimed.idx()] < letter_known[answer.idx()]
+                        // Impossible iff the upper bound on one letter's count
+                        // is below the lower bound on the other's. Both bounds
+                        // fold in sibling Count questions, so this also catches
+                        // pairs separated by a CountAnswer floor/ceiling, not
+                        // just by placed/eliminated cells.
+                        let cells = letter_cells.get();
+                        let bounds = count_bounds.get();
+                        if bounds.upper(&cells, answer.idx()) < bounds.lower(&cells, claimed.idx())
+                            || bounds.upper(&cells, claimed.idx())
+                                < bounds.lower(&cells, answer.idx())
                         {
                             push(
                                 DeduceRule::EqualCountRangeElim,
@@ -2238,9 +2341,9 @@ fn deduce_impl(
                         // qi is unanswered, so it doesn't contribute to letter_known.
                         // Subtract pos's contribution to check for any OTHER match.
                         let letter = Answer::from(oi as u8);
-                        let (letter_known, _) = letter_counts.get();
+                        let cells = letter_cells.get();
                         let pos_contrib = u8::from(answers[pos] == Some(letter));
-                        if letter_known[oi] > pos_contrib {
+                        if cells.filled[oi] > pos_contrib {
                             push(
                                 DeduceRule::OnlySameOtherMatch,
                                 DeduceAction::Eliminate { qi, oi },
@@ -2250,30 +2353,83 @@ fn deduce_impl(
                 }
             }
             QuestionType::LeastCommon if full && ans.is_none() => {
-                let (known, max) = letter_counts.get();
+                let cells = letter_cells.get();
                 apply_extremum_count::<true>(
                     fp,
                     state,
                     &mut push,
                     qi,
-                    known,
-                    max,
+                    &cells,
                     DeduceRule::LeastCommonElim,
                     DeduceRule::LeastCommonForce,
                 );
+
+                // Global pigeonhole: letter D can be the unique least-common
+                // letter only if count(D) <= floor((n - oc + 1) / oc); beyond
+                // that the other oc-1 letters can't all be strictly larger
+                // within n answers. A proven lower bound above the threshold
+                // rules D out — a whole-puzzle sum argument the pairwise
+                // extremum check above structurally can't make.
+                let oc = fp.option_count;
+                if oc >= 2 && n + 1 >= oc {
+                    let bounds = count_bounds.get();
+                    let max_least = ((n + 1 - oc) / oc) as u8;
+                    for oi in 0..oc {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let v = fp.options[qi][oi];
+                        if !v.is_num() {
+                            continue;
+                        }
+                        let d = v.value() as usize;
+                        if d < oc && bounds.lower(&cells, d) > max_least {
+                            push(
+                                DeduceRule::LeastCommonCountFloor,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                        }
+                    }
+                }
             }
             QuestionType::MostCommon if full && ans.is_none() => {
-                let (known, max) = letter_counts.get();
+                let cells = letter_cells.get();
                 apply_extremum_count::<false>(
                     fp,
                     state,
                     &mut push,
                     qi,
-                    known,
-                    max,
+                    &cells,
                     DeduceRule::MostCommonElim,
                     DeduceRule::MostCommonForce,
                 );
+
+                // Global pigeonhole (mirror of LeastCommonCountFloor): letter D
+                // can be the unique most-common letter only if count(D) >=
+                // ceil((n + oc - 1) / oc); below that the other oc-1 letters
+                // can't all stay strictly smaller while summing to n. A proven
+                // upper bound under the threshold rules D out.
+                let oc = fp.option_count;
+                if oc >= 2 {
+                    let bounds = count_bounds.get();
+                    let min_most = ((n + 2 * oc - 2) / oc) as u8;
+                    for oi in 0..oc {
+                        if is_elim(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let v = fp.options[qi][oi];
+                        if !v.is_num() {
+                            continue;
+                        }
+                        let d = v.value() as usize;
+                        if d < oc && bounds.upper(&cells, d) < min_most {
+                            push(
+                                DeduceRule::MostCommonCountCeil,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                        }
+                    }
+                }
             }
             QuestionType::TrueStmt if full => {
                 apply_true_stmt(fp, state, &mut push, qi, n, assume_unique);
