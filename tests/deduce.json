@@ -4095,6 +4095,33 @@
       "expect": "2c"
     },
     {
+      "name": "TrueStatementMatchForce: CountConsonant question = 3 (n=4) forces the complement 'vowels == 1' claim",
+      "rule": "TrueStatementMatchForce",
+      "puzzle": {
+        "o": [
+          [1, 4, 0, 2, 3],
+          [3, 0, 1, 2, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "TrueStmt" },
+          { "t": "CountConsonant" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ],
+        "t": [
+          { "t": "CountVowel" },
+          { "t": "PrevSame" },
+          { "t": "NextSame" },
+          { "t": "OnlySame" },
+          { "t": "SameAs" }
+        ]
+      },
+      "state": ["", "A", "", ""],
+      "expect": "1A"
+    },
+    {
       "section": "=== No deduction / rule filter ==="
     },
     {

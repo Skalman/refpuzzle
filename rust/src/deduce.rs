@@ -298,7 +298,6 @@ fn count_matching_mask(
 /// Per-qi count-family dispatch (CountAnswer/Before/After/Vowel/Consonant).
 /// Handles the answered case (CountSaturated / CountMustMatch{Force,Elim}) and
 /// the unanswered case (CountAllAnswered + per-option CountExceeded/Impossible).
-#[allow(clippy::too_many_arguments)]
 fn apply_count(
     fp: &FlatPuzzle,
     state: &State,
@@ -439,7 +438,6 @@ fn apply_count(
 
 /// Per-qi OnlyOdd/OnlyEven dispatch (qi must be unanswered). `parity` is
 /// 1 for OnlyOdd (1-indexed odd = 0-indexed even positions), 0 for OnlyEven.
-#[allow(clippy::too_many_arguments)]
 fn apply_onlyoddeven(
     fp: &FlatPuzzle,
     state: &State,
@@ -667,29 +665,329 @@ fn apply_positional_forward(
     }
 }
 
-/// Whether a claim of this type asserts a *global* proposition — one whose truth
-/// doesn't depend on which question hosts it. Only these can be linked to a real
-/// question of the same type: a host-relative type (`PrevSame`, `SameAs`,
-/// `LetterDist`, `NoOtherHasAnswer`, `EqualCount`, …) means something different at
-/// the TrueStmt than at the matching question, so the propositions aren't equal.
-fn is_global_claim(qt: &QuestionType) -> bool {
-    matches!(
-        qt,
-        QuestionType::CountAnswer { .. }
+/// Claim↔question link. A TrueStmt claim whose proposition is *global* is the same
+/// proposition as a real question of type `link_type` answered to `link_val`, so
+/// the claim cell `(qi, oi)` and that question's option `(k, ok)` relate. `link_val`
+/// is the value `k` must hold for the claim true: the claim's own value for a
+/// same-kind link, or `n − V` for the vowel/consonant complement.
+///
+/// Two of the four directions are sound regardless of uniqueness and always run:
+/// a *false* claim can't be the selected one (`k` ruled out of `ok` ⇒ eliminate the
+/// claim), and the *selected* claim must be true (`qi` answered `oi` ⇒ force `k=ok`).
+/// The other two assume the TrueStmt's true claim is *unique* — true ⇒ selected
+/// (`k=ok` ⇒ force the claim), and not-selected ⇒ false (claim eliminated ⇒ rule
+/// `ok` out of `k`). Those are gated behind `assume_unique`: sound for play/check,
+/// but NOT during generation, where that very uniqueness is what's being validated
+/// (assuming it would "solve" genuinely ambiguous TrueStmts). `#[inline]` so the
+/// per-arm calls fold back in (no call overhead, source stays DRY).
+#[inline]
+fn link_claim_question(
+    fp: &FlatPuzzle,
+    state: &State,
+    push: &mut impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    oi: usize,
+    n: usize,
+    link_type: QuestionType,
+    link_val: OptionValue,
+    assume_unique: bool,
+) {
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let self_elim = is_elim(eliminated, qi, oi);
+
+    let Some(k) = (0..n).find(|&k| k != qi && fp.question_types[k] == link_type) else {
+        return; // no question carries this proposition — nothing to link against
+    };
+    // `k`'s option holding the linked value. None → `k` can never take it, and a
+    // valid puzzle always lists a question's true value, so the claim is false (and
+    // a false claim can't be selected — sound regardless of uniqueness).
+    let Some(ok) = (0..fp.option_count).find(|&ok| fp.options[k][ok] == link_val) else {
+        if !self_elim {
+            push(
+                DeduceRule::TrueStatementMatchElim,
+                DeduceAction::Eliminate { qi, oi },
+            );
+        }
+        return;
+    };
+    let self_answered = answers[qi] == Some(Answer::from(oi as u8));
+    let k_answered_ok = answers[k] == Some(Answer::from(ok as u8));
+    let k_ruled_out = answers[k].is_some() || is_elim(eliminated, k, ok);
+
+    // question → claim
+    if k_answered_ok {
+        // true claim ⇒ selected — only under uniqueness (another claim could also
+        // be true and selected instead).
+        if assume_unique && answers[qi].is_none() && !self_elim {
+            push(
+                DeduceRule::TrueStatementMatchForce,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
+        }
+    } else if k_ruled_out && !self_elim {
+        // false claim can't be the selected one — sound.
+        push(
+            DeduceRule::TrueStatementMatchElim,
+            DeduceAction::Eliminate { qi, oi },
+        );
+    }
+
+    // claim → question
+    if answers[k].is_none() && !is_elim(eliminated, k, ok) {
+        if self_answered {
+            // selected claim must be true — sound.
+            push(
+                DeduceRule::TrueStatementMatchForce,
+                DeduceAction::Force {
+                    qi: k,
+                    answer: Answer::from(ok as u8),
+                },
+            );
+        } else if self_elim && assume_unique {
+            // not-selected ⇒ false — only under uniqueness.
+            push(
+                DeduceRule::TrueStatementMatchElim,
+                DeduceAction::Eliminate { qi: k, oi: ok },
+            );
+        }
+    }
+}
+
+/// TrueStmt dispatch, keyed on each claim's `question_type`. Per claim: a uniform
+/// `ClaimInvalid` (cell-semantic falsity), then a type match for the SelfRef
+/// contradiction and the same-proposition link(s) — same-kind for any *global*
+/// claim (host-relative types mean something different at the TrueStmt than at a
+/// like-typed question, so they don't link), plus the `n − V` complement for
+/// vowel/consonant counts. After the per-claim pass: `Forward` from the selected
+/// claim (qi answered), else the aggregate `ClaimValid` / (unique-only)
+/// `ClaimKnownTrue` (qi unanswered).
+fn apply_true_stmt(
+    fp: &FlatPuzzle,
+    state: &State,
+    mut push: impl FnMut(DeduceRule, DeduceAction),
+    qi: usize,
+    n: usize,
+    assume_unique: bool,
+) {
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let ans = answers[qi];
+
+    for oi in 0..fp.option_count {
+        let Some(claim) = fp.claim_at(qi, oi) else {
+            unreachable!("Claim at ({qi},{oi}) should exist")
+        };
+        let open = !is_elim(eliminated, qi, oi);
+        let v = claim.value;
+
+        // Cell-semantic falsity — uniform across all claim types.
+        if open
+            && crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, claim)
+                == crate::check_answer::Validity::Invalid
+        {
+            push(
+                DeduceRule::TrueStatementClaimInvalid,
+                DeduceAction::Eliminate { qi, oi },
+            );
+        }
+
+        // Type-specific: SelfRef contradiction (positional/AnswerOf referencing qi)
+        // and the same-proposition link(s). Non-global types don't link (`_`).
+        match claim.question_type {
+            QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
+                if open
+                    && v.is_num()
+                    && usize::from(v.value()) == qi
+                    && answer != Answer::from(oi as u8)
+                {
+                    push(
+                        DeduceRule::TrueStatementSelfRef,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                link_claim_question(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    oi,
+                    n,
+                    claim.question_type,
+                    v,
+                    assume_unique,
+                );
+            }
+            QuestionType::AnswerOf { question_index } => {
+                if open
+                    && question_index as usize == qi
+                    && v.is_num()
+                    && v.value() <= 4
+                    && Answer::from(v.value()) != Answer::from(oi as u8)
+                {
+                    push(
+                        DeduceRule::TrueStatementSelfRef,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                link_claim_question(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    oi,
+                    n,
+                    claim.question_type,
+                    v,
+                    assume_unique,
+                );
+            }
+            // Vowel/consonant counts also link to the opposite kind at `n − V`.
+            QuestionType::CountVowel | QuestionType::CountConsonant => {
+                link_claim_question(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    oi,
+                    n,
+                    claim.question_type,
+                    v,
+                    assume_unique,
+                );
+                if v.is_num() && v.value() <= n as u8 {
+                    let opposite = if matches!(claim.question_type, QuestionType::CountVowel) {
+                        QuestionType::CountConsonant
+                    } else {
+                        QuestionType::CountVowel
+                    };
+                    let comp = OptionValue::num(n as u8 - v.value());
+                    link_claim_question(
+                        fp,
+                        state,
+                        &mut push,
+                        qi,
+                        oi,
+                        n,
+                        opposite,
+                        comp,
+                        assume_unique,
+                    );
+                }
+            }
+            QuestionType::CountAnswer { .. }
             | QuestionType::CountAnswerBefore { .. }
             | QuestionType::CountAnswerAfter { .. }
-            | QuestionType::CountVowel
-            | QuestionType::CountConsonant
             | QuestionType::MostCommonCount
             | QuestionType::ClosestAfter { .. }
             | QuestionType::ClosestBefore { .. }
-            | QuestionType::FirstWith { .. }
-            | QuestionType::LastWith { .. }
             | QuestionType::ConsecIdent
-            | QuestionType::AnswerOf { .. }
             | QuestionType::LeastCommon
-            | QuestionType::MostCommon
-    )
+            | QuestionType::MostCommon => {
+                link_claim_question(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    oi,
+                    n,
+                    claim.question_type,
+                    v,
+                    assume_unique,
+                );
+            }
+            _ => {}
+        }
+    }
+
+    if let Some(a) = ans {
+        // Forward (qi answered): a true-statement's claim, if compatible with
+        // current state, forces the referenced target.
+        if let Some(claim) = fp.claim_at(qi, a.idx()) {
+            match claim.question_type {
+                QuestionType::FirstWith { answer } | QuestionType::LastWith { answer }
+                    if claim.value.is_num() =>
+                {
+                    let tqi = usize::from(claim.value.value());
+                    if tqi < n && answers[tqi].is_none() && !is_elim(eliminated, tqi, answer.idx())
+                    {
+                        push(
+                            DeduceRule::TrueStatementForward,
+                            DeduceAction::Force { qi: tqi, answer },
+                        );
+                    }
+                }
+                QuestionType::AnswerOf { question_index } => {
+                    let tqi = question_index as usize;
+                    if claim.value.is_num()
+                        && claim.value.value() <= 4
+                        && tqi < n
+                        && answers[tqi].is_none()
+                    {
+                        let letter = Answer::from(claim.value.value());
+                        if !is_elim(eliminated, tqi, letter.idx()) {
+                            push(
+                                DeduceRule::TrueStatementForward,
+                                DeduceAction::Force {
+                                    qi: tqi,
+                                    answer: letter,
+                                },
+                            );
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    } else {
+        // ClaimValid + ClaimKnownTrue (qi unanswered).
+        if let Some(oi) = exactly_one(0..5, |oi| {
+            if is_elim(eliminated, qi, oi) {
+                return false;
+            }
+            let Some(claim) = fp.claim_at(qi, oi) else {
+                return false;
+            };
+            let mut hyp = *state;
+            hyp.answers[qi] = Some(Answer::from(oi as u8));
+            hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+            crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, claim)
+                != crate::check_answer::Validity::Invalid
+        }) {
+            push(
+                DeduceRule::TrueStatementClaimValid,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
+        }
+
+        // Uniqueness-assuming: gated so it never fires during generation.
+        if assume_unique
+            && let Some(oi) = exactly_one(0..5, |oi| {
+                if is_elim(eliminated, qi, oi) {
+                    return false;
+                }
+                let Some(claim) = fp.claim_at(qi, oi) else {
+                    return false;
+                };
+                crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, claim)
+                    == crate::check_answer::Validity::Valid
+            })
+        {
+            push(
+                DeduceRule::TrueStatementClaimKnownTrue,
+                DeduceAction::Force {
+                    qi,
+                    answer: Answer::from(oi as u8),
+                },
+            );
+        }
+    }
 }
 
 /// Backward positional dispatch (LastWith / ClosestBefore).
@@ -999,7 +1297,6 @@ fn apply_prev_or_next_same(
 /// The Least/Most asymmetry reduces to swapping the (subject, other) pair:
 /// for Least, `oi`'s claimed letter is the "other" that other letters bound;
 /// for Most, it's the "subject" being bounded by others' min.
-#[allow(clippy::too_many_arguments)]
 fn apply_extremum_count<const IS_LEAST: bool>(
     fp: &FlatPuzzle,
     state: &State,
@@ -1979,208 +2276,7 @@ fn deduce_impl(
                 );
             }
             QuestionType::TrueStmt if full => {
-                // Per-option scan. For a still-open option: SelfRef + ClaimInvalid.
-                // For every option (open or eliminated): the claim/question link —
-                // a claim `(T, V)` whose proposition is *global* (independent of
-                // which question hosts it) asserts exactly what a real question of
-                // type `T` answered to value `V` asserts, so "this TrueStmt selects
-                // `oi`" and "that question selects its `V` option" are the same
-                // proposition. Each answered cell forces the other, each eliminated
-                // one eliminates the other — even when neither is decided yet.
-                for oi in 0..fp.option_count {
-                    let Some(claim) = fp.claim_at(qi, oi) else {
-                        unreachable!("Claim at ({qi},{oi}) should exist")
-                    };
-                    let self_elim = is_elim(eliminated, qi, oi);
-
-                    if !self_elim {
-                        let contradicts = match claim.question_type {
-                            QuestionType::FirstWith { answer }
-                            | QuestionType::LastWith { answer } => {
-                                claim.value.is_num()
-                                    && usize::from(claim.value.value()) == qi
-                                    && answer != Answer::from(oi as u8)
-                            }
-                            QuestionType::AnswerOf { question_index } => {
-                                question_index as usize == qi
-                                    && claim.value.is_num()
-                                    && claim.value.value() <= 4
-                                    && Answer::from(claim.value.value()) != Answer::from(oi as u8)
-                            }
-                            _ => false,
-                        };
-                        if contradicts {
-                            push(
-                                DeduceRule::TrueStatementSelfRef,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
-                        if crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, claim)
-                            == crate::check_answer::Validity::Invalid
-                        {
-                            push(
-                                DeduceRule::TrueStatementClaimInvalid,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
-                    }
-
-                    if !is_global_claim(&claim.question_type) {
-                        continue;
-                    }
-                    let Some(k) =
-                        (0..n).find(|&k| k != qi && fp.question_types[k] == claim.question_type)
-                    else {
-                        continue;
-                    };
-                    let self_answered = answers[qi] == Some(Answer::from(oi as u8));
-
-                    // `k`'s option holding the same value. None → `k` can never take
-                    // `V`, and a valid puzzle always lists a question's true value,
-                    // so the claim is false.
-                    let Some(ok) =
-                        (0..fp.option_count).find(|&ok| fp.options[k][ok] == claim.value)
-                    else {
-                        if !self_elim {
-                            push(
-                                DeduceRule::TrueStatementMatchElim,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
-                        continue;
-                    };
-                    let k_answered_ok = answers[k] == Some(Answer::from(ok as u8));
-                    let k_ruled_out = answers[k].is_some() || is_elim(eliminated, k, ok);
-
-                    // question → claim
-                    if k_answered_ok {
-                        if answers[qi].is_none() && !self_elim {
-                            push(
-                                DeduceRule::TrueStatementMatchForce,
-                                DeduceAction::Force {
-                                    qi,
-                                    answer: Answer::from(oi as u8),
-                                },
-                            );
-                        }
-                    } else if k_ruled_out && !self_elim {
-                        push(
-                            DeduceRule::TrueStatementMatchElim,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-
-                    // claim → question
-                    if answers[k].is_none() && !is_elim(eliminated, k, ok) {
-                        if self_answered {
-                            push(
-                                DeduceRule::TrueStatementMatchForce,
-                                DeduceAction::Force {
-                                    qi: k,
-                                    answer: Answer::from(ok as u8),
-                                },
-                            );
-                        } else if self_elim {
-                            push(
-                                DeduceRule::TrueStatementMatchElim,
-                                DeduceAction::Eliminate { qi: k, oi: ok },
-                            );
-                        }
-                    }
-                }
-
-                if let Some(a) = ans {
-                    // Forward (qi answered): a true-statement's claim, if compatible
-                    // with current state, forces the referenced target.
-                    if let Some(claim) = fp.claim_at(qi, a.idx()) {
-                        match claim.question_type {
-                            QuestionType::FirstWith { answer }
-                            | QuestionType::LastWith { answer }
-                                if claim.value.is_num() =>
-                            {
-                                let tqi = usize::from(claim.value.value());
-                                if tqi < n
-                                    && answers[tqi].is_none()
-                                    && !is_elim(eliminated, tqi, answer.idx())
-                                {
-                                    push(
-                                        DeduceRule::TrueStatementForward,
-                                        DeduceAction::Force { qi: tqi, answer },
-                                    );
-                                }
-                            }
-                            QuestionType::AnswerOf { question_index } => {
-                                let tqi = question_index as usize;
-                                if claim.value.is_num()
-                                    && claim.value.value() <= 4
-                                    && tqi < n
-                                    && answers[tqi].is_none()
-                                {
-                                    let letter = Answer::from(claim.value.value());
-                                    if !is_elim(eliminated, tqi, letter.idx()) {
-                                        push(
-                                            DeduceRule::TrueStatementForward,
-                                            DeduceAction::Force {
-                                                qi: tqi,
-                                                answer: letter,
-                                            },
-                                        );
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
-                } else {
-                    // ClaimValid + ClaimKnownTrue (qi unanswered).
-                    if let Some(oi) = exactly_one(0..5, |oi| {
-                        if is_elim(eliminated, qi, oi) {
-                            return false;
-                        }
-                        let Some(claim) = fp.claim_at(qi, oi) else {
-                            return false;
-                        };
-                        let mut hyp = *state;
-                        hyp.answers[qi] = Some(Answer::from(oi as u8));
-                        hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
-                        crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, claim)
-                            != crate::check_answer::Validity::Invalid
-                    }) {
-                        push(
-                            DeduceRule::TrueStatementClaimValid,
-                            DeduceAction::Force {
-                                qi,
-                                answer: Answer::from(oi as u8),
-                            },
-                        );
-                    }
-
-                    // Uniqueness-assuming: gated so it never fires during generation.
-                    if assume_unique
-                        && let Some(oi) = exactly_one(0..5, |oi| {
-                            if is_elim(eliminated, qi, oi) {
-                                return false;
-                            }
-                            let Some(claim) = fp.claim_at(qi, oi) else {
-                                return false;
-                            };
-                            crate::check_answer::check_claim(
-                                fp,
-                                *state,
-                                OptionPos { qi, oi },
-                                claim,
-                            ) == crate::check_answer::Validity::Valid
-                        })
-                    {
-                        push(
-                            DeduceRule::TrueStatementClaimKnownTrue,
-                            DeduceAction::Force {
-                                qi,
-                                answer: Answer::from(oi as u8),
-                            },
-                        );
-                    }
-                }
+                apply_true_stmt(fp, state, &mut push, qi, n, assume_unique);
             }
 
             _ => {}
