@@ -1574,7 +1574,20 @@ fn apply_vowel_consonant_cross_elim(
 /// true in any valid extension of the current state, regardless of whether the
 /// puzzle has a unique solution.
 pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, RuleFilter::All, true, false)
+    deduce_impl(fp, state, RuleFilter::All, true, false, None)
+}
+
+/// Single-question probe: the new deductions `qi`'s own rules produce against
+/// the current state, in one pass (same rule set as [`deduce`], scoped to qi).
+///
+/// Intended as a cheap repair gate — `O(qi's rules)` instead of `O(all rules)`.
+/// It can miss an edit whose payoff lands on a *different* question (a global
+/// rule elsewhere that reads qi's options), but that only costs a skipped
+/// repair, never soundness: the accepting path still runs the full engine +
+/// brute-force uniqueness check. To adopt, swap repair's `deduce(fp, cur)` gate
+/// for `deduce_question(fp, cur, qi)`.
+pub fn deduce_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
+    deduce_impl(fp, state, RuleFilter::All, true, false, Some(qi))
 }
 
 /// Deduction that may apply uniqueness-assuming rules (e.g. "TrueStmt has
@@ -1582,19 +1595,19 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// when the puzzle is known to have a unique solution — use for play, check,
 /// or tests; NOT during generation.
 pub fn deduce_assuming_unique(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, RuleFilter::All, true, true)
+    deduce_impl(fp, state, RuleFilter::All, true, true, None)
 }
 
 /// Fast-path variant of `deduce`: skips expensive non-fast rules. Sound-only
 /// (does NOT apply uniqueness-assuming rules); used by lookahead's
 /// hypothesis-testing where the hypothesis may be inconsistent.
 pub fn deduce_fast(fp: &FlatPuzzle, state: &State) -> DeduceResults {
-    deduce_impl(fp, state, RuleFilter::All, false, false)
+    deduce_impl(fp, state, RuleFilter::All, false, false, None)
 }
 
 #[cfg(test)]
 pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
-    deduce_impl(fp, state, RuleFilter::Only(rule), true, true)
+    deduce_impl(fp, state, RuleFilter::Only(rule), true, true, None)
 }
 
 #[cfg(test)]
@@ -1603,7 +1616,7 @@ pub fn deduce_with_rule_except(
     state: &State,
     exclude: DeduceRule,
 ) -> DeduceResults {
-    deduce_impl(fp, state, RuleFilter::Except(exclude), true, true)
+    deduce_impl(fp, state, RuleFilter::Except(exclude), true, true, None)
 }
 
 // Inlining specializes per caller — the bool/RuleFilter args become
@@ -1616,6 +1629,11 @@ fn deduce_impl(
     filter: RuleFilter,
     full: bool,
     assume_unique: bool,
+    // `Some(qi)` restricts the per-qi dispatch to a single question — a scoped
+    // probe for repair. `None` (every play/solve caller) is a compile-time
+    // constant under the per-caller inlining, so the skip below folds away and
+    // the full path is byte-for-byte unchanged.
+    question_scope: Option<usize>,
 ) -> DeduceResults {
     let n = fp.n;
     let answers = &state.answers;
@@ -1649,6 +1667,9 @@ fn deduce_impl(
     // is qi (regardless of qi's answered state). The type-agnostic
     // OnlyOptionLeft fires at the end of each iteration.
     for qi in 0..n {
+        if question_scope.is_some_and(|only| only != qi) {
+            continue;
+        }
         let t = &fp.question_types[qi];
         let ans = answers[qi];
 
