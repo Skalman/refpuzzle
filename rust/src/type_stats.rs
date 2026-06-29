@@ -36,15 +36,15 @@ struct LevelData {
     successes: u32,
     total_calls: u32,
     per_type: BTreeMap<QuestionTypeKind, TypeStats>,
-    /// v2 telemetry across all compose attempts: total composes + AnswerOf
+    /// v2 telemetry across all skeleton generations: total skeletons + AnswerOf
     /// fallbacks by phase.
-    composes: u32,
+    skeletons: u32,
     fallback_assign_kinds: u32,
     fallback_parametrize: u32,
 }
 
 /// `output` is a file path, or `-` for stdout. `use_v2` selects the v2
-/// `compose` pipeline (`construct_v2::generate`) instead of the live generator.
+/// `generate_skeleton` pipeline (`construct_v2::generate`) instead of the live generator.
 pub fn type_stats(attempts: u32, seed: u32, output: &str, use_v2: bool) {
     let levels: Vec<LevelData> = (1..=6u8)
         .map(|l| collect_level(l, attempts, seed, use_v2))
@@ -130,20 +130,20 @@ fn collect_level(level: u8, attempts: u32, seed: u32, use_v2: bool) -> LevelData
         successes,
         total_calls,
         per_type,
-        composes: bstats.v2_compose.compose_count,
-        fallback_assign_kinds: bstats.v2_compose.fallbacks.assign_kinds,
-        fallback_parametrize: bstats.v2_compose.fallbacks.parametrize,
+        skeletons: bstats.v2_skeleton.count,
+        fallback_assign_kinds: bstats.v2_skeleton.fallbacks.assign_kinds,
+        fallback_parametrize: bstats.v2_skeleton.fallbacks.parametrize,
     }
 }
 
-/// Per-level v2 compose telemetry: total composes (with attempts-per-accepted-
+/// Per-level v2 skeleton telemetry: total skeletons (with attempts-per-accepted-
 /// puzzle, i.e. the rejection ratio), and AnswerOf fallbacks per phase as a
-/// per-compose rate.
+/// per-skeleton rate.
 fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
     md.push_str(
-        "## Compose telemetry (v2)\n\n`composes` is total compose calls (with attempts per accepted puzzle); fallback columns are totals (with per-compose rate).\n\n",
+        "## Skeleton telemetry (v2)\n\n`skeletons` is total skeletons generated (with attempts per accepted puzzle); fallback columns are totals (with per-skeleton rate).\n\n",
     );
-    let header: Vec<String> = ["Level", "composes", "assign_kinds", "parametrize"]
+    let header: Vec<String> = ["Level", "skeletons", "assign_kinds", "parametrize"]
         .iter()
         .map(|s| s.to_string())
         .collect();
@@ -154,15 +154,15 @@ fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
                 0 => c.to_string(),
                 s => format!("{c} ({:.1}/pz)", c as f64 / s as f64),
             };
-            let per_compose = |c: u32| match l.composes {
+            let per_skeleton = |c: u32| match l.skeletons {
                 0 => c.to_string(),
-                composes => format!("{c} ({:.2}/c)", c as f64 / composes as f64),
+                skeletons => format!("{c} ({:.2}/sk)", c as f64 / skeletons as f64),
             };
             vec![
                 format!("L{}", l.level),
-                per_puzzle(l.composes),
-                per_compose(l.fallback_assign_kinds),
-                per_compose(l.fallback_parametrize),
+                per_puzzle(l.skeletons),
+                per_skeleton(l.fallback_assign_kinds),
+                per_skeleton(l.fallback_parametrize),
             ]
         })
         .collect();

@@ -11,7 +11,7 @@ use crate::rng::Rng;
 use crate::solve_brute::solve;
 use crate::types::*;
 
-/// Slots demoted to AnswerOf during a `compose`, by phase — a shape that
+/// Slots demoted to AnswerOf during a `generate_skeleton`, by phase — a shape that
 /// couldn't seed (`assign_kinds`), a kind that wouldn't parametrize
 /// (`parametrize`), or a pinned shape left unsatisfiable (`repair`).
 #[derive(Default)]
@@ -20,12 +20,12 @@ pub struct FallbackCounts {
     pub parametrize: u32,
 }
 
-/// v2 `compose` telemetry, accumulated across every attempt: how many composes
-/// ran and the AnswerOf fallbacks they incurred. `compose_count` is the
-/// denominator for per-compose fallback rates.
+/// v2 `generate_skeleton` telemetry, accumulated across every attempt: how many
+/// skeletons were generated and the AnswerOf fallbacks they incurred. `count` is
+/// the denominator for per-skeleton fallback rates.
 #[derive(Default)]
-pub struct ComposeStats {
-    pub compose_count: u32,
+pub struct SkeletonStats {
+    pub count: u32,
     pub fallbacks: FallbackCounts,
 }
 
@@ -52,7 +52,16 @@ pub struct Stats {
     // into deduce_calls (which counts only the outer hint-loop `deduce`) so the
     // two propagation paths stay distinguishable.
     pub deduce_calls_in_lookahead: u32,
-    pub v2_compose: ComposeStats,
+    // v2 distractor-repair telemetry: `_ok` counts edits that completed a puzzle,
+    // `_attempts` counts edits tried.
+    pub distractor_attempts: u32,
+    pub distractor_ok: u32,
+    // Repairs the engine reported "solved" but brute-force found non-unique —
+    // rejected (not accepted), so the caller regenerates. The resume-from-`cur`
+    // optimization can carry an elimination a global rule made on a since-edited
+    // option; brute is the backstop that catches it.
+    pub repair_unsound: u32,
+    pub v2_skeleton: SkeletonStats,
 }
 
 impl Stats {
@@ -75,9 +84,12 @@ impl Stats {
         self.lookahead_hits += other.lookahead_hits;
         self.lookahead_us += other.lookahead_us;
         self.deduce_calls_in_lookahead += other.deduce_calls_in_lookahead;
-        self.v2_compose.compose_count += other.v2_compose.compose_count;
-        self.v2_compose.fallbacks.assign_kinds += other.v2_compose.fallbacks.assign_kinds;
-        self.v2_compose.fallbacks.parametrize += other.v2_compose.fallbacks.parametrize;
+        self.distractor_attempts += other.distractor_attempts;
+        self.distractor_ok += other.distractor_ok;
+        self.repair_unsound += other.repair_unsound;
+        self.v2_skeleton.count += other.v2_skeleton.count;
+        self.v2_skeleton.fallbacks.assign_kinds += other.v2_skeleton.fallbacks.assign_kinds;
+        self.v2_skeleton.fallbacks.parametrize += other.v2_skeleton.fallbacks.parametrize;
     }
 
     pub fn print(&self) {
@@ -105,10 +117,13 @@ impl Stats {
             self.repair_fail_changed,
         );
         eprintln!(
-            "  v2 composes={} | AnswerOf fallbacks: assign_kinds={} parametrize={}",
-            self.v2_compose.compose_count,
-            self.v2_compose.fallbacks.assign_kinds,
-            self.v2_compose.fallbacks.parametrize,
+            "  v2 skeletons={} | repair distractor={}/{} unsound_rejected={} | AnswerOf fallbacks: assign_kinds={} parametrize={}",
+            self.v2_skeleton.count,
+            self.distractor_ok,
+            self.distractor_attempts,
+            self.repair_unsound,
+            self.v2_skeleton.fallbacks.assign_kinds,
+            self.v2_skeleton.fallbacks.parametrize,
         );
     }
 }
@@ -212,7 +227,7 @@ pub(crate) fn run_hint_engine(
     run_hint_engine_from(fp, fp.initial_state, stats, trace, lookahead_depth)
 }
 
-fn run_hint_engine_from(
+pub(crate) fn run_hint_engine_from(
     fp: &FlatPuzzle,
     mut state: State,
     stats: &mut Stats,
@@ -443,7 +458,12 @@ fn validate_option_values(fp: &FlatPuzzle) {
     }
 }
 
-fn valid_values(qt: &QuestionType, qi: usize, n: usize, oc: usize) -> ArrayVec<OptionValue, 20> {
+pub(crate) fn valid_values(
+    qt: &QuestionType,
+    qi: usize,
+    n: usize,
+    oc: usize,
+) -> ArrayVec<OptionValue, 20> {
     let mut out = ArrayVec::new();
     let mut push_num = |v: usize| out.push(OptionValue::num(v as u8));
     match *qt {
@@ -565,7 +585,6 @@ pub(crate) fn assert_accepted(
     );
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn validate_and_repair(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
@@ -733,7 +752,7 @@ pub fn validate_and_repair(
 // distractor values (0, max, edge positions). Prioritize counting types since
 // extreme counts are easy for the hint engine to disprove.
 
-pub(crate) fn rank_repair_candidates(
+fn rank_repair_candidates(
     fp: &FlatPuzzle,
     stuck_answers: &[Option<Answer>; MAX_N],
 ) -> ArrayVec<usize, MAX_N> {
@@ -990,7 +1009,6 @@ pub fn repair_one_question(
 
 // ── Build FlatPuzzle with options ──
 
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn fill_one_question(
     qt: &QuestionType,
     qi: usize,

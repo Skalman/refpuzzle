@@ -226,7 +226,6 @@ fn undo_propagation(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn search(
     fp: &FlatPuzzle,
     fixed: &[Option<Answer>; MAX_N],

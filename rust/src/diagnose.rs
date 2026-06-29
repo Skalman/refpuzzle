@@ -1,14 +1,13 @@
-//! TEMPORARY: stuck-puzzle diagnostic for rebuilding repair. Samples a fixed
-//! number of v2 composes per level, runs `validate_and_repair` (engine + move #1
-//! distractor repair), and reports (a) a per-level histogram of how far it got
-//! and (b) example `/playground` links to puzzles repair couldn't crack, split into
-//! no-progress (solved 0) and partial-progress buckets. Delete this module and
-//! the `stuck` subcommand once `validate_and_repair` does real repair.
+//! v2 generation-quality diagnostic (`gen-stats`). Samples a fixed number of v2
+//! skeletons per level, runs `validate_and_repair` (engine + distractor repair),
+//! and reports (a) a per-level histogram of how far it got and (b) example
+//! `/playground` links to puzzles repair couldn't crack, split into no-progress
+//! (solved 0) and partial-progress buckets.
 
 use std::io::IsTerminal;
 
 use crate::build::{Stats, fill_options};
-use crate::construct_v2::{RECIPES, Verdict, compose, validate_and_repair};
+use crate::construct_v2::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::serialize::playground_link;
@@ -27,10 +26,16 @@ struct StuckCase {
     link: String,
 }
 
-/// Sample `attempts` v2 composes for each selected level (`only_level` or all
+/// Sample `attempts` v2 skeletons for each selected level (`only_level` or all
 /// six), seeded for reproducibility. Print per-level solved-count + cells-filled
 /// histograms, then `count` no-progress + `count` partial example links.
-pub fn stuck(seed: u32, attempts: usize, count: usize, only_level: Option<usize>, origin: &str) {
+pub fn gen_stats(
+    seed: u32,
+    attempts: usize,
+    count: usize,
+    only_level: Option<usize>,
+    origin: &str,
+) {
     let levels: Vec<usize> = match only_level {
         Some(l) => vec![l],
         None => (1..=6).collect(),
@@ -50,23 +55,30 @@ pub fn stuck(seed: u32, attempts: usize, count: usize, only_level: Option<usize>
         let mut dist = vec![0u32; n + 1];
         let mut filled_dist = vec![0u32; n * oc + 1];
         for _ in 0..attempts {
-            let c = compose(&RECIPES[level], n, oc, &mut rng, &mut stats.v2_compose);
-            let mut fp = fill_options(&c.types, &c.solution, c.n, oc, &mut rng, false);
+            let skeleton =
+                generate_skeleton(&RECIPES[level], n, oc, &mut rng, &mut stats.v2_skeleton);
+            let mut fp = fill_options(
+                &skeleton.types,
+                &skeleton.solution,
+                skeleton.n,
+                oc,
+                &mut rng,
+                false,
+            );
             // `solved` = questions pinned to one answer; `filled` = resolved cells
             // (eliminated options + the known-correct cell of solved questions).
             let (solved, filled) = match validate_and_repair(
                 &mut fp,
-                &c.solution,
-                c.n,
+                &skeleton.solution,
+                skeleton.n,
                 RECIPES[level].lookahead_depth,
                 &mut rng,
                 &mut stats,
-                false,
-                "stuck",
+                "gen-stats",
             ) {
-                Verdict::Accepted => (c.n, c.n * oc),
+                Verdict::Accepted => (skeleton.n, skeleton.n * oc),
                 Verdict::Stuck { solved, state } => {
-                    let filled: usize = (0..c.n)
+                    let filled: usize = (0..skeleton.n)
                         .map(|qi| {
                             if state.answers[qi].is_some() {
                                 oc
@@ -84,17 +96,21 @@ pub fn stuck(seed: u32, attempts: usize, count: usize, only_level: Option<usize>
                         bucket.push(StuckCase {
                             level: lvl,
                             solved,
-                            n: c.n,
+                            n: skeleton.n,
                             filled,
-                            total: c.n * oc,
+                            total: skeleton.n * oc,
                             solutions: solve(&fp, None, 2).len(),
-                            stuck: (0..c.n).filter(|&qi| state.answers[qi].is_none()).collect(),
-                            // Read types from `fp`, not `c.types`: a kept move-#2
-                            // graft rewrites a rule, so `fp` is the repaired truth.
-                            types: (0..c.n)
+                            stuck: (0..skeleton.n)
+                                .filter(|&qi| state.answers[qi].is_none())
+                                .collect(),
+                            // Repair edits options only, so `fp.question_types`
+                            // matches `skeleton.types`.
+                            types: (0..skeleton.n)
                                 .map(|qi| format!("{:?}", fp.question_types[qi]))
                                 .collect(),
-                            answers: (0..c.n).map(|qi| c.solution[qi].as_char()).collect(),
+                            answers: (0..skeleton.n)
+                                .map(|qi| skeleton.solution[qi].as_char())
+                                .collect(),
                             link: playground_link(origin, &fp.question_types, &fp, &state),
                         });
                     }
@@ -116,7 +132,7 @@ pub fn stuck(seed: u32, attempts: usize, count: usize, only_level: Option<usize>
         "PARTIAL-PROGRESS (engine stalled mid-solve)",
         &pool(&partial, count),
     );
-    eprintln!("\n{attempts} composes/level, seed {seed}");
+    eprintln!("\n{attempts} skeletons/level, seed {seed}");
 }
 
 /// `L{lvl}: {pct}% {solved}/{n}; …` for solved 0..=n — the `n/n` bucket is the

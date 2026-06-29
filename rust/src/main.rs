@@ -7,7 +7,7 @@ mod check_form;
 mod construct;
 mod construct_v2;
 mod deduce;
-mod diagnose; // TEMPORARY: `stuck` subcommand for rebuilding repair
+mod diagnose;
 mod difficulty;
 mod format;
 mod lookahead;
@@ -133,7 +133,7 @@ fn print_help() {
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S] [--v2]");
     eprintln!(
-        "       refpuzzle stuck [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (v2 stuck histogram + links)"
+        "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (v2 gen quality: histogram + links)"
     );
     eprintln!();
     eprintln!("Options:");
@@ -141,11 +141,13 @@ fn print_help() {
     eprintln!("  -m, --merge   merge into existing file");
     eprintln!("  --overwrite   overwrite existing output file");
     eprintln!("  -l, --level   generate only this level (1-6)");
-    eprintln!("  -a, --attempts  max attempts per seed (default 100)");
+    eprintln!(
+        "  -a, --attempts  budget per puzzle (v1: attempts per seed; v2: regenerations) (default 100)"
+    );
     eprintln!("  -t, --threads N  worker threads (default: all cores)");
     eprintln!("  --stats       show generation statistics");
     eprintln!("  --trace       show trace output");
-    eprintln!("  --v2          use the v2 compose+repair pipeline (default: v1)");
+    eprintln!("  --v2          use the v2 skeleton+repair pipeline (default: v1)");
     eprintln!("  --json        output check results as JSON");
     eprintln!();
     eprintln!("Examples:");
@@ -235,9 +237,8 @@ fn main() {
             type_stats::type_stats(attempts, seed, &output, use_v2);
             return;
         }
-        // TEMPORARY: stuck-puzzle diagnostic — remove with src/diagnose.rs once
-        // validate_and_repair does real repair.
-        "stuck" => {
+        // v2 generation quality diagnostic (see src/diagnose.rs).
+        "gen-stats" => {
             let mut seed: u32 = 1;
             let mut attempts: usize = 200;
             let mut count: usize = 5;
@@ -275,7 +276,7 @@ fn main() {
                 }
                 i += 1;
             }
-            diagnose::stuck(seed, attempts, count, level, &origin);
+            diagnose::gen_stats(seed, attempts, count, level, &origin);
             return;
         }
         _ => {
@@ -438,11 +439,14 @@ fn main() {
             let (mm, dd) = days[day_idx];
             let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
-            let mut result = None;
             let mut stats = build::Stats::default();
-            for &s in seeds {
-                let mut rng = Rng::new(s);
-                let r = if use_v2 {
+            let result = if use_v2 {
+                // v2 fixes the answer key on the first skeleton and only re-rolls
+                // the questions, so one seed suffices — no key-varying retry loop.
+                // A `None` means the key admitted no unique puzzle within the
+                // budget, which shouldn't happen; surface it loudly.
+                let mut rng = Rng::new(seeds[0]);
+                Some(
                     construct_v2::generate(
                         &construct_v2::RECIPES[level as usize - 1],
                         profile.question_count,
@@ -452,14 +456,27 @@ fn main() {
                         &mut stats,
                         &label,
                     )
-                } else {
-                    construct::generate(profile, &mut rng, max_attempts, &mut stats, trace, &label)
-                };
-                if let Some(r) = r {
-                    result = Some(r);
-                    break;
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "{label}: no unique puzzle within {max_attempts} regenerations (seed {})",
+                            seeds[0]
+                        )
+                    }),
+                )
+            } else {
+                // v1 builds a fresh key each attempt, so vary it by re-seeding.
+                let mut result = None;
+                for &s in seeds {
+                    let mut rng = Rng::new(s);
+                    if let Some(r) =
+                        construct::generate(profile, &mut rng, max_attempts, &mut stats, trace, &label)
+                    {
+                        result = Some(r);
+                        break;
+                    }
                 }
-            }
+                result
+            };
             done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
             if let Ok(mut last) = last_report.try_lock()
                 && last.elapsed().as_secs() >= 15
