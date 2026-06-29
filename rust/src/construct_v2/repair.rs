@@ -161,8 +161,12 @@ fn repair_one_question(
                 continue;
             }
             fp.options[qi][oi] = v;
-            // Keep the first edit that is well-formed and gives qi's rules a move.
-            if !row_has_duplicate(fp, qi) && !deduce_question(fp, state, qi).is_empty() {
+            // Keep the first edit that is well-formed (no duplicate value, no
+            // ambiguous match) and gives qi's rules a move.
+            if !row_has_duplicate(fp, qi)
+                && crate::check_form::check_unique_match(fp, qi, &qt, solution).is_none()
+                && !deduce_question(fp, state, qi).is_empty()
+            {
                 return true;
             }
         }
