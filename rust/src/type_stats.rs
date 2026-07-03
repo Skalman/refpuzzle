@@ -1,5 +1,4 @@
 use crate::build::{self, GenerateResult};
-use crate::construct;
 use crate::construct_v2;
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
@@ -44,22 +43,18 @@ struct LevelData {
     fallback_backstop: u32,
 }
 
-/// `output` is a file path, or `-` for stdout. `use_v2` selects the v2
-/// `generate_skeleton` pipeline (`construct_v2::generate`) instead of the live generator.
-pub fn type_stats(attempts: u32, seed: u32, output: &str, use_v2: bool) {
+/// `output` is a file path, or `-` for stdout.
+pub fn type_stats(attempts: u32, seed: u32, output: &str) {
     let levels: Vec<LevelData> = (1..=6u8)
-        .map(|l| collect_level(l, attempts, seed, use_v2))
+        .map(|l| collect_level(l, attempts, seed))
         .collect();
 
     let mut md = String::new();
-    let pipeline = if use_v2 { " (v2 pipeline)" } else { "" };
     md.push_str(&format!(
-        "# Puzzle generation statistics{pipeline}\n\nUp to {attempts} attempts per level. Base seed {seed}.\n\n"
+        "# Puzzle generation statistics\n\nUp to {attempts} attempts per level. Base seed {seed}.\n\n"
     ));
     write_overview(&mut md, &levels);
-    if use_v2 {
-        write_fallbacks(&mut md, &levels);
-    }
+    write_fallbacks(&mut md, &levels);
     write_multiplicity(&mut md, &levels);
     write_answer_freq(&mut md, &levels);
 
@@ -75,7 +70,7 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str, use_v2: bool) {
 /// Mirrors production: retry with fresh seeds until a generation succeeds, so
 /// `attempts` is the target *puzzle* count, not the generate()-call count.
 /// Capped at 100× calls as a backstop against an infeasible profile.
-fn collect_level(level: u8, attempts: u32, seed: u32, use_v2: bool) -> LevelData {
+fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     let profile = &PROFILES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
@@ -93,19 +88,15 @@ fn collect_level(level: u8, attempts: u32, seed: u32, use_v2: bool) -> LevelData
         attempt = attempt.wrapping_add(1);
         total_calls += 1;
         let mut rng = Rng::new(s);
-        let result = if use_v2 {
-            construct_v2::generate(
-                &construct_v2::RECIPES[(level - 1) as usize],
-                profile.question_count,
-                profile.option_count,
-                &mut rng,
-                100,
-                &mut bstats,
-                "stats",
-            )
-        } else {
-            construct::generate(profile, &mut rng, 100, &mut bstats, false, "stats")
-        };
+        let result = construct_v2::generate(
+            &construct_v2::RECIPES[(level - 1) as usize],
+            profile.question_count,
+            profile.option_count,
+            &mut rng,
+            100,
+            &mut bstats,
+            "stats",
+        );
         let Some(result) = result else {
             continue;
         };

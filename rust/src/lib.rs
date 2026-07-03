@@ -32,7 +32,7 @@ static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> 
 mod wasm_api {
     use crate::build;
     use crate::check_answer::{Validity, check_answer};
-    use crate::construct;
+    use crate::construct_v2;
     use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
     use crate::lookahead::lookahead;
@@ -240,18 +240,24 @@ mod wasm_api {
         }
         let profile = &PROFILES[(level - 1) as usize];
         let mut stats = build::Stats::default();
-        for retry in 0..100u32 {
-            let s = seed
-                .wrapping_mul(17)
-                .wrapping_add(retry.wrapping_mul(0x9e3779b9));
-            let mut rng = Rng::new(s);
-            if let Some(result) =
-                construct::generate(profile, &mut rng, 100, &mut stats, false, "wasm")
-            {
+        // v2 fixes the key on the first skeleton and retries internally, so one
+        // seed suffices. `seed * 17` matches the CLI's `seeds[0]`, so a puzzle
+        // generated here is identical to the same date/level built by `gen`.
+        let mut rng = Rng::new(seed.wrapping_mul(17));
+        match construct_v2::generate(
+            &construct_v2::RECIPES[(level - 1) as usize],
+            profile.question_count,
+            profile.option_count,
+            &mut rng,
+            100,
+            &mut stats,
+            "wasm",
+        ) {
+            Some(result) => {
                 let value = puzzle_to_compact_value(&result.question_types, &result.fp);
-                return Ok(serde_json::to_string(&value).unwrap());
+                Ok(serde_json::to_string(&value).unwrap())
             }
+            None => Err(err("generator exhausted retry budget")),
         }
-        Err(err("generator exhausted retry budget"))
     }
 }

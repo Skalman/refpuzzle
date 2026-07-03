@@ -132,7 +132,7 @@ fn print_help() {
     eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
-    eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S] [--v2]");
+    eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
     eprintln!(
         "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (v2 gen quality: histogram + links)"
     );
@@ -142,18 +142,13 @@ fn print_help() {
     eprintln!("  -m, --merge   merge into existing file");
     eprintln!("  --overwrite   overwrite existing output file");
     eprintln!("  -l, --level   generate only this level (1-6)");
-    eprintln!(
-        "  -a, --attempts  budget per puzzle (v1: attempts per seed; v2: regenerations) (default 100)"
-    );
+    eprintln!("  -a, --attempts  regeneration budget per puzzle (default 100)");
     eprintln!("  -t, --threads N  worker threads (default: all cores)");
     eprintln!("  --stats       show generation statistics");
-    eprintln!("  --trace       show trace output");
-    eprintln!("  --v2          use the v2 skeleton+repair pipeline (default: v1)");
     eprintln!("  --json        output check results as JSON");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  refpuzzle gen 2051 -o out.json");
-    eprintln!("  refpuzzle gen 2051 -o out.json --v2");
     eprintln!("  refpuzzle gen 2051-03 -o out.json -l 4");
     eprintln!("  refpuzzle gen 2051-01..2051-06 -o out.json -m");
     eprintln!("  refpuzzle check puzzles/daily/2051.json");
@@ -204,7 +199,6 @@ fn main() {
             let mut attempts: u32 = 10000;
             let mut seed: u32 = 1;
             let mut output: Option<String> = None;
-            let mut use_v2 = false;
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
@@ -220,9 +214,6 @@ fn main() {
                         i += 1;
                         output = Some(args[i].clone());
                     }
-                    "--v2" => {
-                        use_v2 = true;
-                    }
                     other => {
                         eprintln!("Unknown option: {other}");
                         std::process::exit(1);
@@ -231,11 +222,11 @@ fn main() {
                 i += 1;
             }
             let Some(output) = output else {
-                eprintln!("Usage: refpuzzle type-stats -o FILE [--attempts N] [--seed N] [--v2]");
+                eprintln!("Usage: refpuzzle type-stats -o FILE [--attempts N] [--seed N]");
                 eprintln!("  -o FILE   output file (required, - for stdout)");
                 std::process::exit(1);
             };
-            type_stats::type_stats(attempts, seed, &output, use_v2);
+            type_stats::type_stats(attempts, seed, &output);
             return;
         }
         // v2 generation quality diagnostic (see src/diagnose.rs).
@@ -294,12 +285,10 @@ fn main() {
     let mut max_attempts: usize = 100;
     let mut level_filter: Option<u8> = None;
     let mut show_stats = false;
-    let mut trace = false;
     let mut output_path: Option<String> = None;
     let mut merge = false;
     let mut overwrite = false;
     let mut threads: Option<usize> = None;
-    let mut use_v2 = false;
 
     let mut i = 2;
     while i < args.len() {
@@ -330,12 +319,6 @@ fn main() {
             }
             "--stats" => {
                 show_stats = true;
-            }
-            "--trace" => {
-                trace = true;
-            }
-            "--v2" => {
-                use_v2 = true;
             }
             "--help" | "-h" => {
                 print_help();
@@ -441,43 +424,28 @@ fn main() {
             let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
             let mut stats = build::Stats::default();
-            let result = if use_v2 {
-                // v2 fixes the answer key on the first skeleton and only re-rolls
-                // the questions, so one seed suffices — no key-varying retry loop.
-                // A `None` means the key admitted no unique puzzle within the
-                // budget, which shouldn't happen; surface it loudly.
-                let mut rng = Rng::new(seeds[0]);
-                Some(
-                    construct_v2::generate(
-                        &construct_v2::RECIPES[level as usize - 1],
-                        profile.question_count,
-                        profile.option_count,
-                        &mut rng,
-                        max_attempts,
-                        &mut stats,
-                        &label,
-                    )
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "{label}: no unique puzzle within {max_attempts} regenerations (seed {})",
-                            seeds[0]
-                        )
-                    }),
+            // v2 fixes the answer key on the first skeleton and only re-rolls the
+            // questions, so one seed suffices — no key-varying retry loop. A `None`
+            // means the key admitted no unique puzzle within the budget, which
+            // shouldn't happen; surface it loudly.
+            let mut rng = Rng::new(seeds[0]);
+            let result = Some(
+                construct_v2::generate(
+                    &construct_v2::RECIPES[level as usize - 1],
+                    profile.question_count,
+                    profile.option_count,
+                    &mut rng,
+                    max_attempts,
+                    &mut stats,
+                    &label,
                 )
-            } else {
-                // v1 builds a fresh key each attempt, so vary it by re-seeding.
-                let mut result = None;
-                for &s in seeds {
-                    let mut rng = Rng::new(s);
-                    if let Some(r) =
-                        construct::generate(profile, &mut rng, max_attempts, &mut stats, trace, &label)
-                    {
-                        result = Some(r);
-                        break;
-                    }
-                }
-                result
-            };
+                .unwrap_or_else(|| {
+                    panic!(
+                        "{label}: no unique puzzle within {max_attempts} regenerations (seed {})",
+                        seeds[0]
+                    )
+                }),
+            );
             done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
             if let Ok(mut last) = last_report.try_lock()
                 && last.elapsed().as_secs() >= 15
