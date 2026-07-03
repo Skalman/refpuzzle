@@ -13,9 +13,10 @@ use crate::build::{
     FallbackCounts, GenerateResult, SkeletonStats, Stats, assert_accepted, fill_options,
     run_hint_engine, solution_satisfies_type, to_optional,
 };
-use crate::check_answer::check_answer;
+use crate::check_answer::{check_answer, check_unambiguous_answer};
+use crate::check_answerable::{answerable, check_answerable};
 use crate::check_form::check_form;
-use crate::construct::{random_type_params, solution_fits_type};
+use crate::construct::{random_type_params, solution_fits_kind};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
 use crate::types::QuestionTypeKind::*;
@@ -234,7 +235,7 @@ pub fn generate_skeleton(
     let kinds = select_kinds(recipe, n, rng);
     let SolutionAndKinds { solution, kind_of } =
         SolutionAndKindsBuilder::new(n, oc).build(&kinds, rng, fallbacks);
-    let types = parametrize(n, oc, &solution, &kind_of, rng, fallbacks);
+    let types = parametrize(recipe, n, oc, &solution, &kind_of, rng, fallbacks);
 
     Skeleton { types, solution, n }
 }
@@ -257,7 +258,7 @@ pub fn regenerate_skeleton(
     let fallbacks = &mut skeleton_stats.fallbacks;
     let kinds = select_kinds(recipe, n, rng);
     let kind_of = assign_kinds_to_solution(n, oc, solution, &kinds, rng, fallbacks);
-    let types = parametrize(n, oc, solution, &kind_of, rng, fallbacks);
+    let types = parametrize(recipe, n, oc, solution, &kind_of, rng, fallbacks);
 
     Skeleton {
         types,
@@ -329,6 +330,21 @@ pub fn generate(
             stats,
             label,
         ) {
+            // Gate: an accepted puzzle must have a unique answer per question — the
+            // builder skips count-type ties, fill avoids SameAs sharer-distractors,
+            // and repair's keep-gate refuses ambiguous edits. Assert it rather than
+            // emit an ambiguous puzzle (a silent emit would mask a gen/repair bug).
+            let sol = &skeleton.solution[..skeleton.n];
+            for qi in 0..skeleton.n {
+                if let Some(reason) = check_unambiguous_answer(&fp, qi, sol)
+                    .or_else(|| check_answerable(&fp, qi, sol))
+                {
+                    panic!(
+                        "[{label}] emitted an ambiguous puzzle at Q{}: {reason}",
+                        qi + 1
+                    );
+                }
+            }
             // Repair only edits options, so types are unchanged from `skeleton.types`;
             // read them off `fp`, the value we return anyway.
             return Some(GenerateResult {
@@ -524,6 +540,21 @@ struct SolutionAndKinds {
     kind_of: [QuestionTypeKind; MAX_N],
 }
 
+/// Placement order for kind assignment (lower = placed first). The structural
+/// shapes come before everything else; among them, ConsecIdent precedes the
+/// pair-sharers (Next/PrevSame) so it owns the single adjacent pair they reuse.
+/// `build` (author) places shapes first to seed them while structure is free;
+/// `assign_kinds_to_solution` (fixed key) places them first because they fit the
+/// fewest slots. Same order, both reasons.
+fn shape_rank(k: QuestionTypeKind) -> u8 {
+    match k {
+        OnlySame | NoOtherHasAnswer => 0,
+        ConsecIdent => 1,
+        NextSame | PrevSame => 2,
+        _ => 3,
+    }
+}
+
 impl SolutionAndKindsBuilder {
     fn new(n: usize, oc: usize) -> Self {
         SolutionAndKindsBuilder {
@@ -573,16 +604,9 @@ impl SolutionAndKindsBuilder {
         self.open = (0..self.n).collect();
         rng.shuffle(&mut self.open);
 
-        // Seed shapes trickiest-first; ConsecIdent before the pair-sharers
-        // (Next/Prev) so it owns the single pair they reuse. Next/Prev share a
-        // rank — they reuse the same pair, so their order doesn't matter.
+        // Seed shapes trickiest-first (see `shape_rank`).
         let mut ordered: ArrayVec<QuestionTypeKind, MAX_N> = kinds.iter().copied().collect();
-        ordered.sort_by_key(|&k| match k {
-            OnlySame | NoOtherHasAnswer => 0,
-            ConsecIdent => 1,
-            NextSame | PrevSame => 2,
-            _ => 3,
-        });
+        ordered.sort_by_key(|&k| shape_rank(k));
         for &k in &ordered {
             let qi = match k {
                 OnlySame => self.seed_only_same(),
@@ -815,13 +839,11 @@ impl SolutionAndKindsBuilder {
 
 /// Assign each selected kind to a slot of a *fixed* answer key — the companion of
 /// [`SolutionAndKindsBuilder::build`] for the reuse path, deciding only kinds,
-/// never the key. A kind claims a random unclaimed slot the solution already
-/// supports (`solution_fits_type`); the most-constrained kinds go first, since
-/// `solution_fits_type` reads only the solution, so a kind that fits few slots
-/// must grab one before a looser kind eats it. A kind with no fitting slot left
-/// is demoted to `AnswerOf` on a leftover slot (tallied into `fallbacks.assign_kinds`),
-/// exactly as `parametrize`/`build` already do — `AnswerOf` fits anywhere once
-/// every answer is decided.
+/// never the key. Mirrors `build`'s shape: walk the kinds in [`shape_rank`] order
+/// (shapes first — here because they fit the fewest slots of the fixed key) and
+/// claim the first shuffled slot the solution supports (`solution_fits_kind`).
+/// A kind with no fitting slot left is demoted to `AnswerOf` on a leftover
+/// (`fallbacks.assign_kinds`), which fits anywhere once the key is decided.
 fn assign_kinds_to_solution(
     n: usize,
     oc: usize,
@@ -831,43 +853,41 @@ fn assign_kinds_to_solution(
     fallbacks: &mut FallbackCounts,
 ) -> [QuestionTypeKind; MAX_N] {
     let mut kind_of = [QuestionTypeKind::AnswerIsSelf; MAX_N];
-    let mut claimed = [false; MAX_N];
+    let mut open: ArrayVec<usize, MAX_N> = (0..n).collect();
+    rng.shuffle(&mut open);
 
     let mut ordered: ArrayVec<QuestionTypeKind, MAX_N> = kinds.iter().copied().collect();
-    ordered.sort_by_key(|&k| {
-        (0..n)
-            .filter(|&qi| solution_fits_type(k, qi, solution, n, oc))
-            .count()
-    });
+    ordered.sort_by_key(|&k| shape_rank(k));
 
     for &k in &ordered {
-        let fitting: ArrayVec<usize, MAX_N> = (0..n)
-            .filter(|&qi| !claimed[qi] && solution_fits_type(k, qi, solution, n, oc))
-            .collect();
-        let qi = if fitting.is_empty() {
-            fallbacks.assign_kinds += 1;
-            let qi = (0..n)
-                .find(|&qi| !claimed[qi])
-                .expect("a leftover slot per kind");
-            kind_of[qi] = AnswerOf;
-            qi
-        } else {
-            let qi = rng.pick(&fitting);
-            kind_of[qi] = k;
-            qi
-        };
-        claimed[qi] = true;
+        // `open` is shuffled, so the first supported slot is a random fitting one.
+        match open
+            .iter()
+            .position(|&qi| solution_fits_kind(k, qi, solution, n, oc))
+        {
+            Some(idx) => {
+                kind_of[open[idx]] = k;
+                open.swap_remove(idx);
+            }
+            None => {
+                let qi = open.pop().expect("a leftover slot per kind");
+                kind_of[qi] = AnswerOf;
+                fallbacks.assign_kinds += 1;
+            }
+        }
     }
     kind_of
 }
 
-/// Turn each slot's kind into a full QuestionType against the
-/// finished answer key. Each kind is drawn against the solution (parameter-free
-/// shapes map straight to their unit variant); a kind that won't fit its slot
-/// (e.g. ClosestAfter on the last slot) is replaced with a fresh AnswerOf
-/// (tallied into `fallbacks.parametrize`). Shape-types were authored to fit, so they
-/// never fall back here.
+/// Turn each slot's kind into a full QuestionType against the finished answer key.
+/// Each kind is drawn against the solution (parameter-free shapes map straight to
+/// their unit variant). A kind that won't fit its slot (e.g. ClosestAfter on the
+/// last slot, or MostCommon with a tied extreme) is replaced — first by another
+/// fitting kind from the level's pool (`fallbacks.reserve`), and only if none fit
+/// by a generic AnswerOf/LetterDist (`fallbacks.backstop`). Shape-types were
+/// authored to fit, so they never fall back here.
 fn parametrize(
+    recipe: &LevelRecipe,
     n: usize,
     oc: usize,
     sol: &[Answer; MAX_N],
@@ -879,31 +899,91 @@ fn parametrize(
     let all_targets = if n >= 16 { u16::MAX } else { (1u16 << n) - 1 };
     let mut types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut placed: ArrayVec<QuestionType, MAX_N> = ArrayVec::new();
+
     for qi in 0..n {
-        let kind = kind_of[qi];
-        let mut chosen = None;
-        // The kind must *fit* this slot (e.g. MostCommon needs a unique extreme);
-        // if not, it's replaced rather than relocated.
-        if solution_fits_type(kind, qi, sol, n, oc) {
-            // measured: 10 draws saturates the fallback rate; more won't help.
-            for _ in 0..10 {
-                if let Some(qt) = random_type_params(kind, qi, n, oc, sol, all_targets, rng)
-                    && !placed.contains(&qt)
-                    && solution_satisfies_type(&qt, qi, sol, n, oc)
-                {
-                    chosen = Some(qt);
-                    break;
-                }
-            }
-        }
-        let qt = chosen.unwrap_or_else(|| {
-            fallbacks.parametrize += 1;
+        // Three tiers, in order of preference: the slot's planned kind; else a
+        // fitting kind from the level's own pool; else the generic backstop
+        // (AnswerOf/LetterDist, which always fits). The two fallbacks are counted
+        // separately.
+        let qt = if let Some(qt) =
+            try_parametrize_kind(kind_of[qi], qi, n, oc, sol, all_targets, &placed, rng)
+        {
+            qt
+        } else if let Some(qt) =
+            pick_reserve(recipe, qi, n, oc, sol, all_targets, kind_of, &placed, rng)
+        {
+            fallbacks.reserve += 1;
+            qt
+        } else {
+            fallbacks.backstop += 1;
             fresh_fallback_type(n, qi, &placed, rng)
-        });
+        };
         types[qi] = qt;
         placed.push(qt);
     }
     types
+}
+
+/// A slot's planned kind didn't fit (e.g. MostCommon with a tied extreme). Pick a
+/// different kind from the level's pool that *does* fit here — so the slot keeps a
+/// level-appropriate question instead of degrading to the generic backstop. Skips
+/// kinds already at their cap; `None` if nothing in the pool fits.
+fn pick_reserve(
+    recipe: &LevelRecipe,
+    qi: usize,
+    n: usize,
+    oc: usize,
+    sol: &[Answer; MAX_N],
+    all_targets: u16,
+    kind_of: &[QuestionTypeKind; MAX_N],
+    placed: &[QuestionType],
+    rng: &mut Rng,
+) -> Option<QuestionType> {
+    let mut pool: ArrayVec<QuestionTypeKind, 32> = recipe.allowed.iter().copied().collect();
+    rng.shuffle(&mut pool);
+    for r in pool {
+        // How many `r`s are already committed: placed so far, plus those still
+        // planned in later slots. Adding one here must keep the total within cap.
+        let committed = placed.iter().filter(|qt| qt.kind() == r).count()
+            + kind_of[qi + 1..n].iter().filter(|&&k| k == r).count();
+        if committed >= usize::from(recipe.caps[r as usize]) {
+            continue;
+        }
+        if let Some(qt) = try_parametrize_kind(r, qi, n, oc, sol, all_targets, placed, rng) {
+            return Some(qt);
+        }
+    }
+    None
+}
+
+/// Turn `kind` into a concrete `QuestionType` for slot `qi`, or `None` if it can't:
+/// the kind must *fit* the solution shape (e.g. MostCommon needs a unique extreme),
+/// and a random parametrization must be unique (not already `placed`), satisfied by
+/// the key, and leave a unique answer.
+fn try_parametrize_kind(
+    kind: QuestionTypeKind,
+    qi: usize,
+    n: usize,
+    oc: usize,
+    sol: &[Answer; MAX_N],
+    all_targets: u16,
+    placed: &[QuestionType],
+    rng: &mut Rng,
+) -> Option<QuestionType> {
+    if !solution_fits_kind(kind, qi, sol, n, oc) {
+        return None;
+    }
+    // measured: 10 draws saturates the fallback rate; more won't help.
+    for _ in 0..10 {
+        if let Some(qt) = random_type_params(kind, qi, n, oc, sol, all_targets, rng)
+            && !placed.contains(&qt)
+            && solution_satisfies_type(&qt, qi, sol, n, oc)
+            && answerable(&qt, sol, n, oc)
+        {
+            return Some(qt);
+        }
+    }
+    None
 }
 
 /// A satisfiable, not-yet-placed reference type for `qi`: a random AnswerOf to
@@ -1054,6 +1134,62 @@ mod tests {
                     }
                 }
             }
+        }
+    }
+
+    /// Every puzzle `generate` emits must be well-posed: each question has a
+    /// unique answer for the key. This is the accept-gate's invariant, checked
+    /// here independently (re-deriving the key by solving) so a gap in the
+    /// checks — like the `EqualCount` tie that originally slipped through —
+    /// fails the suite rather than shipping.
+    #[test]
+    fn generate_emits_only_well_posed_puzzles() {
+        for level in 0..6 {
+            let p = &PROFILES[level];
+            let mut rng = Rng::new(level as u32 * 4099 + 11);
+            let mut produced = 0;
+            for _ in 0..40 {
+                let Some(result) = generate(
+                    &RECIPES[level],
+                    p.question_count,
+                    p.option_count,
+                    &mut rng,
+                    100,
+                    &mut Stats::default(),
+                    "test",
+                ) else {
+                    continue;
+                };
+                produced += 1;
+                let fp = &result.fp;
+                let n = fp.n;
+                // v2 emits uniquely-solvable puzzles; recover the key by solving.
+                let solutions = solve(fp, None, 2);
+                assert_eq!(
+                    solutions.len(),
+                    1,
+                    "L{} emitted a non-unique puzzle",
+                    level + 1
+                );
+                let sol = &solutions[0][..n];
+                for qi in 0..n {
+                    assert!(
+                        check_unambiguous_answer(fp, qi, sol).is_none(),
+                        "L{} Q{}: {:?}",
+                        level + 1,
+                        qi + 1,
+                        check_unambiguous_answer(fp, qi, sol),
+                    );
+                    assert!(
+                        check_answerable(fp, qi, sol).is_none(),
+                        "L{} Q{}: {:?}",
+                        level + 1,
+                        qi + 1,
+                        check_answerable(fp, qi, sol),
+                    );
+                }
+            }
+            assert!(produced > 0, "L{} produced no puzzles", level + 1);
         }
     }
 }

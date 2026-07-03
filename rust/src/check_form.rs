@@ -217,51 +217,6 @@ fn check_correct_claim_form(
     None
 }
 
-/// Well-formedness for the "pick the unique match" types: only the correct option
-/// may be a valid answer. For `SameAs`/`SameAsWhich` the text says "which of
-/// *these*", so the rule is per-distractor: no distractor option may point to a
-/// question that shares the matched answer. A brute solve won't flag a violation —
-/// `check_answer` ties an option's validity to its slot-letter, so the puzzle stays
-/// uniquely solvable — but `deduce_assuming_unique`'s `SameAsNegative` relies on the
-/// invariant and otherwise eliminates a true answer. Needs the solution; returns at
-/// most one error.
-pub(crate) fn check_unique_match(
-    fp: &FlatPuzzle,
-    qi: usize,
-    qt: &QuestionType,
-    sol: &[Answer],
-) -> Option<(String, Severity)> {
-    let n = fp.n;
-    let oc = fp.option_count;
-    // (answer to match against, slot holding the correct option, ref question to skip)
-    let (matched, answer_slot, ref_q) = match qt {
-        QuestionType::SameAs => (sol[qi], sol[qi].idx(), qi),
-        QuestionType::SameAsWhich { question_index } => {
-            let r = *question_index as usize;
-            (sol[r], sol[qi].idx(), r)
-        }
-        _ => return None,
-    };
-    for oi in 0..oc {
-        if oi == answer_slot {
-            continue;
-        }
-        let v = fp.options[qi][oi];
-        if v.is_num() {
-            let t = usize::from(v.value());
-            if t < n && t != qi && t != ref_q && sol[t] == matched {
-                return error(format!(
-                    "{:?} distractor (option {oi}) points to Q{} which shares the matched answer {} — ambiguous",
-                    qt.kind(),
-                    t + 1,
-                    matched.as_char(),
-                ));
-            }
-        }
-    }
-    None
-}
-
 pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError> {
     let mut errors = Vec::new();
     let n = fp.n;
@@ -272,18 +227,6 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
 
         // Per-qt structural reference checks.
         if let Some((msg, sev)) = check_question_form(fp, qi, qt) {
-            errors.push(FormError {
-                qi,
-                message: msg,
-                severity: sev,
-            });
-        }
-
-        // Per-qt uniqueness: the "pick the unique match" types must have a single
-        // valid answer (needs the solution).
-        if let Some(sol) = solution
-            && let Some((msg, sev)) = check_unique_match(fp, qi, qt, sol)
-        {
             errors.push(FormError {
                 qi,
                 message: msg,

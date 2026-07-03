@@ -1,9 +1,9 @@
 use arrayvec::ArrayVec;
 
 use crate::build::{
-    GenerateResult, Stats, count_letter, fill_options, letter_counts, solution_satisfies_type,
-    validate_and_repair,
+    GenerateResult, Stats, count_letter, fill_options, solution_satisfies_type, validate_and_repair,
 };
+use crate::check_answerable::answerable;
 use crate::difficulty::DifficultyProfile;
 use crate::format::format_type_tag;
 use crate::rng::Rng;
@@ -243,7 +243,7 @@ impl PlacementState {
         {
             return false;
         }
-        if !solution_fits_type(
+        if !solution_fits_kind(
             kind,
             self.slots[self.assigned_count] as usize,
             solution,
@@ -484,7 +484,7 @@ fn try_construct(
         let mut fitting: ArrayVec<QuestionTypeKind, 32> = av_constrained
             .iter()
             .copied()
-            .filter(|&k| solution_fits_type(k, qi, solution, n, oc))
+            .filter(|&k| solution_fits_kind(k, qi, solution, n, oc))
             .collect();
         rng.shuffle(&mut fitting);
         let mut placed = false;
@@ -656,7 +656,7 @@ fn is_constrained_type(kind: QuestionTypeKind) -> bool {
 }
 
 /// Checks whether the solution has the properties needed for this type at this position.
-pub(crate) fn solution_fits_type(
+pub(crate) fn solution_fits_kind(
     kind: QuestionTypeKind,
     qi: usize,
     sol: &[Answer; MAX_N],
@@ -664,16 +664,10 @@ pub(crate) fn solution_fits_type(
     oc: usize,
 ) -> bool {
     match kind {
-        QuestionTypeKind::LeastCommon => {
-            let counts = letter_counts(sol, n);
-            let min = *counts[..oc].iter().min().unwrap_or(&0);
-            counts[..oc].iter().filter(|&&c| c == min).count() == 1
-        }
-        QuestionTypeKind::MostCommon => {
-            let counts = letter_counts(sol, n);
-            let max = *counts[..oc].iter().max().unwrap_or(&0);
-            counts[..oc].iter().filter(|&&c| c == max).count() == 1
-        }
+        // MC/LC answerability (unique extreme) lives in `check_answerable` — the one
+        // build-time source, shared with v2's parametrize and `refpuzzle check`.
+        QuestionTypeKind::LeastCommon => answerable(&QuestionType::LeastCommon, sol, n, oc),
+        QuestionTypeKind::MostCommon => answerable(&QuestionType::MostCommon, sol, n, oc),
         QuestionTypeKind::SameAs => {
             // Pool capacity for SameAs at qi depends on how many questions share qi's answer:
             //   same_count == 1 (qi is unique): correct = null, pool = n-1 other Qs, no null.

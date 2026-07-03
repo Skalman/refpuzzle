@@ -36,11 +36,12 @@ struct LevelData {
     successes: u32,
     total_calls: u32,
     per_type: BTreeMap<QuestionTypeKind, TypeStats>,
-    /// v2 telemetry across all skeleton generations: total skeletons + AnswerOf
-    /// fallbacks by phase.
+    /// v2 telemetry across all skeleton generations: total skeletons + fallback
+    /// substitutions by phase.
     skeletons: u32,
     fallback_assign_kinds: u32,
-    fallback_parametrize: u32,
+    fallback_reserve: u32,
+    fallback_backstop: u32,
 }
 
 /// `output` is a file path, or `-` for stdout. `use_v2` selects the v2
@@ -132,18 +133,20 @@ fn collect_level(level: u8, attempts: u32, seed: u32, use_v2: bool) -> LevelData
         per_type,
         skeletons: bstats.v2_skeleton.count,
         fallback_assign_kinds: bstats.v2_skeleton.fallbacks.assign_kinds,
-        fallback_parametrize: bstats.v2_skeleton.fallbacks.parametrize,
+        fallback_reserve: bstats.v2_skeleton.fallbacks.reserve,
+        fallback_backstop: bstats.v2_skeleton.fallbacks.backstop,
     }
 }
 
 /// Per-level v2 skeleton telemetry: total skeletons (with attempts-per-accepted-
-/// puzzle, i.e. the rejection ratio), and AnswerOf fallbacks per phase as a
-/// per-skeleton rate.
+/// puzzle, i.e. the rejection ratio), and fallback substitutions per phase as a
+/// per-skeleton rate. `reserve` swaps in another pool kind; `assign_kinds` and
+/// `backstop` fall back to AnswerOf.
 fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
     md.push_str(
         "## Skeleton telemetry (v2)\n\n`skeletons` is total skeletons generated (with attempts per accepted puzzle); fallback columns are totals (with per-skeleton rate).\n\n",
     );
-    let header: Vec<String> = ["Level", "skeletons", "assign_kinds", "parametrize"]
+    let header: Vec<String> = ["Level", "skeletons", "assign_kinds", "reserve", "backstop"]
         .iter()
         .map(|s| s.to_string())
         .collect();
@@ -162,7 +165,8 @@ fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
                 format!("L{}", l.level),
                 per_puzzle(l.skeletons),
                 per_skeleton(l.fallback_assign_kinds),
-                per_skeleton(l.fallback_parametrize),
+                per_skeleton(l.fallback_reserve),
+                per_skeleton(l.fallback_backstop),
             ]
         })
         .collect();

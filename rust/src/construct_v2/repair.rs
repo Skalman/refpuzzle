@@ -7,6 +7,7 @@
 use arrayvec::ArrayVec;
 
 use crate::build::{Stats, assert_accepted, run_hint_engine_from, valid_values};
+use crate::check_answer::check_unambiguous_answer;
 use crate::deduce::deduce_question;
 use crate::rng::Rng;
 use crate::solve_brute::solve;
@@ -164,7 +165,7 @@ fn repair_one_question(
             // Keep the first edit that is well-formed (no duplicate value, no
             // ambiguous match) and gives qi's rules a move.
             if !row_has_duplicate(fp, qi)
-                && crate::check_form::check_unique_match(fp, qi, &qt, solution).is_none()
+                && check_unambiguous_answer(fp, qi, solution).is_none()
                 && !deduce_question(fp, state, qi).is_empty()
             {
                 return true;

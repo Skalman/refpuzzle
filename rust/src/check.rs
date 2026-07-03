@@ -4,6 +4,7 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::check_answer;
+use crate::check_answerable;
 use crate::check_form;
 use crate::deduce;
 use crate::format;
@@ -91,6 +92,9 @@ pub struct PuzzleCheckResult {
     pub hint_brute_match: bool,
     pub validity_ok: bool,
     pub validity_per_question: Vec<String>,
+    /// Questions without a unique answer for the key — `check_answer::check_unambiguous_answer`
+    /// (SameAs/SameAsWhich/TrueStmt) and `check_answerable` (count-type ties).
+    pub ambiguous: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -251,6 +255,20 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         })
         .collect();
 
+    // Well-posedness: with the key known (unique brute solution), no question may
+    // have a second valid answer.
+    let ambiguous: Vec<String> = unique_solution
+        .map(|sol| {
+            (0..n)
+                .filter_map(|qi| {
+                    check_answer::check_unambiguous_answer(fp, qi, sol)
+                        .or_else(|| check_answerable::check_answerable(fp, qi, sol))
+                        .map(|msg| format!("Q{}: {}", qi + 1, msg))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     PuzzleCheckResult {
         key: key.to_string(),
         n,
@@ -266,6 +284,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         hint_brute_match,
         validity_ok,
         validity_per_question,
+        ambiguous,
     }
 }
 
@@ -314,7 +333,11 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
     let lvl = &r.key[5..];
 
     let has_form_warns = !r.form_warnings.is_empty();
-    let has_errors = !r.solve_ok || r.brute_count != 1 || !r.hint_brute_match || !r.validity_ok;
+    let has_errors = !r.solve_ok
+        || r.brute_count != 1
+        || !r.hint_brute_match
+        || !r.validity_ok
+        || !r.ambiguous.is_empty();
 
     let verdict = if !r.hint_brute_match {
         red("MISMATCH")
@@ -399,6 +422,17 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         writeln!(w, "    {}", dim(msg)).unwrap();
     }
 
+    // Answerable (unique answer per question)
+    let answerable_label = if r.ambiguous.is_empty() {
+        green("ok")
+    } else {
+        bad_n(r.ambiguous.len(), "ambiguous")
+    };
+    writeln!(w, "  {:<28} {answerable_label}", "Answerable").unwrap();
+    for msg in &r.ambiguous {
+        writeln!(w, "    {}", dim(msg)).unwrap();
+    }
+
     // Solve
     let solve_label = if r.solve_ok {
         green(&format!("solved {}/{n}", r.solve_answered))
@@ -473,6 +507,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
     let mut ambiguous: Vec<&str> = Vec::new();
     let mut mismatches: Vec<&str> = Vec::new();
     let mut validity_fails: Vec<&str> = Vec::new();
+    let mut not_answerable: Vec<&str> = Vec::new();
 
     for r in results {
         if !r.form_warnings.is_empty() {
@@ -495,6 +530,9 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         if !r.validity_ok {
             validity_fails.push(&r.key);
         }
+        if !r.ambiguous.is_empty() {
+            not_answerable.push(&r.key);
+        }
     }
 
     let mut failed_set: std::collections::HashSet<&str> = std::collections::HashSet::new();
@@ -504,6 +542,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         &ambiguous,
         &mismatches,
         &validity_fails,
+        &not_answerable,
     ] {
         for k in v {
             failed_set.insert(k);
@@ -516,7 +555,8 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         || !contradictions.is_empty()
         || !ambiguous.is_empty()
         || !mismatches.is_empty()
-        || !validity_fails.is_empty();
+        || !validity_fails.is_empty()
+        || !not_answerable.is_empty();
 
     let verdict = if has_errors {
         red(&format!("{passed}/{total} passed"))
@@ -586,6 +626,13 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         )
     };
     writeln!(w, "    answer validity:    {validity_label}").unwrap();
+    writeln!(
+        w,
+        "    unique answer       {}, {}",
+        ok_n(total - not_answerable.len()),
+        bad_n(not_answerable.len(), "ambiguous")
+    )
+    .unwrap();
 
     if !form_warnings.is_empty() {
         writeln!(w, "\nWarnings:").unwrap();
@@ -645,6 +692,15 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
                 "  Validity ({}): {}",
                 validity_fails.len(),
                 validity_fails.join(" ")
+            )
+            .unwrap();
+        }
+        if !not_answerable.is_empty() {
+            writeln!(
+                w,
+                "  Ambiguous-answer ({}): {}",
+                not_answerable.len(),
+                not_answerable.join(" ")
             )
             .unwrap();
         }

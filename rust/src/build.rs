@@ -16,8 +16,14 @@ use crate::types::*;
 /// (`parametrize`), or a pinned shape left unsatisfiable (`repair`).
 #[derive(Default)]
 pub struct FallbackCounts {
+    /// Assign phase: a kind fit no free slot, so a leftover slot became AnswerOf.
     pub assign_kinds: u32,
-    pub parametrize: u32,
+    /// Parametrize phase: the planned kind didn't fit, replaced by a different
+    /// fitting kind from the level's pool.
+    pub reserve: u32,
+    /// Parametrize phase: neither the planned kind nor any pool reserve fit, so
+    /// the slot fell back to the generic AnswerOf/LetterDist.
+    pub backstop: u32,
 }
 
 /// v2 `generate_skeleton` telemetry, accumulated across every attempt: how many
@@ -89,7 +95,8 @@ impl Stats {
         self.repair_unsound += other.repair_unsound;
         self.v2_skeleton.count += other.v2_skeleton.count;
         self.v2_skeleton.fallbacks.assign_kinds += other.v2_skeleton.fallbacks.assign_kinds;
-        self.v2_skeleton.fallbacks.parametrize += other.v2_skeleton.fallbacks.parametrize;
+        self.v2_skeleton.fallbacks.reserve += other.v2_skeleton.fallbacks.reserve;
+        self.v2_skeleton.fallbacks.backstop += other.v2_skeleton.fallbacks.backstop;
     }
 
     pub fn print(&self) {
@@ -117,13 +124,14 @@ impl Stats {
             self.repair_fail_changed,
         );
         eprintln!(
-            "  v2 skeletons={} | repair distractor={}/{} unsound_rejected={} | AnswerOf fallbacks: assign_kinds={} parametrize={}",
+            "  v2 skeletons={} | repair distractor={}/{} unsound_rejected={} | fallbacks: assign_kinds={} reserve={} backstop={}",
             self.v2_skeleton.count,
             self.distractor_ok,
             self.distractor_attempts,
             self.repair_unsound,
             self.v2_skeleton.fallbacks.assign_kinds,
-            self.v2_skeleton.fallbacks.parametrize,
+            self.v2_skeleton.fallbacks.reserve,
+            self.v2_skeleton.fallbacks.backstop,
         );
     }
 }

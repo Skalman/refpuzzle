@@ -849,6 +849,85 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }
 
+/// Does `qi` have a *unique* valid answer, given the full solution `sol`? `None`
+/// if so; `Some(reason)` if a distractor/claim is *also* a valid answer, making
+/// the question ambiguous to a solver. Covers the types whose ambiguity lives in
+/// the options:
+///
+/// - `SameAs`/`SameAsWhich`: a distractor option points to a question that shares
+///   the matched answer. `check_answer` can't catch this — its slot-letter coupling
+///   marks such a distractor `Invalid` regardless of its target — so we test the
+///   targets directly.
+/// - `TrueStmt`: more than one claim is true.
+///
+/// The count types (`MostCommon`/`LeastCommon`/`EqualCount`), whose answer is forced
+/// by the key's letter histogram rather than the options, are `check_answerable`'s
+/// job, not this.
+pub fn check_unambiguous_answer(fp: &FlatPuzzle, qi: usize, sol: &[Answer]) -> Option<String> {
+    match fp.question_types[qi] {
+        QuestionType::SameAs => ambiguating_distractor(fp, qi, sol, sol[qi], qi),
+        QuestionType::SameAsWhich { question_index } => {
+            let r = usize::from(question_index);
+            ambiguating_distractor(fp, qi, sol, sol[r], r)
+        }
+        QuestionType::TrueStmt => {
+            let state = State {
+                // `sol` may be longer than `fp.n` (some callers pass the full MAX_N
+                // key), so cap — slots past `fp.n` must stay None for the histogram.
+                answers: std::array::from_fn(|i| (i < fp.n).then(|| sol[i])),
+                eliminated: [fp.phantom_mask(); MAX_N],
+            };
+            // A claim is true iff it holds against the actual solution (qi at its
+            // real answer — not the claim's slot, which would alter the histogram).
+            // Exactly one claim may be true. A missing claim is malformed — report
+            // it rather than silently undercounting true claims.
+            let mut true_claims = 0;
+            for oi in 0..fp.option_count {
+                let Some(claim) = fp.claim_at(qi, oi) else {
+                    return Some(format!("TrueStmt option {oi} has no claim"));
+                };
+                if check_claim(fp, state, OptionPos { qi, oi }, claim) == Validity::Valid {
+                    true_claims += 1;
+                }
+            }
+            (true_claims != 1)
+                .then(|| format!("TrueStmt has {true_claims} true claims; need exactly 1"))
+        }
+        _ => None,
+    }
+}
+
+/// SameAs/SameAsWhich helper: find a distractor that is *also* a valid answer —
+/// an option (other than `qi` or the reference `ref_q`) pointing to a question
+/// whose answer equals `matched`. Returns the ambiguity reason, else `None`.
+fn ambiguating_distractor(
+    fp: &FlatPuzzle,
+    qi: usize,
+    sol: &[Answer],
+    matched: Answer,
+    ref_q: usize,
+) -> Option<String> {
+    let answer_slot = sol[qi].idx();
+    for oi in 0..fp.option_count {
+        if oi == answer_slot {
+            continue;
+        }
+        let v = fp.options[qi][oi];
+        if v.is_num() {
+            let t = usize::from(v.value());
+            if t < fp.n && t != qi && t != ref_q && sol[t] == matched {
+                return Some(format!(
+                    "{:?} distractor (option {oi}) points to Q{} which shares the matched answer {}",
+                    fp.question_types[qi].kind(),
+                    t + 1,
+                    matched.as_char(),
+                ));
+            }
+        }
+    }
+    None
+}
+
 /// True iff `value` represents this position: `Some(p)` matches `num(p)`,
 /// `None` matches `NONE`. Used by position-finder arms in `check_claim_fast`.
 fn pos_matches(value: OptionValue, pos: Option<usize>) -> bool {
@@ -1194,5 +1273,124 @@ mod tests {
 
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
+
+    /// Assemble a `FlatPuzzle` from raw rows for the `check_unambiguous_answer`
+    /// cases below — no fill_options/generation, just enough to exercise the check.
+    fn build_fp(
+        question_types: [QuestionType; MAX_N],
+        options: [[OptionValue; 5]; MAX_N],
+        true_stmt_question_types: Option<[QuestionType; 5]>,
+        n: usize,
+        option_count: usize,
+    ) -> FlatPuzzle {
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
+        FlatPuzzle {
+            question_types,
+            options,
+            true_stmt_question_types,
+            affected_by,
+            global_indices,
+            n,
+            option_count,
+            initial_state: State::initial(option_count),
+        }
+    }
+
+    #[test]
+    fn same_as_flags_a_distractor_that_shares_the_answer() {
+        // sol: Q0=Q1=Q2=A, Q3=B. Q0 is "same as N?", answered A (slot 0). The
+        // correct option points to Q1; a *distractor* points to Q2 — which also
+        // has answer A, so it is equally valid → ambiguous.
+        let sol = [Answer::A, Answer::A, Answer::A, Answer::B];
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        qts[0] = QuestionType::SameAs;
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        opts[0][0] = OptionValue::num(1); // answer slot (skipped) → genuine sharer Q1
+        opts[0][1] = OptionValue::num(2); // distractor → Q2, ALSO shares A
+        opts[0][2] = OptionValue::num(3); // distractor → Q3 (B), does not share
+        let fp = build_fp(qts, opts, None, 4, 3);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_some());
+    }
+
+    #[test]
+    fn same_as_accepts_distractors_that_point_elsewhere() {
+        // Same setup, but the distractors point to Q2 (B) and Q3 (C) — neither
+        // shares Q0's answer A, so the question has a unique answer.
+        let sol = [Answer::A, Answer::A, Answer::B, Answer::C];
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        qts[0] = QuestionType::SameAs;
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        opts[0][0] = OptionValue::num(1); // answer slot → genuine sharer Q1
+        opts[0][1] = OptionValue::num(2); // distractor → Q2 (B)
+        opts[0][2] = OptionValue::num(3); // distractor → Q3 (C)
+        let fp = build_fp(qts, opts, None, 4, 3);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_none());
+    }
+
+    #[test]
+    fn same_as_which_compares_against_the_referenced_question() {
+        // SameAsWhich{question_index: 1}: the match target is Q1's answer (A). Q0's
+        // own answer is B (slot 1). A distractor points to Q2, which also answers
+        // A → it equally satisfies "same as Q1" → ambiguous.
+        let sol = [Answer::B, Answer::A, Answer::A, Answer::A];
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        qts[0] = QuestionType::SameAsWhich { question_index: 1 };
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        opts[0][0] = OptionValue::num(2); // distractor → Q2, shares the matched answer A
+        opts[0][1] = OptionValue::num(3); // answer slot (B → idx 1), skipped
+        opts[0][2] = OptionValue::num(0); // distractor → Q0 itself, ignored (t == qi)
+        let fp = build_fp(qts, opts, None, 4, 3);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_some());
+    }
+
+    /// TrueStmt row whose claims are `CountVowel`/`CountConsonant`, evaluated against
+    /// `sol = [A, B, C]` (1 vowel, 2 consonants).
+    fn true_stmt_fp(claim_types: [QuestionType; 3], values: [u8; 3]) -> FlatPuzzle {
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        qts[0] = QuestionType::TrueStmt;
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        for oi in 0..3 {
+            opts[0][oi] = OptionValue::num(values[oi]);
+        }
+        let mut stmt_types = [QuestionType::AnswerIsSelf; 5];
+        stmt_types[..3].copy_from_slice(&claim_types);
+        build_fp(qts, opts, Some(stmt_types), 3, 3)
+    }
+
+    #[test]
+    fn true_stmt_requires_exactly_one_true_claim() {
+        use QuestionType::{CountConsonant, CountVowel};
+        let sol = [Answer::A, Answer::B, Answer::C];
+
+        // Exactly one true (vowels == 1) → unambiguous.
+        let fp = true_stmt_fp([CountVowel, CountVowel, CountConsonant], [1, 2, 0]);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_none());
+
+        // Two true (vowels == 1 and consonants == 2) → ambiguous.
+        let fp = true_stmt_fp([CountVowel, CountConsonant, CountVowel], [1, 2, 0]);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_some());
+
+        // Zero true → ambiguous.
+        let fp = true_stmt_fp([CountVowel, CountVowel, CountConsonant], [0, 2, 0]);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_some());
+    }
+
+    #[test]
+    fn true_stmt_reports_a_missing_claim() {
+        // option_count is 3 but slot 2 is left UNUSED → claim_at returns None there,
+        // a malformed row that should be reported, not silently skipped.
+        let sol = [Answer::A, Answer::B, Answer::C];
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        qts[0] = QuestionType::TrueStmt;
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        opts[0][0] = OptionValue::num(1);
+        opts[0][1] = OptionValue::num(2);
+        // opts[0][2] stays UNUSED — the missing claim
+        let mut stmt_types = [QuestionType::AnswerIsSelf; 5];
+        stmt_types[0] = QuestionType::CountVowel;
+        stmt_types[1] = QuestionType::CountVowel;
+        let fp = build_fp(qts, opts, Some(stmt_types), 3, 3);
+        assert!(check_unambiguous_answer(&fp, 0, &sol).is_some());
     }
 }
