@@ -1136,7 +1136,7 @@ pub(crate) fn solution_fits_kind(
 ) -> bool {
     match kind {
         // MC/LC answerability (unique extreme) lives in `check_answerable` — the one
-        // build-time source, shared with v2's parametrize and `refpuzzle check`.
+        // build-time source, shared with parametrize and `refpuzzle check`.
         QuestionTypeKind::LeastCommon => answerable(&QuestionType::LeastCommon, sol, n, oc),
         QuestionTypeKind::MostCommon => answerable(&QuestionType::MostCommon, sol, n, oc),
         QuestionTypeKind::SameAs => {
@@ -1544,7 +1544,7 @@ mod tests {
                 produced += 1;
                 let fp = &result.fp;
                 let n = fp.n;
-                // v2 emits uniquely-solvable puzzles; recover the key by solving.
+                // the generator emits uniquely-solvable puzzles; recover the key by solving.
                 let solutions = solve(fp, None, 2);
                 assert_eq!(
                     solutions.len(),

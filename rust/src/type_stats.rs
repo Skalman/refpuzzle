@@ -35,7 +35,7 @@ struct LevelData {
     successes: u32,
     total_calls: u32,
     per_type: BTreeMap<QuestionTypeKind, TypeStats>,
-    /// v2 telemetry across all skeleton generations: total skeletons + fallback
+    /// Telemetry across all skeleton generations: total skeletons + fallback
     /// substitutions by phase.
     skeletons: u32,
     fallback_assign_kinds: u32,
@@ -129,13 +129,13 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     }
 }
 
-/// Per-level v2 skeleton telemetry: total skeletons (with attempts-per-accepted-
+/// Per-level skeleton telemetry: total skeletons (with attempts-per-accepted-
 /// puzzle, i.e. the rejection ratio), and fallback substitutions per phase as a
 /// per-skeleton rate. `reserve` swaps in another pool kind; `assign_kinds` and
 /// `backstop` fall back to AnswerOf.
 fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
     md.push_str(
-        "## Skeleton telemetry (v2)\n\n`skeletons` is total skeletons generated (with attempts per accepted puzzle); fallback columns are totals (with per-skeleton rate).\n\n",
+        "## Skeleton telemetry\n\n`skeletons` is total skeletons generated (with attempts per accepted puzzle); fallback columns are totals (with per-skeleton rate).\n\n",
     );
     let header: Vec<String> = ["Level", "skeletons", "assign_kinds", "reserve", "backstop"]
         .iter()

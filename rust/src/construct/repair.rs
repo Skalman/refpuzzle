@@ -1,4 +1,4 @@
-//! Distractor repair for the v2 pipeline — the per-question edits
+//! Distractor repair for the generation pipeline — the per-question edits
 //! `validate_and_repair` applies to nudge a stuck-but-unique puzzle into one the
 //! engine can actually solve. `repair_one_question` edits `fp.options[qi]` in
 //! place under two invariants: the correct option (`solution[qi]`) stays correct,

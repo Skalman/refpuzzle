@@ -133,7 +133,7 @@ fn print_help() {
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
     eprintln!(
-        "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (v2 gen quality: histogram + links)"
+        "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (gen quality: histogram + links)"
     );
     eprintln!();
     eprintln!("Options:");
@@ -228,7 +228,7 @@ fn main() {
             type_stats::type_stats(attempts, seed, &output);
             return;
         }
-        // v2 generation quality diagnostic (see src/diagnose.rs).
+        // generation quality diagnostic (see src/diagnose.rs).
         "gen-stats" => {
             let mut seed: u32 = 1;
             let mut attempts: usize = 200;
@@ -389,23 +389,18 @@ fn main() {
         .flat_map(|d| levels.iter().map(move |&l| (d, l)))
         .collect();
 
-    // Derive per-task seeds deterministically from (year, mmdd, level).
-    // Each retry gets a different seed by mixing in the retry index.
-    // This means the same date always produces the same puzzle regardless of --start.
-    let task_seeds: Vec<Vec<u32>> = tasks
+    // One seed per task, derived deterministically from (year, mmdd, level) so the
+    // same date always produces the same puzzle. The generator retries internally
+    // (re-rolling questions against the fixed key), so no per-retry seed is needed.
+    let task_seeds: Vec<u32> = tasks
         .iter()
         .map(|&(day_idx, level)| {
             let (mm, dd) = days[day_idx];
             let date_key = year * 10000 + mm * 100 + dd;
-            (0..100u32)
-                .map(|retry| {
-                    date_key
-                        .wrapping_mul(31)
-                        .wrapping_add(level as u32)
-                        .wrapping_mul(17)
-                        .wrapping_add(retry.wrapping_mul(0x9e3779b9))
-                })
-                .collect()
+            date_key
+                .wrapping_mul(31)
+                .wrapping_add(level as u32)
+                .wrapping_mul(17)
         })
         .collect();
 
@@ -418,16 +413,16 @@ fn main() {
     let results: Vec<((usize, u8), Option<GenerateResult>, build::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
-        .map(|(&(day_idx, level), seeds)| {
+        .map(|(&(day_idx, level), &seed)| {
             let (mm, dd) = days[day_idx];
             let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
             let mut stats = build::Stats::default();
-            // v2 fixes the answer key on the first skeleton and only re-rolls the
-            // questions, so one seed suffices — no key-varying retry loop. A `None`
-            // means the key admitted no unique puzzle within the budget, which
-            // shouldn't happen; surface it loudly.
-            let mut rng = Rng::new(seeds[0]);
+            // The generator fixes the answer key on the first skeleton and only
+            // re-rolls the questions, so one seed suffices. A `None` means the key
+            // admitted no unique puzzle within the budget, which shouldn't happen;
+            // surface it loudly.
+            let mut rng = Rng::new(seed);
             let result = Some(
                 construct::generate(
                     &construct::RECIPES[level as usize - 1],
@@ -440,8 +435,7 @@ fn main() {
                 )
                 .unwrap_or_else(|| {
                     panic!(
-                        "{label}: no unique puzzle within {max_attempts} regenerations (seed {})",
-                        seeds[0]
+                        "{label}: no unique puzzle within {max_attempts} regenerations (seed {seed})",
                     )
                 }),
             );

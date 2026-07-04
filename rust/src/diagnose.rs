@@ -1,4 +1,4 @@
-//! v2 generation-quality diagnostic (`gen-stats`). Samples a fixed number of v2
+//! Generation-quality diagnostic (`gen-stats`). Samples a fixed number of
 //! skeletons per level, runs `validate_and_repair` (engine + distractor repair),
 //! and reports (a) a per-level histogram of how far it got and (b) example
 //! `/playground` links to puzzles repair couldn't crack, split into no-progress
@@ -26,7 +26,7 @@ struct StuckCase {
     link: String,
 }
 
-/// Sample `attempts` v2 skeletons for each selected level (`only_level` or all
+/// Sample `attempts` skeletons for each selected level (`only_level` or all
 /// six), seeded for reproducibility. Print per-level solved-count + cells-filled
 /// histograms, then `count` no-progress + `count` partial example links.
 pub fn gen_stats(

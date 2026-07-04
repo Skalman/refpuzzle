@@ -239,7 +239,7 @@ mod wasm_api {
         }
         let profile = &PROFILES[(level - 1) as usize];
         let mut stats = build::Stats::default();
-        // v2 fixes the key on the first skeleton and retries internally, so one
+        // The generator fixes the key on the first skeleton and retries internally, so one
         // seed suffices. `seed * 17` matches the CLI's `seeds[0]`, so a puzzle
         // generated here is identical to the same date/level built by `gen`.
         let mut rng = Rng::new(seed.wrapping_mul(17));

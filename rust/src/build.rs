@@ -25,7 +25,7 @@ pub struct FallbackCounts {
     pub backstop: u32,
 }
 
-/// v2 `generate_skeleton` telemetry, accumulated across every attempt: how many
+/// `generate_skeleton` telemetry, accumulated across every attempt: how many
 /// skeletons were generated and the AnswerOf fallbacks they incurred. `count` is
 /// the denominator for per-skeleton fallback rates.
 #[derive(Default)]
@@ -96,7 +96,7 @@ impl Stats {
             self.deduce_calls_in_lookahead,
         );
         eprintln!(
-            "  v2 skeletons={} | repair distractor={}/{} unsound_rejected={} | fallbacks: assign_kinds={} reserve={} backstop={}",
+            "  skeletons={} | repair distractor={}/{} unsound_rejected={} | fallbacks: assign_kinds={} reserve={} backstop={}",
             self.v2_skeleton.count,
             self.distractor_ok,
             self.distractor_attempts,
@@ -275,7 +275,7 @@ pub(crate) fn run_hint_engine_from(
 
         // `lookahead_depth` 0 disables lookahead (intro puzzles must be solvable
         // by pure deduction); otherwise probe up to that many deductions deep
-        // for a contradiction. Set per level (recipe in v2; oc-based otherwise).
+        // for a contradiction. Set per level by the recipe.
         if lookahead_depth == 0 {
             return (false, state);
         }
