@@ -6,7 +6,6 @@ mod check_answer;
 mod check_answerable;
 mod check_form;
 mod construct;
-mod construct_v2;
 mod deduce;
 mod diagnose;
 mod difficulty;
@@ -430,8 +429,8 @@ fn main() {
             // shouldn't happen; surface it loudly.
             let mut rng = Rng::new(seeds[0]);
             let result = Some(
-                construct_v2::generate(
-                    &construct_v2::RECIPES[level as usize - 1],
+                construct::generate(
+                    &construct::RECIPES[level as usize - 1],
                     profile.question_count,
                     profile.option_count,
                     &mut rng,

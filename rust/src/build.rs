@@ -37,17 +37,8 @@ pub struct SkeletonStats {
 #[derive(Default)]
 pub struct Stats {
     pub attempts: u32,
-    pub fail_unique: u32,
     pub fail_solve: u32,
     pub fail_solve_zero_progress: u32,
-    pub repair_attempts: u32,
-    pub repair_ok: u32,
-    pub repair_fail_no_candidates: u32,
-    pub repair_fail_no_change: u32,
-    pub repair_fail_changed: u32,
-    pub solve_us: u64,
-    pub hint_us: u64,
-    pub repair_us: u64,
     pub deduce_calls: u32,
     pub deduce_results: u32,
     pub lookahead_calls: u32,
@@ -57,7 +48,7 @@ pub struct Stats {
     // into deduce_calls (which counts only the outer hint-loop `deduce`) so the
     // two propagation paths stay distinguishable.
     pub deduce_calls_in_lookahead: u32,
-    // v2 distractor-repair telemetry: `_ok` counts edits that completed a puzzle,
+    // distractor-repair telemetry: `_ok` counts edits that completed a puzzle,
     // `_attempts` counts edits tried.
     pub distractor_attempts: u32,
     pub distractor_ok: u32,
@@ -72,17 +63,8 @@ pub struct Stats {
 impl Stats {
     pub fn merge(&mut self, other: &Stats) {
         self.attempts += other.attempts;
-        self.fail_unique += other.fail_unique;
         self.fail_solve += other.fail_solve;
         self.fail_solve_zero_progress += other.fail_solve_zero_progress;
-        self.repair_attempts += other.repair_attempts;
-        self.repair_ok += other.repair_ok;
-        self.repair_fail_no_candidates += other.repair_fail_no_candidates;
-        self.repair_fail_no_change += other.repair_fail_no_change;
-        self.repair_fail_changed += other.repair_fail_changed;
-        self.solve_us += other.solve_us;
-        self.hint_us += other.hint_us;
-        self.repair_us += other.repair_us;
         self.deduce_calls += other.deduce_calls;
         self.deduce_results += other.deduce_results;
         self.lookahead_calls += other.lookahead_calls;
@@ -99,28 +81,19 @@ impl Stats {
     }
 
     pub fn print(&self) {
-        let ok = self.attempts - self.fail_unique - self.fail_solve;
+        let ok = self.attempts - self.fail_solve;
         eprintln!(
-            "  attempts={} ok={} unique_fail={} solve_fail={} (zero_progress={}) | repair: {}/{}\n  solve={}ms hint={}ms | deduce: {} calls, {} results | lookahead: {} calls, {} hits, {}ms ({} deduce calls)\n  repair: {}ms | repair_fail: no_candidates={} no_change={} changed_but_stuck={}",
+            "  attempts={} ok={} solve_fail={} (zero_progress={}) | deduce: {} calls, {} results | lookahead: {} calls, {} hits, {}ms ({} deduce calls)",
             self.attempts,
             ok,
-            self.fail_unique,
             self.fail_solve,
             self.fail_solve_zero_progress,
-            self.repair_ok,
-            self.repair_attempts,
-            self.solve_us / 1000,
-            self.hint_us / 1000,
             self.deduce_calls,
             self.deduce_results,
             self.lookahead_calls,
             self.lookahead_hits,
             self.lookahead_us / 1000,
             self.deduce_calls_in_lookahead,
-            self.repair_us / 1000,
-            self.repair_fail_no_candidates,
-            self.repair_fail_no_change,
-            self.repair_fail_changed,
         );
         eprintln!(
             "  v2 skeletons={} | repair distractor={}/{} unsound_rejected={} | fallbacks: assign_kinds={} reserve={} backstop={}",
@@ -161,7 +134,6 @@ fn us(_t: WasmInstant) -> u64 {
 pub struct GenerateResult {
     pub question_types: [QuestionType; MAX_N],
     pub fp: FlatPuzzle,
-    #[allow(dead_code)]
     pub n: usize,
 }
 

@@ -1,5 +1,5 @@
 /// Per-level board dimensions. The question mix (which kinds appear, caps,
-/// lookahead depth) lives in [`crate::construct_v2::RECIPES`]; this is only the
+/// lookahead depth) lives in [`crate::construct::RECIPES`]; this is only the
 /// board size, shared by generation, the wasm runtime, and the stats tools.
 pub struct DifficultyProfile {
     pub question_count: usize,

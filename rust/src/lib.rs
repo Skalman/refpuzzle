@@ -10,7 +10,6 @@ pub mod check_answer;
 pub mod check_answerable;
 pub mod check_form;
 pub mod construct;
-pub mod construct_v2;
 pub mod deduce;
 pub mod difficulty;
 pub mod format;
@@ -32,7 +31,7 @@ static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> 
 mod wasm_api {
     use crate::build;
     use crate::check_answer::{Validity, check_answer};
-    use crate::construct_v2;
+    use crate::construct;
     use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
     use crate::lookahead::lookahead;
@@ -244,8 +243,8 @@ mod wasm_api {
         // seed suffices. `seed * 17` matches the CLI's `seeds[0]`, so a puzzle
         // generated here is identical to the same date/level built by `gen`.
         let mut rng = Rng::new(seed.wrapping_mul(17));
-        match construct_v2::generate(
-            &construct_v2::RECIPES[(level - 1) as usize],
+        match construct::generate(
+            &construct::RECIPES[(level - 1) as usize],
             profile.question_count,
             profile.option_count,
             &mut rng,

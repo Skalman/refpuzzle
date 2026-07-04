@@ -1,5 +1,5 @@
 use crate::build::{self, GenerateResult};
-use crate::construct_v2;
+use crate::construct;
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::solve_deduce::solve;
@@ -88,8 +88,8 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
         attempt = attempt.wrapping_add(1);
         total_calls += 1;
         let mut rng = Rng::new(s);
-        let result = construct_v2::generate(
-            &construct_v2::RECIPES[(level - 1) as usize],
+        let result = construct::generate(
+            &construct::RECIPES[(level - 1) as usize],
             profile.question_count,
             profile.option_count,
             &mut rng,

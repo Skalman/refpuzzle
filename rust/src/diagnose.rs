@@ -7,7 +7,7 @@
 use std::io::IsTerminal;
 
 use crate::build::{Stats, fill_options};
-use crate::construct_v2::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
+use crate::construct::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::serialize::playground_link;
