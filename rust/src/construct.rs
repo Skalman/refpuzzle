@@ -34,10 +34,11 @@ pub struct LevelRecipe {
     /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
     /// indexed by `QuestionGroup as usize`.
     pub damping: [f64; QUESTION_GROUP_COUNT],
-    /// Lookahead search depth the engine may use to accept a puzzle (the
-    /// `stop_deducing_after_n_results` budget). 0 = pure deduction only; larger
-    /// admits harder puzzles. Ramps from intro (shallow) to late (deep).
-    pub lookahead_depth: usize,
+    /// How far the engine's lookahead may deduce when accepting a puzzle: within
+    /// each hypothesis it deduces until the chain reaches this many results, then
+    /// stops probing. 0 = pure deduction only (no lookahead); larger admits harder
+    /// puzzles. Ramps from intro (shallow) to late (deep).
+    pub lookahead_deduce_until: usize,
 }
 
 const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
@@ -120,7 +121,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 1,
+        lookahead_deduce_until: 1,
     },
     // L2
     LevelRecipe {
@@ -128,7 +129,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 1,
+        lookahead_deduce_until: 1,
     },
     // L3
     LevelRecipe {
@@ -149,7 +150,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 6,
+        lookahead_deduce_until: 6,
     },
     // L4
     LevelRecipe {
@@ -176,7 +177,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 6,
+        lookahead_deduce_until: 6,
     },
     // L5
     LevelRecipe {
@@ -210,7 +211,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 6,
+        lookahead_deduce_until: 6,
     },
     // L6
     LevelRecipe {
@@ -245,7 +246,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: DEFAULT_CAPS,
         damping: DEFAULT_DAMPING,
-        lookahead_depth: 6,
+        lookahead_deduce_until: 6,
     },
 ];
 
@@ -361,7 +362,7 @@ pub fn generate(
             &mut fp,
             &skeleton.solution,
             skeleton.n,
-            recipe.lookahead_depth,
+            recipe.lookahead_deduce_until,
             rng,
             stats,
             label,
@@ -416,7 +417,7 @@ pub(crate) fn validate_and_repair(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_depth: usize,
+    lookahead_deduce_until: usize,
     rng: &mut Rng,
     stats: &mut Stats,
     label: &str,
@@ -439,7 +440,7 @@ pub(crate) fn validate_and_repair(
         );
     }
 
-    let (did_solve, state) = run_hint_engine(fp, stats, lookahead_depth);
+    let (did_solve, state) = run_hint_engine(fp, stats, lookahead_deduce_until);
     if did_solve {
         let solutions = solve(fp, None, 2);
         assert_accepted(fp, solutions.len(), label);
@@ -453,7 +454,7 @@ pub(crate) fn validate_and_repair(
         fp,
         solution,
         n,
-        lookahead_depth,
+        lookahead_deduce_until,
         rng,
         stats,
         &mut state,

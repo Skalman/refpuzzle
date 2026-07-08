@@ -22,14 +22,23 @@ pub(super) fn repair_distractors(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_depth: usize,
+    lookahead_deduce_until: usize,
     rng: &mut Rng,
     stats: &mut Stats,
     state: &mut State,
     label: &str,
 ) -> bool {
     loop {
-        match repair_pass(fp, solution, n, lookahead_depth, rng, stats, state, label) {
+        match repair_pass(
+            fp,
+            solution,
+            n,
+            lookahead_deduce_until,
+            rng,
+            stats,
+            state,
+            label,
+        ) {
             PassOutcome::Solved => return true,
             PassOutcome::Changed => {} // advanced — run another pass from the new position
             PassOutcome::NoChange | PassOutcome::PoorlySolved => return false,
@@ -56,7 +65,7 @@ fn repair_pass(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_depth: usize,
+    lookahead_deduce_until: usize,
     rng: &mut Rng,
     stats: &mut Stats,
     state: &mut State,
@@ -94,7 +103,8 @@ fn repair_pass(
         // below re-check the emitted puzzle before accepting: brute for uniqueness,
         // and a fresh hint solve for from-scratch solvability. A rejected edit is
         // left in place (the puzzle is discarded on regenerate) rather than restored.
-        let (solved, advanced_state) = run_hint_engine_from(fp, *state, stats, lookahead_depth);
+        let (solved, advanced_state) =
+            run_hint_engine_from(fp, *state, stats, lookahead_deduce_until);
         if solved {
             let solutions = solve(fp, None, 2);
             if solutions.len() != 1 {
@@ -107,7 +117,7 @@ fn repair_pass(
             // hint engine solves the emitted puzzle from `initial_state`; otherwise
             // it's uniquely solvable but not hint-solvable from a fresh start.
             let (fresh_solved, _) =
-                run_hint_engine_from(fp, fp.initial_state, stats, lookahead_depth);
+                run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until);
             if !fresh_solved {
                 stats.repair_unsolvable += 1;
                 return PassOutcome::PoorlySolved;

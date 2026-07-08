@@ -123,7 +123,7 @@ impl Stats {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-type WasmInstant = std::time::Instant;
+pub(crate) type WasmInstant = std::time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
 pub(crate) fn wasm_now() -> WasmInstant {
     std::time::Instant::now()
@@ -135,7 +135,7 @@ pub(crate) fn us(t: WasmInstant) -> u64 {
 
 #[cfg(target_arch = "wasm32")]
 #[derive(Copy, Clone)]
-struct WasmInstant;
+pub(crate) struct WasmInstant;
 #[cfg(target_arch = "wasm32")]
 pub(crate) fn wasm_now() -> WasmInstant {
     WasmInstant
@@ -162,9 +162,9 @@ pub fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
 pub(crate) fn run_hint_engine(
     fp: &FlatPuzzle,
     stats: &mut Stats,
-    lookahead_depth: usize,
+    lookahead_deduce_until: usize,
 ) -> (bool, State) {
-    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_depth)
+    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until)
 }
 
 /// Generation's accept-gate solve: the shared [`run_engine`] under the `generation`
@@ -176,12 +176,12 @@ pub(crate) fn run_hint_engine_from(
     fp: &FlatPuzzle,
     state: State,
     stats: &mut Stats,
-    lookahead_depth: usize,
+    lookahead_deduce_until: usize,
 ) -> (bool, State) {
     let out = run_engine(
         fp,
         state,
-        EngineConfig::generation(lookahead_depth),
+        EngineConfig::generation(lookahead_deduce_until),
         fp.n * 15,
         &mut NoSteps,
     );

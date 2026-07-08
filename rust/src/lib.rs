@@ -34,7 +34,7 @@ mod wasm_api {
     use crate::construct;
     use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
-    use crate::lookahead::lookahead;
+    use crate::lookahead::lookahead_shortest;
     use crate::rng::Rng;
     use crate::serialize::{parse_puzzle, puzzle_to_compact_value};
     use crate::solve_deduce::solve;
@@ -121,11 +121,18 @@ mod wasm_api {
     #[derive(Serialize)]
     #[serde(rename_all = "camelCase")]
     struct LookaheadResultApi {
-        eliminate_qi: usize,
-        eliminate_oi: usize,
+        /// The disproven hypothesis — "suppose question `assumption_qi` were
+        /// `assumption_answer`". Because that assumption leads to a contradiction,
+        /// `assumption_answer` is *also* exactly the option the hint eliminates:
+        /// in this lookahead the assumed option and the eliminated option are
+        /// always the same, so only the assumption is sent over the wire (the
+        /// engine-internal `eliminate_qi`/`eliminate_oi` would be redundant here).
         assumption_qi: usize,
         assumption_answer: &'static str,
+        /// The deduction steps from the assumption to the contradiction.
         chain: Vec<DeduceResultApi>,
+        /// The question at which the contradiction surfaced (may differ from
+        /// `assumption_qi`).
         contradiction_qi: usize,
     }
 
@@ -207,19 +214,18 @@ mod wasm_api {
             serde_wasm_bindgen::to_value(&out).map_err(|e| err(&e.to_string()))
         }
 
-        /// Shortest lookahead chain, or null if no single-step assumption
-        /// reaches a contradiction.
+        /// The eliminable option with the fewest-deduction contradiction chain —
+        /// the shortest, most explainable hint — or null if no assumption reaches
+        /// a contradiction. Probes every candidate to a full fixpoint (see
+        /// `lookahead_shortest`), so it finds a hint whenever one exists.
         #[wasm_bindgen(js_name = lookaheadShortest)]
         pub fn lookahead_shortest(&self, state: JsValue) -> Result<JsValue, JsError> {
             let s = parse_state(state, self.fp.n)?;
-            // `lookahead(.., .., 1, false)` is the "shortest" mode the TS engine uses.
-            let Some(lr) = lookahead(&self.fp, &s, 1, false, &mut 0) else {
+            let Some(lr) = lookahead_shortest(&self.fp, &s) else {
                 return Ok(JsValue::NULL);
             };
             let chain: Vec<DeduceResultApi> = lr.chain.iter().copied().map(result_to_api).collect();
             let api = LookaheadResultApi {
-                eliminate_qi: lr.eliminate_qi,
-                eliminate_oi: lr.eliminate_oi,
                 assumption_qi: lr.assumption_qi,
                 assumption_answer: answer_to_str(lr.assumption_answer),
                 chain,

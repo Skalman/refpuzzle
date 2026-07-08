@@ -95,10 +95,16 @@ export interface DeduceResult {
 }
 
 export interface LookaheadResult {
-  eliminateQi: number;
-  eliminateOi: number;
+  /**
+   * The disproven hypothesis — "suppose question `assumptionQi` were
+   * `assumptionAnswer`". Because that assumption leads to a contradiction, this
+   * is also the option the hint eliminates: the assumed option and the
+   * eliminated option are always the same in this lookahead.
+   */
   assumptionQi: number;
   assumptionAnswer: Answer;
+  /** The deduction steps from the assumption to the contradiction. */
   chain: DeduceResult[];
+  /** The question at which the contradiction surfaced (may differ from `assumptionQi`). */
   contradictionQi: number;
 }

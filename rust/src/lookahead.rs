@@ -18,93 +18,140 @@ pub struct LookaheadResult {
     pub contradiction_qi: usize,
 }
 
+/// First eliminable option found: walk unanswered questions' live options in
+/// order and return the first whose assumption reaches a contradiction within
+/// `lookahead_deduce_until` deductions. Called by `run_engine` (the shared
+/// deduce+lookahead solver behind generation's accept-gate and the offline
+/// `check`/`solve`) — when solving a whole puzzle any single elimination advances
+/// it, so first-hit is enough; hints use `lookahead_shortest` instead.
 pub fn lookahead(
     fp: &FlatPuzzle,
     state: &State,
-    stop_deducing_after_n_results: usize,
+    lookahead_deduce_until: usize,
+    full: bool,
+    deduce_calls: &mut u32,
+) -> Option<LookaheadResult> {
+    for qi in 0..fp.n {
+        if state.answers[qi].is_some() {
+            continue;
+        }
+        for oi in 0..5usize {
+            if (state.eliminated[qi] >> oi) & 1 == 1 {
+                continue;
+            }
+            if let Some(r) = probe_candidate(
+                fp,
+                state,
+                qi,
+                oi,
+                lookahead_deduce_until,
+                full,
+                deduce_calls,
+            ) {
+                return Some(r);
+            }
+        }
+    }
+    None
+}
+
+/// Probe *every* candidate to a full fixpoint (unbounded, full `deduce`) and
+/// return the elimination whose contradiction chain has the fewest deductions —
+/// the shortest, most explainable hint. Ties break toward the first candidate in
+/// (question, option) order. Drives the browser hint engine; unbounded depth also
+/// makes it as strong as any puzzle generation accepts.
+// Only caller is the wasm `lookaheadShortest` export, so it's dead in native builds.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadResult> {
+    let mut best: Option<LookaheadResult> = None;
+    for qi in 0..fp.n {
+        if state.answers[qi].is_some() {
+            continue;
+        }
+        for oi in 0..5usize {
+            if (state.eliminated[qi] >> oi) & 1 == 1 {
+                continue;
+            }
+            if let Some(r) = probe_candidate(fp, state, qi, oi, usize::MAX, true, &mut 0)
+                && best.as_ref().is_none_or(|b| r.chain.len() < b.chain.len())
+            {
+                best = Some(r);
+            }
+        }
+    }
+    best
+}
+
+/// Assume `oi` is the answer to `qi` and deduce forward, stopping once the chain
+/// reaches `lookahead_deduce_until` results: if it hits a contradiction (a rule
+/// contradicting the hypothesis, a question with no options left, or an invalid
+/// answer), return the elimination of `(qi, oi)` with the deduction chain that led
+/// there; otherwise `None`.
+fn probe_candidate(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    oi: usize,
+    lookahead_deduce_until: usize,
     full: bool,
     deduce_calls: &mut u32,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
-    let answers = &state.answers;
-    let eliminated = &state.eliminated;
-    for qi in 0..n {
-        if answers[qi].is_some() {
+    let mut hyp = *state;
+    hyp.answers[qi] = Some(Answer::from(oi as u8));
+    hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+
+    let mut chain = ArrayVec::new();
+    let mut contradiction = false;
+    while chain.len() < lookahead_deduce_until {
+        *deduce_calls += 1;
+        let mut drs = if full {
+            deduce(fp, &hyp)
+        } else {
+            deduce_fast(fp, &hyp)
+        };
+        if drs.is_empty() {
+            break;
+        }
+        drs.sort_by_key(|dr| dr.rule as u8);
+        for dr in &drs {
+            if has_contradiction(&dr.action, &hyp) {
+                contradiction = true;
+                break;
+            }
+            apply_action(&dr.action, &mut hyp);
+            if !chain.is_full() {
+                chain.push(*dr);
+            }
+        }
+        if contradiction {
+            break;
+        }
+    }
+
+    let result = |contradiction_qi| {
+        Some(LookaheadResult {
+            eliminate_qi: qi,
+            eliminate_oi: oi,
+            assumption_qi: qi,
+            assumption_answer: Answer::from(oi as u8),
+            chain: chain.clone(),
+            contradiction_qi,
+        })
+    };
+
+    if contradiction {
+        return result(qi);
+    }
+    for check_qi in 0..n {
+        if hyp.answers[check_qi].is_none() {
+            if (!hyp.eliminated[check_qi] & 0b11111u8).count_ones() == 0 {
+                return result(check_qi);
+            }
             continue;
         }
-        for oi in 0..5usize {
-            if (eliminated[qi] >> oi) & 1 == 1 {
-                continue;
-            }
-
-            let mut hyp = *state;
-            hyp.answers[qi] = Some(Answer::from(oi as u8));
-            hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
-
-            let mut chain = ArrayVec::new();
-            let mut contradiction = false;
-            while chain.len() < stop_deducing_after_n_results {
-                *deduce_calls += 1;
-                let mut drs = if full {
-                    deduce(fp, &hyp)
-                } else {
-                    deduce_fast(fp, &hyp)
-                };
-                if drs.is_empty() {
-                    break;
-                }
-                drs.sort_by_key(|dr| dr.rule as u8);
-                for dr in &drs {
-                    if has_contradiction(&dr.action, &hyp) {
-                        contradiction = true;
-                        break;
-                    }
-                    apply_action(&dr.action, &mut hyp);
-                    if !chain.is_full() {
-                        chain.push(*dr);
-                    }
-                }
-                if contradiction {
-                    break;
-                }
-            }
-
-            if contradiction {
-                return Some(LookaheadResult {
-                    eliminate_qi: qi,
-                    eliminate_oi: oi,
-                    assumption_qi: qi,
-                    assumption_answer: Answer::from(oi as u8),
-                    chain,
-                    contradiction_qi: qi,
-                });
-            }
-
-            for check_qi in 0..n {
-                if hyp.answers[check_qi].is_none() {
-                    if (!hyp.eliminated[check_qi] & 0b11111u8).count_ones() == 0 {
-                        return Some(LookaheadResult {
-                            eliminate_qi: qi,
-                            eliminate_oi: oi,
-                            assumption_qi: qi,
-                            assumption_answer: Answer::from(oi as u8),
-                            chain,
-                            contradiction_qi: check_qi,
-                        });
-                    }
-                    continue;
-                }
-                if check_answer(fp, hyp, check_qi) == Validity::Invalid {
-                    return Some(LookaheadResult {
-                        eliminate_qi: qi,
-                        eliminate_oi: oi,
-                        assumption_qi: qi,
-                        assumption_answer: Answer::from(oi as u8),
-                        chain,
-                        contradiction_qi: check_qi,
-                    });
-                }
-            }
+        if check_answer(fp, hyp, check_qi) == Validity::Invalid {
+            return result(check_qi);
         }
     }
     None
