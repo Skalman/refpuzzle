@@ -7,8 +7,8 @@
 
 pub mod build;
 pub mod check_answer;
-pub mod check_answerable;
 pub mod check_form;
+pub mod check_well_posed;
 pub mod construct;
 pub mod deduce;
 pub mod difficulty;

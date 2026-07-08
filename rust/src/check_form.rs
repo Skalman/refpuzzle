@@ -178,46 +178,7 @@ fn check_claim_form(
     }
 }
 
-/// Per-(qt, value) checks that depend on the puzzle's solution. Currently only
-/// `NoOtherHasAnswer` ambiguity: if the asserted letter has no other question
-/// answering it AND another letter also has no other question answering it,
-/// the correct option is ambiguous.
-fn check_correct_claim_form(
-    fp: &FlatPuzzle,
-    solution: &[Answer],
-    opt: OptionPos,
-    qt: &QuestionType,
-    value: OptionValue,
-) -> Option<(String, Severity)> {
-    let oc = fp.option_count;
-    if !matches!(qt, QuestionType::NoOtherHasAnswer) {
-        return None;
-    }
-    if !value.is_num() {
-        return None;
-    }
-    let v = usize::from(value.value());
-    if v >= oc {
-        return None; // out-of-range letter caught by check_claim_form
-    }
-    let self_ans = Answer::from(v as u8);
-    for letter in LETTERS.iter().take(oc) {
-        if *letter != self_ans
-            && !solution
-                .iter()
-                .enumerate()
-                .any(|(j, &a)| j != opt.qi && a == *letter)
-        {
-            return warning(format!(
-                "NoOtherHasAnswer: letter {} also has no other question with that answer, so the correct option is ambiguous",
-                letter.as_char()
-            ));
-        }
-    }
-    None
-}
-
-pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError> {
+pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
     let mut errors = Vec::new();
     let n = fp.n;
     let oc = fp.option_count;
@@ -253,15 +214,6 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                     });
                 }
                 if let Some((msg, sev)) = check_claim_form(fp, opt, cqt, cv) {
-                    errors.push(FormError {
-                        qi,
-                        message: format!("TrueStmt option {oi}: {msg}"),
-                        severity: sev,
-                    });
-                }
-                if let Some(sol) = solution
-                    && let Some((msg, sev)) = check_correct_claim_form(fp, sol, opt, cqt, cv)
-                {
                     errors.push(FormError {
                         qi,
                         message: format!("TrueStmt option {oi}: {msg}"),
@@ -324,25 +276,6 @@ pub fn check_form(fp: &FlatPuzzle, solution: Option<&[Answer]>) -> Vec<FormError
                     errors.push(FormError {
                         qi,
                         message: format!("Option {oi}: {msg}"),
-                        severity: sev,
-                    });
-                }
-            }
-
-            // Per-qi solution-dependent (currently NoOtherHasAnswer ambiguity).
-            // For NoOtherHasAnswer, the asserted letter is the puzzle's answer at qi;
-            // for other types the function no-ops so we pass a placeholder value.
-            if let Some(sol) = solution {
-                let value = match qt {
-                    QuestionType::NoOtherHasAnswer => OptionValue::num(sol[qi] as u8),
-                    _ => OptionValue::num(0),
-                };
-                if let Some((msg, sev)) =
-                    check_correct_claim_form(fp, sol, OptionPos { qi, oi: 0 }, qt, value)
-                {
-                    errors.push(FormError {
-                        qi,
-                        message: msg,
                         severity: sev,
                     });
                 }

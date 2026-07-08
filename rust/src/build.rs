@@ -145,58 +145,6 @@ pub fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
     arr
 }
 
-pub fn solution_satisfies_type(
-    qt: &QuestionType,
-    qi: usize,
-    sol: &[Answer; MAX_N],
-    n: usize,
-    option_count: usize,
-) -> bool {
-    match *qt {
-        QuestionType::OnlySame => {
-            let mut matches = 0;
-            for i in 0..n {
-                if i != qi && sol[i] == sol[qi] {
-                    matches += 1;
-                }
-            }
-            matches <= 1
-        }
-        QuestionType::ConsecIdent => {
-            let mut pairs = 0;
-            for i in 0..n.saturating_sub(1) {
-                if sol[i] == sol[i + 1] {
-                    pairs += 1;
-                }
-            }
-            pairs <= 1
-        }
-        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-            let parity = match qt {
-                QuestionType::OnlyOdd { .. } => 1,
-                _ => 0,
-            };
-            let mut matches = 0;
-            for i in 0..n {
-                if (i + 1) % 2 == parity && sol[i] == answer {
-                    matches += 1;
-                }
-            }
-            matches <= 1
-        }
-        QuestionType::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
-        QuestionType::EqualCount { .. } => true,
-        QuestionType::SameAsWhich { question_index } => {
-            let ref_ans = sol[question_index as usize];
-            let has_match =
-                (0..n).any(|j| j != qi && j != question_index as usize && sol[j] == ref_ans);
-            let distractor_count = (0..n).filter(|&j| j != qi && sol[j] != ref_ans).count();
-            has_match && distractor_count >= option_count - 1
-        }
-        _ => true,
-    }
-}
-
 pub(crate) fn run_hint_engine(
     fp: &FlatPuzzle,
     stats: &mut Stats,
@@ -355,61 +303,6 @@ fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
     );
 }
 
-#[cfg(debug_assertions)]
-fn validate_option_values(fp: &FlatPuzzle) {
-    let n = fp.n;
-    let oc = fp.option_count;
-    for qi in 0..n {
-        let qt = &fp.question_types[qi];
-        for oi in 0..oc {
-            if let Some(claim) = fp.claim_at(qi, oi) {
-                if !claim.value.is_none() {
-                    // qi here is the TrueStmt's qi, which would be the wrong reference
-                    // for position-dependent types. CLAIM_TYPES enforces (at compile
-                    // time, below) that claims can't carry NextSame/PrevSame, so this
-                    // qi is irrelevant for every kind that actually reaches here.
-                    let pool = valid_values(&claim.question_type, qi, n, oc);
-                    assert!(
-                        pool.contains(&claim.value),
-                        "Q{} option {}: claim {:?} value {:?} not in {:?}",
-                        qi + 1,
-                        Answer::from(oi as u8).as_char(),
-                        claim.question_type,
-                        claim.value,
-                        &*pool
-                    );
-                }
-                continue;
-            }
-            let s = fp.options[qi][oi];
-            if !s.is_num() {
-                continue;
-            }
-            // Letter-typed and identity-options qts store letter/option indices, not
-            // values from valid_values — skip them here.
-            if matches!(
-                qt,
-                QuestionType::AnswerOf { .. }
-                    | QuestionType::LeastCommon
-                    | QuestionType::MostCommon
-            ) || qt.has_identity_options()
-            {
-                continue;
-            }
-            let pool = valid_values(qt, qi, n, oc);
-            assert!(
-                pool.contains(&s),
-                "Q{} option {}: type {:?} value {:?} not in {:?}",
-                qi + 1,
-                Answer::from(oi as u8).as_char(),
-                qt,
-                s,
-                &*pool
-            );
-        }
-    }
-}
-
 pub(crate) fn valid_values(
     qt: &QuestionType,
     qi: usize,
@@ -515,18 +408,12 @@ pub(crate) fn valid_values(
     out
 }
 
-pub(crate) fn assert_accepted(
-    fp: &FlatPuzzle,
-    solution: &[Answer; MAX_N],
-    n: usize,
-    brute_count: usize,
-    label: &str,
-) {
+pub(crate) fn assert_accepted(fp: &FlatPuzzle, brute_count: usize, label: &str) {
     assert_eq!(
         brute_count, 1,
         "BUG [{label}]: expected 1 solution, got {brute_count}"
     );
-    let fe = check_form::check_form(fp, Some(&solution[..n]));
+    let fe = check_form::check_form(fp);
     assert!(
         fe.is_empty(),
         "BUG [{label}]: form errors: {}",
@@ -1771,7 +1658,7 @@ mod tests {
                 };
                 let puzzle = build_puzzle(type_json, qi, n, oc, v);
                 let fp = parse_puzzle(&puzzle).expect("parse_puzzle failed");
-                let errors = check_form(&fp, None);
+                let errors = check_form(&fp);
                 let flagged = errors.iter().any(|e| {
                     e.qi == qi && (e.message.contains("option 0") || e.message.contains("Option 0"))
                 });

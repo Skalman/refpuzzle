@@ -4,8 +4,8 @@ use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::check_answer;
-use crate::check_answerable;
 use crate::check_form;
+use crate::check_well_posed;
 use crate::deduce;
 use crate::format;
 use crate::lookahead;
@@ -92,8 +92,8 @@ pub struct PuzzleCheckResult {
     pub hint_brute_match: bool,
     pub validity_ok: bool,
     pub validity_per_question: Vec<String>,
-    /// Questions without a unique answer for the key — `check_answer::check_unambiguous_answer`
-    /// (SameAs/SameAsWhich/TrueStmt) and `check_answerable` (count-type ties).
+    /// Questions without a unique answer for the key — `check_well_posed_given_key`
+    /// (histogram/structural) and `check_well_posed_given_options` (SameAs/SameAsWhich/TrueStmt).
     pub ambiguous: Vec<String>,
 }
 
@@ -158,7 +158,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     } else {
         None
     };
-    let fe = check_form::check_form(fp, unique_solution);
+    let fe = check_form::check_form(fp);
     let form_warnings: Vec<String> = fe
         .iter()
         .filter(|e| matches!(e.severity, check_form::Severity::Warning))
@@ -261,9 +261,15 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         .map(|sol| {
             (0..n)
                 .filter_map(|qi| {
-                    check_answer::check_unambiguous_answer(fp, qi, sol)
-                        .or_else(|| check_answerable::check_answerable(fp, qi, sol))
-                        .map(|msg| format!("Q{}: {}", qi + 1, msg))
+                    check_well_posed::check_well_posed_given_key(
+                        n,
+                        oc,
+                        sol,
+                        qi,
+                        fp.question_types[qi],
+                    )
+                    .or_else(|| check_well_posed::check_well_posed_given_options(fp, sol, qi))
+                    .map(|msg| format!("Q{}: {}", qi + 1, msg))
                 })
                 .collect()
         })

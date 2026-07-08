@@ -12,11 +12,11 @@ use arrayvec::ArrayVec;
 
 use crate::build::{
     FallbackCounts, GenerateResult, SkeletonStats, Stats, assert_accepted, count_letter,
-    fill_options, run_hint_engine, solution_satisfies_type, to_optional,
+    fill_options, run_hint_engine, to_optional,
 };
-use crate::check_answer::{check_answer, check_unambiguous_answer};
-use crate::check_answerable::{answerable, check_answerable};
+use crate::check_answer::check_answer;
 use crate::check_form::check_form;
+use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given_options};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
 use crate::types::QuestionTypeKind::*;
@@ -257,7 +257,7 @@ pub fn regenerate_skeleton(
     skeleton_stats.count += 1;
     let fallbacks = &mut skeleton_stats.fallbacks;
     let kinds = select_kinds(recipe, n, rng);
-    let kind_of = assign_kinds_to_solution(n, oc, solution, &kinds, rng, fallbacks);
+    let kind_of = assign_kinds_to_solution(n, &kinds, rng);
     let types = parametrize(recipe, n, oc, solution, &kind_of, rng, fallbacks);
 
     Skeleton {
@@ -313,7 +313,7 @@ pub fn generate(
         // NoOtherHasAnswer's `cover_all` keeps every letter present (the one
         // construct-side hazard). Assert it — a malformed key panics deep in
         // validate_and_repair otherwise, and a silent reject would mask the bug.
-        let form_errors = check_form(&fp, Some(&skeleton.solution[..skeleton.n]));
+        let form_errors = check_form(&fp);
         assert!(
             form_errors.is_empty(),
             "generate_skeleton/regenerate_skeleton produced a malformed answer key (n={}, oc={oc}): {form_errors:?}\n  types={:?}\n  sol={:?}",
@@ -330,15 +330,14 @@ pub fn generate(
             stats,
             label,
         ) {
-            // Gate: an accepted puzzle must have a unique answer per question — the
-            // builder skips count-type ties, fill avoids SameAs sharer-distractors,
-            // and repair's keep-gate refuses ambiguous edits. Assert it rather than
-            // emit an ambiguous puzzle (a silent emit would mask a gen/repair bug).
+            // Gate: an accepted puzzle must have a unique answer per question. The
+            // key facet was settled at parametrize (and fill/repair never touch the
+            // key), so only the distractor facet can still be wrong here — fill or a
+            // repair edit could make a distractor also-valid. Assert rather than emit
+            // an ambiguous puzzle (a silent emit would mask a fill/repair bug).
             let sol = &skeleton.solution[..skeleton.n];
             for qi in 0..skeleton.n {
-                if let Some(reason) = check_unambiguous_answer(&fp, qi, sol)
-                    .or_else(|| check_answerable(&fp, qi, sol))
-                {
+                if let Some(reason) = check_well_posed_given_options(&fp, sol, qi) {
                     panic!(
                         "[{label}] emitted an ambiguous puzzle at Q{}: {reason}",
                         qi + 1
@@ -407,7 +406,7 @@ pub(crate) fn validate_and_repair(
     let (did_solve, state) = run_hint_engine(fp, stats, false, lookahead_depth);
     if did_solve {
         let solutions = solve(fp, None, 2);
-        assert_accepted(fp, solution, n, solutions.len(), label);
+        assert_accepted(fp, solutions.len(), label);
         return Verdict::Accepted;
     }
 
@@ -838,43 +837,20 @@ impl SolutionAndKindsBuilder {
 }
 
 /// Assign each selected kind to a slot of a *fixed* answer key — the companion of
-/// [`SolutionAndKindsBuilder::build`] for the reuse path, deciding only kinds,
-/// never the key. Mirrors `build`'s shape: walk the kinds in [`shape_rank`] order
-/// (shapes first — here because they fit the fewest slots of the fixed key) and
-/// claim the first shuffled slot the solution supports (`solution_fits_kind`).
-/// A kind with no fitting slot left is demoted to `AnswerOf` on a leftover
-/// (`fallbacks.assign_kinds`), which fits anywhere once the key is decided.
+/// [`SolutionAndKindsBuilder::build`] for the reuse path, deciding only kinds, never
+/// the key. Blind: each kind takes a shuffled slot with no fit check. A kind the key
+/// can't host is caught downstream by `parametrize`'s `check_well_posed_given_key`
+/// and swapped out by the reserve — feasibility is deferred to that stage.
 fn assign_kinds_to_solution(
     n: usize,
-    oc: usize,
-    solution: &[Answer; MAX_N],
     kinds: &[QuestionTypeKind],
     rng: &mut Rng,
-    fallbacks: &mut FallbackCounts,
 ) -> [QuestionTypeKind; MAX_N] {
     let mut kind_of = [QuestionTypeKind::AnswerIsSelf; MAX_N];
     let mut open: ArrayVec<usize, MAX_N> = (0..n).collect();
     rng.shuffle(&mut open);
-
-    let mut ordered: ArrayVec<QuestionTypeKind, MAX_N> = kinds.iter().copied().collect();
-    ordered.sort_by_key(|&k| shape_rank(k));
-
-    for &k in &ordered {
-        // `open` is shuffled, so the first supported slot is a random fitting one.
-        match open
-            .iter()
-            .position(|&qi| solution_fits_kind(k, qi, solution, n, oc))
-        {
-            Some(idx) => {
-                kind_of[open[idx]] = k;
-                open.swap_remove(idx);
-            }
-            None => {
-                let qi = open.pop().expect("a leftover slot per kind");
-                kind_of[qi] = AnswerOf;
-                fallbacks.assign_kinds += 1;
-            }
-        }
+    for (&k, &qi) in kinds.iter().zip(&open) {
+        kind_of[qi] = k;
     }
     kind_of
 }
@@ -970,15 +946,13 @@ fn try_parametrize_kind(
     placed: &[QuestionType],
     rng: &mut Rng,
 ) -> Option<QuestionType> {
-    if !solution_fits_kind(kind, qi, sol, n, oc) {
-        return None;
-    }
-    // measured: 10 draws saturates the fallback rate; more won't help.
+    // measured: 10 draws saturates the fallback rate; more won't help. No key-fit
+    // pre-check — a doomed kind just fails `check_well_posed_given_key` and the
+    // reserve substitutes it (feasibility is deferred to the reserve/downstream).
     for _ in 0..10 {
         if let Some(qt) = random_type_params(kind, qi, n, oc, sol, all_targets, rng)
             && !placed.contains(&qt)
-            && solution_satisfies_type(&qt, qi, sol, n, oc)
-            && answerable(&qt, sol, n, oc)
+            && check_well_posed_given_key(n, oc, sol, qi, qt).is_none()
         {
             return Some(qt);
         }
@@ -1115,102 +1089,6 @@ pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
     serde_json::Value::Object(obj)
 }
 
-fn is_constrained_type(kind: QuestionTypeKind) -> bool {
-    matches!(
-        kind,
-        QuestionTypeKind::ConsecIdent
-            | QuestionTypeKind::NoOtherHasAnswer
-            | QuestionTypeKind::OnlySame
-            | QuestionTypeKind::OnlyOdd
-            | QuestionTypeKind::OnlyEven
-    )
-}
-
-/// Checks whether the solution has the properties needed for this type at this position.
-pub(crate) fn solution_fits_kind(
-    kind: QuestionTypeKind,
-    qi: usize,
-    sol: &[Answer; MAX_N],
-    n: usize,
-    oc: usize,
-) -> bool {
-    match kind {
-        // MC/LC answerability (unique extreme) lives in `check_answerable` — the one
-        // build-time source, shared with parametrize and `refpuzzle check`.
-        QuestionTypeKind::LeastCommon => answerable(&QuestionType::LeastCommon, sol, n, oc),
-        QuestionTypeKind::MostCommon => answerable(&QuestionType::MostCommon, sol, n, oc),
-        QuestionTypeKind::SameAs => {
-            // Pool capacity for SameAs at qi depends on how many questions share qi's answer:
-            //   same_count == 1 (qi is unique): correct = null, pool = n-1 other Qs, no null.
-            //   same_count >= 2: correct = a same-answer Q, pool = (n - same_count) differing-Q + 1 null.
-            // We need pool >= oc - 1 (one distractor per non-correct option).
-            let same_count = count_letter(sol, sol[qi], n) as usize;
-            let pool = if same_count == 1 {
-                n - 1
-            } else {
-                n - same_count + 1
-            };
-            pool >= oc - 1
-        }
-        QuestionTypeKind::SameAsWhich => true,
-        QuestionTypeKind::NoOtherHasAnswer => {
-            count_letter(sol, sol[qi], n) == 1
-                && LETTERS[..oc]
-                    .iter()
-                    .all(|&l| l == sol[qi] || count_letter(sol, l, n) >= 1)
-        }
-        QuestionTypeKind::EqualCount => true,
-        _ if is_constrained_type(kind) => solution_satisfies_type_for_kind(kind, qi, sol, n),
-        _ => true,
-    }
-}
-
-fn solution_satisfies_type_for_kind(
-    kind: QuestionTypeKind,
-    qi: usize,
-    sol: &[Answer; MAX_N],
-    n: usize,
-) -> bool {
-    match kind {
-        QuestionTypeKind::ConsecIdent => {
-            let mut pairs = 0;
-            for i in 0..n.saturating_sub(1) {
-                if sol[i] == sol[i + 1] {
-                    pairs += 1;
-                }
-            }
-            pairs <= 1
-        }
-        QuestionTypeKind::NoOtherHasAnswer => count_letter(sol, sol[qi], n) == 1,
-        QuestionTypeKind::OnlySame => {
-            let mut m = 0;
-            for i in 0..n {
-                if i != qi && sol[i] == sol[qi] {
-                    m += 1;
-                }
-            }
-            m <= 1
-        }
-        QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
-            let parity = if kind == QuestionTypeKind::OnlyOdd {
-                1
-            } else {
-                0
-            };
-            LETTERS.iter().any(|&letter| {
-                let mut m = 0;
-                for i in 0..n {
-                    if (i + 1) % 2 == parity && sol[i] == letter {
-                        m += 1;
-                    }
-                }
-                m <= 1
-            })
-        }
-        _ => true,
-    }
-}
-
 pub(crate) fn random_type_params(
     kind: QuestionTypeKind,
     qi: usize,
@@ -1328,10 +1206,18 @@ pub(crate) fn random_type_params(
         }
         QuestionTypeKind::OnlySame => Some(QuestionType::OnlySame),
         QuestionTypeKind::SameAs => {
-            // "none" (no other question shares this answer) is a valid answer, so there is no
-            // structural requirement. Capacity: with "none" as a value, oc distinct options
-            // need n >= oc (none case: oc-1 index distractors from the n-1 other questions).
-            if n < option_count {
+            // Feasibility: fill needs oc-1 distinct distractor targets. If qi's answer
+            // is unique the pool is the n-1 other questions; if a match exists, the
+            // same-answer questions are excluded (they'd be alternate correct answers),
+            // leaving (n - same_count) differing questions + "none". Must be >= oc-1,
+            // else fill_one_question can't build the row.
+            let same_count = count_letter(solution, solution[qi], n) as usize;
+            let pool = if same_count == 1 {
+                n - 1
+            } else {
+                n - same_count + 1
+            };
+            if pool < option_count - 1 {
                 return None;
             }
             Some(QuestionType::SameAs)
@@ -1414,7 +1300,7 @@ mod tests {
 
     #[test]
     fn generate_skeleton_is_internally_consistent() {
-        use crate::build::solution_satisfies_type;
+        use crate::check_well_posed::check_well_posed_given_key;
         for level in 0..6 {
             let p = &PROFILES[level];
             let mut rng = Rng::new(level as u32 * 7919 + 1);
@@ -1431,14 +1317,15 @@ mod tests {
                 // key — otherwise fill_options couldn't build a valid puzzle.
                 for qi in 0..skeleton.n {
                     assert!(
-                        solution_satisfies_type(
-                            &skeleton.types[qi],
-                            qi,
-                            &skeleton.solution,
+                        check_well_posed_given_key(
                             skeleton.n,
-                            p.option_count
-                        ),
-                        "L{} slot {qi}: {:?} unsatisfied",
+                            p.option_count,
+                            &skeleton.solution,
+                            qi,
+                            skeleton.types[qi],
+                        )
+                        .is_none(),
+                        "L{} slot {qi}: {:?} not well-posed for the key",
                         level + 1,
                         skeleton.types[qi],
                     );
@@ -1459,7 +1346,7 @@ mod tests {
 
     #[test]
     fn regenerate_skeleton_preserves_solution_and_stays_consistent() {
-        use crate::build::solution_satisfies_type;
+        use crate::check_well_posed::check_well_posed_given_key;
         for level in 0..6 {
             let p = &PROFILES[level];
             let mut rng = Rng::new(level as u32 * 6271 + 3);
@@ -1492,14 +1379,15 @@ mod tests {
                     );
                     for qi in 0..skeleton.n {
                         assert!(
-                            solution_satisfies_type(
-                                &skeleton.types[qi],
-                                qi,
-                                &skeleton.solution,
+                            check_well_posed_given_key(
                                 skeleton.n,
-                                p.option_count
-                            ),
-                            "L{} slot {qi}: {:?} unsatisfied",
+                                p.option_count,
+                                &skeleton.solution,
+                                qi,
+                                skeleton.types[qi],
+                            )
+                            .is_none(),
+                            "L{} slot {qi}: {:?} not well-posed for the key",
                             level + 1,
                             skeleton.types[qi],
                         );
@@ -1554,19 +1442,20 @@ mod tests {
                 );
                 let sol = &solutions[0][..n];
                 for qi in 0..n {
+                    let qt = fp.question_types[qi];
                     assert!(
-                        check_unambiguous_answer(fp, qi, sol).is_none(),
-                        "L{} Q{}: {:?}",
+                        check_well_posed_given_key(n, fp.option_count, sol, qi, qt).is_none(),
+                        "L{} Q{} key: {:?}",
                         level + 1,
                         qi + 1,
-                        check_unambiguous_answer(fp, qi, sol),
+                        check_well_posed_given_key(n, fp.option_count, sol, qi, qt),
                     );
                     assert!(
-                        check_answerable(fp, qi, sol).is_none(),
-                        "L{} Q{}: {:?}",
+                        check_well_posed_given_options(fp, sol, qi).is_none(),
+                        "L{} Q{} options: {:?}",
                         level + 1,
                         qi + 1,
-                        check_answerable(fp, qi, sol),
+                        check_well_posed_given_options(fp, sol, qi),
                     );
                 }
             }

@@ -7,7 +7,7 @@
 use arrayvec::ArrayVec;
 
 use crate::build::{Stats, assert_accepted, run_hint_engine_from, valid_values};
-use crate::check_answer::check_unambiguous_answer;
+use crate::check_well_posed::check_well_posed_given_options;
 use crate::deduce::deduce_question;
 use crate::rng::Rng;
 use crate::solve_brute::solve;
@@ -98,7 +98,7 @@ fn repair_pass(
                 fp.options[qi] = before;
                 return PassOutcome::NoChange;
             }
-            assert_accepted(fp, solution, n, solutions.len(), label);
+            assert_accepted(fp, solutions.len(), label);
             stats.distractor_ok += 1;
             return PassOutcome::Solved;
         }
@@ -165,7 +165,7 @@ fn repair_one_question(
             // Keep the first edit that is well-formed (no duplicate value, no
             // ambiguous match) and gives qi's rules a move.
             if !row_has_duplicate(fp, qi)
-                && check_unambiguous_answer(fp, qi, solution).is_none()
+                && check_well_posed_given_options(fp, solution, qi).is_none()
                 && !deduce_question(fp, state, qi).is_empty()
             {
                 return true;

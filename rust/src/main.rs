@@ -3,8 +3,8 @@
 mod build;
 mod check;
 mod check_answer;
-mod check_answerable;
 mod check_form;
+mod check_well_posed;
 mod construct;
 mod deduce;
 mod diagnose;
@@ -745,7 +745,7 @@ mod tests {
             }
 
             let is_past = puzzle_is_past(key, today);
-            let form_errors = check_form::check_form(fp, Some(&sol[..fp.n]));
+            let form_errors = check_form::check_form(fp);
             for e in &form_errors {
                 let is_warning = matches!(e.severity, check_form::Severity::Warning);
                 if is_warning && is_past {
@@ -812,7 +812,7 @@ mod tests {
 
         for (key, fp) in &puzzles {
             let is_past = puzzle_is_past(key, today);
-            let errors = check_form::check_form(fp, None);
+            let errors = check_form::check_form(fp);
             for e in &errors {
                 let is_warning = matches!(e.severity, check_form::Severity::Warning);
                 if is_warning && is_past {
