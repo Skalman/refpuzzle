@@ -1,13 +1,12 @@
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
-use crate::check_answer::{check_answers, check_claim_fast};
+use crate::check_answer::check_claim_fast;
 use crate::check_form;
 use crate::construct::format_claim_qt;
-use crate::deduce::{DeduceAction, DeduceResult, deduce};
 use crate::format::format_type_tag;
-use crate::lookahead::lookahead;
 use crate::rng::Rng;
+use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
 use crate::types::*;
 
 /// Slots demoted to AnswerOf during a `generate_skeleton`, by phase — a shape that
@@ -52,11 +51,14 @@ pub struct Stats {
     // `_attempts` counts edits tried.
     pub distractor_attempts: u32,
     pub distractor_ok: u32,
-    // Repairs the engine reported "solved" but brute-force found non-unique —
-    // rejected (not accepted), so the caller regenerates. The resume-from-`cur`
-    // optimization can carry an elimination a global rule made on a since-edited
-    // option; brute is the backstop that catches it.
-    pub repair_unsound: u32,
+    // Distractor repairs that reported "solved" from the resume state but were
+    // rejected by an independent from-scratch re-check, so the caller regenerates.
+    // The resume-from-`state` optimization can carry an elimination a global rule
+    // made on a since-edited option, so the emitted puzzle is re-verified two ways:
+    // `_ambiguous` = brute found ≥2 solutions (not well-posed); `_unsolvable` =
+    // unique, but the hint engine can't solve it from scratch.
+    pub repair_ambiguous: u32,
+    pub repair_unsolvable: u32,
     pub v2_skeleton: SkeletonStats,
 }
 
@@ -73,11 +75,22 @@ impl Stats {
         self.deduce_calls_in_lookahead += other.deduce_calls_in_lookahead;
         self.distractor_attempts += other.distractor_attempts;
         self.distractor_ok += other.distractor_ok;
-        self.repair_unsound += other.repair_unsound;
+        self.repair_ambiguous += other.repair_ambiguous;
+        self.repair_unsolvable += other.repair_unsolvable;
         self.v2_skeleton.count += other.v2_skeleton.count;
         self.v2_skeleton.fallbacks.assign_kinds += other.v2_skeleton.fallbacks.assign_kinds;
         self.v2_skeleton.fallbacks.reserve += other.v2_skeleton.fallbacks.reserve;
         self.v2_skeleton.fallbacks.backstop += other.v2_skeleton.fallbacks.backstop;
+    }
+
+    /// Fold one `run_engine` invocation's loop telemetry into the running stats.
+    pub fn merge_engine(&mut self, tel: &crate::solve_deduce::EngineTelemetry) {
+        self.deduce_calls += tel.deduce_calls;
+        self.deduce_results += tel.deduce_results;
+        self.lookahead_calls += tel.lookahead_calls;
+        self.lookahead_hits += tel.lookahead_hits;
+        self.lookahead_us += tel.lookahead_us;
+        self.deduce_calls_in_lookahead += tel.deduce_calls_in_lookahead;
     }
 
     pub fn print(&self) {
@@ -96,11 +109,12 @@ impl Stats {
             self.deduce_calls_in_lookahead,
         );
         eprintln!(
-            "  skeletons={} | repair distractor={}/{} unsound_rejected={} | fallbacks: assign_kinds={} reserve={} backstop={}",
+            "  skeletons={} | repair distractor={}/{} rejected(ambiguous={} unsolvable={}) | fallbacks: assign_kinds={} reserve={} backstop={}",
             self.v2_skeleton.count,
             self.distractor_ok,
             self.distractor_attempts,
-            self.repair_unsound,
+            self.repair_ambiguous,
+            self.repair_unsolvable,
             self.v2_skeleton.fallbacks.assign_kinds,
             self.v2_skeleton.fallbacks.reserve,
             self.v2_skeleton.fallbacks.backstop,
@@ -111,11 +125,11 @@ impl Stats {
 #[cfg(not(target_arch = "wasm32"))]
 type WasmInstant = std::time::Instant;
 #[cfg(not(target_arch = "wasm32"))]
-fn wasm_now() -> WasmInstant {
+pub(crate) fn wasm_now() -> WasmInstant {
     std::time::Instant::now()
 }
 #[cfg(not(target_arch = "wasm32"))]
-fn us(t: WasmInstant) -> u64 {
+pub(crate) fn us(t: WasmInstant) -> u64 {
     t.elapsed().as_micros() as u64
 }
 
@@ -123,11 +137,11 @@ fn us(t: WasmInstant) -> u64 {
 #[derive(Copy, Clone)]
 struct WasmInstant;
 #[cfg(target_arch = "wasm32")]
-fn wasm_now() -> WasmInstant {
+pub(crate) fn wasm_now() -> WasmInstant {
     WasmInstant
 }
 #[cfg(target_arch = "wasm32")]
-fn us(_t: WasmInstant) -> u64 {
+pub(crate) fn us(_t: WasmInstant) -> u64 {
     0
 }
 
@@ -148,159 +162,39 @@ pub fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
 pub(crate) fn run_hint_engine(
     fp: &FlatPuzzle,
     stats: &mut Stats,
-    trace: bool,
     lookahead_depth: usize,
 ) -> (bool, State) {
-    run_hint_engine_from(fp, fp.initial_state, stats, trace, lookahead_depth)
+    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_depth)
 }
 
+/// Generation's accept-gate solve: the shared [`run_engine`] under the `generation`
+/// config (sound `deduce`, lookahead bounded to the recipe depth), with the outer
+/// loop capped at `n * 15`. Steps aren't recorded — `NoSteps` inlines away, so this
+/// hot path carries no tracing overhead — and the loop telemetry is folded into
+/// `stats` for the `--stats` report.
 pub(crate) fn run_hint_engine_from(
     fp: &FlatPuzzle,
-    mut state: State,
+    state: State,
     stats: &mut Stats,
-    trace: bool,
     lookahead_depth: usize,
 ) -> (bool, State) {
-    let n = fp.n;
-    let mut batch = 0u32;
-
-    for _ in 0..n * 15 {
-        if (0..n).all(|i| state.answers[i].is_some()) {
-            let valid = check_answers(fp, &state.answers);
-            return (valid, state);
-        }
-
-        stats.deduce_calls += 1;
-        let drs = deduce(fp, &state);
-        stats.deduce_results += drs.len() as u32;
-        if !drs.is_empty() {
-            if trace {
-                trace_deduce_batch(batch, &drs, n);
-                batch += 1;
-            }
-            for dr in &drs {
-                match dr.action {
-                    DeduceAction::Force { qi, answer } => {
-                        if let Some(existing) = state.answers[qi] {
-                            assert_eq!(
-                                existing,
-                                answer,
-                                "conflicting forces for Q{}: {} vs {}",
-                                qi + 1,
-                                existing.as_char(),
-                                answer.as_char()
-                            );
-                        } else {
-                            state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                            state.answers[qi] = Some(answer);
-                        }
-                    }
-                    DeduceAction::Eliminate { qi, oi } => {
-                        assert!(
-                            state.answers[qi].is_none()
-                                || state.answers[qi] != Some(Answer::from(oi as u8)),
-                            "eliminating Q{} option {} but it's already forced to that answer",
-                            qi + 1,
-                            Answer::from(oi as u8).as_char()
-                        );
-                        state.eliminated[qi] |= 1 << oi;
-                    }
-                    DeduceAction::EliminateMulti {
-                        question_mask,
-                        option_mask,
-                    } => {
-                        let mut qm = question_mask;
-                        while qm != 0 {
-                            let i = qm.trailing_zeros() as usize;
-                            qm &= qm - 1;
-                            state.eliminated[i] |= option_mask;
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-
-        // `lookahead_depth` 0 disables lookahead (intro puzzles must be solvable
-        // by pure deduction); otherwise probe up to that many deductions deep
-        // for a contradiction. Set per level by the recipe.
-        if lookahead_depth == 0 {
-            return (false, state);
-        }
-        stats.lookahead_calls += 1;
-        let t_la = wasm_now();
-        let lr = lookahead(
-            fp,
-            &state,
-            lookahead_depth,
-            false,
-            &mut stats.deduce_calls_in_lookahead,
+    let out = run_engine(
+        fp,
+        state,
+        EngineConfig::generation(lookahead_depth),
+        fp.n * 15,
+        &mut NoSteps,
+    );
+    // A sound engine never forces a cell two ways; if it does, an unsound deduce
+    // rule slipped through — fail loud rather than emit a corrupt puzzle.
+    if let Some(qi) = out.contradiction {
+        panic!(
+            "run_hint_engine: engine self-contradicted at Q{} — an unsound deduce rule",
+            qi + 1
         );
-        stats.lookahead_us += us(t_la);
-        if let Some(lr) = lr {
-            stats.lookahead_hits += 1;
-            if trace {
-                trace_lookahead(&lr);
-            }
-            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
-            continue;
-        }
-
-        return (false, state);
     }
-    (false, state)
-}
-
-// ── Trace helpers ──
-
-fn action_to_json(action: &DeduceAction, rule: &str) -> Value {
-    match *action {
-        DeduceAction::Force { qi, answer } => {
-            json!({"qi": qi, "answer": answer.as_char().to_string(), "rule": rule})
-        }
-        DeduceAction::Eliminate { qi, oi } => {
-            json!({"qi": qi, "oi": oi, "rule": rule})
-        }
-        DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => {
-            json!({"qi": -1, "qm": question_mask, "om": option_mask, "rule": rule})
-        }
-    }
-}
-
-#[cold]
-#[inline(never)]
-fn trace_deduce_batch(batch: u32, drs: &[DeduceResult], _n: usize) {
-    let actions: Vec<Value> = drs
-        .iter()
-        .map(|dr| action_to_json(&dr.action, dr.rule.to_str()))
-        .collect();
-    eprintln!(
-        "{}",
-        json!({"t": "batch", "batch": batch, "actions": actions})
-    );
-}
-
-#[cold]
-#[inline(never)]
-fn trace_lookahead(lr: &crate::lookahead::LookaheadResult) {
-    let chain: Vec<Value> = lr
-        .chain
-        .iter()
-        .map(|dr| action_to_json(&dr.action, dr.rule.to_str()))
-        .collect();
-    eprintln!(
-        "{}",
-        json!({
-            "t": "lookahead",
-            "assume": [lr.assumption_qi, lr.assumption_answer.as_char().to_string()],
-            "contradiction": lr.contradiction_qi,
-            "eliminate": [lr.eliminate_qi, lr.eliminate_oi],
-            "chain": chain
-        })
-    );
+    stats.merge_engine(&out.telemetry);
+    (out.solved, out.state)
 }
 
 pub(crate) fn valid_values(
@@ -1458,7 +1352,7 @@ mod tests {
 
                 let answers: [Option<Answer>; MAX_N] =
                     std::array::from_fn(|i| if i < n { Some(solution[i]) } else { None });
-                if !check_answers(&fp, &answers) {
+                if !crate::check_answer::check_answers(&fp, &answers) {
                     eprintln!("FAIL: {name} (seed={seed}): check_answers rejected");
                     for qi in 0..n {
                         let state = State {

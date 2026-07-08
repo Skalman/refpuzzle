@@ -1,68 +1,222 @@
-use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
-use crate::lookahead::lookahead;
+use crate::build::{us, wasm_now};
+use crate::check_answer::check_answers;
+use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_assuming_unique};
+use crate::lookahead::{LookaheadResult, lookahead};
 use crate::types::*;
 
+/// Which variant of the shared solve engine to run. The presets are the engines
+/// that used to be separate hand-rolled loops, now unified behind [`run_engine`]:
+/// - [`generation`](EngineConfig::generation): sound `deduce` (no
+///   uniqueness-assuming rules — it runs *before* uniqueness is brute-confirmed)
+///   plus lookahead bounded to the recipe depth. The accept-gate.
+/// - [`verify`](EngineConfig::verify): maximum power (uniqueness rules + unbounded,
+///   full lookahead). Offline `check` / `solve`.
+///
+/// A `player` preset (`assuming_unique: true`, budget 1, `full: false`) mirrors the
+/// browser hint engine; add it when generation is switched to certify against it.
+#[derive(Clone, Copy)]
+pub struct EngineConfig {
+    /// `deduce_assuming_unique` (true) vs sound `deduce` (false).
+    pub assuming_unique: bool,
+    /// `stop_deducing_after_n_results` handed to `lookahead`; 0 disables lookahead.
+    pub lookahead_budget: usize,
+    /// full `deduce` (true) vs `deduce_fast` (false) inside lookahead hypotheses.
+    pub lookahead_full: bool,
+}
+
+impl EngineConfig {
+    pub fn generation(lookahead_depth: usize) -> Self {
+        Self {
+            assuming_unique: false,
+            lookahead_budget: lookahead_depth,
+            lookahead_full: false,
+        }
+    }
+    pub fn verify() -> Self {
+        Self {
+            assuming_unique: true,
+            lookahead_budget: usize::MAX,
+            lookahead_full: true,
+        }
+    }
+}
+
+/// Loop counters [`run_engine`] always tallies (cheap integer work). Generation
+/// folds these into `Stats`; other callers discard them.
+#[derive(Default)]
+pub struct EngineTelemetry {
+    pub deduce_calls: u32,
+    pub deduce_results: u32,
+    pub lookahead_calls: u32,
+    pub lookahead_hits: u32,
+    pub lookahead_us: u64,
+    pub deduce_calls_in_lookahead: u32,
+}
+
+/// Observes each applied step. [`NoSteps`] is zero-sized and its methods inline to
+/// nothing, so callers that don't report steps (generation, `solve`) compile to a
+/// loop with no recording overhead. [`StepLog`] collects the ordered trace for the
+/// one caller that reports it (`check`).
+pub trait StepSink {
+    fn on_deduce(&mut self, dr: &DeduceResult);
+    fn on_lookahead(&mut self, lr: &LookaheadResult);
+}
+
+pub struct NoSteps;
+impl StepSink for NoSteps {
+    fn on_deduce(&mut self, _dr: &DeduceResult) {}
+    fn on_lookahead(&mut self, _lr: &LookaheadResult) {}
+}
+
+#[derive(Default)]
+pub struct StepLog(pub Vec<SolveStep>);
+impl StepSink for StepLog {
+    fn on_deduce(&mut self, dr: &DeduceResult) {
+        self.0.push(SolveStep::Deduce(*dr));
+    }
+    fn on_lookahead(&mut self, lr: &LookaheadResult) {
+        self.0.push(SolveStep::Lookahead(Box::new(lr.clone())));
+    }
+}
+
 #[derive(Debug, Clone)]
-#[allow(dead_code)]
 pub enum SolveStep {
     Deduce(DeduceResult),
-    Lookahead {
-        eliminate_qi: usize,
-        eliminate_oi: usize,
-        assumption_qi: usize,
-        assumption_answer: Answer,
-    },
+    Lookahead(Box<LookaheadResult>),
 }
 
 pub struct SolveResult {
     pub solved: bool,
     pub answers: [Option<Answer>; MAX_N],
-    pub steps: Vec<SolveStep>,
 }
 
-pub fn solve(fp: &FlatPuzzle) -> SolveResult {
-    let n = fp.n;
-    let mut state = fp.initial_state;
-    let mut steps = Vec::new();
+/// Outcome of a [`run_engine`] call.
+pub struct EngineOutcome {
+    pub solved: bool,
+    pub state: State,
+    pub telemetry: EngineTelemetry,
+    /// `Some(qi)` if some deduction contradicted an already-decided cell — a rule
+    /// forcing a second answer for `qi`, or eliminating `qi`'s forced answer. A
+    /// sound engine on a well-posed puzzle never does this; it's surfaced so every
+    /// caller is guarded against an unsound rule (generation asserts it's `None`,
+    /// `check` reports the first incorrect action).
+    pub contradiction: Option<usize>,
+}
 
-    for _ in 0..n * 30 {
+/// The single deduce→lookahead solve loop shared by generation
+/// (`run_hint_engine`), the offline `check` / `solve`, and (via wasm) the browser.
+/// Every behavioral difference between those callers is captured by `cfg`;
+/// `max_iters` bounds the outer loop.
+pub fn run_engine<S: StepSink>(
+    fp: &FlatPuzzle,
+    mut state: State,
+    cfg: EngineConfig,
+    max_iters: usize,
+    sink: &mut S,
+) -> EngineOutcome {
+    let n = fp.n;
+    let mut tel = EngineTelemetry::default();
+    let mut contradiction = None;
+
+    for _ in 0..max_iters {
         if (0..n).all(|i| state.answers[i].is_some()) {
-            let valid = crate::check_answer::check_answers(fp, &state.answers);
-            return SolveResult {
-                solved: valid,
-                answers: state.answers,
-                steps,
+            let solved = check_answers(fp, &state.answers);
+            return EngineOutcome {
+                solved,
+                state,
+                telemetry: tel,
+                contradiction,
             };
         }
 
-        let drs = deduce_assuming_unique(fp, &state);
+        tel.deduce_calls += 1;
+        let drs = if cfg.assuming_unique {
+            deduce_assuming_unique(fp, &state)
+        } else {
+            deduce(fp, &state)
+        };
+        tel.deduce_results += drs.len() as u32;
         if !drs.is_empty() {
             for dr in &drs {
+                // First self-contradiction wins; keep solving so `check` still gets
+                // the full trajectory and generation asserts after the fact.
+                if contradiction.is_none() {
+                    contradiction = contradiction_qi(&dr.action, &state);
+                }
+                sink.on_deduce(dr);
                 apply_action(&dr.action, &mut state);
-                steps.push(SolveStep::Deduce(*dr));
             }
             continue;
         }
 
-        if let Some(lr) = lookahead(fp, &state, usize::MAX, true, &mut 0) {
+        // Budget 0 disables lookahead (intro puzzles must be pure-deduction).
+        if cfg.lookahead_budget == 0 {
+            break;
+        }
+        tel.lookahead_calls += 1;
+        let t = wasm_now();
+        let lr = lookahead(
+            fp,
+            &state,
+            cfg.lookahead_budget,
+            cfg.lookahead_full,
+            &mut tel.deduce_calls_in_lookahead,
+        );
+        tel.lookahead_us += us(t);
+        if let Some(lr) = lr {
+            tel.lookahead_hits += 1;
+            sink.on_lookahead(&lr);
             state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
-            steps.push(SolveStep::Lookahead {
-                eliminate_qi: lr.eliminate_qi,
-                eliminate_oi: lr.eliminate_oi,
-                assumption_qi: lr.assumption_qi,
-                assumption_answer: lr.assumption_answer,
-            });
             continue;
         }
 
         break;
     }
+    EngineOutcome {
+        solved: false,
+        state,
+        telemetry: tel,
+        contradiction,
+    }
+}
 
-    let solved = (0..n).all(|i| state.answers[i].is_some());
+/// The question a deduction would contradict — a `Force` to an already-decided
+/// cell with a different answer, or an `Eliminate`/`EliminateMulti` removing a
+/// decided answer — or `None` if consistent with the current state.
+fn contradiction_qi(action: &DeduceAction, state: &State) -> Option<usize> {
+    match *action {
+        DeduceAction::Force { qi, answer } => match state.answers[qi] {
+            Some(a) if a != answer => Some(qi),
+            _ => None,
+        },
+        DeduceAction::Eliminate { qi, oi } => {
+            (state.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
+        }
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => (0..MAX_N).find(|&i| {
+            (question_mask >> i) & 1 == 1
+                && state.answers[i].is_some_and(|a| (option_mask >> a.idx()) & 1 == 1)
+        }),
+    }
+}
+
+/// Solve with the offline `verify` engine (uniqueness rules + full, unbounded
+/// lookahead), reporting only the final answers.
+pub fn solve(fp: &FlatPuzzle) -> SolveResult {
+    // `solve` only reports the final answers; skip step recording (`NoSteps`) so
+    // there's no throwaway `Vec` on the wasm solve path.
+    let out = run_engine(
+        fp,
+        fp.initial_state,
+        EngineConfig::verify(),
+        fp.n * 30,
+        &mut NoSteps,
+    );
     SolveResult {
-        solved,
-        answers: state.answers,
-        steps,
+        solved: out.solved,
+        answers: out.state.answers,
     }
 }
 
@@ -91,15 +245,13 @@ pub fn format_step(step: &SolveStep) -> Vec<String> {
                 out
             }
         },
-        SolveStep::Lookahead {
-            eliminate_qi,
-            eliminate_oi,
-            ..
-        } => vec![format!(
-            "{}{}",
-            eliminate_qi + 1,
-            letters_lower[*eliminate_oi]
-        )],
+        SolveStep::Lookahead(lr) => {
+            vec![format!(
+                "{}{}",
+                lr.eliminate_qi + 1,
+                letters_lower[lr.eliminate_oi]
+            )]
+        }
     }
 }
 

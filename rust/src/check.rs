@@ -8,9 +8,9 @@ use crate::check_form;
 use crate::check_well_posed;
 use crate::deduce;
 use crate::format;
-use crate::lookahead;
 use crate::serialize;
 use crate::solve_brute;
+use crate::solve_deduce;
 use crate::types::*;
 
 // ── Color ──
@@ -969,158 +969,77 @@ pub struct CheckResult {
 }
 
 pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
-    let n = fp.n;
-    let mut state = fp.initial_state;
-    let mut forced_by: [Option<deduce::DeduceRule>; MAX_N] = [None; MAX_N];
-    let mut action_log: Vec<CheckAction> = Vec::new();
-    let mut conflict_reported = false;
-    let mut brute_solutions: Option<Vec<[Answer; MAX_N]>> = None;
-    let mut steps = Vec::new();
-    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
-
-    for _ in 0..n * 30 {
-        if (0..n).all(|i| state.answers[i].is_some()) {
-            let valid = check_answer::check_answers(fp, &state.answers);
-            return CheckResult {
-                ok: valid,
-                steps,
-                answers: state.answers,
-                eliminated: state.eliminated,
-            };
-        }
-        let mut drs = deduce::deduce_assuming_unique(fp, &state);
-        if !drs.is_empty() {
-            drs.sort_by_key(|dr| dr.rule as u8);
-            for dr in &drs {
-                match dr.action {
-                    deduce::DeduceAction::Force { qi, answer } => {
-                        action_log.push(CheckAction::Force {
-                            qi,
-                            answer,
-                            rule: dr.rule,
-                        });
-                        if let Some(existing) = state.answers[qi] {
-                            if existing != answer {
-                                let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
-                                eprintln!(
-                                    "CONFLICT [{key}]: Q{} forced {} by {} but already {} (set by {})",
-                                    qi + 1,
-                                    answer.as_char(),
-                                    dr.rule.to_str(),
-                                    existing.as_char(),
-                                    origin,
-                                );
-                                report_first_incorrect_if_needed(
-                                    key,
-                                    fp,
-                                    &action_log,
-                                    n,
-                                    &mut conflict_reported,
-                                    &mut brute_solutions,
-                                );
-                            }
-                        } else {
-                            forced_by[qi] = Some(dr.rule);
-                        }
-                        state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
-                        state.answers[qi] = Some(answer);
-                        steps.push(format!("{}{}", qi + 1, answer.as_char()));
-                    }
-                    deduce::DeduceAction::Eliminate { qi, oi } => {
-                        action_log.push(CheckAction::Eliminate {
-                            qi,
-                            oi,
-                            rule: dr.rule,
-                        });
-                        if state.answers[qi] == Some(Answer::from(oi as u8)) {
-                            let origin = forced_by[qi].map_or("unknown", |r| r.to_str());
-                            eprintln!(
-                                "CONFLICT [{key}]: Q{} eliminating {} by {} but already forced to it (set by {})",
-                                qi + 1,
-                                Answer::from(oi as u8).as_char(),
-                                dr.rule.to_str(),
-                                origin,
-                            );
-                            report_first_incorrect_if_needed(
-                                key,
-                                fp,
-                                &action_log,
-                                n,
-                                &mut conflict_reported,
-                                &mut brute_solutions,
-                            );
-                        }
-                        state.eliminated[qi] |= 1 << oi;
-                        steps.push(format!("{}{}", qi + 1, letters_lower[oi]));
-                    }
-                    deduce::DeduceAction::EliminateMulti {
-                        question_mask,
-                        option_mask,
-                    } => {
-                        action_log.push(CheckAction::EliminateMulti {
-                            question_mask,
-                            option_mask,
-                            rule: dr.rule,
-                        });
-                        for i in 0..n {
-                            if (question_mask >> i) & 1 == 1 {
-                                state.eliminated[i] |= option_mask;
-                                for oi in 0..5usize {
-                                    if (option_mask >> oi) & 1 == 1 {
-                                        if state.answers[i] == Some(Answer::from(oi as u8)) {
-                                            let origin =
-                                                forced_by[i].map_or("unknown", |r| r.to_str());
-                                            eprintln!(
-                                                "CONFLICT [{key}]: Q{} eliminating {} by {} (multi) but already forced to it (set by {})",
-                                                i + 1,
-                                                Answer::from(oi as u8).as_char(),
-                                                dr.rule.to_str(),
-                                                origin,
-                                            );
-                                            report_first_incorrect_if_needed(
-                                                key,
-                                                fp,
-                                                &action_log,
-                                                n,
-                                                &mut conflict_reported,
-                                                &mut brute_solutions,
-                                            );
-                                        }
-                                        steps.push(format!("{}{}", i + 1, letters_lower[oi]));
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            continue;
-        }
-        if let Some(lr) = lookahead::lookahead(fp, &state, usize::MAX, true, &mut 0) {
-            action_log.push(CheckAction::LookaheadEliminate {
-                trace: LookaheadTrace {
-                    eliminate_qi: lr.eliminate_qi,
-                    eliminate_oi: lr.eliminate_oi,
-                    assumption_qi: lr.assumption_qi,
-                    assumption_answer: lr.assumption_answer,
-                    contradiction_qi: lr.contradiction_qi,
-                    chain: lr.chain.iter().copied().collect(),
-                },
-            });
-            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
-            steps.push(format!(
-                "{}{}",
-                lr.eliminate_qi + 1,
-                letters_lower[lr.eliminate_oi]
-            ));
-            continue;
-        }
-        break;
+    let mut log = solve_deduce::StepLog::default();
+    let out = solve_deduce::run_engine(
+        fp,
+        fp.initial_state,
+        solve_deduce::EngineConfig::verify(),
+        fp.n * 30,
+        &mut log,
+    );
+    // `run_engine` flags a self-contradiction (an unsound rule forcing a cell two
+    // ways). It never fires for a sound engine on a well-posed puzzle, but if it
+    // does, report the first action that deviated from the brute solution.
+    if out.contradiction.is_some() {
+        report_conflict(fp, key, &log.0);
     }
     CheckResult {
-        ok: false,
-        steps,
-        answers: state.answers,
-        eliminated: state.eliminated,
+        ok: out.solved,
+        steps: solve_deduce::format_steps(&log.0),
+        answers: out.state.answers,
+        eliminated: out.state.eliminated,
+    }
+}
+
+/// Replay the recorded solve trace as a `CheckAction` log and, using brute as
+/// ground truth, print the first action that removed/contradicted the true
+/// answer. Only called when `run_engine` reported a self-contradiction.
+fn report_conflict(fp: &FlatPuzzle, key: &str, steps: &[solve_deduce::SolveStep]) {
+    let actions: Vec<CheckAction> = steps.iter().map(step_to_action).collect();
+    eprintln!("CONFLICT [{key}]: hint engine forced a cell two ways — an unsound rule");
+    let mut conflict_reported = false;
+    let mut brute_solutions = None;
+    report_first_incorrect_if_needed(
+        key,
+        fp,
+        &actions,
+        fp.n,
+        &mut conflict_reported,
+        &mut brute_solutions,
+    );
+}
+
+fn step_to_action(step: &solve_deduce::SolveStep) -> CheckAction {
+    match step {
+        solve_deduce::SolveStep::Deduce(dr) => match dr.action {
+            deduce::DeduceAction::Force { qi, answer } => CheckAction::Force {
+                qi,
+                answer,
+                rule: dr.rule,
+            },
+            deduce::DeduceAction::Eliminate { qi, oi } => CheckAction::Eliminate {
+                qi,
+                oi,
+                rule: dr.rule,
+            },
+            deduce::DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => CheckAction::EliminateMulti {
+                question_mask,
+                option_mask,
+                rule: dr.rule,
+            },
+        },
+        solve_deduce::SolveStep::Lookahead(lr) => CheckAction::LookaheadEliminate {
+            trace: LookaheadTrace {
+                eliminate_qi: lr.eliminate_qi,
+                eliminate_oi: lr.eliminate_oi,
+                assumption_qi: lr.assumption_qi,
+                assumption_answer: lr.assumption_answer,
+                contradiction_qi: lr.contradiction_qi,
+                chain: lr.chain.iter().copied().collect(),
+            },
+        },
     }
 }

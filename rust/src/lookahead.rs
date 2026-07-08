@@ -4,6 +4,7 @@ use crate::check_answer::{Validity, check_answer};
 use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_fast};
 use crate::types::*;
 
+#[derive(Clone, Debug)]
 pub struct LookaheadResult {
     pub eliminate_qi: usize,
     pub eliminate_oi: usize,

@@ -32,7 +32,7 @@ pub(super) fn repair_distractors(
         match repair_pass(fp, solution, n, lookahead_depth, rng, stats, state, label) {
             PassOutcome::Solved => return true,
             PassOutcome::Changed => {} // advanced — run another pass from the new position
-            PassOutcome::NoChange => return false,
+            PassOutcome::NoChange | PassOutcome::PoorlySolved => return false,
         }
     }
 }
@@ -41,6 +41,11 @@ enum PassOutcome {
     Solved,
     Changed,
     NoChange,
+    /// An edit completed the resume solve, but the emitted puzzle failed a
+    /// from-scratch re-check (ambiguous, or not hint-solvable). Terminal like
+    /// `NoChange` — reject and regenerate — but the offending edit is left in
+    /// place rather than restored (the puzzle is discarded anyway).
+    PoorlySolved,
 }
 
 /// One repair pass. Walks the stuck questions, mutates one distractor each, and
@@ -73,7 +78,6 @@ fn repair_pass(
         {
             continue;
         }
-        let before = fp.options[qi];
         stats.distractor_attempts += 1;
         // repair_one_question keeps only a well-formed edit that fires `qi`'s deduce
         // gate (else it restores the row and returns false). Trust that: a kept edit
@@ -82,21 +86,31 @@ fn repair_pass(
         if !repair_one_question(fp, qi, solution, state, rng) {
             continue;
         }
-        // Resume from `state` rather than re-solve from scratch (cheaper). NOTE: a
-        // distractor edit can invalidate an elimination a global rule made on the
-        // edited option, which `state` still carries — so a "solved" result here
-        // isn't guaranteed unique. The brute check below is the backstop: reject
-        // (regenerate) when it isn't.
-        let (solved, advanced_state) =
-            run_hint_engine_from(fp, *state, stats, false, lookahead_depth);
+        // Resume from `state` rather than re-solve from scratch (cheaper) to decide
+        // whether this edit finishes the puzzle. NOTE: a distractor edit can
+        // invalidate an elimination a global rule made on the edited option, which
+        // `state` still carries — so a "solved" result here is neither guaranteed
+        // unique nor guaranteed reproducible from scratch. Two independent backstops
+        // below re-check the emitted puzzle before accepting: brute for uniqueness,
+        // and a fresh hint solve for from-scratch solvability. A rejected edit is
+        // left in place (the puzzle is discarded on regenerate) rather than restored.
+        let (solved, advanced_state) = run_hint_engine_from(fp, *state, stats, lookahead_depth);
         if solved {
             let solutions = solve(fp, None, 2);
             if solutions.len() != 1 {
-                // Engine "solved" it from a stale `state`, but it isn't actually
-                // unique — reject and let the caller regenerate, not emit it.
-                stats.repair_unsound += 1;
-                fp.options[qi] = before;
-                return PassOutcome::NoChange;
+                // Not actually unique — the edit added a second valid answer.
+                stats.repair_ambiguous += 1;
+                return PassOutcome::PoorlySolved;
+            }
+            // The resume finished from `state`, whose carried eliminations this edit
+            // may have invalidated — so re-solve from scratch. Accept only if the
+            // hint engine solves the emitted puzzle from `initial_state`; otherwise
+            // it's uniquely solvable but not hint-solvable from a fresh start.
+            let (fresh_solved, _) =
+                run_hint_engine_from(fp, fp.initial_state, stats, lookahead_depth);
+            if !fresh_solved {
+                stats.repair_unsolvable += 1;
+                return PassOutcome::PoorlySolved;
             }
             assert_accepted(fp, solutions.len(), label);
             stats.distractor_ok += 1;

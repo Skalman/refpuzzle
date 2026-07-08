@@ -151,6 +151,28 @@ pub enum QuestionTypeKind {
     SameAsWhich,
 }
 
+/// Coarse "families" of question kinds that read as similar to a solver. Used
+/// only by generation to dampen picking a *second* kind from the same family
+/// (see `DEFAULT_DAMPING`), so a puzzle is less likely to stack near-synonyms
+/// (three `Count*`s, both parities). Kinds that stand alone — those already
+/// capped at one occurrence, plus `LetterDist` — have no group and are never
+/// damped. `QUESTION_GROUP_COUNT` must equal the number of variants here.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[repr(u8)]
+pub enum QuestionGroup {
+    AnswerCount,
+    LetterClass,
+    Histogram,
+    Closest,
+    FirstLast,
+    Sameness,
+    Parity,
+    AnswerOf,
+}
+
+/// Number of [`QuestionGroup`] variants — the length of a per-group array.
+pub const QUESTION_GROUP_COUNT: usize = 8;
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
 pub enum QuestionType {
@@ -260,6 +282,26 @@ impl QuestionTypeKind {
             TrueStmt,
             SameAsWhich,
         ]
+    }
+
+    /// The similarity family this kind belongs to, or `None` if it stands
+    /// alone (never damped during generation). See [`QuestionGroup`].
+    pub fn group(self) -> Option<QuestionGroup> {
+        use QuestionGroup as G;
+        use QuestionTypeKind::*;
+        Some(match self {
+            CountAnswer | CountAnswerBefore | CountAnswerAfter => G::AnswerCount,
+            CountVowel | CountConsonant => G::LetterClass,
+            MostCommonCount | LeastCommon | MostCommon | EqualCount => G::Histogram,
+            ClosestAfter | ClosestBefore => G::Closest,
+            FirstWith | LastWith => G::FirstLast,
+            PrevSame | NextSame | OnlySame | SameAs => G::Sameness,
+            OnlyOdd | OnlyEven => G::Parity,
+            AnswerOf => G::AnswerOf,
+            ConsecIdent | NoOtherHasAnswer | AnswerIsSelf | LetterDist | TrueStmt | SameAsWhich => {
+                return None;
+            }
+        })
     }
 }
 

@@ -31,6 +31,9 @@ pub struct LevelRecipe {
     pub allowed: &'static [QuestionTypeKind],
     /// Per-type max occurrences (default 3; unit variants 1 — see `DEFAULT_CAPS`).
     pub caps: [u8; 32],
+    /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
+    /// indexed by `QuestionGroup as usize`.
+    pub damping: [f64; QUESTION_GROUP_COUNT],
     /// Lookahead search depth the engine may use to accept a puzzle (the
     /// `stop_deducing_after_n_results` budget). 0 = pure deduction only; larger
     /// admits harder puzzles. Ramps from intro (shallow) to late (deep).
@@ -67,6 +70,33 @@ const DEFAULT_CAPS: [u8; 32] = caps_with(&[
     (QuestionTypeKind::TrueStmt, 1),
 ]);
 
+const fn damping_with(overrides: &[(QuestionGroup, f64)]) -> [f64; QUESTION_GROUP_COUNT] {
+    let mut d = [1.0f64; QUESTION_GROUP_COUNT];
+    let mut i = 0;
+    while i < overrides.len() {
+        d[overrides[i].0 as usize] = overrides[i].1;
+        i += 1;
+    }
+    d
+}
+
+/// Per-group damping for `select_kinds`: once a kind from a group has been
+/// picked, each later same-group candidate is kept only with this probability
+/// (else redrawn), so near-synonymous questions cluster less. Flat, not
+/// compounding — a third same-group pick is no less likely than the second —
+/// so "extreme" puzzles stay possible, just rarer. Groups omitted here (and the
+/// ungrouped kinds) default to 1.0 = no damping.
+const DEFAULT_DAMPING: [f64; QUESTION_GROUP_COUNT] = damping_with(&[
+    (QuestionGroup::AnswerCount, 0.5),
+    (QuestionGroup::LetterClass, 0.3),
+    (QuestionGroup::Histogram, 0.4),
+    (QuestionGroup::Closest, 0.6),
+    (QuestionGroup::FirstLast, 0.4),
+    (QuestionGroup::Sameness, 0.9),
+    (QuestionGroup::Parity, 0.5),
+    (QuestionGroup::AnswerOf, 0.9),
+]);
+
 /// Per-level recipes, tuned via type-stats. Indexed by level-1.
 pub static RECIPES: [LevelRecipe; 6] = [
     // L1
@@ -89,6 +119,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             NoOtherHasAnswer,
         ],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 1,
     },
     // L2
@@ -96,6 +127,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         required: &[],
         allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 1,
     },
     // L3
@@ -116,6 +148,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAs,
         ],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 6,
     },
     // L4
@@ -142,6 +175,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAs,
         ],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 6,
     },
     // L5
@@ -175,6 +209,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAsWhich,
         ],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 6,
     },
     // L6
@@ -209,6 +244,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
             SameAsWhich,
         ],
         caps: DEFAULT_CAPS,
+        damping: DEFAULT_DAMPING,
         lookahead_depth: 6,
     },
 ];
@@ -403,7 +439,7 @@ pub(crate) fn validate_and_repair(
         );
     }
 
-    let (did_solve, state) = run_hint_engine(fp, stats, false, lookahead_depth);
+    let (did_solve, state) = run_hint_engine(fp, stats, lookahead_depth);
     if did_solve {
         let solutions = solve(fp, None, 2);
         assert_accepted(fp, solutions.len(), label);
@@ -438,15 +474,27 @@ fn solved_count(state: &State, n: usize) -> usize {
     (0..n).filter(|&qi| state.answers[qi].is_some()).count()
 }
 
-/// Required types first, then fill remaining slots by uniform random draw from
-/// `allowed`, respecting caps. Panics if the pool can't fill `n` slots — that's a
-/// recipe misconfiguration, not a runtime condition.
+/// Cap on redraws in `select_kinds`' damped pick before accepting an
+/// unconditional draw. The smallest damping factor is well above zero, so a slot
+/// accepts within a few tries in expectation; this only guards a pathological
+/// RNG streak.
+const DAMPING_MAX_TRIES: usize = 50;
+
+/// Required types first, then fill remaining slots by a damped random draw from
+/// `allowed`, respecting caps: the first kind from a similarity group is taken
+/// as-is, later same-group kinds are kept only with `recipe.damping[group]`
+/// probability (see `DEFAULT_DAMPING`). Panics if the pool can't fill `n` slots —
+/// that's a recipe misconfiguration, not a runtime condition.
 fn select_kinds(
     recipe: &LevelRecipe,
     n: usize,
     rng: &mut Rng,
 ) -> ArrayVec<QuestionTypeKind, MAX_N> {
     let mut sel = KindSelection::new(recipe.caps);
+    // Similarity groups that already have a member picked; a fired group's later
+    // candidates are damped below. Both the first skeleton and every
+    // `regenerate_skeleton` retry route through here, so damping applies to both.
+    let mut fired = [false; QUESTION_GROUP_COUNT];
 
     for &(kind, count) in recipe.required {
         for _ in 0..count {
@@ -455,6 +503,11 @@ fn select_kinds(
                 "level recipe requires {kind:?} but has a too strict cap"
             );
             sel.take(kind);
+            // Required picks pre-fire their group, so a later optional draw of
+            // the same family is damped from the start.
+            if let Some(g) = kind.group() {
+                fired[g as usize] = true;
+            }
         }
     }
     assert!(
@@ -476,7 +529,27 @@ fn select_kinds(
             !eligible.is_empty(),
             "level recipe can't fill {n} slots: pool capped out"
         );
-        let (index, kind) = rng.pick_kv(&eligible);
+        // Damped draw: the first kind from a group is taken as-is; a later
+        // candidate from an already-fired group is kept only with probability
+        // `damping[g]`, else redrawn. Rejection sampling — exactly equivalent to
+        // a weighted draw, bounded against a rejection streak.
+        let (index, kind) = 'draw: {
+            for _ in 0..DAMPING_MAX_TRIES {
+                let (index, kind) = rng.pick_kv(&eligible);
+                match kind.group() {
+                    Some(g) if fired[g as usize] => {
+                        if rng.next_f64() < recipe.damping[g as usize] {
+                            break 'draw (index, kind);
+                        }
+                    }
+                    _ => break 'draw (index, kind),
+                }
+            }
+            rng.pick_kv(&eligible)
+        };
+        if let Some(g) = kind.group() {
+            fired[g as usize] = true;
+        }
         sel.take(kind);
         if !sel.room_for(kind) {
             eligible.swap_remove(index);
