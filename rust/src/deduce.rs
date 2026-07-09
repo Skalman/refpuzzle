@@ -1251,7 +1251,8 @@ fn apply_same_shared(
         }
 
         // OnlySameNoneForward: an answered None means qi's answer is unique,
-        // so no other question can have that letter. Sound, ungated.
+        // so no other question can have that letter. Sound; not gated on
+        // assume_unique (only on `full`).
         if full && s.is_none() {
             for j in 0..n {
                 if j == qi {
@@ -1584,8 +1585,8 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// It can miss an edit whose payoff lands on a *different* question (a global
 /// rule elsewhere that reads qi's options), but that only costs a skipped
 /// repair, never soundness: the accepting path still runs the full engine +
-/// brute-force uniqueness check. To adopt, swap repair's `deduce(fp, cur)` gate
-/// for `deduce_question(fp, cur, qi)`.
+/// brute-force uniqueness check. Used as repair's per-question gate (see
+/// `construct::repair`).
 pub fn deduce_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
     deduce_impl(fp, state, RuleFilter::All, true, false, Some(qi))
 }

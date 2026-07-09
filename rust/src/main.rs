@@ -462,7 +462,7 @@ fn main() {
         stats.merge(s);
     }
 
-    // Assemble into { "_seed": N, "MMDD": { "level-1": ..., ... }, ... }
+    // Assemble into { "MMDD": { "1": ..., ..., "6": ... }, ... }
     let mut year_map = serde_json::Map::new();
     let mut ok_count = 0;
     let mut fail_count = 0;

@@ -90,8 +90,9 @@ mod wasm_api {
         })
     }
 
-    // ── Wire shapes for the hint engine (match the TS types in deduce.ts /
-    // lookahead.ts). Answer rendered as "A".."E" string; field names camelCase.
+    // ── Wire shapes for the hint engine (match the TS types in
+    // src/engine/hint-types.ts). Answer rendered as "A".."E" string; field
+    // names camelCase.
 
     #[derive(Serialize)]
     #[serde(tag = "type", rename_all = "camelCase")]
@@ -235,7 +236,7 @@ mod wasm_api {
         }
     }
 
-    /// Returns a CompactPuzzle JSON string, or empty string if generation
+    /// Returns a CompactPuzzle JSON string, or an `Err` if generation
     /// exhausted its retry budget. Mirrors the seed-retry loop the native
     /// CLI uses in `main.rs`.
     #[wasm_bindgen(js_name = generatePuzzle)]
@@ -246,8 +247,9 @@ mod wasm_api {
         let profile = &PROFILES[(level - 1) as usize];
         let mut stats = build::Stats::default();
         // The generator fixes the key on the first skeleton and retries internally, so one
-        // seed suffices. `seed * 17` matches the CLI's `seeds[0]`, so a puzzle
-        // generated here is identical to the same date/level built by `gen`.
+        // seed suffices. `seed * 17` matches the CLI's `task_seeds` derivation
+        // (main.rs), so a puzzle generated here is identical to the same
+        // date/level built by `gen`.
         let mut rng = Rng::new(seed.wrapping_mul(17));
         match construct::generate(
             &construct::RECIPES[(level - 1) as usize],

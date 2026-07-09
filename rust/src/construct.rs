@@ -62,8 +62,9 @@ const DEFAULT_CAPS: [u8; 32] = caps_with(&[
     // AnswerOf: no entry here — each recipe caps it at n-1 (its structural max,
     // since wire needs one non-AnswerOf question to root the chains) via
     // `caps_max_answer_of`.
-    // Parameter-free variants: a second of the same kind is the *identical*
-    // question, so cap them at 1.
+    // Parameter-free variants carry no position, so two instances would be the
+    // same `QuestionType` value — a literal duplicate the pairwise-distinctness
+    // check rejects. Cap them at 1.
     (QuestionTypeKind::CountVowel, 1),
     (QuestionTypeKind::CountConsonant, 1),
     (QuestionTypeKind::MostCommonCount, 1),
@@ -304,9 +305,10 @@ pub fn generate_skeleton(
 /// Like [`generate_skeleton`], but reuses a fixed answer key instead of authoring a new one.
 /// Selects fresh question kinds and assigns them to slots the given solution
 /// already supports ([`assign_kinds_to_solution`]), then parametrizes against it.
-/// A kind the solution can't host as a shape is demoted to `AnswerOf`; the answer
-/// key itself is never touched. `generate` uses this for every attempt after the
-/// first, so retries vary the questions while the solution stays fixed.
+/// A kind the solution can't host is swapped for another fitting pool kind, or
+/// failing that demoted to a generic `AnswerOf`; the answer key itself is never
+/// touched. `generate` uses this for every attempt after the first, so retries
+/// vary the questions while the solution stays fixed.
 pub fn regenerate_skeleton(
     recipe: &LevelRecipe,
     n: usize,
@@ -369,15 +371,15 @@ pub fn generate(
             rng,
             false,
         );
-        // generate_skeleton/regenerate_skeleton should never produce a malformed answer key: references
+        // generate_skeleton/regenerate_skeleton should never produce a malformed puzzle: references
         // are in range by construction, fill_options encodes values in range, and
         // NoOtherHasAnswer's `cover_all` keeps every letter present (the one
-        // construct-side hazard). Assert it — a malformed key panics deep in
+        // construct-side hazard). Assert it — a malformed puzzle panics deep in
         // validate_and_repair otherwise, and a silent reject would mask the bug.
         let form_errors = check_form(&fp);
         assert!(
             form_errors.is_empty(),
-            "generate_skeleton/regenerate_skeleton produced a malformed answer key (n={}, oc={oc}): {form_errors:?}\n  types={:?}\n  sol={:?}",
+            "generate_skeleton/regenerate_skeleton produced a malformed puzzle (n={}, oc={oc}): {form_errors:?}\n  types={:?}\n  sol={:?}",
             skeleton.n,
             &skeleton.types[..skeleton.n],
             &skeleton.solution[..skeleton.n]

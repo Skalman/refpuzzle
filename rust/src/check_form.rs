@@ -18,7 +18,7 @@ pub struct FormError {
 // Each returns `Option<(message, severity)>`. The caller wraps the message into
 // a `FormError` and supplies the `qi` (the same qi is used whether we're
 // checking a top-level question or one of a TrueStmt's per-option claims —
-// errors attribute to the TrueStmt question in both cases). All three are
+// errors attribute to the TrueStmt question in both cases). Both are
 // wellformedness checks — for the **semantic** "is this claim true?" check
 // see `check_answer::check_claim`.
 

@@ -9,9 +9,12 @@ use crate::rng::Rng;
 use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
 use crate::types::*;
 
-/// Slots demoted to AnswerOf during a `generate_skeleton`, by phase — a shape that
-/// couldn't seed (`assign_kinds`), a kind that wouldn't parametrize
-/// (`parametrize`), or a pinned shape left unsatisfiable (`repair`).
+/// Where the planned question mix couldn't be honored during skeleton
+/// generation. In the assign phase a leftover slot becomes AnswerOf
+/// (`assign_kinds`); in the parametrize phase the planned kind is either swapped
+/// for another fitting pool kind (`reserve`) or, failing that, demoted to a
+/// generic AnswerOf (`backstop`). Only `assign_kinds`/`backstop` are AnswerOf
+/// demotions; `reserve` is a same-tier kind swap.
 #[derive(Default)]
 pub struct FallbackCounts {
     /// Assign phase: a kind fit no free slot, so a leftover slot became AnswerOf.
@@ -47,8 +50,9 @@ pub struct Stats {
     // into deduce_calls (which counts only the outer hint-loop `deduce`) so the
     // two propagation paths stay distinguishable.
     pub deduce_calls_in_lookahead: u32,
-    // distractor-repair telemetry: `_ok` counts edits that completed a puzzle,
-    // `_attempts` counts edits tried.
+    // distractor-repair telemetry: `_attempts` counts questions probed for
+    // repair (each probe may try several candidate edits); `_ok` counts probes
+    // whose kept edit completed the puzzle and passed both re-check backstops.
     pub distractor_attempts: u32,
     pub distractor_ok: u32,
     // Distractor repairs that reported "solved" from the resume state but were

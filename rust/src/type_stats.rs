@@ -77,7 +77,7 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     let mut attempt = 0u32;
     let mut total_calls = 0u32;
     let max_calls = attempts.saturating_mul(100);
-    let mut bstats = build::Stats::default(); // accumulates across accepted puzzles
+    let mut bstats = build::Stats::default(); // accumulates across all generate() calls, rejected included
 
     while successes < attempts && total_calls < max_calls {
         let s = seed

@@ -129,8 +129,9 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
 
     for (qi, opts) in opts_arr.iter().enumerate() {
         let qt = &question_types[qi];
-        // Identity-option types persist a degenerate `[null, null, ...]` row on
-        // wire; rebuild the canonical letter indices in memory.
+        // Identity-option rows carry the canonical letter indices `[0, 1, 2, ...]`
+        // on wire, but their values are fixed by position — rebuild them here
+        // rather than reading the row.
         if qt.has_identity_options() {
             for oi in 0..option_count {
                 options[qi][oi] = OptionValue::num(oi as u8);

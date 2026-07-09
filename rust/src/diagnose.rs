@@ -157,9 +157,9 @@ fn print_histogram(levels: &[usize], dists: &[Vec<u32>], color: bool) {
     }
 }
 
-/// A `{pct}% {label}` histogram cell, dimmed when it rounds to 0% (noise) and
-/// bolded above 5% (notable). Plain when stdout isn't a terminal so redirected
-/// output stays free of escape codes.
+/// A `{pct}% {label}` histogram cell: dimmed below 0.5% (noise), yellow above
+/// 5% (notable), bold yellow above 20% (dominant), plain in between. Uncolored
+/// when stdout isn't a terminal so redirected output stays free of escape codes.
 fn bucket(pct: f64, label: &str, color: bool) -> String {
     let cell = format!("{pct:.0}% {label}");
     if !color {
