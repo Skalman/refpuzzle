@@ -1,7 +1,7 @@
 //! Puzzle generation pipeline.
 //!
 //! `generate_skeleton()` picks the question kinds, decides the answer key and a kind per
-//! slot (shapes seed the structure they need), then turns each kind into a full
+//! slot (structural kinds seed the answer key they need), then turns each kind into a full
 //! `QuestionType` against that key. `generate()` wraps that with `fill_options`
 //! and `validate_and_repair`. The shared question-type helpers (fit checks,
 //! parametrization, claim JSON) live at the bottom of this file.
@@ -557,9 +557,10 @@ fn select_kinds(
         sel.picked_kinds.len()
     );
 
-    // Count-shaped AnswerOf: sample the per-puzzle target and force exactly that
-    // many, capping AnswerOf so neither the pool fill below nor `pick_reserve` adds
-    // more — the count then follows `answer_of_counts`, not the random draw.
+    // Recipe fixes the number of AnswerOf questions: sample the per-puzzle target
+    // and force exactly that many, capping AnswerOf so neither the pool fill below
+    // nor `pick_reserve` adds more — the count then follows `answer_of_counts`,
+    // not the random draw.
     if !recipe.answer_of_counts.is_empty() {
         let target = (weighted_pick(recipe.answer_of_counts, rng) as usize).min(n - 1);
         sel.cap_per_kind[AnswerOf as usize] = target as u8;
@@ -647,7 +648,7 @@ fn letters(oc: usize) -> impl Iterator<Item = Answer> {
 /// Scratch for the first skeleton phase: decides the answer key and the kind per
 /// slot. `build` consumes it and returns a `SolutionAndKinds`; `parametrize`
 /// turns those kinds into full `QuestionType`s next. The fields below `decided`
-/// are the in-progress constraints the shapes impose on the fill.
+/// are the in-progress constraints the structural kinds impose on the fill.
 struct SolutionAndKindsBuilder {
     n: usize,
     oc: usize,
@@ -664,13 +665,15 @@ struct SolutionAndKinds {
     kind_of: [QuestionTypeKind; MAX_N],
 }
 
-/// Placement order for kind assignment (lower = placed first). The structural
-/// shapes come before everything else; among them, ConsecIdent precedes the
-/// pair-sharers (Next/PrevSame) so it owns the single adjacent pair they reuse.
-/// `build` (author) places shapes first to seed them while structure is free;
+/// Seeding order for kind assignment (lower = seeded first). A *structural kind*
+/// is one whose truth depends on how the answer key is arranged, so the key must
+/// be built around it — vs. a kind whose answer is just read off an existing key.
+/// Structural kinds come before everything else; among them, ConsecIdent precedes
+/// the pair-sharers (Next/PrevSame) so it owns the single adjacent pair they reuse.
+/// `build` (author) seeds them first while the key is still free;
 /// `assign_kinds_to_solution` (fixed key) places them first because they fit the
 /// fewest slots. Same order, both reasons.
-fn shape_rank(k: QuestionTypeKind) -> u8 {
+fn seed_rank(k: QuestionTypeKind) -> u8 {
     match k {
         OnlySame | NoOtherHasAnswer => 0,
         ConsecIdent => 1,
@@ -712,12 +715,12 @@ impl SolutionAndKindsBuilder {
     }
 
     /// Decide the answer key and the kind per slot (returned as `SolutionAndKinds`).
-    /// One pass over the selected kinds trickiest-first: a shape seeds its
-    /// structure and claims its own slot; any other kind (or a shape that can't
-    /// seed) takes a leftover slot and gets a randomized answer. The constraints
-    /// the shapes impose — reserved letters (`banned`), no new adjacent pairs
-    /// (`no_pairs`, ConsecIdent), every letter present (`cover_all`, NoOther) —
-    /// are locals, threaded into the fill.
+    /// One pass over the selected kinds trickiest-first: a structural kind seeds
+    /// the key it needs and claims its own slot; any other kind (or a structural
+    /// kind that can't seed) takes a leftover slot and gets a randomized answer.
+    /// The constraints the structural kinds impose — reserved letters (`banned`),
+    /// no new adjacent pairs (`no_pairs`, ConsecIdent), every letter present
+    /// (`cover_all`, NoOther) — are locals, threaded into the fill.
     fn build(
         mut self,
         kinds: &[QuestionTypeKind],
@@ -728,9 +731,9 @@ impl SolutionAndKindsBuilder {
         self.open = (0..self.n).collect();
         rng.shuffle(&mut self.open);
 
-        // Seed shapes trickiest-first (see `shape_rank`).
+        // Seed structural kinds trickiest-first (see `seed_rank`).
         let mut ordered: ArrayVec<QuestionTypeKind, MAX_N> = kinds.iter().copied().collect();
-        ordered.sort_by_key(|&k| shape_rank(k));
+        ordered.sort_by_key(|&k| seed_rank(k));
         for &k in &ordered {
             let qi = match k {
                 OnlySame => self.seed_only_same(),
@@ -755,8 +758,8 @@ impl SolutionAndKindsBuilder {
         }
     }
 
-    /// Claim a leftover open slot for a non-shape kind and decide its answer —
-    /// unless a shape already pre-set it (OnlySame's partner, a pair slot). The
+    /// Claim a leftover open slot for a non-structural kind and decide its answer —
+    /// unless a structural kind already pre-set it (OnlySame's partner, a pair slot). The
     /// answer avoids banned letters and (under `no_pairs`) new adjacent pairs;
     /// when coverage still needs letters and the free slots are running out, it
     /// forces a still-absent one. Returns the slot.
@@ -857,7 +860,7 @@ impl SolutionAndKindsBuilder {
     }
 
     /// Claim a random open, undecided slot in `lo..=hi` and give it a plain
-    /// non-banned answer (the position-referent shapes only need enough referent
+    /// non-banned answer (the position-referent kinds only need enough referent
     /// slots on one side; whether a match exists is left to chance). None if no
     /// open slot falls in range.
     fn seed_positional(&mut self, lo: usize, hi: usize, rng: &mut Rng) -> Option<usize> {
@@ -899,8 +902,9 @@ impl SolutionAndKindsBuilder {
                 .collect();
         }
         if cands.is_empty() {
-            // Relax the no-pair rule (if the new pair breaks a shape, parametrize's
-            // satisfy-check drops it to AnswerOf); a still-missing coverage letter keeps priority.
+            // Relax the no-pair rule (if the new pair breaks a structural kind,
+            // parametrize's satisfy-check drops it to AnswerOf); a still-missing
+            // coverage letter keeps priority.
             cands = if must_cover {
                 missing.iter().copied().collect()
             } else {
@@ -915,11 +919,11 @@ impl SolutionAndKindsBuilder {
         rng.pick(&cands)
     }
 
-    /// The start index of an adjacent equal pair shared by the pair-shapes: an
+    /// The start index of an adjacent equal pair shared by the pair-sharers: an
     /// existing one if any, else a new one on two open slots (its letter chosen
     /// so it doesn't extend a neighbour into a triple). None if none exists and
     /// `no_pairs` forbids making one (ConsecIdent chose "no pair"). The position
-    /// is randomized — a fixed pair slot biases which slot each pair-shape lands
+    /// is randomized — a fixed pair slot biases which slot each pair-sharer lands
     /// on, which in turn skews their survival through validation.
     fn ensure_pair(&mut self, rng: &mut Rng) -> Option<usize> {
         if let Some(a) = self.find_pair() {
@@ -981,12 +985,13 @@ fn assign_kinds_to_solution(
 }
 
 /// Turn each slot's kind into a full QuestionType against the finished answer key.
-/// Each kind is drawn against the solution (parameter-free shapes map straight to
+/// Each kind is drawn against the solution (parameter-free kinds map straight to
 /// their unit variant). A kind that won't fit its slot (e.g. ClosestAfter on the
 /// last slot, or MostCommon with a tied extreme) is replaced — first by another
 /// fitting kind from the level's pool (`fallbacks.reserve`), and only if none fit
-/// by a generic AnswerOf (`fallbacks.backstop`). Shape-types were authored to fit,
-/// so they never fall back here.
+/// by a generic AnswerOf (`fallbacks.backstop`). Structural kinds are seeded to
+/// fit, so they rarely fall back here — but a relaxed key constraint (see
+/// `pick_answer`) can leave one unsatisfiable and demote it too.
 fn parametrize(
     recipe: &LevelRecipe,
     n: usize,
@@ -1143,8 +1148,8 @@ fn pick_reserve(
     let mut pool: ArrayVec<QuestionTypeKind, 32> = recipe.allowed.iter().copied().collect();
     rng.shuffle(&mut pool);
     for r in pool {
-        // When the level count-shapes AnswerOf, select_kinds fixed its count; don't
-        // let reserve substitutions inflate it past the sampled target.
+        // When the recipe fixes the number of AnswerOf questions, select_kinds already
+        // set it; don't let reserve substitutions inflate it past the sampled target.
         if r == AnswerOf && !recipe.answer_of_counts.is_empty() {
             continue;
         }
