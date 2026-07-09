@@ -1,5 +1,3 @@
-use arrayvec::ArrayVec;
-
 use crate::types::Answer;
 
 pub struct Rng {
@@ -32,14 +30,6 @@ impl Rng {
     }
 
     pub fn pick_kv<T: Copy>(&mut self, arr: &[T]) -> (usize, T) {
-        let k = self.int(0, arr.len() as i32 - 1) as usize;
-        (k, arr[k])
-    }
-
-    pub fn pick_kv_arrayvec<T: Copy, const CAP: usize>(
-        &mut self,
-        arr: &ArrayVec<T, CAP>,
-    ) -> (usize, T) {
         let k = self.int(0, arr.len() as i32 - 1) as usize;
         (k, arr[k])
     }

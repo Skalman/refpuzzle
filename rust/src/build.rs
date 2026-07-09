@@ -20,7 +20,7 @@ pub struct FallbackCounts {
     /// fitting kind from the level's pool.
     pub reserve: u32,
     /// Parametrize phase: neither the planned kind nor any pool reserve fit, so
-    /// the slot fell back to the generic AnswerOf/LetterDist.
+    /// the slot fell back to a generic AnswerOf.
     pub backstop: u32,
 }
 

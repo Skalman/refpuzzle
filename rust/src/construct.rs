@@ -34,6 +34,12 @@ pub struct LevelRecipe {
     /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
     /// indexed by `QuestionGroup as usize`.
     pub damping: [f64; QUESTION_GROUP_COUNT],
+    /// AnswerOf-count distribution as `(count, weight)` pairs: each puzzle samples a
+    /// count (probability ∝ weight) and forces exactly that many AnswerOfs — so a
+    /// few puzzles are reference-heavy while most have few/none. Counts must be
+    /// ≤ n-1. Weights are percentages (sum 100) by convention. Empty = no forcing
+    /// (AnswerOf drawn normally, bounded by `caps`).
+    pub answer_of_counts: &'static [(u8, u16)],
     /// How far the engine's lookahead may deduce when accepting a puzzle: within
     /// each hypothesis it deduces until the chain reaches this many results, then
     /// stops probing. 0 = pure deduction only (no lookahead); larger admits harder
@@ -53,7 +59,9 @@ const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
 
 const DEFAULT_CAPS: [u8; 32] = caps_with(&[
     (QuestionTypeKind::LetterDist, 1),
-    (QuestionTypeKind::AnswerOf, 3),
+    // AnswerOf: no entry here — each recipe caps it at n-1 (its structural max,
+    // since wire needs one non-AnswerOf question to root the chains) via
+    // `caps_max_answer_of`.
     // Parameter-free variants: a second of the same kind is the *identical*
     // question, so cap them at 1.
     (QuestionTypeKind::CountVowel, 1),
@@ -70,6 +78,16 @@ const DEFAULT_CAPS: [u8; 32] = caps_with(&[
     (QuestionTypeKind::AnswerIsSelf, 1),
     (QuestionTypeKind::TrueStmt, 1),
 ]);
+
+/// `DEFAULT_CAPS` but with AnswerOf capped at `question_count - 1` — its
+/// structural maximum, since `wire_answer_of_targets` needs at least one
+/// non-AnswerOf question to root the reference chains. Each recipe sets this so a
+/// hard-to-fill skeleton can lean on the always-fits AnswerOf all the way up.
+const fn caps_max_answer_of(question_count: usize) -> [u8; 32] {
+    let mut c = DEFAULT_CAPS;
+    c[QuestionTypeKind::AnswerOf as usize] = (question_count - 1) as u8;
+    c
+}
 
 const fn damping_with(overrides: &[(QuestionGroup, f64)]) -> [f64; QUESTION_GROUP_COUNT] {
     let mut d = [1.0f64; QUESTION_GROUP_COUNT];
@@ -95,7 +113,7 @@ const DEFAULT_DAMPING: [f64; QUESTION_GROUP_COUNT] = damping_with(&[
     (QuestionGroup::FirstLast, 0.4),
     (QuestionGroup::Sameness, 0.9),
     (QuestionGroup::Parity, 0.5),
-    (QuestionGroup::AnswerOf, 0.9),
+    (QuestionGroup::AnswerOf, 1.0),
 ]);
 
 /// Per-level recipes, tuned via type-stats. Indexed by level-1.
@@ -119,16 +137,18 @@ pub static RECIPES: [LevelRecipe; 6] = [
             LeastCommon,
             NoOtherHasAnswer,
         ],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(3),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 50), (1, 40), (2, 10)],
         lookahead_deduce_until: 1,
     },
     // L2
     LevelRecipe {
         required: &[],
         allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(4),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 42), (1, 35), (2, 20), (3, 3)],
         lookahead_deduce_until: 1,
     },
     // L3
@@ -148,8 +168,9 @@ pub static RECIPES: [LevelRecipe; 6] = [
             PrevSame,
             SameAs,
         ],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(5),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 31), (1, 33), (2, 25), (3, 10), (4, 1)],
         lookahead_deduce_until: 6,
     },
     // L4
@@ -175,8 +196,9 @@ pub static RECIPES: [LevelRecipe; 6] = [
             OnlySame,
             SameAs,
         ],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(8),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 22), (1, 28), (2, 31), (3, 15), (4, 3), (5, 1)],
         lookahead_deduce_until: 6,
     },
     // L5
@@ -209,8 +231,9 @@ pub static RECIPES: [LevelRecipe; 6] = [
             OnlyEven,
             SameAsWhich,
         ],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(10),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 16), (1, 25), (2, 31), (3, 19), (4, 7), (5, 2)],
         lookahead_deduce_until: 6,
     },
     // L6
@@ -244,8 +267,9 @@ pub static RECIPES: [LevelRecipe; 6] = [
             TrueStmt,
             SameAsWhich,
         ],
-        caps: DEFAULT_CAPS,
+        caps: caps_max_answer_of(12),
         damping: DEFAULT_DAMPING,
+        answer_of_counts: &[(0, 13), (1, 24), (2, 24), (3, 26), (4, 9), (5, 3), (6, 1)],
         lookahead_deduce_until: 6,
     },
 ];
@@ -481,6 +505,20 @@ fn solved_count(state: &State, n: usize) -> usize {
 /// RNG streak.
 const DAMPING_MAX_TRIES: usize = 50;
 
+/// Sample a value from `(value, weight)` pairs, with probability proportional to
+/// weight. Assumes a non-empty slice with positive total weight.
+fn weighted_pick(pairs: &[(u8, u16)], rng: &mut Rng) -> u8 {
+    let total: u32 = pairs.iter().map(|&(_, w)| u32::from(w)).sum();
+    let mut r = rng.int(0, total as i32 - 1) as u32;
+    for &(v, w) in pairs {
+        if r < u32::from(w) {
+            return v;
+        }
+        r -= u32::from(w);
+    }
+    pairs[pairs.len() - 1].0
+}
+
 /// Required types first, then fill remaining slots by a damped random draw from
 /// `allowed`, respecting caps: the first kind from a similarity group is taken
 /// as-is, later same-group kinds are kept only with `recipe.damping[group]`
@@ -516,6 +554,17 @@ fn select_kinds(
         "level recipe requires {} types but the level has only {n} slots",
         sel.picked_kinds.len()
     );
+
+    // Count-shaped AnswerOf: sample the per-puzzle target and force exactly that
+    // many, capping AnswerOf so neither the pool fill below nor `pick_reserve` adds
+    // more — the count then follows `answer_of_counts`, not the random draw.
+    if !recipe.answer_of_counts.is_empty() {
+        let target = (weighted_pick(recipe.answer_of_counts, rng) as usize).min(n - 1);
+        sel.cap_per_kind[AnswerOf as usize] = target as u8;
+        for _ in 0..target {
+            sel.take(AnswerOf);
+        }
+    }
 
     // Only kinds with room left; a kind is evicted the moment it fills, so
     // every draw below places exactly one kind (no wasted picks).
@@ -934,8 +983,8 @@ fn assign_kinds_to_solution(
 /// their unit variant). A kind that won't fit its slot (e.g. ClosestAfter on the
 /// last slot, or MostCommon with a tied extreme) is replaced — first by another
 /// fitting kind from the level's pool (`fallbacks.reserve`), and only if none fit
-/// by a generic AnswerOf/LetterDist (`fallbacks.backstop`). Shape-types were
-/// authored to fit, so they never fall back here.
+/// by a generic AnswerOf (`fallbacks.backstop`). Shape-types were authored to fit,
+/// so they never fall back here.
 fn parametrize(
     recipe: &LevelRecipe,
     n: usize,
@@ -952,9 +1001,9 @@ fn parametrize(
 
     for qi in 0..n {
         // Three tiers, in order of preference: the slot's planned kind; else a
-        // fitting kind from the level's own pool; else the generic backstop
-        // (AnswerOf/LetterDist, which always fits). The two fallbacks are counted
-        // separately.
+        // fitting kind from the level's own pool; else the generic backstop (an
+        // AnswerOf placeholder, which always fits and is wired below). The two
+        // fallbacks are counted separately.
         let qt = if let Some(qt) =
             try_parametrize_kind(kind_of[qi], qi, n, oc, sol, all_targets, &placed, rng)
         {
@@ -966,12 +1015,112 @@ fn parametrize(
             qt
         } else {
             fallbacks.backstop += 1;
-            fresh_fallback_type(n, qi, &placed, rng)
+            fresh_fallback_type(qi)
         };
         types[qi] = qt;
         placed.push(qt);
     }
+    // AnswerOf slots hold self-pointer placeholders; assign their real targets now
+    // that the whole type map is known.
+    wire_answer_of_targets(&mut types, n, rng);
     types
+}
+
+/// Probability that consecutive `AnswerOf`s link into the same chain (vs. starting
+/// a fresh one). Tunable knob for [`wire_answer_of_targets`]. There's no length
+/// cap — long chains are fine.
+const ANSWER_OF_CHAIN_PROB: f64 = 0.5;
+
+/// Assign every `AnswerOf`'s real target, replacing the self-pointer placeholders
+/// `parametrize` left. Links them into chains (a→b→c→…) terminating at a
+/// non-`AnswerOf` question, so the references can't cycle among themselves (whether
+/// that terminator resolves is the accept-gate's concern, not ours). Targets stay
+/// distinct and non-self. Acyclic as long as a non-`AnswerOf` question exists —
+/// which `caps`/count-forcing guarantee by holding AnswerOf to ≤ n-1; the
+/// `roots.is_empty()` branch handles the degenerate all-`AnswerOf` case.
+fn wire_answer_of_targets(types: &mut [QuestionType; MAX_N], n: usize, rng: &mut Rng) {
+    // Set `from`'s AnswerOf target to `to`.
+    fn point(types: &mut [QuestionType; MAX_N], from: usize, to: usize) {
+        types[from] = QuestionType::AnswerOf {
+            question_index: to as u8,
+        };
+    }
+
+    let mut sources: ArrayVec<usize, MAX_N> = (0..n)
+        .filter(|&i| matches!(types[i], QuestionType::AnswerOf { .. }))
+        .collect();
+    if sources.is_empty() {
+        return;
+    }
+    rng.shuffle(&mut sources);
+
+    let mut roots: ArrayVec<usize, MAX_N> = (0..n)
+        .filter(|&i| !matches!(types[i], QuestionType::AnswerOf { .. }))
+        .collect();
+
+    // No non-AnswerOf anchor means a cycle is unavoidable. Only reachable if
+    // `parametrize`'s backstop overrides the n-1 cap on every slot (never observed);
+    // emit a cycle and let the accept-gate reject + retry it like any unsolvable one.
+    if roots.is_empty() {
+        let m = sources.len();
+        for i in 0..m {
+            point(types, sources[i], sources[(i + 1) % m]);
+        }
+        return;
+    }
+    rng.shuffle(&mut roots);
+
+    // Link the shuffled AnswerOfs into chains, each terminating at a distinct
+    // non-AnswerOf root. Linking is probabilistic but forced whenever the last root
+    // is already in use and sources remain — so we never run out of roots and the
+    // result is always acyclic.
+    let mut root_idx = 0;
+    let mut i = 0;
+    while i < sources.len() {
+        let mut prev = sources[i];
+        i += 1;
+        while i < sources.len() {
+            let on_last_root = root_idx + 1 == roots.len();
+            let extend = on_last_root || rng.next_f64() < ANSWER_OF_CHAIN_PROB;
+            if !extend {
+                break;
+            }
+            point(types, prev, sources[i]);
+            prev = sources[i];
+            i += 1;
+        }
+        point(types, prev, roots[root_idx]);
+        root_idx += 1;
+    }
+
+    debug_assert!(
+        !answer_of_has_cycle(types, n),
+        "wire_answer_of_targets left an AnswerOf self-target or cycle"
+    );
+}
+
+/// Whether following any `AnswerOf`'s target references revisits a question — a
+/// cycle (a self-target is the length-1 case). Debug-only safety check for
+/// [`wire_answer_of_targets`].
+fn answer_of_has_cycle(types: &[QuestionType; MAX_N], n: usize) -> bool {
+    for start in 0..n {
+        if !matches!(types[start], QuestionType::AnswerOf { .. }) {
+            continue;
+        }
+        let mut seen = 0u16;
+        let mut cur = start;
+        loop {
+            if seen & (1 << cur) != 0 {
+                return true;
+            }
+            seen |= 1 << cur;
+            match types[cur] {
+                QuestionType::AnswerOf { question_index } => cur = question_index as usize,
+                _ => break,
+            }
+        }
+    }
+    false
 }
 
 /// A slot's planned kind didn't fit (e.g. MostCommon with a tied extreme). Pick a
@@ -992,6 +1141,11 @@ fn pick_reserve(
     let mut pool: ArrayVec<QuestionTypeKind, 32> = recipe.allowed.iter().copied().collect();
     rng.shuffle(&mut pool);
     for r in pool {
+        // When the level count-shapes AnswerOf, select_kinds fixed its count; don't
+        // let reserve substitutions inflate it past the sampled target.
+        if r == AnswerOf && !recipe.answer_of_counts.is_empty() {
+            continue;
+        }
         // How many `r`s are already committed: placed so far, plus those still
         // planned in later slots. Adding one here must keep the total within cap.
         let committed = placed.iter().filter(|qt| qt.kind() == r).count()
@@ -1034,43 +1188,14 @@ fn try_parametrize_kind(
     None
 }
 
-/// A satisfiable, not-yet-placed reference type for `qi`: a random AnswerOf to
-/// another question, falling back to a random LetterDist once every AnswerOf
-/// target is taken (small `n`).
-fn fresh_fallback_type(
-    n: usize,
-    qi: usize,
-    placed: &[QuestionType],
-    rng: &mut Rng,
-) -> QuestionType {
-    // Both candidate types are unconditionally solution-satisfiable: AnswerOf
-    // trivially, and LetterDist's answer `|sol[qi] - sol[j]| < oc` is always in range.
-    for make_qt in [make_answer_of, make_letter_dist] {
-        let mut targets: ArrayVec<u8, MAX_N> =
-            (0..n).filter(|&i| i != qi).map(|i| i as u8).collect();
-        while !targets.is_empty() {
-            let (k, target_qi) = rng.pick_kv_arrayvec(&targets);
-            let qt = make_qt(target_qi);
-            if !placed.contains(&qt) {
-                return qt;
-            }
-            targets.swap_remove(k);
-        }
-    }
-    // Unreachable: blocking a target needs *both* its AnswerOf and LetterDist
-    // placed (`2·(n-1)` types), but `placed` holds only `qi ≤ n-1` here — so some
-    // target is always free.
-    unreachable!("no free AnswerOf/LetterDist target");
-
-    fn make_answer_of(target: u8) -> QuestionType {
-        QuestionType::AnswerOf {
-            question_index: target,
-        }
-    }
-    fn make_letter_dist(target: u8) -> QuestionType {
-        QuestionType::LetterDist {
-            question_index: target,
-        }
+/// The generic backstop when neither the planned kind nor any pool reserve fits:
+/// a self-pointer `AnswerOf` placeholder, like every other `AnswerOf` out of
+/// `parametrize`. `AnswerOf` is unconditionally solution-satisfiable, and
+/// `wire_answer_of_targets` assigns its real (acyclic) target alongside the rest —
+/// so the backstop needs no target logic of its own.
+fn fresh_fallback_type(qi: usize) -> QuestionType {
+    QuestionType::AnswerOf {
+        question_index: qi as u8,
     }
 }
 
@@ -1200,19 +1325,10 @@ pub(crate) fn random_type_params(
         QuestionTypeKind::CountConsonant => Some(QuestionType::CountConsonant),
         QuestionTypeKind::MostCommonCount => Some(QuestionType::MostCommonCount),
         QuestionTypeKind::AnswerOf => {
-            let mut pool = [0u8; MAX_N];
-            let mut plen = 0;
-            for j in 0..n {
-                if j != qi && (assigned & (1 << j)) != 0 {
-                    pool[plen] = j as u8;
-                    plen += 1;
-                }
-            }
-            if plen == 0 {
-                return None;
-            }
+            // Placeholder self-pointer; `wire_answer_of_targets` assigns the real
+            // target later, once the whole type map is known.
             Some(QuestionType::AnswerOf {
-                question_index: rng.pick(&pool[..plen]),
+                question_index: qi as u8,
             })
         }
         QuestionTypeKind::LetterDist => {
