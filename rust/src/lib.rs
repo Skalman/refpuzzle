@@ -14,6 +14,7 @@ pub mod deduce;
 pub mod difficulty;
 pub mod format;
 pub mod lookahead;
+pub mod render;
 pub mod rng;
 pub mod serialize;
 pub mod solve_brute;

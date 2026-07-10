@@ -11,6 +11,9 @@ mod diagnose;
 mod difficulty;
 mod format;
 mod lookahead;
+// Consumers (wasm exposure, explain) arrive in later migration increments.
+#[allow(dead_code)]
+mod render;
 mod rng;
 mod serialize;
 mod solve_brute;
