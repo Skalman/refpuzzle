@@ -333,9 +333,326 @@ fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
     v.is_num().then(|| v.value())
 }
 
+/// Over/at-most count check shared by the count kinds (`CountAnswer`,
+/// `CountAnswerBefore`, `CountAnswerAfter`, `CountVowel`, `CountConsonant`).
+/// `MostCommonCount` is intentionally NOT here — it has its own max-known /
+/// max-possible logic.
+fn count_kind_elim_detail(
+    qt: &QuestionType,
+    qi: usize,
+    letter: Answer,
+    vnum: Option<u8>,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    n: usize,
+) -> Option<ElimDetail> {
+    let pred = count_pred(qt)?;
+    let (from, to) = count_range(qt, n);
+    let cr = count_matching(answers, eliminated, pred, from, to);
+    if let Some(v) = vnum {
+        if cr.count > v {
+            return detail(
+                format!(
+                    "{} option {letter} claims {v} {}, but there are already {}.",
+                    q(qi),
+                    count_rule_label(qt, v),
+                    cr.count
+                ),
+                None,
+            );
+        }
+        if cr.count + cr.remaining < v {
+            return detail(
+                format!(
+                    "{} option {letter} claims {v} {}, but at most {} are possible.",
+                    q(qi),
+                    count_rule_label(qt, v),
+                    cr.count + cr.remaining
+                ),
+                None,
+            );
+        }
+    }
+    None
+}
+
+/// Positional forward reason shared by `FirstWith` (scan from 0) and
+/// `ClosestAfter` (scan from just after the anchor). `label` is "first" or
+/// "closest".
+#[allow(clippy::too_many_arguments)]
+fn forward_positional_elim_detail(
+    label: &str,
+    scan_start: usize,
+    answer: Answer,
+    qi: usize,
+    letter: Answer,
+    vnum: Option<u8>,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    n: usize,
+) -> Option<ElimDetail> {
+    match vnum {
+        Some(v) => {
+            let target = v as usize;
+            if target < scan_start || target >= n {
+                return detail(
+                    format!(
+                        "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
+                        q(qi),
+                        q(target)
+                    ),
+                    None,
+                );
+            }
+            match answers[target] {
+                Some(av) if av != answer => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
+                            q(qi),
+                            q(target),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                None if is_elim(eliminated, target, answer.idx()) => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
+                            q(qi),
+                            q(target),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                _ => {}
+            }
+            for j in scan_start..target {
+                if answers[j] == Some(answer) {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {} already has answer {answer} and comes before {}.",
+                            q(qi),
+                            q(target),
+                            q(j),
+                            q(target)
+                        ),
+                        Some(j),
+                    );
+                }
+            }
+            if letter == answer && qi >= scan_start && qi < target {
+                return detail(
+                    format!(
+                        "{} option {letter} claims {label} {answer} is {}, but {} itself is before {} and would have answer {answer}. Contradiction.",
+                        q(qi),
+                        q(target),
+                        q(qi),
+                        q(target)
+                    ),
+                    None,
+                );
+            }
+        }
+        None => {
+            for j in scan_start..n {
+                if answers[j] == Some(answer) {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
+                            q(qi),
+                            q(j)
+                        ),
+                        Some(j),
+                    );
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Positional backward reason shared by `LastWith` (scan up to `n`) and
+/// `ClosestBefore` (scan up to the anchor). `label` is "last" or "closest".
+#[allow(clippy::too_many_arguments)]
+fn backward_positional_elim_detail(
+    label: &str,
+    before_idx: usize,
+    answer: Answer,
+    qi: usize,
+    letter: Answer,
+    vnum: Option<u8>,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+) -> Option<ElimDetail> {
+    match vnum {
+        Some(v) => {
+            let target = v as usize;
+            if target >= before_idx {
+                return detail(
+                    format!(
+                        "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
+                        q(qi),
+                        q(target)
+                    ),
+                    None,
+                );
+            }
+            match answers[target] {
+                Some(av) if av != answer => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
+                            q(qi),
+                            q(target),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                None if is_elim(eliminated, target, answer.idx()) => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
+                            q(qi),
+                            q(target),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                _ => {}
+            }
+            for j in (target + 1..before_idx).rev() {
+                if answers[j] == Some(answer) {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}.",
+                            q(qi),
+                            q(target),
+                            q(j),
+                            q(target)
+                        ),
+                        Some(j),
+                    );
+                }
+            }
+            if letter == answer && qi > target && qi < before_idx {
+                return detail(
+                    format!(
+                        "{} option {letter} claims {label} {answer} is {}, but {} itself is after {} and would have answer {answer}. Contradiction.",
+                        q(qi),
+                        q(target),
+                        q(qi),
+                        q(target)
+                    ),
+                    None,
+                );
+            }
+        }
+        None => {
+            for j in 0..before_idx {
+                if answers[j] == Some(answer) {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
+                            q(qi),
+                            q(j)
+                        ),
+                        Some(j),
+                    );
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Parity reason shared by `OnlyOdd` (parity 1) and `OnlyEven` (parity 0).
+/// `wrong_parity` labels a mispointed target's parity; `own_parity` labels this
+/// question's parity for the no-match case.
+#[allow(clippy::too_many_arguments)]
+fn parity_elim_detail(
+    parity: u8,
+    wrong_parity: &str,
+    own_parity: &str,
+    answer: Answer,
+    qi: usize,
+    letter: Answer,
+    vnum: Option<u8>,
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    n: usize,
+) -> Option<ElimDetail> {
+    match vnum {
+        Some(v) => {
+            let target = v as usize;
+            if (target + 1) % 2 != parity as usize {
+                return detail(
+                    format!(
+                        "{} option {letter} claims {}, but {} is {wrong_parity}-numbered.",
+                        q(qi),
+                        q(target),
+                        q(target)
+                    ),
+                    None,
+                );
+            }
+            if target < n {
+                match answers[target] {
+                    Some(av) if av != answer => {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has answer {answer}, but {} is answered {av}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
+                    None if is_elim(eliminated, target, answer.idx()) => {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has answer {answer}, but {answer} is ruled out for {}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
+                    _ => {}
+                }
+            }
+        }
+        None => {
+            for i in 0..n {
+                if (i + 1) % 2 == parity as usize && answers[i] == Some(answer) {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims no {own_parity}-numbered question has answer {answer}, but {} does.",
+                            q(qi),
+                            q(i)
+                        ),
+                        Some(i),
+                    );
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Why option `oi` (value `value`) of question `qi` is being eliminated. Mirrors
 /// the TS `explainElimDetail`. Only called for options the engine has ruled out,
 /// so a matching reason is expected; `None` means no phrasing for this kind.
+///
+/// Exhaustive over `QuestionType` on purpose: every kind can have options
+/// eliminated, so a new variant must supply a reason (or join the explicit
+/// no-reason arm). Mirrors the exhaustive `render::question_text`.
 pub fn explain_elim_detail(
     qt: &QuestionType,
     qi: usize,
@@ -349,319 +666,150 @@ pub fn explain_elim_detail(
     let eliminated = &state.eliminated;
     let vnum = value.is_num().then(|| value.value());
 
-    // Count kinds (count_pred is None for MostCommonCount, handled next).
-    if let Some(pred) = count_pred(qt) {
-        let (from, to) = count_range(qt, n);
-        let cr = count_matching(answers, eliminated, pred, from, to);
-        if let Some(v) = vnum {
-            if cr.count > v {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {v} {}, but there are already {}.",
-                        q(qi),
-                        count_rule_label(qt, v),
-                        cr.count
-                    ),
-                    None,
-                );
-            }
-            if cr.count + cr.remaining < v {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {v} {}, but at most {} are possible.",
-                        q(qi),
-                        count_rule_label(qt, v),
-                        cr.count + cr.remaining
-                    ),
-                    None,
-                );
-            }
+    match qt {
+        QuestionType::CountAnswer { .. }
+        | QuestionType::CountAnswerBefore { .. }
+        | QuestionType::CountAnswerAfter { .. }
+        | QuestionType::CountVowel
+        | QuestionType::CountConsonant => {
+            count_kind_elim_detail(qt, qi, letter, vnum, answers, eliminated, n)
         }
-    }
 
-    if matches!(qt, QuestionType::MostCommonCount)
-        && let Some(v) = vnum
-    {
-        let mut counts = [0u8; 5];
-        for i in 0..n {
-            if let Some(a) = answers[i] {
-                counts[a.idx()] += 1;
-            }
-        }
-        let max_known = counts.iter().copied().max().unwrap();
-        if v < max_known {
-            let s = if v == 1 { "" } else { "s" };
-            return detail(
-                format!(
-                    "{} option {letter} claims the most common answer appears {v} time{s}, but one already appears {max_known} times.",
-                    q(qi)
-                ),
-                None,
-            );
-        }
-        let mut max_possible = 0u8;
-        for l in LETTERS {
-            let mut c = 0u8;
-            let mut r = 0u8;
-            for i in 0..n {
-                match answers[i] {
-                    Some(a) if a == l => c += 1,
-                    None if !is_elim(eliminated, i, l.idx()) => r += 1,
-                    _ => {}
-                }
-            }
-            max_possible = max_possible.max(c + r);
-        }
-        if v > max_possible {
-            return detail(
-                format!(
-                    "{} option {letter} claims the most common answer appears {v} times, but at most {max_possible} are possible.",
-                    q(qi)
-                ),
-                None,
-            );
-        }
-    }
-
-    if let QuestionType::AnswerOf { question_index } = qt
-        && let Some(v) = vnum
-        && v < 5
-        && is_elim(eliminated, *question_index as usize, v as usize)
-    {
-        let k = *question_index as usize;
-        return detail(
-            format!(
-                "{} option {letter} claims {}'s answer is {}, but {} is ruled out for {}.",
-                q(qi),
-                q(k),
-                LETTERS[v as usize],
-                LETTERS[v as usize],
-                q(k)
-            ),
-            Some(k),
-        );
-    }
-
-    if let QuestionType::SameAsWhich { question_index } = qt
-        && let Some(ref_ans) = answers[*question_index as usize]
-        && let Some(v) = vnum
-        && (v as usize) < n
-    {
-        let k = *question_index as usize;
-        let target = v as usize;
-        match answers[target] {
-            Some(target_ans) if target_ans != ref_ans => {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {} is answered {target_ans}.",
-                        q(qi),
-                        q(target),
-                        q(k),
-                        q(target)
-                    ),
-                    Some(target),
-                );
-            }
-            None if is_elim(eliminated, target, ref_ans.idx()) => {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
-                        q(qi),
-                        q(target),
-                        q(k),
-                        q(target)
-                    ),
-                    Some(target),
-                );
-            }
-            _ => {}
-        }
-    }
-
-    if let QuestionType::LetterDist { question_index } = qt {
-        let k = *question_index as usize;
-        let max_dist = oi.max(4 - oi) as u8;
-        if let Some(v) = vnum
-            && v > max_dist
-        {
-            return detail(
-                format!(
-                    "{} option {letter} claims letter distance {v}, but {letter} can be at most {max_dist} letters from any answer.",
-                    q(qi)
-                ),
-                None,
-            );
-        }
-        match answers[k] {
-            Some(other) => {
-                if let Some(v) = vnum {
-                    let dist = (oi as i32 - other.idx() as i32).unsigned_abs() as u8;
-                    if dist != v {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims letter distance {v}, but {letter} is {dist} letters from {}'s answer {other}.",
-                                q(qi),
-                                q(k)
-                            ),
-                            Some(k),
-                        );
+        QuestionType::MostCommonCount => {
+            if let Some(v) = vnum {
+                let mut counts = [0u8; 5];
+                for i in 0..n {
+                    if let Some(a) = answers[i] {
+                        counts[a.idx()] += 1;
                     }
                 }
-            }
-            None => {
-                if let Some(v) = vnum {
-                    let any_possible = (0..5).any(|ti| {
-                        !is_elim(eliminated, k, ti)
-                            && (oi as i32 - ti as i32).unsigned_abs() as u8 == v
-                    });
-                    if !any_possible {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims letter distance {v}, but no remaining answer for {} gives that distance from {letter}.",
-                                q(qi),
-                                q(k)
-                            ),
-                            Some(k),
-                        );
+                let max_known = counts.iter().copied().max().unwrap();
+                if v < max_known {
+                    let s = if v == 1 { "" } else { "s" };
+                    return detail(
+                        format!(
+                            "{} option {letter} claims the most common answer appears {v} time{s}, but one already appears {max_known} times.",
+                            q(qi)
+                        ),
+                        None,
+                    );
+                }
+                let mut max_possible = 0u8;
+                for l in LETTERS {
+                    let mut c = 0u8;
+                    let mut r = 0u8;
+                    for i in 0..n {
+                        match answers[i] {
+                            Some(a) if a == l => c += 1,
+                            None if !is_elim(eliminated, i, l.idx()) => r += 1,
+                            _ => {}
+                        }
                     }
+                    max_possible = max_possible.max(c + r);
+                }
+                if v > max_possible {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims the most common answer appears {v} times, but at most {max_possible} are possible.",
+                            q(qi)
+                        ),
+                        None,
+                    );
                 }
             }
+            None
         }
-    }
 
-    // Positional forward: "first" / "closest-after".
-    let forward = match qt {
-        QuestionType::FirstWith { answer } => Some(("first", 0usize, *answer)),
         QuestionType::ClosestAfter {
             after_index,
             answer,
-        } => Some(("closest", *after_index as usize + 1, *answer)),
-        _ => None,
-    };
-    if let Some((label, scan_start, answer)) = forward {
-        match vnum {
-            Some(v) => {
-                let target = v as usize;
-                if target < scan_start || target >= n {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
-                            q(qi),
-                            q(target)
-                        ),
-                        None,
-                    );
-                }
-                match answers[target] {
-                    Some(av) if av != answer => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    None if is_elim(eliminated, target, answer.idx()) => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    _ => {}
-                }
-                for j in scan_start..target {
-                    if answers[j] == Some(answer) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {} already has answer {answer} and comes before {}.",
-                                q(qi),
-                                q(target),
-                                q(j),
-                                q(target)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-                if letter == answer && qi >= scan_start && qi < target {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} itself is before {} and would have answer {answer}. Contradiction.",
-                            q(qi),
-                            q(target),
-                            q(qi),
-                            q(target)
-                        ),
-                        None,
-                    );
-                }
-            }
-            None => {
-                for j in scan_start..n {
-                    if answers[j] == Some(answer) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
-                                q(qi),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-            }
-        }
-    }
+        } => forward_positional_elim_detail(
+            "closest",
+            *after_index as usize + 1,
+            *answer,
+            qi,
+            letter,
+            vnum,
+            answers,
+            eliminated,
+            n,
+        ),
+        QuestionType::FirstWith { answer } => forward_positional_elim_detail(
+            "first", 0, *answer, qi, letter, vnum, answers, eliminated, n,
+        ),
 
-    // Positional backward: "last" / "closest-before".
-    let backward = match qt {
-        QuestionType::LastWith { answer } => Some(("last", n, *answer)),
         QuestionType::ClosestBefore {
             before_index,
             answer,
-        } => Some(("closest", *before_index as usize, *answer)),
-        _ => None,
-    };
-    if let Some((label, before_idx, answer)) = backward {
-        match vnum {
-            Some(v) => {
+        } => backward_positional_elim_detail(
+            "closest",
+            *before_index as usize,
+            *answer,
+            qi,
+            letter,
+            vnum,
+            answers,
+            eliminated,
+        ),
+        QuestionType::LastWith { answer } => backward_positional_elim_detail(
+            "last", n, *answer, qi, letter, vnum, answers, eliminated,
+        ),
+
+        QuestionType::OnlyOdd { answer } => parity_elim_detail(
+            1, "even", "odd", *answer, qi, letter, vnum, answers, eliminated, n,
+        ),
+        QuestionType::OnlyEven { answer } => parity_elim_detail(
+            0, "odd", "even", *answer, qi, letter, vnum, answers, eliminated, n,
+        ),
+
+        QuestionType::AnswerOf { question_index } => {
+            if let Some(v) = vnum
+                && v < 5
+                && is_elim(eliminated, *question_index as usize, v as usize)
+            {
+                let k = *question_index as usize;
+                return detail(
+                    format!(
+                        "{} option {letter} claims {}'s answer is {}, but {} is ruled out for {}.",
+                        q(qi),
+                        q(k),
+                        LETTERS[v as usize],
+                        LETTERS[v as usize],
+                        q(k)
+                    ),
+                    Some(k),
+                );
+            }
+            None
+        }
+
+        QuestionType::SameAsWhich { question_index } => {
+            if let Some(ref_ans) = answers[*question_index as usize]
+                && let Some(v) = vnum
+                && (v as usize) < n
+            {
+                let k = *question_index as usize;
                 let target = v as usize;
-                if target >= before_idx {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
-                            q(qi),
-                            q(target)
-                        ),
-                        None,
-                    );
-                }
                 match answers[target] {
-                    Some(av) if av != answer => {
+                    Some(target_ans) if target_ans != ref_ans => {
                         return detail(
                             format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
+                                "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {} is answered {target_ans}.",
                                 q(qi),
                                 q(target),
+                                q(k),
                                 q(target)
                             ),
                             Some(target),
                         );
                     }
-                    None if is_elim(eliminated, target, answer.idx()) => {
+                    None if is_elim(eliminated, target, ref_ans.idx()) => {
                         return detail(
                             format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
+                                "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
                                 q(qi),
                                 q(target),
+                                q(k),
                                 q(target)
                             ),
                             Some(target),
@@ -669,212 +817,318 @@ pub fn explain_elim_detail(
                     }
                     _ => {}
                 }
-                for j in (target + 1..before_idx).rev() {
-                    if answers[j] == Some(answer) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}.",
-                                q(qi),
-                                q(target),
-                                q(j),
-                                q(target)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-                if letter == answer && qi > target && qi < before_idx {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} itself is after {} and would have answer {answer}. Contradiction.",
-                            q(qi),
-                            q(target),
-                            q(qi),
-                            q(target)
-                        ),
-                        None,
-                    );
-                }
             }
-            None => {
-                for j in 0..before_idx {
-                    if answers[j] == Some(answer) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
-                                q(qi),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-            }
+            None
         }
-    }
 
-    // Parity: OnlyOdd / OnlyEven. `wrong_parity` names a mispointed target's
-    // parity; `own_parity` names this question's parity for the no-match case.
-    let odd_even = match qt {
-        QuestionType::OnlyOdd { answer } => Some((1u8, "even", "odd", *answer)),
-        QuestionType::OnlyEven { answer } => Some((0u8, "odd", "even", *answer)),
-        _ => None,
-    };
-    if let Some((parity, wrong_parity, own_parity, answer)) = odd_even {
-        match vnum {
-            Some(v) => {
-                let target = v as usize;
-                if (target + 1) % 2 != parity as usize {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {}, but {} is {wrong_parity}-numbered.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        None,
-                    );
-                }
-                if target < n {
-                    match answers[target] {
-                        Some(av) if av != answer => {
+        QuestionType::LetterDist { question_index } => {
+            let k = *question_index as usize;
+            let max_dist = oi.max(4 - oi) as u8;
+            if let Some(v) = vnum
+                && v > max_dist
+            {
+                return detail(
+                    format!(
+                        "{} option {letter} claims letter distance {v}, but {letter} can be at most {max_dist} letters from any answer.",
+                        q(qi)
+                    ),
+                    None,
+                );
+            }
+            match answers[k] {
+                Some(other) => {
+                    if let Some(v) = vnum {
+                        let dist = (oi as i32 - other.idx() as i32).unsigned_abs() as u8;
+                        if dist != v {
                             return detail(
                                 format!(
-                                    "{} option {letter} claims {} has answer {answer}, but {} is answered {av}.",
+                                    "{} option {letter} claims letter distance {v}, but {letter} is {dist} letters from {}'s answer {other}.",
                                     q(qi),
-                                    q(target),
-                                    q(target)
+                                    q(k)
                                 ),
-                                Some(target),
+                                Some(k),
                             );
                         }
-                        None if is_elim(eliminated, target, answer.idx()) => {
+                    }
+                }
+                None => {
+                    if let Some(v) = vnum {
+                        let any_possible = (0..5).any(|ti| {
+                            !is_elim(eliminated, k, ti)
+                                && (oi as i32 - ti as i32).unsigned_abs() as u8 == v
+                        });
+                        if !any_possible {
                             return detail(
                                 format!(
-                                    "{} option {letter} claims {} has answer {answer}, but {answer} is ruled out for {}.",
+                                    "{} option {letter} claims letter distance {v}, but no remaining answer for {} gives that distance from {letter}.",
                                     q(qi),
-                                    q(target),
-                                    q(target)
+                                    q(k)
                                 ),
-                                Some(target),
+                                Some(k),
                             );
                         }
-                        _ => {}
                     }
                 }
             }
-            None => {
-                for i in 0..n {
-                    if (i + 1) % 2 == parity as usize && answers[i] == Some(answer) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims no {own_parity}-numbered question has answer {answer}, but {} does.",
-                                q(qi),
-                                q(i)
-                            ),
-                            Some(i),
-                        );
-                    }
-                }
-            }
+            None
         }
-    }
 
-    if matches!(qt, QuestionType::ConsecIdent) {
-        match vnum {
-            Some(v) => {
-                let start = v as usize;
-                if start + 1 >= n {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} and {}, but that's out of range.",
-                            q(qi),
-                            q(start),
-                            q(start + 1)
-                        ),
-                        None,
-                    );
-                }
-                if start == qi || start + 1 == qi {
-                    let partner = if start == qi { start + 1 } else { start };
-                    if is_elim(eliminated, partner, oi) {
+        QuestionType::ConsecIdent => {
+            match vnum {
+                Some(v) => {
+                    let start = v as usize;
+                    if start + 1 >= n {
                         return detail(
                             format!(
-                                "{} option {letter} claims {} and {} are the consecutive pair, but {letter} is ruled out for {} so they can't match.",
+                                "{} option {letter} claims {} and {}, but that's out of range.",
                                 q(qi),
                                 q(start),
-                                q(start + 1),
-                                q(partner)
+                                q(start + 1)
                             ),
-                            Some(partner),
+                            None,
                         );
                     }
-                }
-                let poss_a = !eliminated[start] & 0b11111;
-                let poss_b = !eliminated[start + 1] & 0b11111;
-                if poss_a & poss_b == 0 {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} and {} are the consecutive pair, but they share no possible answer.",
-                            q(qi),
-                            q(start),
-                            q(start + 1)
-                        ),
-                        Some(start),
-                    );
-                }
-            }
-            None => {
-                for i in 0..n.saturating_sub(1) {
-                    if let (Some(a), Some(b)) = (answers[i], answers[i + 1])
-                        && a == b
-                    {
+                    if start == qi || start + 1 == qi {
+                        let partner = if start == qi { start + 1 } else { start };
+                        if is_elim(eliminated, partner, oi) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims {} and {} are the consecutive pair, but {letter} is ruled out for {} so they can't match.",
+                                    q(qi),
+                                    q(start),
+                                    q(start + 1),
+                                    q(partner)
+                                ),
+                                Some(partner),
+                            );
+                        }
+                    }
+                    let poss_a = !eliminated[start] & 0b11111;
+                    let poss_b = !eliminated[start + 1] & 0b11111;
+                    if poss_a & poss_b == 0 {
                         return detail(
                             format!(
-                                "{} option {letter} claims no consecutive pair exists, but {} and {} both have answer {a}.",
+                                "{} option {letter} claims {} and {} are the consecutive pair, but they share no possible answer.",
                                 q(qi),
-                                q(i),
-                                q(i + 1)
+                                q(start),
+                                q(start + 1)
                             ),
-                            Some(i),
+                            Some(start),
                         );
                     }
                 }
+                None => {
+                    for i in 0..n.saturating_sub(1) {
+                        if let (Some(a), Some(b)) = (answers[i], answers[i + 1])
+                            && a == b
+                        {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims no consecutive pair exists, but {} and {} both have answer {a}.",
+                                    q(qi),
+                                    q(i),
+                                    q(i + 1)
+                                ),
+                                Some(i),
+                            );
+                        }
+                    }
+                }
             }
+            None
         }
-    }
 
-    if matches!(qt, QuestionType::PrevSame) {
-        match vnum {
-            None => {
-                for j in 0..qi {
-                    if answers[j] == Some(letter) {
+        QuestionType::PrevSame => {
+            match vnum {
+                None => {
+                    for j in 0..qi {
+                        if answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims no previous question has answer {letter}, but {} does.",
+                                    q(qi),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
+                    }
+                }
+                Some(v) => {
+                    let target = v as usize;
+                    if target >= qi {
                         return detail(
                             format!(
-                                "{} option {letter} claims no previous question has answer {letter}, but {} does.",
+                                "{} option {letter} claims {}, but {} is not before {}.",
                                 q(qi),
-                                q(j)
+                                q(target),
+                                q(target),
+                                q(qi)
                             ),
-                            Some(j),
+                            None,
                         );
+                    }
+                    if is_elim(eliminated, target, oi) {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
+                    for j in (target + 1..qi).rev() {
+                        if answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims previous same answer is {}, but {} also has answer {letter} and is closer.",
+                                    q(qi),
+                                    q(target),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
                     }
                 }
             }
-            Some(v) => {
+            None
+        }
+
+        QuestionType::NextSame => {
+            match vnum {
+                None => {
+                    for j in (qi + 1)..n {
+                        if answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims no later question has answer {letter}, but {} does.",
+                                    q(qi),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
+                    }
+                }
+                Some(v) => {
+                    let target = v as usize;
+                    if target <= qi || target >= n {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {}, but {} is not after {}.",
+                                q(qi),
+                                q(target),
+                                q(target),
+                                q(qi)
+                            ),
+                            None,
+                        );
+                    }
+                    if is_elim(eliminated, target, oi) {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
+                    for j in (qi + 1)..target {
+                        if answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims next same answer is {}, but {} also has answer {letter} and is closer.",
+                                    q(qi),
+                                    q(target),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
+                    }
+                }
+            }
+            None
+        }
+
+        QuestionType::OnlySame => {
+            match vnum {
+                None => {
+                    for j in 0..n {
+                        if j != qi && answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims no other question has answer {letter}, but {} does.",
+                                    q(qi),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
+                    }
+                }
+                Some(v) => {
+                    let target = v as usize;
+                    if target == qi {
+                        return detail(
+                            format!(
+                                "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
+                                q(qi),
+                                q(qi)
+                            ),
+                            None,
+                        );
+                    }
+                    if target < n && is_elim(eliminated, target, oi) {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
+                    if target < n && target != qi {
+                        for j in 0..n {
+                            if j != qi && j != target && answers[j] == Some(letter) {
+                                return detail(
+                                    format!(
+                                        "{} option {letter} claims {} is the only other with answer {letter}, but {} already has answer {letter}.",
+                                        q(qi),
+                                        q(target),
+                                        q(j)
+                                    ),
+                                    Some(j),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        }
+
+        QuestionType::SameAs => {
+            if let Some(v) = vnum {
                 let target = v as usize;
-                if target >= qi {
+                if target == qi {
                     return detail(
                         format!(
-                            "{} option {letter} claims {}, but {} is not before {}.",
+                            "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
                             q(qi),
-                            q(target),
-                            q(target),
                             q(qi)
                         ),
                         None,
                     );
                 }
-                if is_elim(eliminated, target, oi) {
+                if target < n && is_elim(eliminated, target, oi) {
                     return detail(
                         format!(
                             "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -885,315 +1139,195 @@ pub fn explain_elim_detail(
                         Some(target),
                     );
                 }
-                for j in (target + 1..qi).rev() {
-                    if answers[j] == Some(letter) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims previous same answer is {}, but {} also has answer {letter} and is closer.",
-                                q(qi),
-                                q(target),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
             }
+            None
         }
-    }
 
-    if matches!(qt, QuestionType::NextSame) {
-        match vnum {
-            None => {
-                for j in (qi + 1)..n {
-                    if answers[j] == Some(letter) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims no later question has answer {letter}, but {} does.",
-                                q(qi),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-            }
-            Some(v) => {
-                let target = v as usize;
-                if target <= qi || target >= n {
+        QuestionType::NoOtherHasAnswer => {
+            for i in 0..n {
+                if answers[i] == Some(letter) {
                     return detail(
                         format!(
-                            "{} option {letter} claims {}, but {} is not after {}.",
+                            "{} option {letter} claims {letter} is unique, but {} already has answer {letter}.",
                             q(qi),
-                            q(target),
-                            q(target),
+                            q(i)
+                        ),
+                        Some(i),
+                    );
+                }
+            }
+            None
+        }
+
+        QuestionType::EqualCount { answer } => {
+            if let Some(v) = vnum {
+                if LETTERS[v as usize] == *answer {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {}, but the question asks for a different letter with the same count as {answer}.",
+                            q(qi),
+                            LETTERS[v as usize]
+                        ),
+                        None,
+                    );
+                }
+                if v < 5 {
+                    let claimed = LETTERS[v as usize];
+                    let (mut rc, mut rr, mut sc, mut sr) = (0u8, 0u8, 0u8, 0u8);
+                    let ref_mask = 1u8 << answer.idx();
+                    let claimed_mask = 1u8 << v;
+                    for j in 0..n {
+                        match answers[j] {
+                            Some(aj) => {
+                                if aj == *answer {
+                                    rc += 1;
+                                }
+                                if aj == claimed {
+                                    sc += 1;
+                                }
+                            }
+                            None => {
+                                if eliminated[j] & ref_mask == 0 {
+                                    rr += 1;
+                                }
+                                if eliminated[j] & claimed_mask == 0 {
+                                    sr += 1;
+                                }
+                            }
+                        }
+                    }
+                    if rc + rr < sc {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {claimed} has the same count as {answer}, but {answer} can have at most {} while {claimed} already has {sc}.",
+                                q(qi),
+                                rc + rr
+                            ),
+                            None,
+                        );
+                    }
+                    if sc + sr < rc {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {claimed} has the same count as {answer}, but {claimed} can have at most {} while {answer} already has {rc}.",
+                                q(qi),
+                                sc + sr
+                            ),
+                            None,
+                        );
+                    }
+                }
+            }
+            None
+        }
+
+        QuestionType::LeastCommon => {
+            if let Some(v) = vnum
+                && v < 5
+            {
+                let mut counts = [0u8; 5];
+                for j in 0..n {
+                    if let Some(aj) = answers[j] {
+                        counts[aj.idx()] += 1;
+                    }
+                }
+                let claimed = LETTERS[v as usize];
+                let min_count = counts.iter().copied().min().unwrap();
+                let min_letters: Vec<Answer> = (0..5)
+                    .filter(|&i| counts[i] == min_count)
+                    .map(|i| LETTERS[i])
+                    .collect();
+                if counts[v as usize] > min_count {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {claimed} is the least common, but {claimed} appears {} time(s) while {} appears only {min_count}.",
+                            q(qi),
+                            counts[v as usize],
+                            min_letters[0]
+                        ),
+                        None,
+                    );
+                }
+                if min_letters.len() > 1 {
+                    let joined = min_letters
+                        .iter()
+                        .map(|l| l.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" and ");
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {claimed} is the least common, but {joined} are tied at {min_count} — no unique least.",
                             q(qi)
                         ),
                         None,
                     );
                 }
-                if is_elim(eliminated, target, oi) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                for j in (qi + 1)..target {
-                    if answers[j] == Some(letter) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims next same answer is {}, but {} also has answer {letter} and is closer.",
-                                q(qi),
-                                q(target),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-            }
-        }
-    }
-
-    if matches!(qt, QuestionType::OnlySame) && vnum.is_none() {
-        for j in 0..n {
-            if j != qi && answers[j] == Some(letter) {
                 return detail(
                     format!(
-                        "{} option {letter} claims no other question has answer {letter}, but {} does.",
-                        q(qi),
-                        q(j)
-                    ),
-                    Some(j),
-                );
-            }
-        }
-    }
-
-    if matches!(qt, QuestionType::OnlySame | QuestionType::SameAs)
-        && let Some(v) = vnum
-    {
-        let target = v as usize;
-        if target == qi {
-            return detail(
-                format!(
-                    "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
-                    q(qi),
-                    q(qi)
-                ),
-                None,
-            );
-        }
-        if target < n && is_elim(eliminated, target, oi) {
-            return detail(
-                format!(
-                    "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                    q(qi),
-                    q(target),
-                    q(target)
-                ),
-                Some(target),
-            );
-        }
-        if matches!(qt, QuestionType::OnlySame) && target < n && target != qi {
-            for j in 0..n {
-                if j != qi && j != target && answers[j] == Some(letter) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} is the only other with answer {letter}, but {} already has answer {letter}.",
-                            q(qi),
-                            q(target),
-                            q(j)
-                        ),
-                        Some(j),
-                    );
-                }
-            }
-        }
-    }
-
-    if matches!(qt, QuestionType::NoOtherHasAnswer) {
-        for i in 0..n {
-            if answers[i] == Some(letter) {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {letter} is unique, but {} already has answer {letter}.",
-                        q(qi),
-                        q(i)
-                    ),
-                    Some(i),
-                );
-            }
-        }
-    }
-
-    if let QuestionType::EqualCount { answer } = qt
-        && let Some(v) = vnum
-    {
-        if LETTERS[v as usize] == *answer {
-            return detail(
-                format!(
-                    "{} option {letter} claims {}, but the question asks for a different letter with the same count as {answer}.",
-                    q(qi),
-                    LETTERS[v as usize]
-                ),
-                None,
-            );
-        }
-        if v < 5 {
-            let claimed = LETTERS[v as usize];
-            let (mut rc, mut rr, mut sc, mut sr) = (0u8, 0u8, 0u8, 0u8);
-            let ref_mask = 1u8 << answer.idx();
-            let claimed_mask = 1u8 << v;
-            for j in 0..n {
-                match answers[j] {
-                    Some(aj) => {
-                        if aj == *answer {
-                            rc += 1;
-                        }
-                        if aj == claimed {
-                            sc += 1;
-                        }
-                    }
-                    None => {
-                        if eliminated[j] & ref_mask == 0 {
-                            rr += 1;
-                        }
-                        if eliminated[j] & claimed_mask == 0 {
-                            sr += 1;
-                        }
-                    }
-                }
-            }
-            if rc + rr < sc {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {claimed} has the same count as {answer}, but {answer} can have at most {} while {claimed} already has {sc}.",
-                        q(qi),
-                        rc + rr
+                        "{} option {letter} claims {claimed} is the least common, but {claimed} can't be uniquely least.",
+                        q(qi)
                     ),
                     None,
                 );
             }
-            if sc + sr < rc {
+            None
+        }
+
+        QuestionType::MostCommon => {
+            if let Some(v) = vnum
+                && v < 5
+            {
+                let mut counts = [0u8; 5];
+                for j in 0..n {
+                    if let Some(aj) = answers[j] {
+                        counts[aj.idx()] += 1;
+                    }
+                }
+                let claimed = LETTERS[v as usize];
+                let max_count = counts.iter().copied().max().unwrap();
+                let max_letters: Vec<Answer> = (0..5)
+                    .filter(|&i| counts[i] == max_count)
+                    .map(|i| LETTERS[i])
+                    .collect();
+                if counts[v as usize] < max_count {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {claimed} is the most common, but {claimed} appears {} time(s) while {} appears {max_count}.",
+                            q(qi),
+                            counts[v as usize],
+                            max_letters[0]
+                        ),
+                        None,
+                    );
+                }
+                if max_letters.len() > 1 {
+                    let joined = max_letters
+                        .iter()
+                        .map(|l| l.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" and ");
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {claimed} is the most common, but {joined} are tied at {max_count} — no unique most.",
+                            q(qi)
+                        ),
+                        None,
+                    );
+                }
                 return detail(
                     format!(
-                        "{} option {letter} claims {claimed} has the same count as {answer}, but {claimed} can have at most {} while {answer} already has {rc}.",
-                        q(qi),
-                        sc + sr
+                        "{} option {letter} claims {claimed} is the most common, but {claimed} can't be uniquely most.",
+                        q(qi)
                     ),
                     None,
                 );
             }
+            None
         }
-    }
 
-    if matches!(qt, QuestionType::LeastCommon)
-        && let Some(v) = vnum
-        && v < 5
-    {
-        let mut counts = [0u8; 5];
-        for j in 0..n {
-            if let Some(aj) = answers[j] {
-                counts[aj.idx()] += 1;
-            }
-        }
-        let claimed = LETTERS[v as usize];
-        let min_count = counts.iter().copied().min().unwrap();
-        let min_letters: Vec<Answer> = (0..5)
-            .filter(|&i| counts[i] == min_count)
-            .map(|i| LETTERS[i])
-            .collect();
-        if counts[v as usize] > min_count {
-            return detail(
-                format!(
-                    "{} option {letter} claims {claimed} is the least common, but {claimed} appears {} time(s) while {} appears only {min_count}.",
-                    q(qi),
-                    counts[v as usize],
-                    min_letters[0]
-                ),
-                None,
-            );
-        }
-        if min_letters.len() > 1 {
-            let joined = min_letters
-                .iter()
-                .map(|l| l.to_string())
-                .collect::<Vec<_>>()
-                .join(" and ");
-            return detail(
-                format!(
-                    "{} option {letter} claims {claimed} is the least common, but {joined} are tied at {min_count} — no unique least.",
-                    q(qi)
-                ),
-                None,
-            );
-        }
-        return detail(
-            format!(
-                "{} option {letter} claims {claimed} is the least common, but {claimed} can't be uniquely least.",
-                q(qi)
-            ),
-            None,
-        );
+        // These kinds assert nothing that can rule an option out on its own.
+        QuestionType::AnswerIsSelf | QuestionType::TrueStmt => None,
     }
-
-    if matches!(qt, QuestionType::MostCommon)
-        && let Some(v) = vnum
-        && v < 5
-    {
-        let mut counts = [0u8; 5];
-        for j in 0..n {
-            if let Some(aj) = answers[j] {
-                counts[aj.idx()] += 1;
-            }
-        }
-        let claimed = LETTERS[v as usize];
-        let max_count = counts.iter().copied().max().unwrap();
-        let max_letters: Vec<Answer> = (0..5)
-            .filter(|&i| counts[i] == max_count)
-            .map(|i| LETTERS[i])
-            .collect();
-        if counts[v as usize] < max_count {
-            return detail(
-                format!(
-                    "{} option {letter} claims {claimed} is the most common, but {claimed} appears {} time(s) while {} appears {max_count}.",
-                    q(qi),
-                    counts[v as usize],
-                    max_letters[0]
-                ),
-                None,
-            );
-        }
-        if max_letters.len() > 1 {
-            let joined = max_letters
-                .iter()
-                .map(|l| l.to_string())
-                .collect::<Vec<_>>()
-                .join(" and ");
-            return detail(
-                format!(
-                    "{} option {letter} claims {claimed} is the most common, but {joined} are tied at {max_count} — no unique most.",
-                    q(qi)
-                ),
-                None,
-            );
-        }
-        return detail(
-            format!(
-                "{} option {letter} claims {claimed} is the most common, but {claimed} can't be uniquely most.",
-                q(qi)
-            ),
-            None,
-        );
-    }
-
-    None
 }
 
 /// A short "because …" clause for why question `qi` is forced to `letter`, or an
