@@ -4,26 +4,30 @@
 
 use crate::types::*;
 
+/// A 1-based question reference for prose, e.g. `#3` for index 2. Mirrors the
+/// `Q()` helper the explain layer uses pervasively.
+pub fn q(index: impl Into<usize>) -> String {
+    format!("#{}", index.into() + 1)
+}
+
 /// The question prompt, e.g. "How many questions have answer A?".
 pub fn question_text(qt: &QuestionType) -> String {
     use QuestionType::*;
     match qt {
-        CountAnswer { answer } => format!("How many questions have answer {}?", answer.as_char()),
+        CountAnswer { answer } => format!("How many questions have answer {answer}?"),
         CountAnswerBefore {
             answer,
             before_index,
         } => format!(
-            "How many questions before #{} have answer {}?",
-            before_index + 1,
-            answer.as_char()
+            "How many questions before {} have answer {answer}?",
+            q(*before_index)
         ),
         CountAnswerAfter {
             answer,
             after_index,
         } => format!(
-            "How many questions after #{} have answer {}?",
-            after_index + 1,
-            answer.as_char()
+            "How many questions after {} have answer {answer}?",
+            q(*after_index)
         ),
         CountVowel => "How many questions have a vowel as the answer?".into(),
         CountConsonant => "How many questions have a consonant as the answer?".into(),
@@ -32,63 +36,48 @@ pub fn question_text(qt: &QuestionType) -> String {
             after_index,
             answer,
         } => format!(
-            "Which is the closest question after #{} that has answer {}?",
-            after_index + 1,
-            answer.as_char()
+            "Which is the closest question after {} that has answer {answer}?",
+            q(*after_index)
         ),
         ClosestBefore {
             before_index,
             answer,
         } => format!(
-            "Which is the closest question before #{} that has answer {}?",
-            before_index + 1,
-            answer.as_char()
+            "Which is the closest question before {} that has answer {answer}?",
+            q(*before_index)
         ),
-        FirstWith { answer } => {
-            format!(
-                "Which is the first question with answer {}?",
-                answer.as_char()
-            )
-        }
-        LastWith { answer } => {
-            format!(
-                "Which is the last question with answer {}?",
-                answer.as_char()
-            )
-        }
+        FirstWith { answer } => format!("Which is the first question with answer {answer}?"),
+        LastWith { answer } => format!("Which is the last question with answer {answer}?"),
         PrevSame => "Which is the previous question that has the same answer as this one?".into(),
         NextSame => "Which is the next question that has the same answer as this one?".into(),
         OnlySame => "Which is the only other question with the same answer as this one?".into(),
         SameAs => "Which of these questions has the same answer as this one?".into(),
         SameAsWhich { question_index } => format!(
-            "Which of these questions has the same answer as #{}?",
-            question_index + 1
+            "Which of these questions has the same answer as {}?",
+            q(*question_index)
         ),
-        OnlyOdd { answer } => format!(
-            "Which is the only odd-numbered question with answer {}?",
-            answer.as_char()
-        ),
-        OnlyEven { answer } => format!(
-            "Which is the only even-numbered question with answer {}?",
-            answer.as_char()
-        ),
+        OnlyOdd { answer } => {
+            format!("Which is the only odd-numbered question with answer {answer}?")
+        }
+        OnlyEven { answer } => {
+            format!("Which is the only even-numbered question with answer {answer}?")
+        }
         ConsecIdent => {
             "Which are the only two consecutive questions with identical answers?".into()
         }
         AnswerOf { question_index } => {
-            format!("What is the answer to question #{}?", question_index + 1)
+            format!("What is the answer to question {}?", q(*question_index))
         }
         LeastCommon => "Which is the least common answer?".into(),
         MostCommon => "Which is the most common answer?".into(),
         NoOtherHasAnswer => "Which answer is not the answer to any other question?".into(),
-        EqualCount { answer } => format!(
-            "Which answer appears the same number of times as {}?",
-            answer.as_char()
-        ),
+        EqualCount { answer } => {
+            format!("Which answer appears the same number of times as {answer}?")
+        }
         AnswerIsSelf => "What is the answer to this question?".into(),
         LetterDist { question_index } => format!(
-            "How many letters away is the answer to this question from the answer to question #{}?",
-            question_index + 1
+            "How many letters away is the answer to this question from the answer to question {}?",
+            q(*question_index)
         ),
         TrueStmt => "Which statement is the only true statement?".into(),
     }
@@ -110,7 +99,7 @@ pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
         AnswerOf { .. } | LeastCommon | MostCommon | NoOtherHasAnswer | AnswerIsSelf
     ) {
         return match v {
-            Some(x) => LETTERS[x as usize].as_char().to_string(),
+            Some(x) => LETTERS[x as usize].to_string(),
             None => "?".into(),
         };
     }
@@ -122,7 +111,7 @@ pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
     }
     if matches!(qt, EqualCount { .. }) {
         return match v {
-            Some(x) => LETTERS[x as usize].as_char().to_string(),
+            Some(x) => LETTERS[x as usize].to_string(),
             None => "None".into(),
         };
     }

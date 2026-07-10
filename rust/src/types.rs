@@ -86,6 +86,12 @@ impl Answer {
     }
 }
 
+impl std::fmt::Display for Answer {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_char())
+    }
+}
+
 impl From<u8> for Answer {
     /// Panics if `v >= 5`.
     fn from(v: u8) -> Answer {
