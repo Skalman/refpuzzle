@@ -52,198 +52,244 @@ pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Stri
 }
 
 fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
+    use QuestionType::*;
     let a = state.answers[qi]?;
     let ai = a.idx();
-    let qt = &fp.question_types[qi];
+    let qt = fp.question_types[qi];
     // The value the chosen option asserts (a count, a letter index, or a
     // 1-based-in-prose question index depending on the kind); NONE = "no such".
     let value = fp.options[qi][ai];
     let n = fp.n;
     let answers = &state.answers;
 
-    // Count kinds: the asserted number is already unreachable.
-    if let Some(pred) = count_pred(qt) {
-        let (from, to) = count_range(qt, n);
-        let cr = count_matching(answers, &state.eliminated, pred, from, to);
-        if value.is_num() {
-            let v = value.value();
-            if cr.count > v {
-                return Some(format!(
-                    "{} claims {v} {}, but there are already {}",
-                    q(qi),
-                    count_rule_label(qt, v),
-                    cr.count
-                ));
-            }
-            if cr.count + cr.remaining < v {
-                return Some(format!(
-                    "{} claims {v} {}, but at most {} are possible",
-                    q(qi),
-                    count_rule_label(qt, v),
-                    cr.count + cr.remaining
-                ));
-            }
-        }
-    }
-
     match qt {
-        QuestionType::AnswerOf { question_index } => {
-            let k = *question_index as usize;
-            if let Some(target) = answers[k]
-                && value.is_num()
-                && target.idx() as u8 != value.value()
-            {
-                return Some(format!(
+        // Count kinds: the asserted number is already unreachable.
+        CountAnswer { .. }
+        | CountAnswerBefore { .. }
+        | CountAnswerAfter { .. }
+        | CountVowel
+        | CountConsonant => count_invalid_reason(fp, state, qi, &qt, value),
+
+        AnswerOf { question_index } => {
+            let k = question_index as usize;
+            let target = answers[k]?;
+            (value.is_num() && target.idx() as u8 != value.value()).then(|| {
+                format!(
                     "{} claims {}'s answer is {}, but {} is answered {target}",
                     q(qi),
                     q(k),
                     LETTERS[value.value() as usize],
                     q(k)
-                ));
-            }
+                )
+            })
         }
-        QuestionType::LetterDist { question_index } => {
-            let k = *question_index as usize;
-            if let Some(other) = answers[k]
-                && value.is_num()
-            {
-                let v = value.value();
-                let dist = (ai as i32 - other.idx() as i32).unsigned_abs() as u8;
-                if dist != v {
-                    return Some(format!(
-                        "{} claims letter distance {v}, but {a} is {dist} letters from {}'s answer {other}",
-                        q(qi),
-                        q(k)
-                    ));
-                }
-            }
-        }
-        QuestionType::NoOtherHasAnswer => {
-            for i in 0..n {
-                if i != qi && answers[i] == Some(a) {
-                    return Some(format!(
-                        "{} claims {a} is unique, but {} already has answer {a}",
-                        q(qi),
-                        q(i)
-                    ));
-                }
-            }
-        }
-        _ => {}
-    }
 
-    // Positional forward: "first"/"closest-after" points at a question that
-    // doesn't hold the answer, or skips an earlier one that does.
-    let forward = match qt {
-        QuestionType::FirstWith { answer } => Some(("first", 0usize, *answer)),
-        QuestionType::ClosestAfter {
+        LetterDist { question_index } => {
+            let other = answers[question_index as usize]?;
+            let v = value.is_num().then(|| value.value())?;
+            let dist = (ai as i32 - other.idx() as i32).unsigned_abs() as u8;
+            (dist != v).then(|| {
+                format!(
+                    "{} claims letter distance {v}, but {a} is {dist} letters from {}'s answer {other}",
+                    q(qi),
+                    q(question_index as usize)
+                )
+            })
+        }
+
+        NoOtherHasAnswer => (0..n).find(|&i| i != qi && answers[i] == Some(a)).map(|i| {
+            format!(
+                "{} claims {a} is unique, but {} already has answer {a}",
+                q(qi),
+                q(i)
+            )
+        }),
+
+        FirstWith { answer } => forward_invalid_reason(state, qi, "first", 0, answer, value, n),
+        ClosestAfter {
             after_index,
             answer,
-        } => Some(("closest", *after_index as usize + 1, *answer)),
-        _ => None,
-    };
-    if let Some((label, scan_start, answer)) = forward {
-        if value.is_num() {
-            let v = value.value() as usize;
-            if v < n
-                && let Some(av) = answers[v]
-                && av != answer
-            {
-                return Some(format!(
-                    "{} claims {label} {answer} is {}, but {} is answered {av}",
-                    q(qi),
-                    q(v),
-                    q(v)
-                ));
-            }
-            for j in scan_start..v {
-                if answers[j] == Some(answer) {
-                    return Some(format!(
-                        "{} claims {label} {answer} is {}, but {} has answer {answer} and comes before {}",
-                        q(qi),
-                        q(v),
-                        q(j),
-                        q(v)
-                    ));
-                }
-            }
-        } else {
-            for j in scan_start..n {
-                if answers[j] == Some(answer) {
-                    return Some(format!(
-                        "{} claims no question has answer {answer}, but {} does",
-                        q(qi),
-                        q(j)
-                    ));
-                }
-            }
-        }
-    }
+        } => forward_invalid_reason(
+            state,
+            qi,
+            "closest",
+            after_index as usize + 1,
+            answer,
+            value,
+            n,
+        ),
 
-    // Positional backward: mirror of forward for "last"/"closest-before".
-    let backward = match qt {
-        QuestionType::LastWith { answer } => Some(("last", n, *answer)),
-        QuestionType::ClosestBefore {
+        LastWith { answer } => backward_invalid_reason(state, qi, "last", n, answer, value, n),
+        ClosestBefore {
             before_index,
             answer,
-        } => Some(("closest", *before_index as usize, *answer)),
-        _ => None,
-    };
-    if let Some((label, before_idx, answer)) = backward {
-        if value.is_num() {
-            let v = value.value() as usize;
-            if v < n
-                && let Some(av) = answers[v]
-                && av != answer
-            {
-                return Some(format!(
-                    "{} claims {label} {answer} is {}, but {} is answered {av}",
+        } => backward_invalid_reason(
+            state,
+            qi,
+            "closest",
+            before_index as usize,
+            answer,
+            value,
+            n,
+        ),
+
+        SameAs => {
+            let v = value.is_num().then(|| value.value() as usize)?;
+            if v >= n {
+                return None;
+            }
+            let av = answers[v]?;
+            (av != a).then(|| {
+                format!(
+                    "{} claims same answer as {}, but {} is {av} and {} is {a}",
                     q(qi),
                     q(v),
-                    q(v)
-                ));
-            }
-            for j in (v + 1..before_idx).rev() {
-                if answers[j] == Some(answer) {
-                    return Some(format!(
-                        "{} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}",
-                        q(qi),
-                        q(v),
-                        q(j),
-                        q(v)
-                    ));
-                }
-            }
-        } else {
-            for j in 0..before_idx {
-                if answers[j] == Some(answer) {
-                    return Some(format!(
-                        "{} claims no question has answer {answer}, but {} does",
-                        q(qi),
-                        q(j)
-                    ));
-                }
-            }
+                    q(v),
+                    q(qi)
+                )
+            })
         }
-    }
 
-    if matches!(qt, QuestionType::SameAs) && value.is_num() {
-        let v = value.value() as usize;
-        if v < n
-            && let Some(av) = answers[v]
-            && av != a
-        {
-            return Some(format!(
-                "{} claims same answer as {}, but {} is {av} and {} is {a}",
+        // No own-answer contradiction to phrase for these kinds.
+        MostCommonCount
+        | SameAsWhich { .. }
+        | OnlySame
+        | PrevSame
+        | NextSame
+        | OnlyOdd { .. }
+        | OnlyEven { .. }
+        | ConsecIdent
+        | LeastCommon
+        | MostCommon
+        | EqualCount { .. }
+        | AnswerIsSelf
+        | TrueStmt => None,
+    }
+}
+
+/// Count-kind invalidity: the answered count is already out of reach.
+fn count_invalid_reason(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    qt: &QuestionType,
+    value: OptionValue,
+) -> Option<String> {
+    let pred = count_pred(qt)?;
+    let v = value.is_num().then(|| value.value())?;
+    let (from, to) = count_range(qt, fp.n);
+    let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
+    if cr.count > v {
+        return Some(format!(
+            "{} claims {v} {}, but there are already {}",
+            q(qi),
+            count_rule_label(qt, v),
+            cr.count
+        ));
+    }
+    if cr.count + cr.remaining < v {
+        return Some(format!(
+            "{} claims {v} {}, but at most {} are possible",
+            q(qi),
+            count_rule_label(qt, v),
+            cr.count + cr.remaining
+        ));
+    }
+    None
+}
+
+/// First/closest-after invalidity: the pointed-at question doesn't hold the
+/// answer, or an earlier one does (or, for a "none" claim, some question does).
+fn forward_invalid_reason(
+    state: &State,
+    qi: usize,
+    label: &str,
+    scan_start: usize,
+    answer: Answer,
+    value: OptionValue,
+    n: usize,
+) -> Option<String> {
+    let answers = &state.answers;
+    let Some(v) = value.is_num().then(|| value.value() as usize) else {
+        return (scan_start..n)
+            .find(|&j| answers[j] == Some(answer))
+            .map(|j| {
+                format!(
+                    "{} claims no question has answer {answer}, but {} does",
+                    q(qi),
+                    q(j)
+                )
+            });
+    };
+    if v < n
+        && let Some(av) = answers[v]
+        && av != answer
+    {
+        return Some(format!(
+            "{} claims {label} {answer} is {}, but {} is answered {av}",
+            q(qi),
+            q(v),
+            q(v)
+        ));
+    }
+    (scan_start..v)
+        .find(|&j| answers[j] == Some(answer))
+        .map(|j| {
+            format!(
+                "{} claims {label} {answer} is {}, but {} has answer {answer} and comes before {}",
                 q(qi),
                 q(v),
-                q(v),
-                q(qi)
-            ));
-        }
-    }
+                q(j),
+                q(v)
+            )
+        })
+}
 
-    None
+/// Last/closest-before invalidity: mirror of [`forward_invalid_reason`].
+fn backward_invalid_reason(
+    state: &State,
+    qi: usize,
+    label: &str,
+    before_idx: usize,
+    answer: Answer,
+    value: OptionValue,
+    n: usize,
+) -> Option<String> {
+    let answers = &state.answers;
+    let Some(v) = value.is_num().then(|| value.value() as usize) else {
+        return (0..before_idx)
+            .find(|&j| answers[j] == Some(answer))
+            .map(|j| {
+                format!(
+                    "{} claims no question has answer {answer}, but {} does",
+                    q(qi),
+                    q(j)
+                )
+            });
+    };
+    if v < n
+        && let Some(av) = answers[v]
+        && av != answer
+    {
+        return Some(format!(
+            "{} claims {label} {answer} is {}, but {} is answered {av}",
+            q(qi),
+            q(v),
+            q(v)
+        ));
+    }
+    (v + 1..before_idx)
+        .rev()
+        .find(|&j| answers[j] == Some(answer))
+        .map(|j| {
+            format!(
+                "{} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}",
+                q(qi),
+                q(v),
+                q(j),
+                q(v)
+            )
+        })
 }
 
 /// The pluralized noun phrase for a count claim, e.g. "questions with answer A"
