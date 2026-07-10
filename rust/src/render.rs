@@ -88,44 +88,40 @@ pub fn question_text(qt: &QuestionType) -> String {
 /// rows carry claim text instead (see [`claim_label`]) so their label is empty.
 pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
     use QuestionType::*;
-    if matches!(qt, TrueStmt) {
-        return String::new();
-    }
     let v = value.is_num().then(|| value.value());
-
-    // Letter-valued types: the option is itself an answer letter.
-    if matches!(
-        qt,
-        AnswerOf { .. } | LeastCommon | MostCommon | NoOtherHasAnswer | AnswerIsSelf
-    ) {
-        return match v {
-            Some(x) => LETTERS[x as usize].to_string(),
-            None => "?".into(),
-        };
-    }
-    if matches!(qt, ConsecIdent) {
-        return match v {
-            Some(x) => format!("{}-{}", x + 1, x + 2),
-            None => "None".into(),
-        };
-    }
-    if matches!(qt, EqualCount { .. }) {
-        return match v {
-            Some(x) => LETTERS[x as usize].to_string(),
-            None => "None".into(),
-        };
-    }
-    // Question-index-valued types: display 1-based.
-    if is_positional(qt) {
-        return match v {
-            Some(x) => (x + 1).to_string(),
-            None => "None".into(),
-        };
-    }
-    // Count-valued types: the raw number.
-    match v {
-        Some(x) => x.to_string(),
-        None => "None".into(),
+    match qt {
+        // TrueStmt rows carry claim text (see `claim_label`), not a plain label.
+        TrueStmt => String::new(),
+        // Letter-valued: the option is itself an answer letter ("?" if unknown).
+        AnswerOf { .. } | LeastCommon | MostCommon | NoOtherHasAnswer | AnswerIsSelf => {
+            v.map_or_else(|| "?".to_string(), |x| LETTERS[x as usize].to_string())
+        }
+        // The consecutive pair, e.g. "4-5".
+        ConsecIdent => v.map_or_else(|| "None".to_string(), |x| format!("{}-{}", x + 1, x + 2)),
+        // A letter with a matching count.
+        EqualCount { .. } => {
+            v.map_or_else(|| "None".to_string(), |x| LETTERS[x as usize].to_string())
+        }
+        // 1-based question position.
+        ClosestAfter { .. }
+        | ClosestBefore { .. }
+        | FirstWith { .. }
+        | LastWith { .. }
+        | PrevSame
+        | NextSame
+        | OnlySame
+        | SameAs
+        | SameAsWhich { .. }
+        | OnlyOdd { .. }
+        | OnlyEven { .. } => v.map_or_else(|| "None".to_string(), |x| (x + 1).to_string()),
+        // Raw number (a count, or a LetterDist distance).
+        CountAnswer { .. }
+        | CountAnswerBefore { .. }
+        | CountAnswerAfter { .. }
+        | CountVowel
+        | CountConsonant
+        | MostCommonCount
+        | LetterDist { .. } => v.map_or_else(|| "None".to_string(), |x| x.to_string()),
     }
 }
 
@@ -136,26 +132,6 @@ pub fn claim_label(claim: &Claim) -> String {
         "{} {}",
         question_text(&claim.question_type),
         option_label(&claim.question_type, claim.value)
-    )
-}
-
-/// Types whose options are 1-based question positions.
-fn is_positional(qt: &QuestionType) -> bool {
-    use QuestionType::*;
-    matches!(
-        qt,
-        ClosestAfter { .. }
-            | ClosestBefore { .. }
-            | FirstWith { .. }
-            | LastWith { .. }
-            | PrevSame
-            | NextSame
-            | OnlySame
-            | SameAs
-            | SameAsWhich { .. }
-            | OnlyOdd { .. }
-            | OnlyEven { .. }
-            | ConsecIdent
     )
 }
 
