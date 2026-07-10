@@ -9,6 +9,9 @@ mod construct;
 mod deduce;
 mod diagnose;
 mod difficulty;
+// Consumers (wasm exposure, flip of the TS explain.ts) arrive in later increments.
+#[allow(dead_code)]
+mod explain;
 mod format;
 mod lookahead;
 // Consumers (wasm exposure, explain) arrive in later migration increments.

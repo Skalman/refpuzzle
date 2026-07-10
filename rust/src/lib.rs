@@ -12,6 +12,7 @@ pub mod check_well_posed;
 pub mod construct;
 pub mod deduce;
 pub mod difficulty;
+pub mod explain;
 pub mod format;
 pub mod lookahead;
 pub mod render;

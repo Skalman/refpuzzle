@@ -17,14 +17,14 @@ impl Validity {
 
 // ── Helpers ──
 
-struct CountResult {
-    count: u8,
-    remaining: u8,
+pub(crate) struct CountResult {
+    pub(crate) count: u8,
+    pub(crate) remaining: u8,
 }
 
 #[derive(Clone, Copy)]
 #[allow(clippy::enum_variant_names)]
-enum Pred {
+pub(crate) enum Pred {
     IsAnswer(Answer),
     IsVowel,
     IsConsonant,
@@ -47,7 +47,7 @@ impl Pred {
     }
 }
 
-fn count_matching(
+pub(crate) fn count_matching(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     pred: Pred,
@@ -83,11 +83,26 @@ fn count_validity(cr: CountResult, value: OptionValue) -> Validity {
     }
 }
 
-fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
+pub(crate) fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
     match *t {
         QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
         QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
         _ => (0, n),
+    }
+}
+
+/// The counting predicate for a count-type question, or `None` for any other
+/// kind. Mirrors the TS `countPred`; lets `explain` reproduce count-based
+/// contradiction reasons off the same primitive `check_answer` counts with.
+#[allow(dead_code)] // wired into explain (and thence wasm) in a later increment
+pub(crate) fn count_pred(t: &QuestionType) -> Option<Pred> {
+    match *t {
+        QuestionType::CountAnswer { answer }
+        | QuestionType::CountAnswerBefore { answer, .. }
+        | QuestionType::CountAnswerAfter { answer, .. } => Some(Pred::IsAnswer(answer)),
+        QuestionType::CountVowel => Some(Pred::IsVowel),
+        QuestionType::CountConsonant => Some(Pred::IsConsonant),
+        _ => None,
     }
 }
 
