@@ -3,8 +3,11 @@
 //! (`check_answer` counts, `render` text) so the wording can't drift from what
 //! the solver actually computes.
 
+use std::collections::BTreeSet;
+
 use crate::check_answer::{count_matching, count_pred, count_range};
-use crate::deduce::DeduceRule;
+use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
+use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};
 use crate::types::*;
 
@@ -20,7 +23,6 @@ fn simple(text: String) -> ExplainStep {
     ExplainStep::Simple { text }
 }
 
-#[allow(dead_code)] // used by explainElimination in a later increment
 fn complex(header: String, lines: Vec<String>) -> ExplainStep {
     ExplainStep::Complex { header, lines }
 }
@@ -2136,10 +2138,324 @@ pub fn explain_elimination(
     steps
 }
 
+/// Why a set of questions can all drop the masked options — `(prose, other_qi)`
+/// for a highlight. Mirrors the TS `explainMultiElim`.
+fn explain_multi_elim(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    option_mask: u8,
+    rule: DeduceRule,
+) -> (String, Option<usize>) {
+    let n = fp.n;
+    let answers = &state.answers;
+
+    if matches!(rule, DeduceRule::SameAsNegative) {
+        for src in 0..n {
+            if src == qi || !matches!(fp.question_types[src], QuestionType::SameAs) {
+                continue;
+            }
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            // Mirror the deduce guard: a "none" answer triggers no negative inference.
+            if option_value_at(fp, src, src_ans).is_none() {
+                continue;
+            }
+            return (
+                format!(
+                    "{} identifies which question shares its answer, so the other listed questions cannot have the same answer.",
+                    q(src)
+                ),
+                Some(src),
+            );
+        }
+    }
+
+    if matches!(rule, DeduceRule::LetterDistReverseElim) {
+        for src in 0..n {
+            if src == qi {
+                continue;
+            }
+            if let QuestionType::LetterDist { question_index } = fp.question_types[src]
+                && question_index as usize == qi
+            {
+                if let Some(src_ans) = answers[src] {
+                    let dist = option_value_at(fp, src, src_ans).unwrap_or(0);
+                    return (
+                        format!(
+                            "{} is answered {src_ans} with letter distance {dist}, so only answers at distance {dist} from {src_ans} are possible.",
+                            q(src)
+                        ),
+                        Some(src),
+                    );
+                }
+                return (
+                    format!(
+                        "{}'s remaining options limit which answers are possible for {}.",
+                        q(src),
+                        q(qi)
+                    ),
+                    Some(src),
+                );
+            }
+        }
+    }
+
+    if matches!(rule, DeduceRule::OnlyOddEvenRangeElim) {
+        for src in 0..n {
+            if src == qi {
+                continue;
+            }
+            let (parity, answer) = match fp.question_types[src] {
+                QuestionType::OnlyOdd { answer } => ("odd", answer),
+                QuestionType::OnlyEven { answer } => ("even", answer),
+                _ => continue,
+            };
+            return (
+                format!(
+                    "{} asks for the only {parity}-numbered question with answer {answer}, limiting which {parity} questions can have that answer.",
+                    q(src)
+                ),
+                Some(src),
+            );
+        }
+    }
+
+    if matches!(
+        rule,
+        DeduceRule::CountSaturated | DeduceRule::CountMustMatchElim
+    ) {
+        let sample_oi = (0..5).find(|&b| (option_mask >> b) & 1 == 1).unwrap_or(0);
+        if let Some((src_qi, text)) = explain_count_saturation(fp, state, qi, sample_oi) {
+            return (text, Some(src_qi));
+        }
+    }
+
+    if matches!(
+        rule,
+        DeduceRule::CountExceeded | DeduceRule::CountImpossible
+    ) {
+        let qt = fp.question_types[qi];
+        if let Some(pred) = count_pred(&qt) {
+            let (from, to) = count_range(&qt, n);
+            let cr = count_matching(answers, &state.eliminated, pred, from, to);
+            if matches!(rule, DeduceRule::CountExceeded) {
+                return (
+                    format!(
+                        "{} claims a count below what's already found ({} {}).",
+                        q(qi),
+                        cr.count,
+                        count_rule_label(&qt, cr.count)
+                    ),
+                    None,
+                );
+            }
+            return (
+                format!(
+                    "{} claims a count above what's possible (at most {} {}).",
+                    q(qi),
+                    cr.count + cr.remaining,
+                    count_rule_label(&qt, cr.count + cr.remaining)
+                ),
+                None,
+            );
+        }
+    }
+
+    debug_assert!(
+        false,
+        "no explain_multi_elim handler for {rule:?} at {}",
+        qi + 1
+    );
+    (format!("{} can't be those options.", q(qi)), None)
+}
+
+/// Turn one `DeduceResult` into narrated hint steps. Mirrors `explainDeduce`.
+pub fn explain_deduce(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> Vec<ExplainStep> {
+    let n = fp.n;
+    match result.action {
+        DeduceAction::Force { qi, answer } => explain_force(fp, state, qi, answer, result.rule),
+        DeduceAction::Eliminate { qi, oi } => explain_elimination(fp, state, qi, oi, result.rule),
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            let qis: Vec<usize> = (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
+            let opt_str = (0..5)
+                .filter(|&b| (option_mask >> b) & 1 == 1)
+                .map(|b| LETTERS[b].to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+
+            if matches!(
+                result.rule,
+                DeduceRule::PositionalRangeAnswered | DeduceRule::PositionalRangeUnanswered
+            ) {
+                let oi = if (option_mask.count_ones()) == 1 {
+                    option_mask.trailing_zeros() as usize
+                } else {
+                    0
+                };
+                if let Some((src_qi, text)) = find_positional_range_source(fp, state, qis[0], oi) {
+                    let all_list = sorted_q_list(src_qi, &qis);
+                    vec![
+                        simple(format!("Try looking at {}.", q(src_qi))),
+                        simple(format!("Try looking at {all_list}.")),
+                        simple(format!("{q_list} can't be {opt_str}: {text}")),
+                    ]
+                } else {
+                    vec![simple(format!("{q_list} can't be {opt_str}."))]
+                }
+            } else {
+                let (text, other_qi) =
+                    explain_multi_elim(fp, state, qis[0], option_mask, result.rule);
+                let mut steps = Vec::new();
+                if let Some(other) = other_qi {
+                    steps.push(simple(format!("Try looking at {}.", q(other))));
+                    steps.push(simple(format!(
+                        "Try looking at {}.",
+                        sorted_q_list(other, &qis)
+                    )));
+                } else {
+                    steps.push(simple(format!("Try looking at {q_list}.")));
+                }
+                steps.push(simple(format!("{q_list} can't be {opt_str}: {text}")));
+                steps
+            }
+        }
+    }
+}
+
+/// `#a, #b, …` over `{extra} ∪ qis`, sorted (duplicates kept, matching the TS).
+fn sorted_q_list(extra: usize, qis: &[usize]) -> String {
+    let mut all = vec![extra];
+    all.extend_from_slice(qis);
+    all.sort_unstable();
+    all.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ")
+}
+
+/// Narrate a refuted lookahead assumption: replay the chain, then the surfaced
+/// contradiction. Mirrors the TS `explainLookahead`.
+pub fn explain_lookahead(
+    fp: &FlatPuzzle,
+    state: &State,
+    result: &LookaheadResult,
+) -> Vec<ExplainStep> {
+    let qi = result.assumption_qi;
+    let letter = result.assumption_answer;
+    let n = fp.n;
+
+    let mut hyp = *state;
+    hyp.answers[qi] = Some(letter);
+    hyp.eliminated[qi] = 0b11111 ^ (1 << letter.idx());
+
+    let mut involved: BTreeSet<usize> = BTreeSet::from([qi]);
+    let mut lines: Vec<String> = Vec::new();
+
+    for dr in &result.chain {
+        match dr.action {
+            DeduceAction::Force { qi: fqi, answer } => {
+                involved.insert(fqi);
+                let reason = brief_force_reason(fp, &hyp, fqi, answer);
+                lines.push(if reason.is_empty() {
+                    format!("{} must be {answer}.", q(fqi))
+                } else {
+                    format!("{} must be {answer} ({reason}).", q(fqi))
+                });
+                hyp.eliminated[fqi] = 0b11111 ^ (1 << answer.idx());
+                hyp.answers[fqi] = Some(answer);
+            }
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                let qis: Vec<usize> = (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
+                involved.extend(qis.iter().copied());
+                let opt_str = (0..5)
+                    .filter(|&b| (option_mask >> b) & 1 == 1)
+                    .map(|b| LETTERS[b].to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+                lines.push(format!("Eliminate {opt_str} from {q_list}."));
+                for &i in &qis {
+                    hyp.eliminated[i] |= option_mask;
+                }
+            }
+            DeduceAction::Eliminate { qi: eqi, oi } => {
+                involved.insert(eqi);
+                let mut handled = false;
+                if matches!(
+                    dr.rule,
+                    DeduceRule::CountSaturated | DeduceRule::CountMustMatchElim
+                ) && let Some((src_qi, text)) = explain_count_saturation(fp, &hyp, eqi, oi)
+                {
+                    involved.insert(src_qi);
+                    lines.push(format!(
+                        "Eliminate {} option {}: {text}",
+                        q(eqi),
+                        LETTERS[oi]
+                    ));
+                    handled = true;
+                }
+                if !handled {
+                    let value = fp.options[eqi][oi];
+                    match explain_elim_detail(&fp.question_types[eqi], eqi, oi, value, &hyp, n) {
+                        Some(d) => {
+                            lines.push(format!(
+                                "Eliminate {} option {}: {}",
+                                q(eqi),
+                                LETTERS[oi],
+                                d.text
+                            ));
+                        }
+                        None => {
+                            debug_assert!(
+                                false,
+                                "no explain for ELIM {} option {} (rule {:?})",
+                                eqi + 1,
+                                LETTERS[oi],
+                                dr.rule
+                            );
+                            lines.push(format!("Eliminate {} option {}.", q(eqi), LETTERS[oi]));
+                        }
+                    }
+                }
+                hyp.eliminated[eqi] |= 1 << oi;
+            }
+        }
+    }
+
+    let contradiction_qi = result.contradiction_qi;
+    involved.insert(contradiction_qi);
+    let detail = match explain_invalid_detail(fp, &hyp, contradiction_qi) {
+        Some(reason) => reason.replace(" claims ", " would say "),
+        None => format!("{} would be invalid", q(contradiction_qi)),
+    };
+    lines.push(format!("But {detail}. Contradiction."));
+    lines.push(format!("So {} can't be {letter}.", q(qi)));
+
+    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+    if involved.len() > 1 {
+        let q_list = involved
+            .iter()
+            .map(|&i| q(i))
+            .collect::<Vec<_>>()
+            .join(", ");
+        steps.push(simple(format!("Try looking at {q_list}.")));
+    }
+    steps.push(simple(format!("What if {} is {letter}?", q(qi))));
+    steps.push(complex(format!("What if {} is {letter}?", q(qi)), lines));
+    steps
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::serialize::parse_puzzle;
+    use arrayvec::ArrayVec;
     use serde_json::json;
 
     fn state_with(fp: &FlatPuzzle, answers: &[Option<Answer>]) -> State {
@@ -2327,6 +2643,43 @@ mod tests {
                 simple(
                     "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."
                         .into()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn lookahead_narrates_the_contradiction() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "CountAnswer", "a": 0}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // Q2 and Q3 are A. Assuming Q1 = A (option 0, "0 answers are A") is
+        // self-refuting: there'd be three A's. Empty chain — the contradiction is
+        // immediate at Q1.
+        let state = state_with(&fp, &[None, Some(Answer::A), Some(Answer::A)]);
+        let result = LookaheadResult {
+            eliminate_qi: 0,
+            eliminate_oi: 0,
+            assumption_qi: 0,
+            assumption_answer: Answer::A,
+            chain: ArrayVec::new(),
+            contradiction_qi: 0,
+        };
+        let steps = explain_lookahead(&fp, &state, &result);
+        assert_eq!(
+            steps,
+            vec![
+                simple("Try looking at #1.".into()),
+                simple("What if #1 is A?".into()),
+                complex(
+                    "What if #1 is A?".into(),
+                    vec![
+                        "But #1 would say 0 questions with answer A, but there are already 3. Contradiction."
+                            .into(),
+                        "So #1 can't be A.".into(),
+                    ]
                 ),
             ]
         );
