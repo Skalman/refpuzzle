@@ -4,8 +4,43 @@
 //! the solver actually computes.
 
 use crate::check_answer::{count_matching, count_pred, count_range};
-use crate::render::q;
+use crate::deduce::DeduceRule;
+use crate::render::{claim_label, q};
 use crate::types::*;
+
+/// One rendered hint step: a single line, or a headed block of lines. Mirrors
+/// the TS `ExplainStep`.
+#[derive(Debug, PartialEq)]
+pub enum ExplainStep {
+    Simple { text: String },
+    Complex { header: String, lines: Vec<String> },
+}
+
+fn simple(text: String) -> ExplainStep {
+    ExplainStep::Simple { text }
+}
+
+#[allow(dead_code)] // used by explainElimination in a later increment
+fn complex(header: String, lines: Vec<String>) -> ExplainStep {
+    ExplainStep::Complex { header, lines }
+}
+
+/// "Try looking at #a and #b." with duplicate indices dropped (first-occurrence
+/// order kept). Mirrors the TS `tryLooking`.
+fn try_looking(qis: &[usize]) -> ExplainStep {
+    let mut unique: Vec<usize> = Vec::new();
+    for &qi in qis {
+        if !unique.contains(&qi) {
+            unique.push(qi);
+        }
+    }
+    let joined = unique
+        .iter()
+        .map(|&i| q(i))
+        .collect::<Vec<_>>()
+        .join(" and ");
+    simple(format!("Try looking at {joined}."))
+}
 
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
 /// unanswered). Mirrors the TS `explainInvalid`.
@@ -1153,6 +1188,407 @@ pub fn brief_force_reason(fp: &FlatPuzzle, state: &State, qi: usize, letter: Ans
     String::new()
 }
 
+/// The plain question that asks exactly what `claim` claims (same kind and
+/// parameters), other than `exclude_qi`. Mirrors `findClaimMatchQuestion`.
+/// (`QuestionType` equality already means "same proposition".)
+fn find_claim_match_question(fp: &FlatPuzzle, exclude_qi: usize, claim: &Claim) -> Option<usize> {
+    (0..fp.n).find(|&k| k != exclude_qi && fp.question_types[k] == claim.question_type)
+}
+
+/// An answered TrueStmt whose selected statement matches `qi`'s proposition.
+/// Mirrors `findTrueStmtClaimMatching`.
+fn find_true_stmt_claim_matching(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+) -> Option<(usize, Claim)> {
+    (0..fp.n).find_map(|t| {
+        if !matches!(fp.question_types[t], QuestionType::TrueStmt) {
+            return None;
+        }
+        let ans = state.answers[t]?;
+        let claim = fp.claim_at(t, ans.idx())?;
+        (fp.question_types[qi] == claim.question_type).then_some((t, claim))
+    })
+}
+
+/// A sibling count question one short of its target, leaving `qi` as the only
+/// slot that can still be `target_letter`. Mirrors `findCountSatSource`.
+fn find_count_sat_source(fp: &FlatPuzzle, state: &State, target_letter: Answer) -> Option<usize> {
+    let n = fp.n;
+    for src in 0..n {
+        let Some(ans) = state.answers[src] else {
+            continue;
+        };
+        let qt = fp.question_types[src];
+        let Some(pred) = count_pred(&qt) else {
+            continue;
+        };
+        if !pred.matches(target_letter) {
+            continue;
+        }
+        let Some(value) = option_value_at(fp, src, ans) else {
+            continue;
+        };
+        let (from, to) = count_range(&qt, n);
+        let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
+        if cr.count + cr.remaining == value && cr.remaining > 0 {
+            return Some(src);
+        }
+    }
+    None
+}
+
+/// The narrated steps for a forced answer: `qi` must be `letter` (via `rule`).
+/// Mirrors the TS `explainForce`.
+pub fn explain_force(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    letter: Answer,
+    rule: DeduceRule,
+) -> Vec<ExplainStep> {
+    let answers = &state.answers;
+    let n = fp.n;
+    let qt = fp.question_types[qi];
+    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+
+    if (!state.eliminated[qi] & 0b11111).count_ones() == 1 {
+        steps.push(simple(format!(
+            "{} has only one option left — it must be {letter}.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if let QuestionType::AnswerOf { question_index } = qt
+        && let Some(target) = answers[question_index as usize]
+    {
+        let k = question_index as usize;
+        steps.push(try_looking(&[qi, k]));
+        steps.push(simple(format!(
+            "{} asks for {}'s answer. {} is {target}, so {} must be {letter}.",
+            q(qi),
+            q(k),
+            q(k),
+            q(qi)
+        )));
+        return steps;
+    }
+
+    // Forward from an answered SameAs / Prev|Next|OnlySame that points at `qi`.
+    for other in 0..n {
+        let Some(other_ans) = answers[other] else {
+            continue;
+        };
+        if option_value_at(fp, other, other_ans) != Some(qi as u8) {
+            continue;
+        }
+        match fp.question_types[other] {
+            QuestionType::SameAs => {
+                steps.push(try_looking(&[qi, other]));
+                steps.push(simple(format!(
+                    "{} says it has the same answer as {}. {} is {other_ans}, so {} must be {other_ans}.",
+                    q(other),
+                    q(qi),
+                    q(other),
+                    q(qi)
+                )));
+                return steps;
+            }
+            QuestionType::PrevSame | QuestionType::NextSame | QuestionType::OnlySame => {
+                steps.push(try_looking(&[qi, other]));
+                steps.push(simple(format!(
+                    "{} is {other_ans}, pointing to {} as having the same answer. So {} must be {other_ans}.",
+                    q(other),
+                    q(qi),
+                    q(qi)
+                )));
+                return steps;
+            }
+            _ => {}
+        }
+    }
+
+    // SameAsWhich reverse: an answered SameAsWhich propagates the equality.
+    for other in 0..n {
+        let Some(other_ans) = answers[other] else {
+            continue;
+        };
+        if let QuestionType::SameAsWhich { question_index } = fp.question_types[other]
+            && let Some(target_q) = option_value_at(fp, other, other_ans)
+        {
+            let ref_q = question_index as usize;
+            let target_q = target_q as usize;
+            if target_q < n {
+                if target_q == qi
+                    && let Some(ref_ans) = answers[ref_q]
+                {
+                    steps.push(try_looking(&[qi, other]));
+                    steps.push(simple(format!(
+                        "{} is {other_ans}, pointing to {} as having the same answer as {} ({ref_ans}). So {} must be {letter}.",
+                        q(other), q(qi), q(ref_q), q(qi)
+                    )));
+                    return steps;
+                }
+                if ref_q == qi
+                    && let Some(target_ans) = answers[target_q]
+                {
+                    steps.push(try_looking(&[qi, other]));
+                    steps.push(simple(format!(
+                        "{} is {other_ans}, pointing to {} as having the same answer as {}. {} is {target_ans}, so {} must be {letter}.",
+                        q(other), q(target_q), q(qi), q(target_q), q(qi)
+                    )));
+                    return steps;
+                }
+            }
+        }
+    }
+
+    // Reverse AnswerOf: another question asks for `qi`'s answer.
+    for other in 0..n {
+        let Some(other_ans) = answers[other] else {
+            continue;
+        };
+        if let QuestionType::AnswerOf { question_index } = fp.question_types[other]
+            && question_index as usize == qi
+        {
+            steps.push(try_looking(&[qi, other]));
+            steps.push(simple(format!(
+                "{} asks for {}'s answer. {} is {other_ans}, telling us {} must be {letter}.",
+                q(other),
+                q(qi),
+                q(other),
+                q(qi)
+            )));
+            return steps;
+        }
+    }
+
+    if let QuestionType::LetterDist { question_index } = qt
+        && let Some(target) = answers[question_index as usize]
+    {
+        steps.push(try_looking(&[qi, question_index as usize]));
+        steps.push(simple(format!(
+            "{} is answered {target}. Only option {letter} gives the right letter distance.",
+            q(question_index as usize)
+        )));
+        return steps;
+    }
+
+    // Reverse LetterDist: another question's distance constrains `qi`.
+    for src in 0..n {
+        if src == qi {
+            continue;
+        }
+        if let QuestionType::LetterDist { question_index } = fp.question_types[src]
+            && question_index as usize == qi
+            && let Some(src_ans) = answers[src]
+            && let Some(dist) = option_value_at(fp, src, src_ans)
+        {
+            steps.push(try_looking(&[qi, src]));
+            steps.push(simple(format!(
+                "{} is answered {src_ans} with letter distance {dist}. Only {letter} is at distance {dist} from {src_ans}, so {} must be {letter}.",
+                q(src), q(qi)
+            )));
+            return steps;
+        }
+    }
+
+    // Counting: everything in range is answered, so the count is fixed.
+    if let Some(pred) = count_pred(&qt) {
+        let (from, to) = count_range(&qt, n);
+        let cr = count_matching(answers, &state.eliminated, pred, from, to);
+        if cr.remaining == 0 {
+            steps.push(simple(format!(
+                "There are {} {}, so {} must be {letter}.",
+                cr.count,
+                count_rule_label(&qt, cr.count),
+                q(qi)
+            )));
+            return steps;
+        }
+    }
+
+    if matches!(rule, DeduceRule::CountMustMatchForce)
+        && let Some(src) = find_count_sat_source(fp, state, letter)
+    {
+        let src_qt = fp.question_types[src];
+        let src_ans = answers[src].expect("find_count_sat_source only returns answered sources");
+        let src_val = option_value_at(fp, src, src_ans).expect("answered count option is numeric");
+        let (from, to) = count_range(&src_qt, n);
+        let cr = count_matching(
+            answers,
+            &state.eliminated,
+            count_pred(&src_qt).expect("count source has a predicate"),
+            from,
+            to,
+        );
+        steps.push(try_looking(&[qi, src]));
+        steps.push(simple(format!(
+            "{} says there are {src_val} {}. Only {} found so far, and {} is the only remaining question that could be {letter} — so {} must be {letter}.",
+            q(src), count_rule_label(&src_qt, src_val), cr.count, q(qi), q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::LeastCommonForce) && matches!(qt, QuestionType::LeastCommon) {
+        steps.push(simple(format!(
+            "Only one answer can make its claimed letter the least common — {} must be {letter}.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::MostCommonForce) && matches!(qt, QuestionType::MostCommon) {
+        steps.push(simple(format!(
+            "Only one answer can make its claimed letter the most common — {} must be {letter}.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(
+        rule,
+        DeduceRule::ConsecIdentForwardForce | DeduceRule::ConsecIdentForwardBothForce
+    ) {
+        for src in 0..n {
+            if !matches!(fp.question_types[src], QuestionType::ConsecIdent) {
+                continue;
+            }
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            let Some(start) = option_value_at(fp, src, src_ans) else {
+                continue;
+            };
+            let p = start as usize;
+            if p == qi || p + 1 == qi {
+                let partner = if p == qi { p + 1 } else { p };
+                steps.push(try_looking(&[qi, src]));
+                if let Some(partner_ans) = answers[partner] {
+                    steps.push(simple(format!(
+                        "{} says {} and {} have the same answer. {} is {partner_ans}, so {} must be {letter}.",
+                        q(src), q(p), q(p + 1), q(partner), q(qi)
+                    )));
+                } else {
+                    steps.push(simple(format!(
+                        "{} says {} and {} have the same answer. Only {letter} is possible for both, so {} must be {letter}.",
+                        q(src), q(p), q(p + 1), q(qi)
+                    )));
+                }
+                return steps;
+            }
+        }
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementForward) {
+        for src in 0..n {
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            if !matches!(fp.question_types[src], QuestionType::TrueStmt) {
+                continue;
+            }
+            let Some(claim) = fp.claim_at(src, src_ans.idx()) else {
+                continue;
+            };
+            match claim.question_type {
+                QuestionType::AnswerOf { question_index } if question_index as usize == qi => {
+                    steps.push(try_looking(&[qi, src]));
+                    steps.push(simple(format!(
+                        "{}'s true statement says {}'s answer is {letter}. So {} must be {letter}.",
+                        q(src),
+                        q(qi),
+                        q(qi)
+                    )));
+                    return steps;
+                }
+                QuestionType::FirstWith { .. } | QuestionType::LastWith { .. }
+                    if claim.value.is_num() && claim.value.value() as usize == qi =>
+                {
+                    steps.push(try_looking(&[qi, src]));
+                    steps.push(simple(format!(
+                        "{}'s true statement says {} has answer {letter}. So {} must be {letter}.",
+                        q(src),
+                        q(qi),
+                        q(qi)
+                    )));
+                    return steps;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementClaimValid) {
+        return vec![
+            simple(format!("Try looking at {}.", q(qi))),
+            simple(format!(
+                "Only one of {}'s claims is still possible, so it must be the answer.",
+                q(qi)
+            )),
+        ];
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementClaimKnownTrue) {
+        return vec![
+            simple(format!("Try looking at {}.", q(qi))),
+            simple(format!(
+                "Option {letter}'s claim is already known to be true, so it must be the answer."
+            )),
+        ];
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementMatchForce) {
+        if let Some(self_claim) = fp.claim_at(qi, letter.idx()) {
+            // `qi` is the TrueStmt: a matching question settled its statement true.
+            let k = find_claim_match_question(fp, qi, &self_claim);
+            return vec![
+                simple(format!("Try looking at {}.", k.map_or_else(|| q(qi), q))),
+                simple(match k {
+                    Some(k) => format!(
+                        "{} settles \"{}\", making that statement true — so {} must be {letter}.",
+                        q(k),
+                        claim_label(&self_claim),
+                        q(qi)
+                    ),
+                    None => format!(
+                        "Its statement is already settled as true, so {} must be {letter}.",
+                        q(qi)
+                    ),
+                }),
+            ];
+        }
+        // `qi` is a plain question that a chosen true statement points at.
+        let matched = find_true_stmt_claim_matching(fp, state, qi);
+        return vec![
+            simple(format!(
+                "Try looking at {}.",
+                matched.as_ref().map_or_else(|| q(qi), |(t, _)| q(*t))
+            )),
+            simple(match &matched {
+                Some((t, claim)) => format!(
+                    "{}'s true statement is \"{}\", so {} must be {letter}.",
+                    q(*t),
+                    claim_label(claim),
+                    q(qi)
+                ),
+                None => format!("The true statement forces {} to be {letter}.", q(qi)),
+            }),
+        ];
+    }
+
+    // No branch matched — a rule-wiring bug. Loud in debug, graceful in release.
+    debug_assert!(
+        false,
+        "explain_force: no explanation for {} = {letter:?} (rule {rule:?})",
+        qi + 1
+    );
+    steps.push(simple(format!("{} must be {letter}.", q(qi))));
+    steps
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1256,5 +1692,48 @@ mod tests {
             "#1 option A claims A is the least common, but A appears 2 time(s) while B appears only 0."
         );
         assert_eq!(d.other_qi, None);
+    }
+
+    #[test]
+    fn force_only_option_left() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2]],
+        }))
+        .unwrap();
+        // Strike B and C, leaving only A. (Rule is irrelevant — this branch is
+        // structural, checked before any rule-specific reasoning.)
+        let state = State {
+            answers: [None; MAX_N],
+            eliminated: [0b11110; MAX_N],
+        };
+        let steps = explain_force(&fp, &state, 0, Answer::A, DeduceRule::CountMustMatchForce);
+        assert_eq!(
+            steps,
+            vec![
+                simple("Try looking at #1.".into()),
+                simple("#1 has only one option left — it must be A.".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn force_answer_of_target_answered() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "AnswerOf", "q": 1}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // Q2 is B, so the AnswerOf question #1 must be B (rule irrelevant here too).
+        let state = state_with(&fp, &[None, Some(Answer::B)]);
+        let steps = explain_force(&fp, &state, 0, Answer::B, DeduceRule::CountMustMatchForce);
+        assert_eq!(
+            steps,
+            vec![
+                simple("Try looking at #1.".into()),
+                simple("Try looking at #1 and #2.".into()),
+                simple("#1 asks for #2's answer. #2 is B, so #1 must be B.".into()),
+            ]
+        );
     }
 }

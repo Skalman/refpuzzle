@@ -31,7 +31,7 @@ pub(crate) enum Pred {
 }
 
 impl Pred {
-    fn matches(self, a: Answer) -> bool {
+    pub(crate) fn matches(self, a: Answer) -> bool {
         match self {
             Pred::IsAnswer(t) => a == t,
             Pred::IsVowel => a.is_vowel(),
