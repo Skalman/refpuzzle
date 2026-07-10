@@ -117,7 +117,7 @@ pub fn check_well_posed_given_options(
                 // `sol` may be longer than `fp.n` (some callers pass the full MAX_N
                 // key), so cap — slots past `fp.n` must stay None for the histogram.
                 answers: std::array::from_fn(|i| (i < fp.n).then(|| sol[i])),
-                eliminated: [fp.phantom_mask(); MAX_N],
+                eliminated: [fp.initial_eliminated_mask(); MAX_N],
             };
             // A claim is true iff it holds against the actual solution (qi at its real
             // answer — not the claim's slot, which would alter the histogram). Exactly

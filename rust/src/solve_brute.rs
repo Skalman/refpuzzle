@@ -383,7 +383,7 @@ fn check_rule(
             fp,
             State {
                 answers: *answers,
-                eliminated: [fp.phantom_mask(); MAX_N],
+                eliminated: [fp.initial_eliminated_mask(); MAX_N],
             },
             i,
         )

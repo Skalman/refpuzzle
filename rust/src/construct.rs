@@ -453,7 +453,7 @@ pub(crate) fn validate_and_repair(
     // The answer key must be self-consistent — a generation bug otherwise.
     let key_state = State {
         answers: to_optional(solution, n),
-        eliminated: [fp.phantom_mask(); MAX_N],
+        eliminated: [fp.initial_eliminated_mask(); MAX_N],
     };
     for qi in 0..n {
         assert!(

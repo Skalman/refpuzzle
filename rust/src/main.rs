@@ -734,7 +734,7 @@ mod tests {
                     fp,
                     State {
                         answers,
-                        eliminated: [fp.phantom_mask(); MAX_N],
+                        eliminated: [fp.initial_eliminated_mask(); MAX_N],
                     },
                     qi,
                 )

@@ -1361,7 +1361,7 @@ mod tests {
                     for qi in 0..n {
                         let state = State {
                             answers,
-                            eliminated: [fp.phantom_mask(); MAX_N],
+                            eliminated: [fp.initial_eliminated_mask(); MAX_N],
                         };
                         let v = check_answer(&fp, state, qi);
                         eprintln!("  Q{}: {:?}", qi + 1, v);

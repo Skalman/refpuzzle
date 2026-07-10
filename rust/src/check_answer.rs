@@ -844,7 +844,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
 pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
     let state = State {
         answers: *answers,
-        eliminated: [fp.phantom_mask(); MAX_N],
+        eliminated: [fp.initial_eliminated_mask(); MAX_N],
     };
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }

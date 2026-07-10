@@ -520,7 +520,11 @@ impl FlatPuzzle {
         (affected_by, global_indices)
     }
 
-    pub fn phantom_mask(&self) -> u8 {
+    /// The value every question's `eliminated` starts at: the "phantom" option
+    /// slots ≥ `option_count`, pre-eliminated because they aren't real options.
+    /// (No real eliminations exist yet in the initial state, so this is the whole
+    /// mask.)
+    pub fn initial_eliminated_mask(&self) -> u8 {
         self.initial_state.eliminated[0]
     }
 
