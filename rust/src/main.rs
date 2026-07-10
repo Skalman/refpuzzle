@@ -78,7 +78,27 @@ fn parse_date_range(input: &str) -> DateRange {
         }
     }
 
+    // Reject impossible calendar dates up front. Left unchecked, a bad month/day
+    // collapses to an empty day set, which divides by zero in the summary and
+    // writes `{}` over the output file. Only explicitly-supplied parts can be out
+    // of range; the defaults below are in range by construction.
+    let validate = |y: u32, m: Option<u32>, d: Option<u32>| {
+        if let Some(m) = m {
+            if !(1..=12).contains(&m) {
+                eprintln!("Invalid month in date range {input}: {m}");
+                std::process::exit(1);
+            }
+            if let Some(d) = d
+                && (d == 0 || d > last_day(y, m))
+            {
+                eprintln!("Invalid day in date range {input}: {y}-{m:02}-{d:02}");
+                std::process::exit(1);
+            }
+        }
+    };
+
     let (sy, sm, sd) = parse_part(start_str);
+    validate(sy, sm, sd);
     let start_mm = sm.unwrap_or(if sy == 2026 { 4 } else { 1 });
     let start_dd = sd.unwrap_or(if sy == 2026 && sm.is_none() { 19 } else { 1 });
 
@@ -87,6 +107,7 @@ fn parse_date_range(input: &str) -> DateRange {
     } else {
         (sy, sm, sd)
     };
+    validate(ey, em, ed);
 
     if sy != ey {
         eprintln!("Date range must not cross year boundaries: {input}");
