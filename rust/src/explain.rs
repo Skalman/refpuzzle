@@ -1589,6 +1589,553 @@ pub fn explain_force(
     steps
 }
 
+/// Highest lower bound on the count of `letter_index` implied by a sibling
+/// CountAnswer/Before/After question — `(src_qi, floor)`. Mirrors
+/// `findCountFloorSource` (and `CountBounds::floor` in deduce.rs).
+fn find_count_floor_source(
+    fp: &FlatPuzzle,
+    state: &State,
+    letter_index: usize,
+) -> Option<(usize, u8)> {
+    let target = LETTERS[letter_index];
+    let mut best: Option<(usize, u8)> = None;
+    for src in 0..fp.n {
+        if !matches!(
+            fp.question_types[src],
+            QuestionType::CountAnswer { answer }
+                | QuestionType::CountAnswerBefore { answer, .. }
+                | QuestionType::CountAnswerAfter { answer, .. }
+            if answer == target
+        ) {
+            continue;
+        }
+        // Smallest still-possible option value = lower bound on this count.
+        let lo = match state.answers[src] {
+            Some(ans) => option_value_at(fp, src, ans),
+            None => (0..fp.option_count)
+                .filter(|&oi| !is_elim(&state.eliminated, src, oi) && fp.options[src][oi].is_num())
+                .map(|oi| fp.options[src][oi].value())
+                .min(),
+        };
+        if let Some(lo) = lo
+            && best.is_none_or(|(_, floor)| lo > floor)
+        {
+            best = Some((src, lo));
+        }
+    }
+    best
+}
+
+/// Lowest upper bound on the count of `letter_index` from a sibling full-range
+/// CountAnswer — `(src_qi, ceil)`. Mirrors `findCountCeilSource` (Before/After
+/// bound only a sub-range, so they can't cap the total).
+fn find_count_ceil_source(
+    fp: &FlatPuzzle,
+    state: &State,
+    letter_index: usize,
+) -> Option<(usize, u8)> {
+    let target = LETTERS[letter_index];
+    let mut best: Option<(usize, u8)> = None;
+    for src in 0..fp.n {
+        if !matches!(fp.question_types[src], QuestionType::CountAnswer { answer } if answer == target)
+        {
+            continue;
+        }
+        let hi = match state.answers[src] {
+            Some(ans) => option_value_at(fp, src, ans),
+            None => (0..fp.option_count)
+                .filter(|&oi| !is_elim(&state.eliminated, src, oi) && fp.options[src][oi].is_num())
+                .map(|oi| fp.options[src][oi].value())
+                .max(),
+        };
+        if let Some(hi) = hi
+            && best.is_none_or(|(_, ceil)| hi < ceil)
+        {
+            best = Some((src, hi));
+        }
+    }
+    best
+}
+
+/// A positional question (first/last/closest/prev-next-same) whose range rules
+/// `letter` out at `qi` — `(src_qi, prose)`. Mirrors `findPositionalRangeSource`.
+fn find_positional_range_source(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    oi: usize,
+) -> Option<(usize, String)> {
+    let n = fp.n;
+    let letter = LETTERS[oi];
+    let answers = &state.answers;
+    for src in 0..n {
+        if src == qi {
+            continue;
+        }
+        let src_qt = fp.question_types[src];
+        // Forward positional: first/closest-after `letter` sits at or past `qi`.
+        if matches!(src_qt, QuestionType::FirstWith { answer } | QuestionType::ClosestAfter { answer, .. } if answer == letter)
+        {
+            let label = if matches!(src_qt, QuestionType::FirstWith { .. }) {
+                "first"
+            } else {
+                "closest"
+            };
+            match answers[src] {
+                Some(src_ans) => {
+                    if let Some(v) = option_value_at(fp, src, src_ans)
+                        && qi < v as usize
+                    {
+                        return Some((
+                            src,
+                            format!(
+                                "{} says {label} {letter} is {}, so {} can't be {letter}.",
+                                q(src),
+                                q(v as usize),
+                                q(qi)
+                            ),
+                        ));
+                    }
+                }
+                None => {
+                    let mut min_pos = n;
+                    for si in 0..5 {
+                        if is_elim(&state.eliminated, src, si) {
+                            continue;
+                        }
+                        let o = fp.options[src][si];
+                        if o.is_num() && (o.value() as usize) < min_pos {
+                            min_pos = o.value() as usize;
+                        }
+                    }
+                    return Some((
+                        src,
+                        format!(
+                            "{}'s remaining options for {label} {letter} are all at {} or later, so earlier questions can't be {letter}.",
+                            q(src),
+                            q(min_pos)
+                        ),
+                    ));
+                }
+            }
+        }
+        // Backward positional: last/closest-before `letter` sits at or before `qi`.
+        if matches!(src_qt, QuestionType::LastWith { answer } | QuestionType::ClosestBefore { answer, .. } if answer == letter)
+        {
+            let label = if matches!(src_qt, QuestionType::LastWith { .. }) {
+                "last"
+            } else {
+                "closest"
+            };
+            match answers[src] {
+                Some(src_ans) => {
+                    if let Some(v) = option_value_at(fp, src, src_ans)
+                        && qi > v as usize
+                    {
+                        return Some((
+                            src,
+                            format!(
+                                "{} says {label} {letter} is {}, so {} can't be {letter}.",
+                                q(src),
+                                q(v as usize),
+                                q(qi)
+                            ),
+                        ));
+                    }
+                }
+                None => {
+                    let mut max_pos: i32 = -1;
+                    for si in 0..5 {
+                        if is_elim(&state.eliminated, src, si) {
+                            continue;
+                        }
+                        let o = fp.options[src][si];
+                        if o.is_num() && (o.value() as i32) > max_pos {
+                            max_pos = o.value() as i32;
+                        }
+                    }
+                    return Some((
+                        src,
+                        format!(
+                            "{}'s remaining options for {label} {letter} are all at {} or earlier, so later questions can't be {letter}.",
+                            q(src),
+                            q(max_pos.max(0) as usize)
+                        ),
+                    ));
+                }
+            }
+        }
+        if matches!(src_qt, QuestionType::NextSame)
+            && answers[src] == Some(letter)
+            && let Some(v) = option_value_at(fp, src, letter)
+            && qi > src
+            && qi < v as usize
+        {
+            return Some((
+                src,
+                format!(
+                    "{} is {letter} and says next same answer is {}, so {} can't be {letter}.",
+                    q(src),
+                    q(v as usize),
+                    q(qi)
+                ),
+            ));
+        }
+        if matches!(src_qt, QuestionType::PrevSame)
+            && answers[src] == Some(letter)
+            && let Some(v) = option_value_at(fp, src, letter)
+            && qi > v as usize
+            && qi < src
+        {
+            return Some((
+                src,
+                format!(
+                    "{} is {letter} and says previous same answer is {}, so {} can't be {letter}.",
+                    q(src),
+                    q(v as usize),
+                    q(qi)
+                ),
+            ));
+        }
+    }
+    None
+}
+
+/// A sibling count question already at its stated count (so `qi` can't add
+/// another match), or one short (so `qi` must match) — `(src_qi, prose)`.
+/// Mirrors `explainCountSaturation`.
+fn explain_count_saturation(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    oi: usize,
+) -> Option<(usize, String)> {
+    let n = fp.n;
+    let letter = LETTERS[oi];
+    for src in 0..n {
+        let Some(ans) = state.answers[src] else {
+            continue;
+        };
+        let src_qt = fp.question_types[src];
+        let Some(pred) = count_pred(&src_qt) else {
+            continue;
+        };
+        let Some(value) = option_value_at(fp, src, ans) else {
+            continue;
+        };
+        let (from, to) = count_range(&src_qt, n);
+        let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
+        if cr.count == value && pred.matches(letter) {
+            return Some((
+                src,
+                format!(
+                    "{} says there are {value} {}. There are already {value}, so {} can't also be {letter}.",
+                    q(src),
+                    count_rule_label(&src_qt, value),
+                    q(qi)
+                ),
+            ));
+        }
+        if cr.count + cr.remaining == value && cr.remaining > 0 && !pred.matches(letter) {
+            return Some((
+                src,
+                format!(
+                    "{} says there are {value} {}. Only {} found so far, and all remaining unknowns must match — so {} can't be {letter}.",
+                    q(src),
+                    count_rule_label(&src_qt, value),
+                    cr.count,
+                    q(qi)
+                ),
+            ));
+        }
+    }
+    None
+}
+
+/// The narrated steps for eliminating option `oi` of question `qi` (via `rule`).
+/// Mirrors the TS `explainElimination`.
+pub fn explain_elimination(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    oi: usize,
+    rule: DeduceRule,
+) -> Vec<ExplainStep> {
+    let letter = LETTERS[oi];
+    let qt = fp.question_types[qi];
+    let value = fp.options[qi][oi];
+    let n = fp.n;
+    let answers = &state.answers;
+    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+    let what_if = || simple(format!("What if {} is {letter}?", q(qi)));
+
+    if matches!(
+        rule,
+        DeduceRule::CountSaturated | DeduceRule::CountMustMatchElim
+    ) {
+        if let Some((src_qi, text)) = explain_count_saturation(fp, state, qi, oi) {
+            steps.push(try_looking(&[qi, src_qi]));
+            steps.push(what_if());
+            steps.push(simple(text));
+        } else {
+            steps.push(what_if());
+            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
+        }
+        return steps;
+    }
+
+    if matches!(
+        rule,
+        DeduceRule::PositionalRangeAnswered | DeduceRule::PositionalRangeUnanswered
+    ) {
+        if let Some((src_qi, text)) = find_positional_range_source(fp, state, qi, oi) {
+            steps.push(try_looking(&[src_qi, qi]));
+            steps.push(simple(text));
+        } else {
+            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
+        }
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementClaimInvalid) {
+        if let Some(claim) = fp.claim_at(qi, oi) {
+            match claim.question_type {
+                QuestionType::FirstWith { answer } | QuestionType::LastWith { answer }
+                    if claim.value.is_num()
+                        && (claim.value.value() as usize) < n
+                        && answers[claim.value.value() as usize].is_some() =>
+                {
+                    let target = claim.value.value() as usize;
+                    let target_ans = answers[target].unwrap();
+                    steps.push(try_looking(&[qi, target]));
+                    steps.push(what_if());
+                    steps.push(simple(format!(
+                        "{} option {letter}'s statement says {} has answer {answer}, but {} is {target_ans}.",
+                        q(qi), q(target), q(target)
+                    )));
+                    return steps;
+                }
+                QuestionType::AnswerOf { question_index }
+                    if (question_index as usize) < n
+                        && answers[question_index as usize].is_some() =>
+                {
+                    let k = question_index as usize;
+                    let k_ans = answers[k].unwrap();
+                    steps.push(try_looking(&[qi, k]));
+                    steps.push(what_if());
+                    steps.push(simple(format!(
+                        "{} option {letter}'s statement says {}'s answer is {}, but {} is {k_ans}.",
+                        q(qi),
+                        q(k),
+                        LETTERS[claim.value.value() as usize],
+                        q(k)
+                    )));
+                    return steps;
+                }
+                _ => {}
+            }
+        }
+        steps.push(what_if());
+        steps.push(simple(format!(
+            "{} option {letter}'s statement is contradicted by the current answers.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementSelfRef) {
+        if let Some(claim) = fp.claim_at(qi, oi) {
+            match claim.question_type {
+                QuestionType::FirstWith { answer } | QuestionType::LastWith { answer }
+                    if claim.value.is_num() && claim.value.value() as usize == qi =>
+                {
+                    steps.push(what_if());
+                    steps.push(simple(format!(
+                        "{} option {letter}'s statement says {} has answer {answer}, but that contradicts {} being {letter}.",
+                        q(qi), q(qi), q(qi)
+                    )));
+                    return steps;
+                }
+                QuestionType::AnswerOf { question_index } if question_index as usize == qi => {
+                    steps.push(what_if());
+                    steps.push(simple(format!(
+                        "{} option {letter}'s statement says {}'s answer is {}, but that contradicts {} being {letter}.",
+                        q(qi), q(qi), LETTERS[claim.value.value() as usize], q(qi)
+                    )));
+                    return steps;
+                }
+                _ => {}
+            }
+        }
+        steps.push(what_if());
+        steps.push(simple(format!(
+            "{} option {letter}'s statement contradicts itself.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::OnlySameNoneForward) {
+        for src in 0..n {
+            if !matches!(fp.question_types[src], QuestionType::OnlySame) {
+                continue;
+            }
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            // Only the "none" option (no numeric value) claims uniqueness.
+            if option_value_at(fp, src, src_ans).is_some() {
+                continue;
+            }
+            if src_ans == letter {
+                steps.push(try_looking(&[qi, src]));
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "{} is {letter} and claims no other question shares that answer, so {} can't be {letter}.",
+                    q(src), q(qi)
+                )));
+                return steps;
+            }
+        }
+    }
+
+    if matches!(rule, DeduceRule::ConsecIdentForwardElim) {
+        for src in 0..n {
+            if !matches!(fp.question_types[src], QuestionType::ConsecIdent) {
+                continue;
+            }
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            let Some(start) = option_value_at(fp, src, src_ans) else {
+                continue;
+            };
+            let p = start as usize;
+            if p == qi || p + 1 == qi {
+                let partner = if p == qi { p + 1 } else { p };
+                steps.push(try_looking(&[qi, partner, src]));
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "{} says {} and {} must have the same answer, but {letter} is ruled out for {}.",
+                    q(src), q(p), q(p + 1), q(partner)
+                )));
+                return steps;
+            }
+        }
+    }
+
+    if matches!(rule, DeduceRule::ConsecIdentReverse) {
+        for src in 0..n {
+            if !matches!(fp.question_types[src], QuestionType::ConsecIdent) {
+                continue;
+            }
+            let neighbor = if qi > 0 && answers[qi - 1] == Some(letter) {
+                Some(qi - 1)
+            } else if qi + 1 < n && answers[qi + 1] == Some(letter) {
+                Some(qi + 1)
+            } else {
+                None
+            };
+            if let Some(neighbor) = neighbor {
+                steps.push(try_looking(&[qi, neighbor, src]));
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "{} and {} would both be {letter}, creating a consecutive pair — but {}'s remaining options don't allow that pair.",
+                    q(qi), q(neighbor), q(src)
+                )));
+            } else {
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "That would create a consecutive pair not allowed by {}'s remaining options.",
+                    q(src)
+                )));
+            }
+            return steps;
+        }
+    }
+
+    if matches!(
+        rule,
+        DeduceRule::VowelCrossElim | DeduceRule::ConsonantCrossElim
+    ) {
+        steps.push(what_if());
+        steps.push(simple(format!(
+            "{} option {letter}: no compatible option exists on the other counting rule.",
+            q(qi)
+        )));
+        return steps;
+    }
+
+    if matches!(rule, DeduceRule::LeastCommonCountFloor) && value.is_num() && value.value() < 5 {
+        let claimed = LETTERS[value.value() as usize];
+        if let Some((src_qi, floor)) = find_count_floor_source(fp, state, value.value() as usize) {
+            let src_qt = fp.question_types[src_qi];
+            steps.push(try_looking(&[qi, src_qi]));
+            steps.push(what_if());
+            steps.push(simple(format!(
+                "{} means there are at least {floor} {}, so {claimed} appears too often to be the least common.",
+                q(src_qi), count_rule_label(&src_qt, floor)
+            )));
+            return steps;
+        }
+        // No count-question floor: fall through to the cell-based explanation.
+    }
+
+    if matches!(rule, DeduceRule::MostCommonCountCeil) && value.is_num() && value.value() < 5 {
+        let claimed = LETTERS[value.value() as usize];
+        if let Some((src_qi, ceil)) = find_count_ceil_source(fp, state, value.value() as usize) {
+            let src_qt = fp.question_types[src_qi];
+            steps.push(try_looking(&[qi, src_qi]));
+            steps.push(what_if());
+            steps.push(simple(format!(
+                "{} means there are at most {ceil} {}, so {claimed} appears too rarely to be the most common.",
+                q(src_qi), count_rule_label(&src_qt, ceil)
+            )));
+            return steps;
+        }
+        // No count-question ceiling: fall through to the cell-based explanation.
+    }
+
+    if matches!(rule, DeduceRule::TrueStatementMatchElim) {
+        let claim = fp.claim_at(qi, oi);
+        let k = claim.and_then(|c| find_claim_match_question(fp, qi, &c));
+        if let Some(k) = k {
+            steps.push(try_looking(&[qi, k]));
+        }
+        steps.push(what_if());
+        steps.push(simple(match (claim, k) {
+            (Some(c), Some(k)) => format!(
+                "{}'s option {letter} is the statement \"{}\", but {} rules that out — so it can't be the true statement.",
+                q(qi), claim_label(&c), q(k)
+            ),
+            _ => format!(
+                "{} option {letter}'s statement can't be true, so it's not the answer.",
+                q(qi)
+            ),
+        }));
+        return steps;
+    }
+
+    // Generic fallback: the per-type elimination reason.
+    let detail = explain_elim_detail(&qt, qi, oi, value, state, n);
+    if let Some(other) = detail.as_ref().and_then(|d| d.other_qi) {
+        steps.push(try_looking(&[qi, other]));
+    }
+    steps.push(what_if());
+    match detail {
+        Some(d) => steps.push(simple(d.text)),
+        None => {
+            debug_assert!(
+                false,
+                "no explain_elim_detail for {} option {letter:?} (rule {rule:?})",
+                qi + 1
+            );
+            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
+        }
+    }
+    steps
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1733,6 +2280,54 @@ mod tests {
                 simple("Try looking at #1.".into()),
                 simple("Try looking at #1 and #2.".into()),
                 simple("#1 asks for #2's answer. #2 is B, so #1 must be B.".into()),
+            ]
+        );
+    }
+
+    #[test]
+    fn elimination_vowel_cross() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "CountVowel"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, None]);
+        let steps = explain_elimination(&fp, &state, 0, 1, DeduceRule::VowelCrossElim);
+        assert_eq!(
+            steps,
+            vec![
+                simple("Try looking at #1.".into()),
+                simple("What if #1 is B?".into()),
+                simple(
+                    "#1 option B: no compatible option exists on the other counting rule.".into()
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn elimination_generic_falls_through_to_elim_detail() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "FirstWith", "a": 0}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // Option C (claims first A is #3) with #2 already A ⇒ earlier match. A
+        // non-special elim rule routes through explain_elim_detail; other_qi = 1
+        // adds the second "Try looking" step.
+        let state = state_with(&fp, &[None, Some(Answer::A), None]);
+        let steps =
+            explain_elimination(&fp, &state, 0, 2, DeduceRule::FirstClosestAfterEarlierMatch);
+        assert_eq!(
+            steps,
+            vec![
+                simple("Try looking at #1.".into()),
+                simple("Try looking at #1 and #2.".into()),
+                simple("What if #1 is C?".into()),
+                simple(
+                    "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."
+                        .into()
+                ),
             ]
         );
     }
