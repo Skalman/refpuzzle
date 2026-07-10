@@ -102,7 +102,7 @@ fn probe_candidate(
     hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
 
     let mut chain = ArrayVec::new();
-    let mut contradiction = false;
+    let mut contradiction_qi = None;
     while chain.len() < lookahead_deduce_until {
         *deduce_calls += 1;
         let mut drs = if full {
@@ -115,8 +115,13 @@ fn probe_candidate(
         }
         drs.sort_by_key(|dr| dr.rule as u8);
         for dr in &drs {
-            if has_contradiction(&dr.action, &hyp) {
-                contradiction = true;
+            // A rule whose conclusion conflicts with `hyp` refutes the hypothesis.
+            // Report the question where the conflict surfaces (the action's target),
+            // not the assumption `qi` — the explain layer renders "Q{contradiction_qi}
+            // would be invalid" against the replayed chain state, and naming the
+            // assumption (which is trivially consistent) yields a false generic hint.
+            if let Some(cqi) = contradiction_question(&dr.action, &hyp) {
+                contradiction_qi = Some(cqi);
                 break;
             }
             apply_action(&dr.action, &mut hyp);
@@ -124,7 +129,7 @@ fn probe_candidate(
                 chain.push(*dr);
             }
         }
-        if contradiction {
+        if contradiction_qi.is_some() {
             break;
         }
     }
@@ -140,8 +145,8 @@ fn probe_candidate(
         })
     };
 
-    if contradiction {
-        return result(qi);
+    if let Some(cqi) = contradiction_qi {
+        return result(cqi);
     }
     for check_qi in 0..n {
         if hyp.answers[check_qi].is_none() {
@@ -157,13 +162,22 @@ fn probe_candidate(
     None
 }
 
-fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
+/// If `action`'s conclusion conflicts with `hyp` — a `Force` to a cell already
+/// answered otherwise or whose target option is eliminated, or an
+/// `Eliminate`/`EliminateMulti` striking a cell's current answer — the question
+/// where the conflict surfaces. `None` if the action is consistent with `hyp`.
+/// Sibling of `solve_deduce::contradiction_qi`, but also flags the
+/// forced-onto-eliminated case that one omits.
+fn contradiction_question(action: &DeduceAction, hyp: &State) -> Option<usize> {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            (hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer))
-                || (hyp.eliminated[qi] >> answer.idx()) & 1 == 1
+            let conflicts = (hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer))
+                || (hyp.eliminated[qi] >> answer.idx()) & 1 == 1;
+            conflicts.then_some(qi)
         }
-        DeduceAction::Eliminate { qi, oi } => hyp.answers[qi] == Some(Answer::from(oi as u8)),
+        DeduceAction::Eliminate { qi, oi } => {
+            (hyp.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
+        }
         DeduceAction::EliminateMulti {
             question_mask,
             option_mask,
@@ -175,10 +189,10 @@ fn has_contradiction(action: &DeduceAction, hyp: &State) -> bool {
                 if let Some(a) = hyp.answers[i]
                     && (option_mask >> a.idx()) & 1 == 1
                 {
-                    return true;
+                    return Some(i);
                 }
             }
-            false
+            None
         }
     }
 }
@@ -287,5 +301,93 @@ mod tests {
 
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
+
+    /// A contradiction is attributed to the conflicting action's target question,
+    /// not the assumption; the forced-onto-eliminated case (which
+    /// `solve_deduce::contradiction_qi` omits) is still detected.
+    #[test]
+    fn contradiction_question_reports_the_conflicting_target() {
+        let mut st = State {
+            answers: [None; MAX_N],
+            eliminated: [0; MAX_N],
+        };
+        st.answers[3] = Some(Answer::B);
+        st.eliminated[3] = 0b11111 ^ (1 << Answer::B.idx());
+        st.answers[5] = Some(Answer::C);
+        st.eliminated[5] = 0b11111 ^ (1 << Answer::C.idx());
+
+        // Force onto a cell answered otherwise → that cell.
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 3,
+                    answer: Answer::A
+                },
+                &st
+            ),
+            Some(3)
+        );
+        // Force onto a cell whose target option is eliminated (cell unanswered) →
+        // that cell. This is the case solve_deduce's twin misses.
+        let mut st_elim = State {
+            answers: [None; MAX_N],
+            eliminated: [0; MAX_N],
+        };
+        st_elim.eliminated[2] = 1 << Answer::A.idx();
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 2,
+                    answer: Answer::A
+                },
+                &st_elim
+            ),
+            Some(2)
+        );
+        // Eliminate striking a cell's current answer → that cell.
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Eliminate {
+                    qi: 5,
+                    oi: Answer::C.idx()
+                },
+                &st
+            ),
+            Some(5)
+        );
+        // EliminateMulti → the lowest conflicting question in the mask (both 3 and 5
+        // conflict here).
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::EliminateMulti {
+                    question_mask: (1 << 3) | (1 << 5),
+                    option_mask: (1 << Answer::B.idx()) | (1 << Answer::C.idx()),
+                },
+                &st
+            ),
+            Some(3)
+        );
+        // Consistent actions → None (no false contradiction).
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 3,
+                    answer: Answer::B
+                },
+                &st
+            ),
+            None
+        );
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Eliminate {
+                    qi: 3,
+                    oi: Answer::A.idx()
+                },
+                &st
+            ),
+            None
+        );
     }
 }
