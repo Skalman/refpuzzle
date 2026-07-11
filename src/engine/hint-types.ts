@@ -94,17 +94,16 @@ export interface DeduceResult {
   rule: DeduceRule;
 }
 
-export interface LookaheadResult {
-  /**
-   * The disproven hypothesis — "suppose question `assumptionQi` were
-   * `assumptionAnswer`". Because that assumption leads to a contradiction, this
-   * is also the option the hint eliminates: the assumed option and the
-   * eliminated option are always the same in this lookahead.
-   */
-  assumptionQi: number;
-  assumptionAnswer: Answer;
-  /** The deduction steps from the assumption to the contradiction. */
-  chain: DeduceResult[];
-  /** The question at which the contradiction surfaced (may differ from `assumptionQi`). */
-  contradictionQi: number;
+/** One rendered hint step, produced by the Rust explain layer (via wasm) and
+ *  rendered by `HintStep`: a single line, or a headed block of lines. */
+export type ExplainStep =
+  | { type: "simple"; text: string }
+  | { type: "complex"; header: string; lines: string[] };
+
+/** One solving step plus its rendered explanation — the unit the hint UI
+ *  renders (`explain`) and the tutorial walks (applies `action`, narrates
+ *  `explain`). The step is a deduction, or a lookahead elimination. */
+export interface SolveStep {
+  action: DeduceAction;
+  explain: ExplainStep[];
 }

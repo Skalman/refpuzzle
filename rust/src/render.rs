@@ -1,6 +1,6 @@
 //! Human-readable text for questions, options, and TrueStmt claims — the prose
-//! shown on the board. Single source of truth (the TS `render.ts` is a
-//! faithful mirror being retired); `explain` builds on `claim_label`.
+//! shown on the board. The single source of truth (the frontend renders the
+//! board through the wasm boundary); `explain` builds on `claim_label`.
 
 use crate::types::*;
 

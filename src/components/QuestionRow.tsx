@@ -2,7 +2,7 @@ import { memo } from "preact/compat";
 import type { QuestionDef, QuestionType, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
-import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../engine/render.ts";
+import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "../lib/wasm.ts";
 import { useQuestionHighlight } from "./TutorialHighlight.ts";
 import { OptionButton } from "./OptionButton.tsx";
 
@@ -47,10 +47,10 @@ export const QuestionRow = memo(
       if (trueStmtQuestionTypes && rule.type === "TrueStmt") {
         return renderClaimLabel({
           questionType: trueStmtQuestionTypes[oi],
-          value: opt.value ?? -1,
+          value: opt.value,
         });
       }
-      return renderOptionLabel(rule, opt.value, oi);
+      return renderOptionLabel(rule, opt.value);
     });
     const isLong = labels.some((l) => l.length > LONG_THRESHOLD);
     const hasCorrect = marks.indexOf("correct") >= 0;

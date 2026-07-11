@@ -1,8 +1,7 @@
 import { useRef, useState, useEffect } from "preact/hooks";
 import type { Answer, Puzzle } from "../engine/types.ts";
-import { letterIdx, getFlatPuzzle } from "../engine/types.ts";
-import { explainDeduce, explainLookahead } from "../engine/explain.ts";
-import type { ExplainStep } from "../engine/explain.ts";
+import { letterIdx } from "../engine/types.ts";
+import type { ExplainStep } from "../engine/hint-types.ts";
 import { deriveState } from "../engine/state.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
@@ -68,27 +67,14 @@ export function useHintEngine(
   function computeHint(): { steps: ExplainStep[] } | null {
     const handle = optsRef.current.handleRef.current;
     if (!handle) return null;
-    const fp = getFlatPuzzle(puzzle);
     const markSets = optsRef.current.questionsRef.current.map((q) => q.marks);
-    const state = deriveState(markSets, puzzle.optionCount);
-    const { answers, eliminated } = state;
+    const { answers, eliminated } = deriveState(markSets, puzzle.optionCount);
 
     const errorSteps = findError(answers, eliminated);
     if (errorSteps) return { steps: errorSteps };
 
-    const drs = handle.deduce(markSets, puzzle.optionCount ?? 5);
-    if (drs.length > 0) {
-      return { steps: explainDeduce(puzzle, fp, answers, eliminated, drs[0]) };
-    }
-
-    const t0 = performance.now();
-    const lr = handle.lookaheadShortest(markSets, puzzle.optionCount ?? 5);
-    console.log(
-      `lookahead: ${(performance.now() - t0).toFixed(1)}ms, chain=${lr?.chain.length ?? "-"}`,
-    );
-    if (lr) return { steps: explainLookahead(puzzle, fp, answers, eliminated, lr) };
-
-    return null;
+    const step = handle.nextStep(answers, eliminated);
+    return step ? { steps: step.explain } : null;
   }
 
   useEffect(() => {

@@ -50,7 +50,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
       if (cancelled) return;
       const handle = optsRef.current.handleRef.current;
       if (!handle) return;
-      setSteps(collectTutorialSteps(puzzle, getFlatPuzzle(puzzle), handle));
+      setSteps(collectTutorialSteps(getFlatPuzzle(puzzle), handle));
     })();
     return () => {
       cancelled = true;

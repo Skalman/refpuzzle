@@ -1,9 +1,11 @@
-//! Human-readable hint prose. Single source of truth (the TS `explain.ts` is a
-//! faithful mirror being retired). Built on the engine's own primitives
+//! Human-readable hint prose — the single source of truth (the frontend calls
+//! this through the wasm boundary). Built on the engine's own primitives
 //! (`check_answer` counts, `render` text) so the wording can't drift from what
 //! the solver actually computes.
 
 use std::collections::BTreeSet;
+
+use serde::Serialize;
 
 use crate::check_answer::{count_matching, count_pred, count_range};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
@@ -11,9 +13,11 @@ use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};
 use crate::types::*;
 
-/// One rendered hint step: a single line, or a headed block of lines. Mirrors
-/// the TS `ExplainStep`.
-#[derive(Debug, PartialEq)]
+/// One rendered hint step: a single line, or a headed block of lines. Serializes
+/// to the wire shape the UI's `HintStep` renders: `{ type: "simple", text }` or
+/// `{ type: "complex", header, lines }`.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
 pub enum ExplainStep {
     Simple { text: String },
     Complex { header: String, lines: Vec<String> },

@@ -1,8 +1,6 @@
-import type { Answer, FlatPuzzle, Puzzle } from "./types.ts";
+import type { Answer, FlatPuzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
-import type { DeduceResult } from "./hint-types.ts";
-import { explainDeduce } from "./explain.ts";
-import type { ExplainStep } from "./explain.ts";
+import type { DeduceAction, ExplainStep } from "./hint-types.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
 
 export type TutorialStep =
@@ -20,18 +18,14 @@ export type TutorialStep =
     }
   | {
       kind: "deduce";
-      action: DeduceResult["action"];
+      action: DeduceAction;
       explain: ExplainStep[];
       questionIndex: number;
       optionIndex: number;
       isForce: boolean;
     };
 
-export function collectTutorialSteps(
-  puzzle: Puzzle,
-  fp: FlatPuzzle,
-  handle: PuzzleHandle,
-): TutorialStep[] {
+export function collectTutorialSteps(fp: FlatPuzzle, handle: PuzzleHandle): TutorialStep[] {
   const n = fp.n;
   const oc = fp.optionCount;
   const phantomMask = 0b11111 & ~((1 << oc) - 1);
@@ -80,27 +74,20 @@ export function collectTutorialSteps(
   for (let iter = 0; iter < n * 30; iter++) {
     if (answers.every((a) => a != null)) break;
 
-    // wasm `deduce` already returns sorted (matches the TS engine's
-    // canonical rule order, see `Puzzle::deduce` in rust/src/lib.rs).
-    const drs = handle.deduceWithState(answers, eliminated);
-    if (drs.length === 0) break;
+    // The next solving step: a deduction if available, else a lookahead
+    // elimination (see `Puzzle::next_step`). Null once the puzzle is solved.
+    const step = handle.nextStep(answers, eliminated);
+    if (!step) break;
+    const { action, explain } = step;
 
-    const dr = drs[0];
-    let explain: ExplainStep[];
-    try {
-      explain = explainDeduce(puzzle, fp, answers, eliminated, dr);
-    } catch {
-      explain = [];
-    }
-
-    if (dr.action.type === "eliminateMulti") {
+    if (action.type === "eliminateMulti") {
       for (let i = 0; i < n; i++) {
-        if ((dr.action.questionMask >> i) & 1) {
+        if ((action.questionMask >> i) & 1) {
           for (let b = 0; b < oc; b++) {
-            if ((dr.action.optionMask >> b) & 1 && !((eliminated[i] >> b) & 1)) {
+            if ((action.optionMask >> b) & 1 && !((eliminated[i] >> b) & 1)) {
               steps.push({
                 kind: "deduce",
-                action: dr.action,
+                action,
                 explain,
                 questionIndex: i,
                 optionIndex: b,
@@ -111,30 +98,30 @@ export function collectTutorialSteps(
         }
       }
       for (let i = 0; i < n; i++) {
-        if ((dr.action.questionMask >> i) & 1) eliminated[i] |= dr.action.optionMask;
+        if ((action.questionMask >> i) & 1) eliminated[i] |= action.optionMask;
       }
-    } else if (dr.action.type === "force") {
+    } else if (action.type === "force") {
       steps.push({
         kind: "deduce",
-        action: dr.action,
+        action,
         explain,
-        questionIndex: dr.action.qi,
-        optionIndex: letterIdx(dr.action.answer),
+        questionIndex: action.qi,
+        optionIndex: letterIdx(action.answer),
         isForce: true,
       });
-      const fOi = letterIdx(dr.action.answer);
-      eliminated[dr.action.qi] = 0b11111 ^ (1 << fOi);
-      answers[dr.action.qi] = dr.action.answer;
-    } else if (dr.action.type === "eliminate") {
+      const fOi = letterIdx(action.answer);
+      eliminated[action.qi] = 0b11111 ^ (1 << fOi);
+      answers[action.qi] = action.answer;
+    } else if (action.type === "eliminate") {
       steps.push({
         kind: "deduce",
-        action: dr.action,
+        action,
         explain,
-        questionIndex: dr.action.qi,
-        optionIndex: dr.action.oi,
+        questionIndex: action.qi,
+        optionIndex: action.oi,
         isForce: false,
       });
-      eliminated[dr.action.qi] |= 1 << dr.action.oi;
+      eliminated[action.qi] |= 1 << action.oi;
     }
   }
 

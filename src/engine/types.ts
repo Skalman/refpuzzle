@@ -43,17 +43,6 @@ export interface OptionDef {
   value: number | null;
 }
 
-/**
- * Helper carrier for the `(question_type, value)` pair. Used as a function
- * return/argument by `checkClaim`, `checkClaimFast`, `renderClaimLabel`, and
- * the generator's claim builders. Never persisted — claims live in the
- * puzzle as `trueStmtQuestionTypes[oi]` + `options[oi].value`.
- */
-export interface Claim {
-  questionType: QuestionType;
-  value: number;
-}
-
 export interface State {
   answers: (Answer | null)[];
   eliminated: number[];
@@ -244,21 +233,6 @@ export interface FlatPuzzle {
   globalIndices: number[]; // indices of questions with global rules (need all answers)
   n: number;
   optionCount: number;
-}
-
-/**
- * Reconstruct the claim at TrueStmt option `(qi, oi)`. Returns `null` if
- * `qi` is not the TrueStmt question, if the puzzle has no TrueStmt, or if
- * `oi` is outside the active option count. Maps the in-memory `null = NONE`
- * convention to the Claim helper's `-1 = NONE` sentinel.
- */
-export function claimAt(fp: FlatPuzzle, qi: number, oi: number): Claim | null {
-  if (fp.questions[qi].t !== QT_TRUE_STMT) return null;
-  const types = fp.trueStmtQuestionTypes;
-  if (!types) return null;
-  if (oi >= fp.optionCount) return null;
-  const value = fp.optionValues[qi][oi];
-  return { questionType: types[oi], value: value ?? -1 };
 }
 
 const GLOBAL_RULE_IDS = new Set<QuestionTypeId>([

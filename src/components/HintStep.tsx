@@ -1,4 +1,4 @@
-import type { ExplainStep } from "../engine/explain.ts";
+import type { ExplainStep } from "../engine/hint-types.ts";
 
 export function HintStep({ step }: { step: ExplainStep }) {
   if (step.type === "complex") {

@@ -10,7 +10,7 @@ import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
 // QR components lazy-loaded via dynamic import (no preact dependency in chunks)
 import type { Puzzle } from "./engine/types.ts";
-import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./engine/render.ts";
+import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./lib/wasm.ts";
 import {
   fetchDaily,
   dayNumber,
@@ -462,8 +462,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
                     q.questionType.type === "TrueStmt" ? p.trueStmtQuestionTypes : undefined;
                   const labels = q.options.map((opt, oi) =>
                     tsTypes
-                      ? renderClaimLabel({ questionType: tsTypes[oi], value: opt.value ?? -1 })
-                      : renderOptionLabel(q.questionType, opt.value, oi),
+                      ? renderClaimLabel({ questionType: tsTypes[oi], value: opt.value })
+                      : renderOptionLabel(q.questionType, opt.value),
                   );
                   return (
                     // oxlint-disable-next-line react/no-array-index-key

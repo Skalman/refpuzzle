@@ -1,10 +1,13 @@
 import init, {
   Puzzle as WasmPuzzle,
   generatePuzzle as wasmGeneratePuzzle,
+  questionText as wasmQuestionText,
+  optionLabel as wasmOptionLabel,
+  claimLabel as wasmClaimLabel,
 } from "../../rust/pkg/refpuzzle.js";
 import type { Puzzle, QuestionType, Marks, Answer } from "../engine/types.ts";
 import { L2I } from "../engine/types.ts";
-import type { DeduceResult, LookaheadResult } from "../engine/hint-types.ts";
+import type { SolveStep } from "../engine/hint-types.ts";
 import type { Validity } from "../engine/state.ts";
 import {
   V_NEUTRAL,
@@ -88,6 +91,25 @@ function toCompactPuzzle(p: Puzzle): CompactPuzzle {
   return t ? { q, o, t } : { q, o };
 }
 
+// ── Board text rendering, delegated to Rust via wasm. The compact question
+// type crosses as JSON (the shape Rust's parse_puzzle reads). Callers must have
+// awaited wasmReady — main.tsx gates the first render on it.
+
+export function renderQuestionText(qt: QuestionType): string {
+  return wasmQuestionText(JSON.stringify(compactQuestion(qt)));
+}
+
+export function renderOptionLabel(qt: QuestionType, value: number | null): string {
+  return wasmOptionLabel(JSON.stringify(compactQuestion(qt)), value);
+}
+
+export function renderClaimLabel(claim: {
+  questionType: QuestionType;
+  value: number | null;
+}): string {
+  return wasmClaimLabel(JSON.stringify(compactQuestion(claim.questionType)), claim.value);
+}
+
 function validityFromU8(v: number): Validity {
   switch (v) {
     case 0:
@@ -110,11 +132,11 @@ const handleRegistry = new FinalizationRegistry<WasmPuzzle>((wasm) => wasm.free(
 export interface PuzzleHandle {
   checkAllAnswers(marks: Marks[], optionCount: number): Validity[];
   solve(): (Answer | null)[];
-  deduce(marks: Marks[], optionCount: number): DeduceResult[];
-  /** Like {@link deduce} but takes the derived state directly. Used by
-   *  the tutorial which walks the puzzle synthetically. */
-  deduceWithState(answers: (Answer | null)[], eliminated: number[]): DeduceResult[];
-  lookaheadShortest(marks: Marks[], optionCount: number): LookaheadResult | null;
+  /** The next solving step — a deduction, else the shortest lookahead
+   *  contradiction — plus its explanation, from the derived state directly.
+   *  Null when the puzzle is solved or stuck. The hint UI renders `explain`;
+   *  the tutorial also applies `action` to walk the puzzle synthetically. */
+  nextStep(answers: (Answer | null)[], eliminated: number[]): SolveStep | null;
   free(): void;
 }
 
@@ -139,20 +161,10 @@ export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return wasm.solve() as (Answer | null)[];
     },
-    deduce(marks, optionCount) {
-      const state = answerIndicesFromMarks(marks, optionCount);
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.deduce(state) as DeduceResult[];
-    },
-    deduceWithState(answers, eliminated) {
+    nextStep(answers, eliminated) {
       const answerIndices = answers.map((a) => (a === null ? null : L2I[a]));
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.deduce({ answers: answerIndices, eliminated }) as DeduceResult[];
-    },
-    lookaheadShortest(marks, optionCount) {
-      const state = answerIndicesFromMarks(marks, optionCount);
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.lookaheadShortest(state) as LookaheadResult | null;
+      return wasm.nextStep({ answers: answerIndices, eliminated }) as SolveStep | null;
     },
     free() {
       handleRegistry.unregister(wrapper);

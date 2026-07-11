@@ -34,13 +34,15 @@ mod wasm_api {
     use crate::build;
     use crate::check_answer::{Validity, check_answer};
     use crate::construct;
-    use crate::deduce::{DeduceAction, DeduceResult, deduce_assuming_unique};
+    use crate::deduce::{DeduceAction, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
+    use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
     use crate::lookahead::lookahead_shortest;
+    use crate::render;
     use crate::rng::Rng;
     use crate::serialize::{parse_puzzle, puzzle_to_compact_value};
     use crate::solve_deduce::solve;
-    use crate::types::{Answer, FlatPuzzle, MAX_N, State};
+    use crate::types::{Answer, Claim, FlatPuzzle, MAX_N, OptionValue, QuestionType, State};
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
@@ -115,28 +117,13 @@ mod wasm_api {
         },
     }
 
+    /// One solving step plus its rendered explanation — the unit the hint UI
+    /// renders (`explain`) and the tutorial walks (applies `action`, shows
+    /// `explain`).
     #[derive(Serialize)]
-    struct DeduceResultApi {
+    struct StepApi {
         action: DeduceActionApi,
-        rule: &'static str,
-    }
-
-    #[derive(Serialize)]
-    #[serde(rename_all = "camelCase")]
-    struct LookaheadResultApi {
-        /// The disproven hypothesis — "suppose question `assumption_qi` were
-        /// `assumption_answer`". Because that assumption leads to a contradiction,
-        /// `assumption_answer` is *also* exactly the option the hint eliminates:
-        /// in this lookahead the assumed option and the eliminated option are
-        /// always the same, so only the assumption is sent over the wire (the
-        /// engine-internal `eliminate_qi`/`eliminate_oi` would be redundant here).
-        assumption_qi: usize,
-        assumption_answer: &'static str,
-        /// The deduction steps from the assumption to the contradiction.
-        chain: Vec<DeduceResultApi>,
-        /// The question at which the contradiction surfaced (may differ from
-        /// `assumption_qi`).
-        contradiction_qi: usize,
+        explain: Vec<ExplainStep>,
     }
 
     fn action_to_api(a: DeduceAction) -> DeduceActionApi {
@@ -153,13 +140,6 @@ mod wasm_api {
                 question_mask,
                 option_mask,
             },
-        }
-    }
-
-    fn result_to_api(r: DeduceResult) -> DeduceResultApi {
-        DeduceResultApi {
-            action: action_to_api(r.action),
-            rule: r.rule.to_str(),
         }
     }
 
@@ -206,36 +186,73 @@ mod wasm_api {
             serde_wasm_bindgen::to_value(&answers).map_err(|e| err(&e.to_string()))
         }
 
-        /// One pass of `deduce_assuming_unique`, sorted by rule order
-        /// (matching the TS engine's `sortDeduceResults` output).
-        #[wasm_bindgen(js_name = deduce)]
-        pub fn deduce(&self, state: JsValue) -> Result<JsValue, JsError> {
+        /// The next solving step plus its rendered explanation, or null when the
+        /// puzzle is solved or truly stuck. Prefers the highest-priority single
+        /// deduction (sorted to match the TS engine's `sortDeduceResults`);
+        /// failing that, falls back to the shortest lookahead contradiction,
+        /// whose `action` eliminates the refuted assumption. The hint UI renders
+        /// `explain`; the tutorial also applies `action` and walks to a full
+        /// solve. Keeping deduction + prose together means no `DeduceResult`
+        /// crosses the wire.
+        #[wasm_bindgen(js_name = nextStep)]
+        pub fn next_step(&self, state: JsValue) -> Result<JsValue, JsError> {
             let s = parse_state(state, self.fp.n)?;
             let mut drs = deduce_assuming_unique(&self.fp, &s);
             drs.sort_by_key(|dr| dr.rule as u8);
-            let out: Vec<DeduceResultApi> = drs.into_iter().map(result_to_api).collect();
-            serde_wasm_bindgen::to_value(&out).map_err(|e| err(&e.to_string()))
-        }
-
-        /// The eliminable option with the fewest-deduction contradiction chain —
-        /// the shortest, most explainable hint — or null if no assumption reaches
-        /// a contradiction. Probes every candidate to a full fixpoint (see
-        /// `lookahead_shortest`), so it finds a hint whenever one exists.
-        #[wasm_bindgen(js_name = lookaheadShortest)]
-        pub fn lookahead_shortest(&self, state: JsValue) -> Result<JsValue, JsError> {
-            let s = parse_state(state, self.fp.n)?;
-            let Some(lr) = lookahead_shortest(&self.fp, &s) else {
+            let api = if let Some(dr) = drs.first() {
+                StepApi {
+                    action: action_to_api(dr.action),
+                    explain: explain_deduce(&self.fp, &s, dr),
+                }
+            } else if let Some(lr) = lookahead_shortest(&self.fp, &s) {
+                StepApi {
+                    action: DeduceActionApi::Eliminate {
+                        qi: lr.eliminate_qi,
+                        oi: lr.eliminate_oi,
+                    },
+                    explain: explain_lookahead(&self.fp, &s, &lr),
+                }
+            } else {
                 return Ok(JsValue::NULL);
-            };
-            let chain: Vec<DeduceResultApi> = lr.chain.iter().copied().map(result_to_api).collect();
-            let api = LookaheadResultApi {
-                assumption_qi: lr.assumption_qi,
-                assumption_answer: answer_to_str(lr.assumption_answer),
-                chain,
-                contradiction_qi: lr.contradiction_qi,
             };
             serde_wasm_bindgen::to_value(&api).map_err(|e| err(&e.to_string()))
         }
+    }
+
+    // ── Board text rendering. Each takes the compact question type as JSON
+    // (`{"t":"CountAnswer","a":0}` — the shape `parse_puzzle` reads). `value` is
+    // the option's numeric value, or null/undefined for the empty marker.
+
+    fn parse_question_type(qt_json: &str) -> Result<QuestionType, JsError> {
+        serde_json::from_str(qt_json).map_err(|e| err(&e.to_string()))
+    }
+
+    fn to_option_value(value: Option<u32>) -> OptionValue {
+        value.map_or(OptionValue::NONE, |v| OptionValue::num(v as u8))
+    }
+
+    /// The question prompt, e.g. "How many questions have answer A?".
+    #[wasm_bindgen(js_name = questionText)]
+    pub fn question_text(qt_json: &str) -> Result<String, JsError> {
+        Ok(render::question_text(&parse_question_type(qt_json)?))
+    }
+
+    /// The label for one option, e.g. "3", "C", "4-5", or "None".
+    #[wasm_bindgen(js_name = optionLabel)]
+    pub fn option_label(qt_json: &str, value: Option<u32>) -> Result<String, JsError> {
+        Ok(render::option_label(
+            &parse_question_type(qt_json)?,
+            to_option_value(value),
+        ))
+    }
+
+    /// A TrueStmt claim rendered as its question text plus the option it asserts.
+    #[wasm_bindgen(js_name = claimLabel)]
+    pub fn claim_label(qt_json: &str, value: Option<u32>) -> Result<String, JsError> {
+        Ok(render::claim_label(&Claim {
+            question_type: parse_question_type(qt_json)?,
+            value: to_option_value(value),
+        }))
     }
 
     /// Returns a CompactPuzzle JSON string, or an `Err` if generation
