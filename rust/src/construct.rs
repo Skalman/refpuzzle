@@ -141,7 +141,9 @@ pub static RECIPES: [LevelRecipe; 6] = [
         caps: caps_max_answer_of(3),
         damping: DEFAULT_DAMPING,
         answer_of_counts: &[(0, 50), (1, 40), (2, 10)],
-        lookahead_deduce_until: 1,
+        // L1 is the tutorial level: accept only pure-deduction puzzles (no
+        // lookahead), so the scripted walk never needs "what if" reasoning.
+        lookahead_deduce_until: 0,
     },
     // L2
     LevelRecipe {
