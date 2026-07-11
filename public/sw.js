@@ -35,7 +35,10 @@ self.addEventListener("fetch", (event) => {
     event.request.destination === "style" ||
     event.request.destination === "image" ||
     url.pathname.endsWith(".svg") ||
-    url.pathname.endsWith(".json")
+    url.pathname.endsWith(".json") ||
+    // wasm is fetched via fetch()/instantiateStreaming, so its request has an
+    // empty `destination`; match on the extension instead.
+    url.pathname.endsWith(".wasm")
   ) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>

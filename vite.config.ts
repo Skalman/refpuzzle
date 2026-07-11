@@ -19,6 +19,43 @@ function versionPlugin(): Plugin {
   };
 }
 
+// Inject a preload for the hashed wasm so the browser fetches it in parallel
+// with the JS bundle instead of discovering it only after init() runs. The
+// filename is content-hashed, so the tag is injected at build time from the
+// emitted bundle. `as="fetch" crossorigin` matches the glue's
+// instantiateStreaming fetch (a same-origin CORS fetch).
+function wasmPreloadPlugin(): Plugin {
+  return {
+    name: "wasm-preload",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html, ctx) {
+        const wasmFile = ctx.bundle
+          ? Object.keys(ctx.bundle).find((f) => f.endsWith(".wasm"))
+          : undefined;
+        if (!wasmFile) return html;
+        return {
+          html,
+          tags: [
+            {
+              tag: "link",
+              attrs: {
+                rel: "preload",
+                href: `/${wasmFile}`,
+                as: "fetch",
+                type: "application/wasm",
+                crossorigin: "",
+              },
+              injectTo: "head",
+            },
+          ],
+        };
+      },
+    },
+  };
+}
+
 function brotliPlugin(): Plugin {
   return {
     name: "brotli-compress",
@@ -46,7 +83,7 @@ function brotliPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [preact(), wasm(), versionPlugin(), brotliPlugin()],
+  plugins: [preact(), wasm(), versionPlugin(), wasmPreloadPlugin(), brotliPlugin()],
   build: {
     target: "es2018",
   },
