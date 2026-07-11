@@ -142,7 +142,7 @@ fn is_elim(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
 
 #[inline(always)]
 fn remaining_count(eliminated: u8) -> u32 {
-    (!eliminated & 0b11111u8).count_ones()
+    (!eliminated & ALL_OPTIONS_MASK).count_ones()
 }
 
 #[derive(Clone, Copy)]
@@ -364,7 +364,7 @@ fn count_matching_mask(
     from: usize,
     to: usize,
 ) -> CountResult {
-    let non_mask = !mask & 0b11111u8;
+    let non_mask = !mask & ALL_OPTIONS_MASK;
     let mut count: u8 = 0;
     let mut guaranteed: u8 = 0;
     let mut possible: u8 = 0;
@@ -374,7 +374,7 @@ fn count_matching_mask(
                 count += 1;
             }
         } else {
-            let remaining_bits = !eliminated[i] & 0b11111u8;
+            let remaining_bits = !eliminated[i] & ALL_OPTIONS_MASK;
             let matching = remaining_bits & mask;
             if matching == 0 {
                 continue;
@@ -404,7 +404,7 @@ fn apply_count(
     mask: u8,
     from: usize,
     to: usize,
-    full: bool,
+    include_slow: bool,
 ) {
     let answers = &state.answers;
     let eliminated = &state.eliminated;
@@ -421,8 +421,8 @@ fn apply_count(
         if cr.min() == on && cr.possible > 0 {
             for j in from..to {
                 if answers[j].is_none() {
-                    let remaining_bits = !eliminated[j] & 0b11111u8;
-                    if remaining_bits & (!mask & 0b11111u8) == 0 {
+                    let remaining_bits = !eliminated[j] & ALL_OPTIONS_MASK;
+                    if remaining_bits & (!mask & ALL_OPTIONS_MASK) == 0 {
                         continue;
                     }
                     let option_mask = remaining_bits & mask;
@@ -461,7 +461,7 @@ fn apply_count(
 
             for j in from..to {
                 if answers[j].is_none() && eliminated[j] & mask != mask {
-                    let option_mask = !eliminated[j] & !mask & 0b11111u8;
+                    let option_mask = !eliminated[j] & !mask & ALL_OPTIONS_MASK;
                     if option_mask != 0 {
                         push(
                             DeduceRule::CountMustMatchElim,
@@ -476,7 +476,7 @@ fn apply_count(
         }
     } else {
         // Unanswered count qi: CountAllAnswered + per-option CountExceeded/Impossible.
-        if full && cr.possible == 0 {
+        if include_slow && cr.possible == 0 {
             let target_val = OptionValue::num(cr.min());
             if let Some(oi) = exactly_one(0..fp.option_count, |oi| {
                 !is_elim(eliminated, qi, oi) && fp.options[qi][oi] == target_val
@@ -536,14 +536,14 @@ fn apply_count(
 
 /// Per-qi OnlyOdd/OnlyEven dispatch (qi must be unanswered). `parity` is
 /// 1 for OnlyOdd (1-indexed odd = 0-indexed even positions), 0 for OnlyEven.
-fn apply_onlyoddeven(
+fn apply_only_odd_even(
     fp: &FlatPuzzle,
     state: &State,
     mut push: impl FnMut(DeduceRule, DeduceAction),
     qi: usize,
     answer: Answer,
     parity: usize,
-    full: bool,
+    include_slow: bool,
 ) {
     let n = fp.n;
     let answers = &state.answers;
@@ -587,10 +587,10 @@ fn apply_onlyoddeven(
         }
     }
 
-    // OnlyOddEvenRangeElim (full mode): positions with the right parity
+    // OnlyOddEvenRangeElim: positions with the right parity
     // that aren't reachable from this OnlyOdd/Even's remaining options
     // can't hold `answer`.
-    if full {
+    if include_slow {
         let answer_oi = answer.idx();
         let mut claimed = 0u16;
         for oi in 0..5usize {
@@ -1051,7 +1051,7 @@ fn apply_true_stmt(
             };
             let mut hyp = *state;
             hyp.answers[qi] = Some(Answer::from(oi as u8));
-            hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+            hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
             crate::check_answer::check_claim(fp, hyp, OptionPos { qi, oi }, claim)
                 != crate::check_answer::Validity::Invalid
         }) {
@@ -1219,15 +1219,18 @@ fn apply_positional_backward(
 
 /// Rules shared by `SameAs` and `OnlySame` arms: reverse force, NoneForward
 /// (answered qi), and the common per-option elims (NoneMatch / SelfRef /
-/// RuledOut) for unanswered qi. `reverse_rule` distinguishes the two arms'
-/// reverse-force rule name (SameAsReverse vs PrevNextOnlySameReverse).
+/// RuledOut) for unanswered qi. Only the reverse force is renamed per arm via
+/// `reverse_rule` (SameAsReverse vs PrevNextOnlySameReverse); the others keep
+/// their `OnlySame*` names for both arms (so a SameAs trace shows e.g.
+/// `OnlySameNoneForward`). Renaming them would also touch the explain prose
+/// keyed on those names and the deduce test fixtures.
 fn apply_same_shared(
     fp: &FlatPuzzle,
     state: &State,
     mut push: impl FnMut(DeduceRule, DeduceAction),
     qi: usize,
     reverse_rule: DeduceRule,
-    full: bool,
+    include_slow: bool,
 ) {
     let n = fp.n;
     let answers = &state.answers;
@@ -1252,8 +1255,8 @@ fn apply_same_shared(
 
         // OnlySameNoneForward: an answered None means qi's answer is unique,
         // so no other question can have that letter. Sound; not gated on
-        // assume_unique (only on `full`).
-        if full && s.is_none() {
+        // assume_unique.
+        if include_slow && s.is_none() {
             for j in 0..n {
                 if j == qi {
                     continue;
@@ -1628,7 +1631,7 @@ fn deduce_impl(
     fp: &FlatPuzzle,
     state: &State,
     filter: RuleFilter,
-    full: bool,
+    include_slow: bool,
     assume_unique: bool,
     // `Some(qi)` restricts the per-qi dispatch to a single question — a scoped
     // probe for repair. `None` (every play/solve caller) is a compile-time
@@ -1676,7 +1679,16 @@ fn deduce_impl(
 
         match *t {
             QuestionType::CountAnswer { answer } => {
-                apply_count(fp, state, &mut push, qi, 1 << answer.idx(), 0, n, full);
+                apply_count(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    1 << answer.idx(),
+                    0,
+                    n,
+                    include_slow,
+                );
             }
             QuestionType::CountAnswerBefore {
                 answer,
@@ -1690,7 +1702,7 @@ fn deduce_impl(
                     1 << answer.idx(),
                     0,
                     before_index as usize,
-                    full,
+                    include_slow,
                 );
             }
             QuestionType::CountAnswerAfter {
@@ -1705,11 +1717,11 @@ fn deduce_impl(
                     1 << answer.idx(),
                     after_index as usize + 1,
                     n,
-                    full,
+                    include_slow,
                 );
             }
             QuestionType::CountConsonant => {
-                apply_count(fp, state, &mut push, qi, CONSONANT_MASK, 0, n, full);
+                apply_count(fp, state, &mut push, qi, CONSONANT_MASK, 0, n, include_slow);
             }
             QuestionType::MostCommonCount if ans.is_none() => {
                 let mut max_known: u8 = 0;
@@ -1741,8 +1753,8 @@ fn deduce_impl(
                 }
             }
             QuestionType::CountVowel => {
-                apply_count(fp, state, &mut push, qi, VOWEL_MASK, 0, n, full);
-                if full
+                apply_count(fp, state, &mut push, qi, VOWEL_MASK, 0, n, include_slow);
+                if include_slow
                     && Some(qi) == vowel_qi
                     && let Some(cq) = consonant_qi
                 {
@@ -1971,10 +1983,10 @@ fn deduce_impl(
                 apply_positional_backward(fp, state, &mut push, qi, answer, before_index as usize);
             }
             QuestionType::OnlyOdd { answer } if ans.is_none() => {
-                apply_onlyoddeven(fp, state, &mut push, qi, answer, 1, full);
+                apply_only_odd_even(fp, state, &mut push, qi, answer, 1, include_slow);
             }
             QuestionType::OnlyEven { answer } if ans.is_none() => {
-                apply_onlyoddeven(fp, state, &mut push, qi, answer, 0, full);
+                apply_only_odd_even(fp, state, &mut push, qi, answer, 0, include_slow);
             }
             QuestionType::ConsecIdent => {
                 // Reverse: any qi state. Eliminate matching neighbors at positions
@@ -2029,13 +2041,13 @@ fn deduce_impl(
                 }
 
                 if let Some(a) = ans {
-                    // Forward force/elim/both (qi answered, full mode only).
-                    if full {
+                    // Forward force/elim/both (qi answered).
+                    if include_slow {
                         let s = fp.options[qi][a.idx()];
                         if s.is_num() && usize::from(s.value()) + 1 < n {
                             let p = usize::from(s.value());
-                            let poss_a = !eliminated[p] & 0b11111u8;
-                            let poss_b = !eliminated[p + 1] & 0b11111u8;
+                            let poss_a = !eliminated[p] & ALL_OPTIONS_MASK;
+                            let poss_b = !eliminated[p + 1] & ALL_OPTIONS_MASK;
                             let ans_a = answers[p];
                             let ans_b = answers[p + 1];
 
@@ -2067,7 +2079,7 @@ fn deduce_impl(
                             // Options at p that are remaining for p but impossible at p+1
                             // (and vice versa) can't be in a consec-identical pair → eliminate.
                             if ans_a.is_none() {
-                                let mut to_elim = poss_a & !poss_b & 0b11111u8;
+                                let mut to_elim = poss_a & !poss_b & ALL_OPTIONS_MASK;
                                 while to_elim != 0 {
                                     let oi = to_elim.trailing_zeros() as usize;
                                     to_elim &= to_elim - 1;
@@ -2078,7 +2090,7 @@ fn deduce_impl(
                                 }
                             }
                             if ans_b.is_none() {
-                                let mut to_elim = poss_b & !poss_a & 0b11111u8;
+                                let mut to_elim = poss_b & !poss_a & ALL_OPTIONS_MASK;
                                 while to_elim != 0 {
                                     let oi = to_elim.trailing_zeros() as usize;
                                     to_elim &= to_elim - 1;
@@ -2126,8 +2138,8 @@ fn deduce_impl(
                                     DeduceAction::Eliminate { qi, oi },
                                 );
                             } else {
-                                let common = (!eliminated[pos] & 0b11111u8)
-                                    & (!eliminated[pos + 1] & 0b11111u8);
+                                let common = (!eliminated[pos] & ALL_OPTIONS_MASK)
+                                    & (!eliminated[pos + 1] & ALL_OPTIONS_MASK);
                                 if common == 0 {
                                     push(
                                         DeduceRule::ConsecIdentNoCommon,
@@ -2232,8 +2244,8 @@ fn deduce_impl(
                 let qi_ref = question_index as usize;
                 let ref_ans = answers[qi_ref];
                 if let Some(a) = ans {
-                    // Reverse (full only).
-                    if full {
+                    // Reverse.
+                    if include_slow {
                         let s = fp.options[qi][a.idx()];
                         if s.is_num() {
                             let j = usize::from(s.value());
@@ -2290,7 +2302,14 @@ fn deduce_impl(
                 }
             }
             QuestionType::SameAs => {
-                apply_same_shared(fp, state, &mut push, qi, DeduceRule::SameAsReverse, full);
+                apply_same_shared(
+                    fp,
+                    state,
+                    &mut push,
+                    qi,
+                    DeduceRule::SameAsReverse,
+                    include_slow,
+                );
 
                 // SameAs negative: non-selected option targets cannot share qi's
                 // answer. Uniqueness-assuming, answered-qi only.
@@ -2341,7 +2360,7 @@ fn deduce_impl(
                     &mut push,
                     qi,
                     DeduceRule::PrevNextOnlySameReverse,
-                    full,
+                    include_slow,
                 );
 
                 // OnlySameOtherMatch: per-option elim, OnlySame only. If pos is
@@ -2374,7 +2393,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LeastCommon if full && ans.is_none() => {
+            QuestionType::LeastCommon if include_slow && ans.is_none() => {
                 let cells = letter_cells.get();
                 apply_extremum_count::<true>(
                     fp,
@@ -2414,7 +2433,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::MostCommon if full && ans.is_none() => {
+            QuestionType::MostCommon if include_slow && ans.is_none() => {
                 let cells = letter_cells.get();
                 apply_extremum_count::<false>(
                     fp,
@@ -2453,7 +2472,7 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::TrueStmt if full => {
+            QuestionType::TrueStmt if include_slow => {
                 apply_true_stmt(fp, state, &mut push, qi, n, assume_unique);
             }
 
@@ -2462,7 +2481,7 @@ fn deduce_impl(
 
         // OnlyOptionLeft is type-agnostic — fires when only one option remains.
         if ans.is_none() && remaining_count(eliminated[qi]) == 1 {
-            let oi = (!eliminated[qi] & 0b11111).trailing_zeros();
+            let oi = (!eliminated[qi] & ALL_OPTIONS_MASK).trailing_zeros();
             push(
                 DeduceRule::OnlyOptionLeft,
                 DeduceAction::Force {
@@ -2578,7 +2597,7 @@ mod tests {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
                         answers[i] = Some(Answer::from(oi as u8));
-                        eliminated[i] = 0b11111 ^ (1 << oi);
+                        eliminated[i] = ALL_OPTIONS_MASK ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;
                         eliminated[i] |= 1 << oi;
@@ -2826,7 +2845,7 @@ mod tests {
                     let r = rng.int(0, 4);
                     if r == 0 {
                         answers[qi] = Some(solution[qi]);
-                        eliminated[qi] = 0b11111 ^ (1 << solution[qi].idx());
+                        eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << solution[qi].idx());
                     } else if r <= 2 {
                         let count = rng.int(1, 3) as usize;
                         for _ in 0..count {

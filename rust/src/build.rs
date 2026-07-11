@@ -63,7 +63,7 @@ pub struct Stats {
     // unique, but the hint engine can't solve it from scratch.
     pub repair_ambiguous: u32,
     pub repair_unsolvable: u32,
-    pub v2_skeleton: SkeletonStats,
+    pub skeleton: SkeletonStats,
 }
 
 impl Stats {
@@ -81,10 +81,10 @@ impl Stats {
         self.distractor_ok += other.distractor_ok;
         self.repair_ambiguous += other.repair_ambiguous;
         self.repair_unsolvable += other.repair_unsolvable;
-        self.v2_skeleton.count += other.v2_skeleton.count;
-        self.v2_skeleton.fallbacks.assign_kinds += other.v2_skeleton.fallbacks.assign_kinds;
-        self.v2_skeleton.fallbacks.reserve += other.v2_skeleton.fallbacks.reserve;
-        self.v2_skeleton.fallbacks.backstop += other.v2_skeleton.fallbacks.backstop;
+        self.skeleton.count += other.skeleton.count;
+        self.skeleton.fallbacks.assign_kinds += other.skeleton.fallbacks.assign_kinds;
+        self.skeleton.fallbacks.reserve += other.skeleton.fallbacks.reserve;
+        self.skeleton.fallbacks.backstop += other.skeleton.fallbacks.backstop;
     }
 
     /// Fold one `run_engine` invocation's loop telemetry into the running stats.
@@ -114,14 +114,14 @@ impl Stats {
         );
         eprintln!(
             "  skeletons={} | repair distractor={}/{} rejected(ambiguous={} unsolvable={}) | fallbacks: assign_kinds={} reserve={} backstop={}",
-            self.v2_skeleton.count,
+            self.skeleton.count,
             self.distractor_ok,
             self.distractor_attempts,
             self.repair_ambiguous,
             self.repair_unsolvable,
-            self.v2_skeleton.fallbacks.assign_kinds,
-            self.v2_skeleton.fallbacks.reserve,
-            self.v2_skeleton.fallbacks.backstop,
+            self.skeleton.fallbacks.assign_kinds,
+            self.skeleton.fallbacks.reserve,
+            self.skeleton.fallbacks.backstop,
         );
     }
 }
@@ -370,28 +370,19 @@ pub(crate) fn fill_one_question(
 
     match *qt {
         QuestionType::AnswerOf { question_index } => {
-            slots[correct_oi] = OptionValue::num(solution[question_index as usize] as u8);
             let correct_answer = solution[question_index as usize];
-            let mut pool = [Answer::A; 4];
-            let mut plen = 0;
-            for &l in letters {
-                if l != correct_answer {
-                    pool[plen] = l;
-                    plen += 1;
-                }
-            }
-            rng.shuffle(&mut pool[..plen]);
-            let mut di = 0;
-            for oi in 0..option_count {
-                if oi != correct_oi {
-                    slots[oi] = OptionValue::num(pool[di] as u8);
-                    di += 1;
-                }
-            }
+            place_letter_distractors(
+                slots,
+                correct_oi,
+                correct_answer,
+                letters,
+                option_count,
+                rng,
+            );
         }
         QuestionType::LeastCommon | QuestionType::MostCommon => {
             let counts = letter_counts(solution, n);
-            let opt_counts: Vec<i32> = letters.iter().map(|l| counts[l.idx()]).collect();
+            let opt_counts: ArrayVec<i32, 5> = letters.iter().map(|l| counts[l.idx()]).collect();
             let target_count = if matches!(*qt, QuestionType::LeastCommon) {
                 *opt_counts.iter().min().unwrap()
             } else {
@@ -402,27 +393,18 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: {qt:?} at qi={qi} but two letters tie for the extreme count — missing upstream guard"
                 );
             }
-            let correct_letter = LETTERS
+            let correct_letter = *letters
                 .iter()
                 .find(|&&l| counts[l.idx()] == target_count)
                 .unwrap();
-            slots[correct_oi] = OptionValue::num(*correct_letter as u8);
-            let mut pool = [Answer::A; 4];
-            let mut plen = 0;
-            for &l in letters {
-                if l != *correct_letter {
-                    pool[plen] = l;
-                    plen += 1;
-                }
-            }
-            rng.shuffle(&mut pool[..plen]);
-            let mut di = 0;
-            for oi in 0..option_count {
-                if oi != correct_oi {
-                    slots[oi] = OptionValue::num(pool[di] as u8);
-                    di += 1;
-                }
-            }
+            place_letter_distractors(
+                slots,
+                correct_oi,
+                correct_letter,
+                letters,
+                option_count,
+                rng,
+            );
         }
         QuestionType::EqualCount { answer } => {
             slots[correct_oi] = correct_val;
@@ -456,9 +438,7 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: {qt:?} at qi={qi} but more than one same-parity question has answer {answer:?} — missing upstream guard"
                 );
             }
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         QuestionType::ConsecIdent => {
             let pairs = (0..n.saturating_sub(1))
@@ -469,19 +449,13 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: ConsecIdent at qi={qi} but more than one consecutive identical pair exists — missing upstream guard"
                 );
             }
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         QuestionType::LetterDist { .. } => {
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         _ if is_counting_type(qt) => {
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         QuestionType::SameAsWhich { question_index } => {
             if correct_val.is_none() {
@@ -551,9 +525,7 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: OnlySame at qi={qi} but {others} other questions share answer {self_ans:?} — missing upstream guard"
                 );
             }
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         QuestionType::ClosestAfter { .. }
         | QuestionType::ClosestBefore { .. }
@@ -561,9 +533,7 @@ pub(crate) fn fill_one_question(
         | QuestionType::LastWith { .. }
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            slots[correct_oi] = correct_val;
-            let distractors = pick_distractors(&val_pool, correct_val, qi, qt, rng);
-            place_distractors(&distractors, slots, correct_oi);
+            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         _ => unreachable!(),
     }
@@ -760,17 +730,12 @@ fn is_counting_type(qt: &QuestionType) -> bool {
 fn pick_distractors(
     vals: &ArrayVec<OptionValue, 20>,
     correct: OptionValue,
-    qi: usize,
-    qt: &QuestionType,
     rng: &mut Rng,
 ) -> [OptionValue; 4] {
     let mut pool = [OptionValue::UNUSED; 20];
     let mut plen = 0;
     for &v in vals {
-        let exclude_self = matches!(*qt, QuestionType::OnlySame | QuestionType::SameAs)
-            && v.is_num()
-            && usize::from(v.value()) == qi;
-        if v != correct && !exclude_self {
+        if v != correct {
             pool[plen] = v;
             plen += 1;
         }
@@ -779,6 +744,53 @@ fn pick_distractors(
     let mut result = [OptionValue::UNUSED; 4];
     result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
+}
+
+/// Distractor placement for number-valued questions (counts, positions,
+/// distances, question-indices — everything but the letter-valued AnswerOf /
+/// LeastCommon / MostCommon): correct option at `correct_oi`, the rest drawn
+/// from `val_pool` (shuffled). `val_pool` is numeric, plus a `NONE` option for
+/// the positional/sameness types.
+fn place_numeric_distractors(
+    slots: &mut [OptionValue; 5],
+    correct_oi: usize,
+    correct_val: OptionValue,
+    val_pool: &ArrayVec<OptionValue, 20>,
+    rng: &mut Rng,
+) {
+    slots[correct_oi] = correct_val;
+    let distractors = pick_distractors(val_pool, correct_val, rng);
+    place_distractors(&distractors, slots, correct_oi);
+}
+
+/// Letter-distractor placement for AnswerOf / LeastCommon / MostCommon, whose
+/// distractors are simply "the other letters": put `correct_letter` at
+/// `correct_oi`, then the remaining `letters` (shuffled) in the other slots.
+fn place_letter_distractors(
+    slots: &mut [OptionValue; 5],
+    correct_oi: usize,
+    correct_letter: Answer,
+    letters: &[Answer],
+    option_count: usize,
+    rng: &mut Rng,
+) {
+    slots[correct_oi] = OptionValue::num(correct_letter as u8);
+    let mut pool = [Answer::A; 4];
+    let mut plen = 0;
+    for &l in letters {
+        if l != correct_letter {
+            pool[plen] = l;
+            plen += 1;
+        }
+    }
+    rng.shuffle(&mut pool[..plen]);
+    let mut di = 0;
+    for oi in 0..option_count {
+        if oi != correct_oi {
+            slots[oi] = OptionValue::num(pool[di] as u8);
+            di += 1;
+        }
+    }
 }
 
 pub fn letter_counts(sol: &[Answer; MAX_N], n: usize) -> [i32; 5] {
@@ -1456,7 +1468,7 @@ mod tests {
             QuestionTypeKind::AnswerIsSelf,
             QuestionTypeKind::TrueStmt,
         ];
-        let value_typed: Vec<QuestionTypeKind> = QuestionTypeKind::all_flat()
+        let value_typed: Vec<QuestionTypeKind> = QuestionTypeKind::all()
             .iter()
             .copied()
             .filter(|k| !exempt.contains(k))

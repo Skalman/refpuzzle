@@ -105,7 +105,7 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     }
 
     // Account for puzzles with 0 instances of each known type.
-    for kind in QuestionTypeKind::all_flat() {
+    for kind in QuestionTypeKind::all() {
         if let Some(entry) = per_type.get_mut(kind) {
             let nonzero: u32 = entry.instances_per_puzzle.values().sum();
             let zeros = successes.saturating_sub(nonzero);
@@ -122,10 +122,10 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
         successes,
         total_calls,
         per_type,
-        skeletons: bstats.v2_skeleton.count,
-        fallback_assign_kinds: bstats.v2_skeleton.fallbacks.assign_kinds,
-        fallback_reserve: bstats.v2_skeleton.fallbacks.reserve,
-        fallback_backstop: bstats.v2_skeleton.fallbacks.backstop,
+        skeletons: bstats.skeleton.count,
+        fallback_assign_kinds: bstats.skeleton.fallbacks.assign_kinds,
+        fallback_reserve: bstats.skeleton.fallbacks.reserve,
+        fallback_backstop: bstats.skeleton.fallbacks.backstop,
     }
 }
 
@@ -288,7 +288,7 @@ fn write_overview(md: &mut String, levels: &[LevelData]) {
         Some(100.0 * (ld.successes - zero) as f64 / ld.successes as f64)
     };
 
-    let mut overview_rows: Vec<(QuestionTypeKind, Vec<Option<f64>>)> = QuestionTypeKind::all_flat()
+    let mut overview_rows: Vec<(QuestionTypeKind, Vec<Option<f64>>)> = QuestionTypeKind::all()
         .iter()
         .map(|&k| {
             (
@@ -346,7 +346,7 @@ fn write_multiplicity(md: &mut String, levels: &[LevelData]) {
             .unwrap_or(0);
 
         let present_set: BTreeSet<QuestionTypeKind> = sorted_kinds.iter().copied().collect();
-        let absent: Vec<String> = QuestionTypeKind::all_flat()
+        let absent: Vec<String> = QuestionTypeKind::all()
             .iter()
             .filter(|k| !present_set.contains(k))
             .map(|k| format!("{k:?}"))
@@ -466,7 +466,7 @@ fn write_answer_freq(md: &mut String, levels: &[LevelData]) {
 }
 
 fn sorted_present_kinds(per_type: &BTreeMap<QuestionTypeKind, TypeStats>) -> Vec<QuestionTypeKind> {
-    let mut kinds: Vec<QuestionTypeKind> = QuestionTypeKind::all_flat()
+    let mut kinds: Vec<QuestionTypeKind> = QuestionTypeKind::all()
         .iter()
         .copied()
         .filter(|k| {

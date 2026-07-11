@@ -308,7 +308,7 @@ fn main() {
 
     // Parse gen subcommand args
     let mut date_range_str: Option<String> = None;
-    let mut max_attempts: usize = 100;
+    let mut max_attempts: usize = construct::DEFAULT_MAX_REGENERATIONS;
     let mut level_filter: Option<u8> = None;
     let mut show_stats = false;
     let mut output_path: Option<String> = None;

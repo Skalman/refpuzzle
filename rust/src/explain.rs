@@ -907,8 +907,8 @@ pub fn explain_elim_detail(
                             );
                         }
                     }
-                    let poss_a = !eliminated[start] & 0b11111;
-                    let poss_b = !eliminated[start + 1] & 0b11111;
+                    let poss_a = !eliminated[start] & ALL_OPTIONS_MASK;
+                    let poss_b = !eliminated[start + 1] & ALL_OPTIONS_MASK;
                     if poss_a & poss_b == 0 {
                         return detail(
                             format!(
@@ -1367,7 +1367,7 @@ pub fn brief_force_reason(fp: &FlatPuzzle, state: &State, qi: usize, letter: Ans
         }
     }
 
-    if (!state.eliminated[qi] & 0b11111).count_ones() == 1 {
+    if (!state.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 1 {
         return "only option left".to_string();
     }
 
@@ -1439,7 +1439,7 @@ pub fn explain_force(
     let qt = fp.question_types[qi];
     let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
 
-    if (!state.eliminated[qi] & 0b11111).count_ones() == 1 {
+    if (!state.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 1 {
         steps.push(simple(format!(
             "{} has only one option left — it must be {letter}.",
             q(qi)
@@ -2533,7 +2533,7 @@ pub fn explain_lookahead(
 
     let mut hyp = *state;
     hyp.answers[qi] = Some(letter);
-    hyp.eliminated[qi] = 0b11111 ^ (1 << letter.idx());
+    hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << letter.idx());
 
     let mut involved: BTreeSet<usize> = BTreeSet::from([qi]);
     let mut lines: Vec<String> = Vec::new();
@@ -2548,7 +2548,7 @@ pub fn explain_lookahead(
                 } else {
                     format!("{} must be {answer} ({reason}).", q(fqi))
                 });
-                hyp.eliminated[fqi] = 0b11111 ^ (1 << answer.idx());
+                hyp.eliminated[fqi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
                 hyp.answers[fqi] = Some(answer);
             }
             DeduceAction::EliminateMulti {

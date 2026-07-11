@@ -99,7 +99,7 @@ fn probe_candidate(
     let n = fp.n;
     let mut hyp = *state;
     hyp.answers[qi] = Some(Answer::from(oi as u8));
-    hyp.eliminated[qi] = 0b11111 ^ (1 << oi);
+    hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
 
     let mut chain = ArrayVec::new();
     let mut contradiction_qi = None;
@@ -150,7 +150,7 @@ fn probe_candidate(
     }
     for check_qi in 0..n {
         if hyp.answers[check_qi].is_none() {
-            if (!hyp.eliminated[check_qi] & 0b11111u8).count_ones() == 0 {
+            if (!hyp.eliminated[check_qi] & ALL_OPTIONS_MASK).count_ones() == 0 {
                 return result(check_qi);
             }
             continue;
@@ -200,7 +200,7 @@ fn contradiction_question(action: &DeduceAction, hyp: &State) -> Option<usize> {
 fn apply_action(action: &DeduceAction, hyp: &mut State) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            hyp.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+            hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
             hyp.answers[qi] = Some(answer);
         }
         DeduceAction::Eliminate { qi, oi } => {
@@ -261,7 +261,7 @@ mod tests {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
                         answers[i] = Some(Answer::from(oi as u8));
-                        eliminated[i] = 0b11111 ^ (1 << oi);
+                        eliminated[i] = ALL_OPTIONS_MASK ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;
                         eliminated[i] |= 1 << oi;
@@ -313,9 +313,9 @@ mod tests {
             eliminated: [0; MAX_N],
         };
         st.answers[3] = Some(Answer::B);
-        st.eliminated[3] = 0b11111 ^ (1 << Answer::B.idx());
+        st.eliminated[3] = ALL_OPTIONS_MASK ^ (1 << Answer::B.idx());
         st.answers[5] = Some(Answer::C);
-        st.eliminated[5] = 0b11111 ^ (1 << Answer::C.idx());
+        st.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << Answer::C.idx());
 
         // Force onto a cell answered otherwise → that cell.
         assert_eq!(

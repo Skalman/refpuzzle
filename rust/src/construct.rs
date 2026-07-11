@@ -332,6 +332,11 @@ pub fn regenerate_skeleton(
     }
 }
 
+/// Default `max_regenerations` for `generate`: the CLI's `-a` default and the
+/// wasm on-the-fly generator share it, so a daily generated in-browser matches
+/// the same seed baked by `gen`.
+pub const DEFAULT_MAX_REGENERATIONS: usize = 100;
+
 /// Full generation: decide the answer key once, then search for questions that
 /// make it solvable + unique. The first skeleton fixes the key; every later
 /// attempt `regenerate_skeleton`s — same key, fresh questions — so retries vary
@@ -361,8 +366,8 @@ pub fn generate(
     // skeleton, each retry regenerates only the questions for that key.
     for _ in 0..=max_regenerations {
         let skeleton = match solution {
-            None => generate_skeleton(recipe, n, oc, rng, &mut stats.v2_skeleton),
-            Some(sol) => regenerate_skeleton(recipe, n, oc, &sol, rng, &mut stats.v2_skeleton),
+            None => generate_skeleton(recipe, n, oc, rng, &mut stats.skeleton),
+            Some(sol) => regenerate_skeleton(recipe, n, oc, &sol, rng, &mut stats.skeleton),
         };
         solution = Some(skeleton.solution);
         let mut fp = fill_options(

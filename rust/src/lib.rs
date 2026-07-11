@@ -60,16 +60,6 @@ mod wasm_api {
         }
     }
 
-    fn answer_to_str(a: Answer) -> &'static str {
-        match a {
-            Answer::A => "A",
-            Answer::B => "B",
-            Answer::C => "C",
-            Answer::D => "D",
-            Answer::E => "E",
-        }
-    }
-
     #[derive(Deserialize)]
     struct StateInput {
         answers: Vec<Option<Answer>>,
@@ -103,7 +93,7 @@ mod wasm_api {
     enum DeduceActionApi {
         Force {
             qi: usize,
-            answer: &'static str,
+            answer: char,
         },
         Eliminate {
             qi: usize,
@@ -137,7 +127,7 @@ mod wasm_api {
         match a {
             DeduceAction::Force { qi, answer } => DeduceActionApi::Force {
                 qi,
-                answer: answer_to_str(answer),
+                answer: answer.as_char(),
             },
             DeduceAction::Eliminate { qi, oi } => DeduceActionApi::Eliminate { qi, oi },
             DeduceAction::EliminateMulti {
@@ -184,11 +174,11 @@ mod wasm_api {
         #[wasm_bindgen(js_name = solve)]
         pub fn solve(&self) -> Result<JsValue, JsError> {
             let r = solve(&self.fp);
-            let answers: Vec<Option<&'static str>> = r
+            let answers: Vec<Option<char>> = r
                 .answers
                 .iter()
                 .take(self.fp.n)
-                .map(|a| a.map(answer_to_str))
+                .map(|a| a.map(Answer::as_char))
                 .collect();
             serde_wasm_bindgen::to_value(&answers).map_err(|e| err(&e.to_string()))
         }
@@ -278,7 +268,7 @@ mod wasm_api {
             profile.question_count,
             profile.option_count,
             &mut rng,
-            100,
+            construct::DEFAULT_MAX_REGENERATIONS,
             &mut stats,
             "wasm",
         ) {

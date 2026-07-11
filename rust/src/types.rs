@@ -74,6 +74,12 @@ pub enum Answer {
 
 pub const LETTERS: [Answer; 5] = [Answer::A, Answer::B, Answer::C, Answer::D, Answer::E];
 
+/// Bitmask of all five option slots (`0b11111`). A puzzle's real options are the
+/// low `option_count` bits; the high `5 - option_count` "phantom" bits are
+/// pre-eliminated in `State::initial`. The engine masks option bitsets with this
+/// so phantom slots never leak into counts, eliminations, or forces.
+pub const ALL_OPTIONS_MASK: u8 = 0b11111;
+
 impl Answer {
     pub fn idx(self) -> usize {
         self as usize
@@ -93,7 +99,10 @@ impl std::fmt::Display for Answer {
 }
 
 impl From<u8> for Answer {
-    /// Panics if `v >= 5`.
+    /// Infallible conversion for internal callers that pass a known-valid index
+    /// (`0..5`): option/answer loop indices, `OptionValue::value()` of a real
+    /// letter option. Panics with the offending value if `v >= 5`. Wire/parse
+    /// paths never use this — they go through the fallible `Deserialize` impl.
     fn from(v: u8) -> Answer {
         match v {
             0 => Answer::A,
@@ -162,7 +171,7 @@ pub enum QuestionTypeKind {
 /// (see `DEFAULT_DAMPING`), so a puzzle is less likely to stack near-synonyms
 /// (three `Count*`s, both parities). Kinds that stand alone — those already
 /// capped at one occurrence, plus `LetterDist` — have no group and are never
-/// damped. `QUESTION_GROUP_COUNT` must equal the number of variants here.
+/// damped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
 pub enum QuestionGroup {
@@ -173,11 +182,12 @@ pub enum QuestionGroup {
     FirstLast,
     Sameness,
     Parity,
+    /// Must stay last: `QUESTION_GROUP_COUNT` derives from `AnswerOf as usize + 1`.
     AnswerOf,
 }
 
 /// Number of [`QuestionGroup`] variants — the length of a per-group array.
-pub const QUESTION_GROUP_COUNT: usize = 8;
+pub const QUESTION_GROUP_COUNT: usize = QuestionGroup::AnswerOf as usize + 1;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -258,7 +268,7 @@ pub enum QuestionType {
 }
 
 impl QuestionTypeKind {
-    pub fn all_flat() -> &'static [QuestionTypeKind] {
+    pub fn all() -> &'static [QuestionTypeKind] {
         use QuestionTypeKind::*;
         &[
             CountAnswer,
@@ -401,10 +411,10 @@ pub struct State {
 
 impl State {
     pub fn initial(option_count: usize) -> Self {
-        let pm = 0b11111u8 & !((1u8 << option_count) - 1);
+        let initial_eliminated_mask = ALL_OPTIONS_MASK & !((1u8 << option_count) - 1);
         State {
             answers: [None; MAX_N],
-            eliminated: [pm; MAX_N],
+            eliminated: [initial_eliminated_mask; MAX_N],
         }
     }
 }

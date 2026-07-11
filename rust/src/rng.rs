@@ -1,5 +1,10 @@
 use crate::types::Answer;
 
+/// Mulberry32 PRNG. The float-based `next_f64`/`int` path is deliberate:
+/// multiply-and-truncate is faster than a runtime `% range` (which lowers to an
+/// integer division), so `%` is not the optimization it looks like — and it
+/// would draw a different sequence for every seed, rewriting the whole baked
+/// corpus. Keep it verbatim.
 pub struct Rng {
     s: u32,
 }
@@ -26,6 +31,7 @@ impl Rng {
     }
 
     pub fn pick<T: Copy>(&mut self, arr: &[T]) -> T {
+        debug_assert!(!arr.is_empty(), "pick from empty slice");
         arr[self.int(0, arr.len() as i32 - 1) as usize]
     }
 

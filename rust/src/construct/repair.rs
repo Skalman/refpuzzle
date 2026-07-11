@@ -41,7 +41,7 @@ pub(super) fn repair_distractors(
         ) {
             PassOutcome::Solved => return true,
             PassOutcome::Changed => {} // advanced — run another pass from the new position
-            PassOutcome::NoChange | PassOutcome::PoorlySolved => return false,
+            PassOutcome::NoChange | PassOutcome::FailedRecheck => return false,
         }
     }
 }
@@ -54,7 +54,7 @@ enum PassOutcome {
     /// from-scratch re-check (ambiguous, or not hint-solvable). Terminal like
     /// `NoChange` — reject and regenerate — but the offending edit is left in
     /// place rather than restored (the puzzle is discarded anyway).
-    PoorlySolved,
+    FailedRecheck,
 }
 
 /// One repair pass. Walks the stuck questions, mutates one distractor each, and
@@ -110,7 +110,7 @@ fn repair_pass(
             if solutions.len() != 1 {
                 // Not actually unique — the edit added a second valid answer.
                 stats.repair_ambiguous += 1;
-                return PassOutcome::PoorlySolved;
+                return PassOutcome::FailedRecheck;
             }
             // The resume finished from `state`, whose carried eliminations this edit
             // may have invalidated — so re-solve from scratch. Accept only if the
@@ -120,7 +120,7 @@ fn repair_pass(
                 run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until);
             if !fresh_solved {
                 stats.repair_unsolvable += 1;
-                return PassOutcome::PoorlySolved;
+                return PassOutcome::FailedRecheck;
             }
             assert_accepted(fp, solutions.len(), label);
             stats.distractor_ok += 1;
@@ -178,11 +178,11 @@ fn repair_one_question(
     rng.shuffle(&mut distractors);
 
     for oi in distractors {
-        let before_val = fp.options[qi][oi];
+        let before_value = fp.options[qi][oi];
         let mut candidates = domain.clone();
         rng.shuffle(&mut candidates);
         for v in candidates {
-            if v == before_val {
+            if v == before_value {
                 continue;
             }
             fp.options[qi][oi] = v;
@@ -195,7 +195,7 @@ fn repair_one_question(
                 return true;
             }
         }
-        fp.options[qi][oi] = before_val; // none worked — restore, try next distractor
+        fp.options[qi][oi] = before_value; // none worked — restore, try next distractor
     }
     false
 }

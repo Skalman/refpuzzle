@@ -47,16 +47,16 @@ pub fn gen_stats(
     let mut no_progress: Vec<Vec<StuckCase>> = levels.iter().map(|_| Vec::new()).collect();
     let mut partial: Vec<Vec<StuckCase>> = levels.iter().map(|_| Vec::new()).collect();
 
-    for (i, &lvl) in levels.iter().enumerate() {
-        let level = lvl - 1; // 0-based index into PROFILES / RECIPES
-        let p = &PROFILES[level];
+    for (i, &level) in levels.iter().enumerate() {
+        let level_index = level - 1; // 0-based index into PROFILES / RECIPES
+        let p = &PROFILES[level_index];
         let (n, oc) = (p.question_count, p.option_count);
         let real_mask = ((1u16 << oc) - 1) as u8; // option slots that aren't phantom
         let mut dist = vec![0u32; n + 1];
         let mut filled_dist = vec![0u32; n * oc + 1];
         for _ in 0..attempts {
             let skeleton =
-                generate_skeleton(&RECIPES[level], n, oc, &mut rng, &mut stats.v2_skeleton);
+                generate_skeleton(&RECIPES[level_index], n, oc, &mut rng, &mut stats.skeleton);
             let mut fp = fill_options(
                 &skeleton.types,
                 &skeleton.solution,
@@ -71,7 +71,7 @@ pub fn gen_stats(
                 &mut fp,
                 &skeleton.solution,
                 skeleton.n,
-                RECIPES[level].lookahead_deduce_until,
+                RECIPES[level_index].lookahead_deduce_until,
                 &mut rng,
                 &mut stats,
                 "gen-stats",
@@ -94,7 +94,7 @@ pub fn gen_stats(
                     };
                     if bucket.len() < count {
                         bucket.push(StuckCase {
-                            level: lvl,
+                            level,
                             solved,
                             n: skeleton.n,
                             filled,
@@ -229,6 +229,7 @@ fn print_bucket(title: &str, cases: &[&StuckCase]) {
     for c in cases {
         let stuck: Vec<String> = c.stuck.iter().map(|qi| format!("Q{}", qi + 1)).collect();
         let uniqueness = match c.solutions {
+            0 => "UNSOLVABLE (0 solutions)".to_string(),
             1 => "unique".to_string(),
             s => format!("AMBIGUOUS ({s}+ solutions)"),
         };

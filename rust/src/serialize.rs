@@ -143,9 +143,9 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
             options[qi][oi] = if o.is_null() {
                 OptionValue::NONE
             } else {
-                let v = o.as_i64()?;
-                if (0..0xFE).contains(&v) {
-                    OptionValue::num(v as u8)
+                let num = o.as_i64()?;
+                if (0..0xFE).contains(&num) {
+                    OptionValue::num(num as u8)
                 } else {
                     OptionValue::UNUSED
                 }

@@ -266,7 +266,7 @@ pub fn format_steps(steps: &[SolveStep]) -> Vec<String> {
 fn apply_action(action: &DeduceAction, state: &mut State) {
     match *action {
         DeduceAction::Force { qi, answer } => {
-            state.eliminated[qi] = 0b11111 ^ (1 << answer.idx());
+            state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
             state.answers[qi] = Some(answer);
         }
         DeduceAction::Eliminate { qi, oi } => {

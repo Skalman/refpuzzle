@@ -568,8 +568,8 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     return Validity::Invalid;
                 }
 
-                let poss_a = !eliminated[p] & 0b11111u8;
-                let poss_b = !eliminated[p + 1] & 0b11111u8;
+                let poss_a = !eliminated[p] & ALL_OPTIONS_MASK;
+                let poss_b = !eliminated[p + 1] & ALL_OPTIONS_MASK;
                 if poss_a & poss_b == 0 {
                     return Validity::Invalid;
                 }
@@ -1113,7 +1113,7 @@ mod tests {
                     if ch.is_ascii_uppercase() {
                         let oi = (ch as u8 - b'A') as usize;
                         answers[i] = Some(Answer::from(oi as u8));
-                        eliminated[i] = 0b11111 ^ (1 << oi);
+                        eliminated[i] = ALL_OPTIONS_MASK ^ (1 << oi);
                     } else if ch.is_ascii_lowercase() {
                         let oi = (ch as u8 - b'a') as usize;
                         eliminated[i] |= 1 << oi;
