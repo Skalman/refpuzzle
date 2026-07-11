@@ -18,7 +18,6 @@ import type { CompactPuzzle } from "../puzzles/daily.ts";
 import { parseCompactPuzzle } from "../puzzles/daily.ts";
 
 let wasmReadyPromise: Promise<unknown> | null = null;
-let initDone = false;
 
 /**
  * Kicks off wasm init on first call and returns a promise that resolves
@@ -26,15 +25,8 @@ let initDone = false;
  * constructing a {@link PuzzleHandle} or calling {@link generatePuzzle}.
  */
 export function wasmReady(): Promise<unknown> {
-  wasmReadyPromise ??= init().then((v) => {
-    initDone = true;
-    return v;
-  });
+  wasmReadyPromise ??= init();
   return wasmReadyPromise;
-}
-
-export function isWasmReady(): boolean {
-  return initDone;
 }
 
 function validityFromU8(v: number): Validity {
@@ -123,6 +115,3 @@ export function generatePuzzle(seed: number, level: number, id: string): Puzzle 
     return null;
   }
 }
-
-// Re-export Answer for callers that want the union type
-export type { Answer };
