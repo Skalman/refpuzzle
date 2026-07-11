@@ -1,11 +1,8 @@
 import init, {
   Puzzle as WasmPuzzle,
   generatePuzzle as wasmGeneratePuzzle,
-  questionText as wasmQuestionText,
-  optionLabel as wasmOptionLabel,
-  claimLabel as wasmClaimLabel,
 } from "../../rust/pkg/refpuzzle.js";
-import type { Puzzle, QuestionType, Marks, Answer } from "../engine/types.ts";
+import type { Puzzle, RenderedQuestion, Marks, Answer } from "../engine/types.ts";
 import { L2I } from "../engine/types.ts";
 import type { SolveStep } from "../engine/hint-types.ts";
 import type { Validity } from "../engine/state.ts";
@@ -17,7 +14,7 @@ import {
   V_PENDING,
   deriveState,
 } from "../engine/state.ts";
-import type { CompactQuestionType, CompactPuzzle } from "../puzzles/daily.ts";
+import type { CompactPuzzle } from "../puzzles/daily.ts";
 import { parseCompactPuzzle } from "../puzzles/daily.ts";
 
 let wasmReadyPromise: Promise<unknown> | null = null;
@@ -38,76 +35,6 @@ export function wasmReady(): Promise<unknown> {
 
 export function isWasmReady(): boolean {
   return initDone;
-}
-
-// Inverse of expandQuestion in daily.ts: compact the TS QuestionType back to
-// the on-disk shape that Rust's parse_puzzle accepts.
-function compactQuestion(qt: QuestionType): CompactQuestionType {
-  const t = qt.type;
-  switch (qt.type) {
-    case "CountVowel":
-    case "CountConsonant":
-    case "MostCommonCount":
-    case "PrevSame":
-    case "NextSame":
-    case "OnlySame":
-    case "SameAs":
-    case "ConsecIdent":
-    case "LeastCommon":
-    case "MostCommon":
-    case "NoOtherHasAnswer":
-    case "AnswerIsSelf":
-    case "TrueStmt":
-      return { t };
-    case "CountAnswer":
-    case "FirstWith":
-    case "LastWith":
-    case "OnlyOdd":
-    case "OnlyEven":
-    case "EqualCount":
-      return { t, a: L2I[qt.answer] };
-    case "CountAnswerAfter":
-    case "ClosestAfter":
-      return { t, a: L2I[qt.answer], q: qt.afterIndex };
-    case "CountAnswerBefore":
-    case "ClosestBefore":
-      return { t, a: L2I[qt.answer], q: qt.beforeIndex };
-    case "AnswerOf":
-    case "LetterDist":
-    case "SameAsWhich":
-      return { t, q: qt.questionIndex };
-    default: {
-      qt satisfies never;
-      // oxlint-disable-next-line typescript/restrict-template-expressions
-      throw new Error(`Unknown question type: ${(qt as { type: string }).type}`);
-    }
-  }
-}
-
-function toCompactPuzzle(p: Puzzle): CompactPuzzle {
-  const q = p.questions.map((qd) => compactQuestion(qd.questionType));
-  const o = p.questions.map((qd) => qd.options.map((opt) => opt.value));
-  const t = p.trueStmtQuestionTypes?.map(compactQuestion);
-  return t ? { q, o, t } : { q, o };
-}
-
-// ── Board text rendering, delegated to Rust via wasm. The compact question
-// type crosses as JSON (the shape Rust's parse_puzzle reads). Callers must have
-// awaited wasmReady — main.tsx gates the first render on it.
-
-export function renderQuestionText(qt: QuestionType): string {
-  return wasmQuestionText(JSON.stringify(compactQuestion(qt)));
-}
-
-export function renderOptionLabel(qt: QuestionType, value: number | null): string {
-  return wasmOptionLabel(JSON.stringify(compactQuestion(qt)), value);
-}
-
-export function renderClaimLabel(claim: {
-  questionType: QuestionType;
-  value: number | null;
-}): string {
-  return wasmClaimLabel(JSON.stringify(compactQuestion(claim.questionType)), claim.value);
 }
 
 function validityFromU8(v: number): Validity {
@@ -137,6 +64,8 @@ export interface PuzzleHandle {
    *  Null when the puzzle is solved or stuck. The hint UI renders `explain`;
    *  the tutorial also applies `action` to walk the puzzle synthetically. */
   nextStep(answers: (Answer | null)[], eliminated: number[]): SolveStep | null;
+  /** Rendered board text — prompt + option labels for every question. */
+  renderBoard(): RenderedQuestion[];
   free(): void;
 }
 
@@ -146,9 +75,8 @@ function answerIndicesFromMarks(marks: Marks[], optionCount: number) {
   return { answers: answers.map((a) => (a === null ? null : L2I[a])), eliminated };
 }
 
-export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
-  const json = JSON.stringify(toCompactPuzzle(p));
-  const wasm = new WasmPuzzle(json);
+export function createPuzzleHandle(compact: CompactPuzzle): PuzzleHandle {
+  const wasm = new WasmPuzzle(JSON.stringify(compact));
   const wrapper: PuzzleHandle = {
     checkAllAnswers(marks, optionCount) {
       const state = answerIndicesFromMarks(marks, optionCount);
@@ -166,6 +94,10 @@ export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
       return wasm.nextStep({ answers: answerIndices, eliminated }) as SolveStep | null;
     },
+    renderBoard() {
+      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+      return wasm.renderBoard() as RenderedQuestion[];
+    },
     free() {
       handleRegistry.unregister(wrapper);
       wasm.free();
@@ -177,8 +109,8 @@ export function createPuzzleHandle(p: Puzzle): PuzzleHandle {
 
 /**
  * Generate one puzzle on the fly. `seed` is any u32; `level` is 1..6.
- * Returns a fully expanded {@link Puzzle} or null if generation failed.
- * Caller must already have awaited {@link wasmReady}.
+ * Returns a rendered {@link Puzzle} (board text cached) or null if generation
+ * failed. Caller must already have awaited {@link wasmReady}.
  */
 export function generatePuzzle(seed: number, level: number, id: string): Puzzle | null {
   try {
@@ -186,7 +118,7 @@ export function generatePuzzle(seed: number, level: number, id: string): Puzzle 
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const compact = JSON.parse(json) as CompactPuzzle;
     const p = parseCompactPuzzle(compact);
-    return { ...p, id, difficulty: String(level) };
+    return { ...p, id };
   } catch {
     return null;
   }

@@ -42,7 +42,7 @@ mod wasm_api {
     use crate::rng::Rng;
     use crate::serialize::{parse_puzzle, puzzle_to_compact_value};
     use crate::solve_deduce::solve;
-    use crate::types::{Answer, Claim, FlatPuzzle, MAX_N, OptionValue, QuestionType, State};
+    use crate::types::{Answer, Claim, FlatPuzzle, MAX_N, QuestionType, State};
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
@@ -124,6 +124,13 @@ mod wasm_api {
     struct StepApi {
         action: DeduceActionApi,
         explain: Vec<ExplainStep>,
+    }
+
+    /// One question's rendered board text: the prompt and one label per option.
+    #[derive(Serialize)]
+    struct BoardQuestionApi {
+        text: String,
+        options: Vec<String>,
     }
 
     fn action_to_api(a: DeduceAction) -> DeduceActionApi {
@@ -217,42 +224,38 @@ mod wasm_api {
             };
             serde_wasm_bindgen::to_value(&api).map_err(|e| err(&e.to_string()))
         }
-    }
 
-    // ── Board text rendering. Each takes the compact question type as JSON
-    // (`{"t":"CountAnswer","a":0}` — the shape `parse_puzzle` reads). `value` is
-    // the option's numeric value, or null/undefined for the empty marker.
-
-    fn parse_question_type(qt_json: &str) -> Result<QuestionType, JsError> {
-        serde_json::from_str(qt_json).map_err(|e| err(&e.to_string()))
-    }
-
-    fn to_option_value(value: Option<u32>) -> OptionValue {
-        value.map_or(OptionValue::NONE, |v| OptionValue::num(v as u8))
-    }
-
-    /// The question prompt, e.g. "How many questions have answer A?".
-    #[wasm_bindgen(js_name = questionText)]
-    pub fn question_text(qt_json: &str) -> Result<String, JsError> {
-        Ok(render::question_text(&parse_question_type(qt_json)?))
-    }
-
-    /// The label for one option, e.g. "3", "C", "4-5", or "None".
-    #[wasm_bindgen(js_name = optionLabel)]
-    pub fn option_label(qt_json: &str, value: Option<u32>) -> Result<String, JsError> {
-        Ok(render::option_label(
-            &parse_question_type(qt_json)?,
-            to_option_value(value),
-        ))
-    }
-
-    /// A TrueStmt claim rendered as its question text plus the option it asserts.
-    #[wasm_bindgen(js_name = claimLabel)]
-    pub fn claim_label(qt_json: &str, value: Option<u32>) -> Result<String, JsError> {
-        Ok(render::claim_label(&Claim {
-            question_type: parse_question_type(qt_json)?,
-            value: to_option_value(value),
-        }))
+        /// The rendered board text for every question: the prompt plus one
+        /// label per option. TrueStmt rows carry per-option claim text. The
+        /// frontend caches these strings and models no question types itself.
+        #[wasm_bindgen(js_name = renderBoard)]
+        pub fn render_board(&self) -> Result<JsValue, JsError> {
+            let fp = &self.fp;
+            let board: Vec<BoardQuestionApi> = (0..fp.n)
+                .map(|qi| {
+                    let qt = &fp.question_types[qi];
+                    let options = (0..fp.option_count)
+                        .map(|oi| {
+                            let value = fp.options[qi][oi];
+                            match (qt, fp.true_stmt_question_types.as_ref()) {
+                                (QuestionType::TrueStmt, Some(types)) => {
+                                    render::claim_label(&Claim {
+                                        question_type: types[oi],
+                                        value,
+                                    })
+                                }
+                                _ => render::option_label(qt, value),
+                            }
+                        })
+                        .collect();
+                    BoardQuestionApi {
+                        text: render::question_text(qt),
+                        options,
+                    }
+                })
+                .collect();
+            serde_wasm_bindgen::to_value(&board).map_err(|e| err(&e.to_string()))
+        }
     }
 
     /// Returns a CompactPuzzle JSON string, or an `Err` if generation

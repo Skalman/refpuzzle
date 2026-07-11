@@ -120,11 +120,11 @@ export function PuzzleView({
     void (async () => {
       await wasmReady();
       if (cancelled) return;
-      const handle = createPuzzleHandle(puzzle);
+      const handle = createPuzzleHandle(puzzle.compact);
       handleRef.current = handle;
       const initial = handle.checkAllAnswers(
         questionsRef.current.map((q) => q.marks),
-        puzzle.optionCount ?? 5,
+        puzzle.optionCount,
       );
       setValidity(initial);
     })();
@@ -251,7 +251,7 @@ export function PuzzleView({
       const result: Validity[] = handle
         ? handle.checkAllAnswers(
             qs.map((q) => q.marks),
-            puzzle.optionCount ?? 5,
+            puzzle.optionCount,
           )
         : new Array(qs.length).fill(V_NEUTRAL);
       setValidity(result);
@@ -750,7 +750,7 @@ export function PuzzleView({
           >
             {puzzle.questions.map((qDef, qi) => (
               <QuestionRow
-                key={qDef.questionType.type + JSON.stringify(qDef.questionType)}
+                key={qDef.text}
                 index={qi}
                 question={qDef}
                 marks={questions[qi]?.marks ?? FRESH_MARKS}
@@ -758,9 +758,6 @@ export function PuzzleView({
                 disabled={completed || tutorial.active}
                 focusedOption={focusedQuestion === qi ? focusedOption : null}
                 defaultFocus={focusedQuestion == null && qi === 0}
-                trueStmtQuestionTypes={
-                  qDef.questionType.type === "TrueStmt" ? puzzle.trueStmtQuestionTypes : undefined
-                }
                 onOptionClick={stableOptionClick}
               />
             ))}

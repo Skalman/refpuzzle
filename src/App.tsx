@@ -10,7 +10,6 @@ import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
 // QR components lazy-loaded via dynamic import (no preact dependency in chunks)
 import type { Puzzle } from "./engine/types.ts";
-import { renderQuestionText, renderOptionLabel, renderClaimLabel } from "./lib/wasm.ts";
 import {
   fetchDaily,
   dayNumber,
@@ -457,33 +456,24 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
                 <h2>
                   {s.difficulty[lvl]} ({p.questions.length} {s.puzzleList.questions})
                 </h2>
-                {p.questions.map((q, qi) => {
-                  const tsTypes =
-                    q.questionType.type === "TrueStmt" ? p.trueStmtQuestionTypes : undefined;
-                  const labels = q.options.map((opt, oi) =>
-                    tsTypes
-                      ? renderClaimLabel({ questionType: tsTypes[oi], value: opt.value })
-                      : renderOptionLabel(q.questionType, opt.value),
-                  );
-                  return (
-                    // oxlint-disable-next-line react/no-array-index-key
-                    <div key={qi} class="print-question">
-                      <div class="print-question-text">
-                        {qi + 1}. {renderQuestionText(q.questionType)}
-                      </div>
-                      <div
-                        class={`print-options ${labels.some((l) => l.length > 12) ? "print-options-long" : ""}`}
-                      >
-                        {labels.map((label, oi) => (
-                          // oxlint-disable-next-line react/no-array-index-key
-                          <span key={oi} class="print-option">
-                            {String.fromCharCode(65 + oi)}. {label}
-                          </span>
-                        ))}
-                      </div>
+                {p.questions.map((q, qi) => (
+                  // oxlint-disable-next-line react/no-array-index-key
+                  <div key={qi} class="print-question">
+                    <div class="print-question-text">
+                      {qi + 1}. {q.text}
                     </div>
-                  );
-                })}
+                    <div
+                      class={`print-options ${q.options.some((l) => l.length > 12) ? "print-options-long" : ""}`}
+                    >
+                      {q.options.map((label, oi) => (
+                        // oxlint-disable-next-line react/no-array-index-key
+                        <span key={oi} class="print-option">
+                          {String.fromCharCode(65 + oi)}. {label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             );
           })}

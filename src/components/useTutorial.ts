@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import type { Marks, Puzzle } from "../engine/types.ts";
-import { FRESH_MARKS, getFlatPuzzle } from "../engine/types.ts";
+import { FRESH_MARKS } from "../engine/types.ts";
 import { V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { collectTutorialSteps } from "../engine/tutorial.ts";
@@ -50,7 +50,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
       if (cancelled) return;
       const handle = optsRef.current.handleRef.current;
       if (!handle) return;
-      setSteps(collectTutorialSteps(getFlatPuzzle(puzzle), handle));
+      setSteps(collectTutorialSteps(puzzle, handle));
     })();
     return () => {
       cancelled = true;
@@ -73,7 +73,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
     const validity: Validity[] = handle
       ? handle.checkAllAnswers(
           qs.map((q) => q.marks),
-          puzzle.optionCount ?? 5,
+          puzzle.optionCount,
         )
       : new Array(qs.length).fill(V_NEUTRAL);
     optsRef.current.setValidity(validity);
@@ -84,7 +84,7 @@ export function useTutorial(puzzle: Puzzle, opts: UseTutorialOpts) {
     snapshotsRef.current.push(cloneStates(optsRef.current.questionsRef.current));
     const next = cloneStates(optsRef.current.questionsRef.current);
     if (step.isForce) {
-      for (let oi = 0; oi < (puzzle.optionCount ?? 5); oi++) {
+      for (let oi = 0; oi < puzzle.optionCount; oi++) {
         next[step.questionIndex].marks[oi] = oi === step.optionIndex ? "correct" : "incorrect";
       }
     } else {

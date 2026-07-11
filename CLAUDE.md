@@ -22,12 +22,14 @@
 - `pnpm wasm` rebuilds `rust/pkg/`; `pnpm build` does it as part of the build.
 - All cargo commands run in the root dir, not in rust/
 - Preact + preact-iso frontend, no backend
+- Rust owns all question types, logic, and prose. The frontend never models
+  a `QuestionType`; it holds the compact blob plus rendered board text
+  (`PuzzleHandle.renderBoard` → question prompt + option labels) and marks.
 - TS engine survivors in `src/engine/`: `state.ts` (mark derivation),
-  `explain.ts` (hint prose), `render.ts` (i18n), `tutorial.ts` (scripted
-  steps), `types.ts` + `hint-types.ts` (shared wire/types), `serialize.ts`
-  (small TS-side helpers).
+  `tutorial.ts` (scripted steps), `types.ts` (Puzzle/marks types + letter
+  helpers), `hint-types.ts` (hint wire types).
 - Puzzle data in `public/puzzles/daily/<year>.json` (compact form, parsed
-  by both wasm and TS).
+  by wasm; the frontend hands the blob to Rust rather than expanding it).
 - Year JSON missing or doesn't contain the date → wasm generates on the
   fly in `src/puzzles/daily.ts::fetchDaily`.
 - All UI strings in src/i18n/ (English only for now)

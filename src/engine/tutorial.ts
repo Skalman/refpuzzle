@@ -1,4 +1,4 @@
-import type { Answer, FlatPuzzle } from "./types.ts";
+import type { Answer, Puzzle } from "./types.ts";
 import { LETTERS, letterIdx } from "./types.ts";
 import type { DeduceAction, ExplainStep } from "./hint-types.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
@@ -25,9 +25,9 @@ export type TutorialStep =
       isForce: boolean;
     };
 
-export function collectTutorialSteps(fp: FlatPuzzle, handle: PuzzleHandle): TutorialStep[] {
-  const n = fp.n;
-  const oc = fp.optionCount;
+export function collectTutorialSteps(puzzle: Puzzle, handle: PuzzleHandle): TutorialStep[] {
+  const n = puzzle.questions.length;
+  const oc = puzzle.optionCount;
   const phantomMask = 0b11111 & ~((1 << oc) - 1);
   const answers: (Answer | null)[] = new Array(n).fill(null);
   const eliminated: number[] = new Array(n).fill(phantomMask);
