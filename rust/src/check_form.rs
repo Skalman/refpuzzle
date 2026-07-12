@@ -177,7 +177,7 @@ fn check_claim_form(
         | QuestionType::NoOtherHasAnswer => (v >= oc).then(|| {
             (
                 format!("letter index {v} outside option count {oc}"),
-                Severity::Warning,
+                Severity::Error,
             )
         }),
         QuestionType::EqualCount { answer } => {
