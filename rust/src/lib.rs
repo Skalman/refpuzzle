@@ -33,6 +33,7 @@ static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> 
 mod wasm_api {
     use crate::build;
     use crate::check_answer::{Validity, check_answer};
+    use crate::check_form::{Severity, check_form};
     use crate::construct;
     use crate::deduce::{DeduceAction, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
@@ -155,6 +156,17 @@ mod wasm_api {
             let v: serde_json::Value =
                 serde_json::from_str(compact_json).map_err(|e| err(&e.to_string()))?;
             let fp = parse_puzzle(&v).ok_or_else(|| err("failed to parse puzzle"))?;
+            // Reject a malformed (playground) puzzle here with a clear message,
+            // rather than letting a downstream deduce/check_answer panic trap the
+            // module. Warnings are tolerated; only fatal form errors block.
+            let fatal: Vec<String> = check_form(&fp)
+                .into_iter()
+                .filter(|e| matches!(e.severity, Severity::Error))
+                .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
+                .collect();
+            if !fatal.is_empty() {
+                return Err(err(&format!("malformed puzzle: {}", fatal.join("; "))));
+            }
             Ok(Puzzle { fp })
         }
 
