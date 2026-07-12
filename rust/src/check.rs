@@ -333,7 +333,8 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         || r.brute_count != 1
         || !r.hint_brute_match
         || !r.validity_ok
-        || !r.ambiguous.is_empty();
+        || !r.ambiguous.is_empty()
+        || !r.form_errors.is_empty();
 
     let verdict = if !r.hint_brute_match {
         red("MISMATCH")
@@ -345,8 +346,10 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         red("STUCK")
     } else if r.brute_count == 0 {
         red("UNSOLVABLE")
-    } else if r.brute_count != 1 {
+    } else if r.brute_count != 1 || !r.ambiguous.is_empty() {
         red("AMBIGUOUS")
+    } else if !r.form_errors.is_empty() {
+        red("FORM ERRORS")
     } else if has_form_warns {
         yellow("ok (with warnings)")
     } else {
@@ -541,6 +544,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         &mismatches,
         &validity_fails,
         &not_answerable,
+        &form_errors,
     ] {
         for k in v {
             failed_set.insert(k);
