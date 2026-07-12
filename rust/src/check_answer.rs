@@ -699,7 +699,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         // ── Equal count ──
         QuestionType::EqualCount { answer } => {
             if value.is_num() {
-                if value.value() > 4 {
+                if value.value() as usize >= oc {
                     return Validity::Invalid;
                 }
                 let claimed = Answer::from(value.value());
@@ -730,7 +730,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     return Validity::Pending;
                 }
                 let ref_count = count_answer_simple(answers, answer, 0, n);
-                let any_match = LETTERS
+                let any_match = LETTERS[..oc]
                     .iter()
                     .any(|&l| l != answer && count_answer_simple(answers, l, 0, n) == ref_count);
                 if any_match {
