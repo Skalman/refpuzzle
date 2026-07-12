@@ -368,7 +368,7 @@ pub(crate) fn fill_one_question(
         return;
     }
 
-    let correct_val = correct_option_value(qt, qi, solution, n);
+    let correct_val = correct_option_value(qt, qi, solution, n, option_count);
     let val_pool = valid_values(qt, qi, n, option_count);
     let letters = &LETTERS[..option_count];
 
@@ -665,6 +665,7 @@ pub fn correct_option_value(
     qi: usize,
     sol: &[Answer; MAX_N],
     n: usize,
+    option_count: usize,
 ) -> OptionValue {
     fn num(v: usize) -> OptionValue {
         OptionValue::num(v as u8)
@@ -723,7 +724,7 @@ pub fn correct_option_value(
         }
         QuestionType::EqualCount { answer } => {
             let ref_count = count_letter(sol, answer, n);
-            LETTERS
+            LETTERS[..option_count]
                 .iter()
                 .find(|&&l| l != answer && count_letter(sol, l, n) == ref_count)
                 .map_or(OptionValue::NONE, |l| num(l.idx()))
@@ -1087,7 +1088,7 @@ fn try_make_claim(
             })
         }
         QuestionTypeKind::LeastCommon => {
-            let counts = letter_counts(sol, n);
+            let counts = &letter_counts(sol, n)[..option_count];
             let min = *counts.iter().min().unwrap_or(&0);
             if counts.iter().filter(|&&c| c == min).count() != 1 {
                 return None;

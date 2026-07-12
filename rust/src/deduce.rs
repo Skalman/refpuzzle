@@ -1404,12 +1404,13 @@ fn apply_extremum_count<const IS_LEAST: bool>(
     force_rule: DeduceRule,
 ) {
     let eliminated = &state.eliminated;
+    let oc = fp.option_count;
 
     // qi is unanswered; remove its contribution to the cell ceiling so adj_*
     // doesn't double-count when we test "if qi were `oi`".
     let min_count = cells.filled;
     let mut max_count = cells.filled;
-    for li in 0..5usize {
+    for li in 0..oc {
         max_count[li] += cells.fillable[li];
         if !is_elim(eliminated, qi, li) {
             max_count[li] -= 1;
@@ -1420,12 +1421,13 @@ fn apply_extremum_count<const IS_LEAST: bool>(
     // the extremum, as bitmasks.
     let mut can_mask = 0u8;
     let mut must_mask = 0u8;
-    for oi in 0..5usize {
+    for oi in 0..oc {
         if is_elim(eliminated, qi, oi) {
             continue;
         }
         let v = fp.options[qi][oi].value();
-        if v >= 5 {
+        // Skip NONE/UNUSED sentinels and any out-of-range letter claim.
+        if usize::from(v) >= oc {
             continue;
         }
         let claimed = v as usize;
@@ -1447,14 +1449,14 @@ fn apply_extremum_count<const IS_LEAST: bool>(
             }
         };
 
-        let can_be_extreme = (0..fp.option_count).all(|li| {
+        let can_be_extreme = (0..oc).all(|li| {
             if li == claimed {
                 return true;
             }
             let (a, b) = pair(li);
             adj_max[a] >= adj_min[b]
         });
-        let must_be_extreme = (0..fp.option_count).all(|li| {
+        let must_be_extreme = (0..oc).all(|li| {
             if li == claimed {
                 return true;
             }

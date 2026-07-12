@@ -821,7 +821,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
         if selected_v != Validity::Valid {
             return selected_v;
         }
-        for oi in 0..5usize {
+        for oi in 0..fp.option_count {
             if oi == ai {
                 continue;
             }

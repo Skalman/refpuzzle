@@ -1457,7 +1457,7 @@ pub(crate) fn random_type_params(
         QuestionTypeKind::EqualCount => {
             let ref_letter = rng.pick_letter(option_count);
             let ref_count = count_letter(solution, ref_letter, n);
-            let has_match = LETTERS
+            let has_match = LETTERS[..option_count]
                 .iter()
                 .any(|&l| l != ref_letter && count_letter(solution, l, n) == ref_count);
             // When no other letter shares ref's count the "equal count" reads as a
