@@ -133,73 +133,12 @@ fn solution_str_to_steps(sol: &str) -> Vec<String> {
 
 // ── Compute ──
 
-fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
+/// Puzzle layout for the `check` display; depends only on `fp`, so it's safe even
+/// when the solve phases are skipped.
+fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
     let n = fp.n;
     let oc = fp.option_count;
-
-    let cr = run_check(fp, key);
-    let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
-
-    let solutions = solve_brute::solve(fp, None, 10);
-
-    let unique_solution = if solutions.len() == 1 {
-        Some(solutions[0][..n].as_ref())
-    } else {
-        None
-    };
-    let fe = check_form::check_form(fp);
-    let form_warnings: Vec<String> = fe
-        .iter()
-        .filter(|e| matches!(e.severity, check_form::Severity::Warning))
-        .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
-        .collect();
-    let form_errors: Vec<String> = fe
-        .iter()
-        .filter(|e| matches!(e.severity, check_form::Severity::Error))
-        .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
-        .collect();
-    let brute_count = solutions.len();
-    let brute_solutions: Vec<String> = solutions
-        .iter()
-        .map(|sol| sol.iter().take(n).map(|a| a.as_char()).collect())
-        .collect();
-
-    let hint_brute_match = if cr.ok && solutions.len() == 1 {
-        (0..n).all(|i| cr.answers[i] == Some(solutions[0][i]))
-    } else {
-        true
-    };
-
-    let state = State {
-        answers: cr.answers,
-        eliminated: cr.eliminated,
-    };
-    let validity_ok = if cr.ok {
-        (0..n).all(|i| {
-            let v = check_answer::check_answer(fp, state, i);
-            v.is_valid() || v == check_answer::Validity::Pending
-        })
-    } else {
-        true
-    };
-    let validity_per_question: Vec<String> = (0..n)
-        .map(|i| {
-            if cr.ok {
-                match check_answer::check_answer(fp, state, i) {
-                    check_answer::Validity::Valid => "valid",
-                    check_answer::Validity::Consistent => "consistent",
-                    check_answer::Validity::Invalid => "invalid",
-                    check_answer::Validity::Pending => "pending",
-                    check_answer::Validity::Neutral => "neutral",
-                }
-                .into()
-            } else {
-                "n/a".into()
-            }
-        })
-        .collect();
-
-    let questions: Vec<QuestionInfo> = (0..n)
+    (0..n)
         .map(|qi| {
             let type_tag = format::format_type_tag(&fp.question_types[qi]);
             let options: Vec<Option<i64>> = (0..oc)
@@ -240,6 +179,98 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
                 type_tag,
                 options,
                 claims,
+            }
+        })
+        .collect()
+}
+
+fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
+    let n = fp.n;
+    let oc = fp.option_count;
+
+    let fe = check_form::check_form(fp);
+    let form_warnings: Vec<String> = fe
+        .iter()
+        .filter(|e| matches!(e.severity, check_form::Severity::Warning))
+        .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
+        .collect();
+    let form_errors: Vec<String> = fe
+        .iter()
+        .filter(|e| matches!(e.severity, check_form::Severity::Error))
+        .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
+        .collect();
+
+    let questions = build_question_infos(fp);
+
+    // Malformed input can panic the solve phases; on fatal form errors, skip them.
+    // The sentinels below read as "not evaluated" so the verdict is FORM ERRORS.
+    if !form_errors.is_empty() {
+        return PuzzleCheckResult {
+            key: key.to_string(),
+            n,
+            option_count: oc,
+            questions,
+            form_warnings,
+            form_errors,
+            solve_ok: true,
+            solve_answered: 0,
+            solve_steps: Vec::new(),
+            brute_count: 1,
+            brute_solutions: Vec::new(),
+            hint_brute_match: true,
+            validity_ok: true,
+            validity_per_question: vec!["n/a".to_string(); n],
+            ambiguous: Vec::new(),
+        };
+    }
+
+    let cr = run_check(fp, key);
+    let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
+
+    let solutions = solve_brute::solve(fp, None, 10);
+
+    let unique_solution = if solutions.len() == 1 {
+        Some(solutions[0][..n].as_ref())
+    } else {
+        None
+    };
+    let brute_count = solutions.len();
+    let brute_solutions: Vec<String> = solutions
+        .iter()
+        .map(|sol| sol.iter().take(n).map(|a| a.as_char()).collect())
+        .collect();
+
+    let hint_brute_match = if cr.ok && solutions.len() == 1 {
+        (0..n).all(|i| cr.answers[i] == Some(solutions[0][i]))
+    } else {
+        true
+    };
+
+    let state = State {
+        answers: cr.answers,
+        eliminated: cr.eliminated,
+    };
+    let validity_ok = if cr.ok {
+        (0..n).all(|i| {
+            let v = check_answer::check_answer(fp, state, i);
+            v.is_valid() || v == check_answer::Validity::Pending
+        })
+    } else {
+        true
+    };
+    let validity_per_question: Vec<String> = (0..n)
+        .map(|i| {
+            if cr.ok {
+                match check_answer::check_answer(fp, state, i) {
+                    check_answer::Validity::Valid => "valid",
+                    check_answer::Validity::Consistent => "consistent",
+                    check_answer::Validity::Invalid => "invalid",
+                    check_answer::Validity::Pending => "pending",
+                    check_answer::Validity::Neutral => "neutral",
+                }
+                .into()
+            } else {
+                "n/a".into()
             }
         })
         .collect();
@@ -366,8 +397,12 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         .map(|q| q.type_tag.len())
         .max()
         .unwrap_or(0);
+    // `.first()` not `[0]`: a form-error sentinel has brute_count == 1 but no solution.
     let sol_chars: Vec<char> = if r.brute_count == 1 {
-        r.brute_solutions[0].chars().collect()
+        r.brute_solutions
+            .first()
+            .map(|s| s.chars().collect())
+            .unwrap_or_default()
     } else {
         vec![]
     };
@@ -421,6 +456,11 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
     writeln!(w, "  {:<28} {form_label}", "Form").unwrap();
     for msg in r.form_warnings.iter().chain(r.form_errors.iter()) {
         writeln!(w, "    {}", dim(msg)).unwrap();
+    }
+
+    // Form-error result: solve was skipped, so the sections below are sentinels.
+    if !r.form_errors.is_empty() {
+        return has_errors;
     }
 
     // Answerable (unique answer per question)

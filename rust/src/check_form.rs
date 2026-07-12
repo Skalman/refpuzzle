@@ -60,6 +60,30 @@ fn check_question_form(
         }
     }
 
+    // Positional index in range: `before_index` is an exclusive bound (so `n` is
+    // fine); `after_index` is a position that needs a question after it.
+    match qt {
+        QuestionType::CountAnswerBefore { before_index, .. }
+        | QuestionType::ClosestBefore { before_index, .. }
+            if usize::from(*before_index) > n =>
+        {
+            return error(format!(
+                "{:?} references out-of-range position {before_index}",
+                qt.kind()
+            ));
+        }
+        QuestionType::CountAnswerAfter { after_index, .. }
+        | QuestionType::ClosestAfter { after_index, .. }
+            if usize::from(*after_index) + 1 >= n =>
+        {
+            return error(format!(
+                "{:?} references out-of-range position {after_index}",
+                qt.kind()
+            ));
+        }
+        _ => {}
+    }
+
     // Answer letter within option count (for types with an `answer` field).
     let answer = match qt {
         QuestionType::CountAnswer { answer }
@@ -201,6 +225,12 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
                 let Some(claim) = fp.claim_at(qi, oi) else {
+                    // Every option of a TrueStmt within `oc` must carry a claim.
+                    errors.push(FormError {
+                        qi,
+                        message: format!("TrueStmt option {oi} has no claim"),
+                        severity: Severity::Error,
+                    });
                     continue;
                 };
                 let cqt = &claim.question_type;
@@ -270,6 +300,12 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                 let opt = OptionPos { qi, oi };
                 let value = fp.options[qi][oi];
                 if value.is_unused() {
+                    // UNUSED is only legal past `oc`.
+                    errors.push(FormError {
+                        qi,
+                        message: format!("Option {oi} is UNUSED but within option count {oc}"),
+                        severity: Severity::Error,
+                    });
                     continue;
                 }
                 if let Some((msg, sev)) = check_claim_form(fp, opt, qt, value) {
