@@ -1,5 +1,15 @@
 use crate::types::*;
 
+/// Play-time verdict for a single question. This is a **wasm wire contract**: the
+/// u8 encoding in `lib.rs::validity_to_u8` and its inverse `wasm.ts::validityFromU8`
+/// must stay in sync with these variants (and their order is not the wire order —
+/// the mapping is explicit on both sides). The two subtle pairs:
+/// - `Neutral` vs `Pending`: `Neutral` = unanswered with options still open (nothing
+///   to say); `Pending` = answered (or forced) but the truth can't be decided until
+///   more answers land.
+/// - `Valid` vs `Consistent`: `Valid` = provably correct independent of this
+///   question's own answer; `Consistent` = correct only once its own answer is
+///   assumed (self-referential, see `maybe_consistent`). `is_valid()` accepts both.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Validity {
     Neutral,
@@ -142,20 +152,7 @@ fn first_in_range(
             Validity::Pending
         }
     } else {
-        let mut could_exist = false;
-        for j in start..end {
-            if answers[j] == Some(answer) {
-                return Validity::Invalid;
-            }
-            if answers[j].is_none() && eliminated[j] & amask == 0 {
-                could_exist = true;
-            }
-        }
-        if could_exist {
-            Validity::Pending
-        } else {
-            Validity::Valid
-        }
+        none_in_range(answers, eliminated, answer, start, end)
     }
 }
 
@@ -195,20 +192,34 @@ fn last_in_range(
             Validity::Pending
         }
     } else {
-        let mut could_exist = false;
-        for j in start..end {
-            if answers[j] == Some(answer) {
-                return Validity::Invalid;
-            }
-            if answers[j].is_none() && eliminated[j] & amask == 0 {
-                could_exist = true;
-            }
+        none_in_range(answers, eliminated, answer, start, end)
+    }
+}
+
+/// The NONE ("no question in `start..end` has `answer`") arm shared by
+/// `first_in_range`/`last_in_range`: Invalid if one already does, Pending if one
+/// still could, else Valid.
+fn none_in_range(
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    answer: Answer,
+    start: usize,
+    end: usize,
+) -> Validity {
+    let amask = 1u8 << answer.idx();
+    let mut could_exist = false;
+    for j in start..end {
+        if answers[j] == Some(answer) {
+            return Validity::Invalid;
         }
-        if could_exist {
-            Validity::Pending
-        } else {
-            Validity::Valid
+        if answers[j].is_none() && eliminated[j] & amask == 0 {
+            could_exist = true;
         }
+    }
+    if could_exist {
+        Validity::Pending
+    } else {
+        Validity::Valid
     }
 }
 
@@ -229,26 +240,6 @@ fn count_answer_simple(
         }
     }
     c
-}
-
-fn count_answer_with_remaining(
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    target: Answer,
-    from: usize,
-    to: usize,
-) -> (u8, u8) {
-    let mask = 1u8 << target.idx();
-    let mut count: u8 = 0;
-    let mut remaining: u8 = 0;
-    for i in from..to {
-        if answers[i] == Some(target) {
-            count += 1;
-        } else if answers[i].is_none() && eliminated[i] & mask == 0 {
-            remaining += 1;
-        }
-    }
-    (count, remaining)
 }
 
 fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [u8; 5] {
@@ -275,8 +266,8 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     let qt = &claim.question_type;
     let value = claim.value;
     let qi = opt.qi;
-    let si = opt.oi;
-    let self_letter = Answer::from(si as u8);
+    let self_oi = opt.oi;
+    let self_letter = Answer::from(self_oi as u8);
     let answers = &state.answers;
     let eliminated = &state.eliminated;
     let n = fp.n;
@@ -371,7 +362,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if !value.is_num() {
                     return Validity::Invalid;
                 }
-                let dist = (si as u8).abs_diff(other as u8);
+                let dist = (self_oi as u8).abs_diff(other as u8);
                 if dist == value.value() {
                     Validity::Valid
                 } else {
@@ -475,26 +466,17 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         }
 
         // ── Previous/Next same ──
-        QuestionType::PrevSame => {
-            if value.is_num() && value.value() as usize >= qi {
-                return Validity::Invalid;
-            }
-            last_in_range(answers, eliminated, self_letter, 0, qi, value)
-        }
+        // No pre-range check: first_in_range/last_in_range already reject a numeric
+        // position outside `start..end` (here `0..qi` / `qi+1..n`).
+        QuestionType::PrevSame => last_in_range(answers, eliminated, self_letter, 0, qi, value),
 
         QuestionType::NextSame => {
-            if value.is_num() {
-                let v = value.value() as usize;
-                if v <= qi || v >= n {
-                    return Validity::Invalid;
-                }
-            }
             first_in_range(answers, eliminated, self_letter, qi + 1, n, value)
         }
 
         // ── Only same ──
         QuestionType::OnlySame => {
-            let amask = 1u8 << si;
+            let amask = 1u8 << self_oi;
 
             if value.is_none() {
                 let mut matches: u8 = 0;
@@ -708,8 +690,14 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if claimed == answer {
                     return Validity::Invalid;
                 }
-                let (rc, rr) = count_answer_with_remaining(answers, eliminated, answer, 0, n);
-                let (sc, sr) = count_answer_with_remaining(answers, eliminated, claimed, 0, n);
+                let CountResult {
+                    count: rc,
+                    remaining: rr,
+                } = count_matching(answers, eliminated, Pred::IsAnswer(answer), 0, n);
+                let CountResult {
+                    count: sc,
+                    remaining: sr,
+                } = count_matching(answers, eliminated, Pred::IsAnswer(claimed), 0, n);
                 if rc + rr < sc || sc + sr < rc {
                     return Validity::Invalid;
                 }
@@ -831,6 +819,13 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
     }
 
     let on = fp.options[qi][ai];
+    // Value routing into check_claim, and how an UNUSED selected slot is handled —
+    // the asymmetry is by design:
+    //  - letter-valued types (AnswerOf, extrema) pass the stored value through, so an
+    //    UNUSED slot reaches check_claim, which rejects it (→ Invalid);
+    //  - identity-option types take the value from the option index (never UNUSED);
+    //  - all other (numeric) types short-circuit an UNUSED slot to Pending, treating
+    //    an unfilled option as undecided rather than wrong.
     let value = match *t {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => on,
         _ if t.has_identity_options() => OptionValue::num(ai as u8),

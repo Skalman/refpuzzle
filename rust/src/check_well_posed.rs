@@ -76,7 +76,10 @@ pub fn check_well_posed_given_key(
                 .filter(|&i| (i + 1) % 2 == parity && sol[i] == answer)
                 .count();
             (matches > 1).then(|| {
-                "OnlyOdd/OnlyEven: more than one match in the parity positions".to_string()
+                format!(
+                    "{:?}: more than one match in the parity positions",
+                    qt.kind()
+                )
             })
         }
         QuestionType::NoOtherHasAnswer => {
@@ -109,8 +112,14 @@ pub fn check_well_posed_given_options(
     match fp.question_types[qi] {
         QuestionType::SameAs => ambiguating_distractor(fp, qi, sol, sol[qi], qi),
         QuestionType::SameAsWhich { question_index } => {
-            let r = usize::from(question_index);
-            ambiguating_distractor(fp, qi, sol, sol[r], r)
+            let ref_q = usize::from(question_index);
+            // A malformed puzzle could put the ref out of range, which would panic on
+            // sol[ref_q]; reporting a bad index is form validation's job, so here we
+            // just avoid the panic.
+            if ref_q >= fp.n {
+                return None;
+            }
+            ambiguating_distractor(fp, qi, sol, sol[ref_q], ref_q)
         }
         QuestionType::TrueStmt => {
             let state = State {

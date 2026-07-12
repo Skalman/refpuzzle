@@ -6,7 +6,7 @@ use crate::solve_deduce::solve;
 use crate::types::{OptionValue, QuestionTypeKind};
 use std::collections::{BTreeMap, BTreeSet};
 
-const LETTERS: [&str; 5] = ["A", "B", "C", "D", "E"];
+const LETTER_LABELS: [&str; 5] = ["A", "B", "C", "D", "E"];
 
 fn is_letter_valued(kind: QuestionTypeKind) -> bool {
     use QuestionTypeKind::*;
@@ -74,18 +74,17 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     let profile = &PROFILES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
-    let mut attempt = 0u32;
     let mut total_calls = 0u32;
     let max_calls = attempts.saturating_mul(100);
     let mut bstats = build::Stats::default(); // accumulates across all generate() calls, rejected included
 
     while successes < attempts && total_calls < max_calls {
+        // Seed uses the pre-increment call index, so the sequence is stable.
         let s = seed
             .wrapping_mul(31)
             .wrapping_add(level as u32)
             .wrapping_mul(17)
-            .wrapping_add(attempt.wrapping_mul(0x9e3779b9));
-        attempt = attempt.wrapping_add(1);
+            .wrapping_add(total_calls.wrapping_mul(0x9e3779b9));
         total_calls += 1;
         let mut rng = Rng::new(s);
         let result = construct::generate(
@@ -175,8 +174,10 @@ fn tally_puzzle(result: &GenerateResult, per_type: &mut BTreeMap<QuestionTypeKin
         *counts_this_puzzle.entry(kind).or_insert(0) += 1;
 
         let entry = per_type.entry(kind).or_default();
+        // An accepted puzzle is fully deduce-solvable, so this is unreachable; fail
+        // loud (in release too) if that invariant ever breaks.
         let Some(correct) = solution[qi] else {
-            continue;
+            unreachable!("accepted puzzle has unsolved Q{qi}");
         };
         let correct_oi = correct as usize;
 
@@ -409,7 +410,7 @@ fn write_answer_freq(md: &mut String, levels: &[LevelData]) {
                 if v.is_none() {
                     "None".into()
                 } else if letter && v.value() < 5 {
-                    LETTERS[v.value() as usize].into()
+                    LETTER_LABELS[v.value() as usize].into()
                 } else {
                     v.value().to_string()
                 }
@@ -454,7 +455,7 @@ fn write_answer_freq(md: &mut String, levels: &[LevelData]) {
             ];
             for i in 0..ld.oc {
                 rows.push(pct_row(
-                    &format!("at {}", LETTERS[i]),
+                    &format!("at {}", LETTER_LABELS[i]),
                     &entry.position_values[i],
                 ));
             }

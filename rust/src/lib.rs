@@ -50,6 +50,8 @@ mod wasm_api {
         JsError::new(msg)
     }
 
+    /// Wire encoding for `Validity`; `wasm.ts::validityFromU8` is the inverse.
+    /// Documented on the `Validity` enum (check_answer.rs). Keep all three in sync.
     fn validity_to_u8(v: Validity) -> u8 {
         match v {
             Validity::Neutral => 0,

@@ -33,12 +33,37 @@ use std::time::Instant;
 #[cfg(test)]
 use types::*;
 
+// RefPuzzle's public launch date. No puzzles exist before it, so a 2026 range
+// with no explicit start defaults here, and an explicit pre-launch start in 2026
+// is clamped up to it; any other pre-launch start is rejected outright.
+const LAUNCH_YEAR: u32 = 2026;
+const LAUNCH_MM: u32 = 4;
+const LAUNCH_DD: u32 = 19;
+const LAUNCH_YYYYMMDD: u32 = LAUNCH_YEAR * 10000 + LAUNCH_MM * 100 + LAUNCH_DD;
+
 struct DateRange {
     year: u32,
     start_mm: u32,
     start_dd: u32,
     end_mm: u32,
     end_dd: u32,
+}
+
+/// Days in a Gregorian month. Only ever called with a validated month (1..=12);
+/// invalid months yield 0 rather than a guess.
+fn days_in_month(year: u32, month: u32) -> u32 {
+    match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 => {
+            if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400)) {
+                29
+            } else {
+                28
+            }
+        }
+        _ => 0,
+    }
 }
 
 fn parse_date_range(input: &str) -> DateRange {
@@ -69,21 +94,6 @@ fn parse_date_range(input: &str) -> DateRange {
         }
     };
 
-    fn last_day(year: u32, month: u32) -> u32 {
-        match month {
-            2 => {
-                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
-                {
-                    29
-                } else {
-                    28
-                }
-            }
-            4 | 6 | 9 | 11 => 30,
-            _ => 31,
-        }
-    }
-
     // Reject impossible calendar dates up front. Left unchecked, a bad month/day
     // collapses to an empty day set, which divides by zero in the summary and
     // writes `{}` over the output file. Only explicitly-supplied parts can be out
@@ -95,7 +105,7 @@ fn parse_date_range(input: &str) -> DateRange {
                 std::process::exit(1);
             }
             if let Some(d) = d
-                && (d == 0 || d > last_day(y, m))
+                && (d == 0 || d > days_in_month(y, m))
             {
                 eprintln!("Invalid day in date range {input}: {y}-{m:02}-{d:02}");
                 std::process::exit(1);
@@ -105,8 +115,12 @@ fn parse_date_range(input: &str) -> DateRange {
 
     let (sy, sm, sd) = parse_part(start_str);
     validate(sy, sm, sd);
-    let start_mm = sm.unwrap_or(if sy == 2026 { 4 } else { 1 });
-    let start_dd = sd.unwrap_or(if sy == 2026 && sm.is_none() { 19 } else { 1 });
+    let start_mm = sm.unwrap_or(if sy == LAUNCH_YEAR { LAUNCH_MM } else { 1 });
+    let start_dd = sd.unwrap_or(if sy == LAUNCH_YEAR && sm.is_none() {
+        LAUNCH_DD
+    } else {
+        1
+    });
 
     let (ey, em, ed) = if let Some(e) = end_str {
         parse_part(e)
@@ -121,19 +135,20 @@ fn parse_date_range(input: &str) -> DateRange {
     }
 
     let end_mm = em.unwrap_or(12);
-    let end_dd = ed.unwrap_or_else(|| last_day(ey, end_mm));
+    let end_dd = ed.unwrap_or_else(|| days_in_month(ey, end_mm));
 
-    let launch = 20260419u32;
     let mut start_mm = start_mm;
     let mut start_dd = start_dd;
     let start_val = sy * 10000 + start_mm * 100 + start_dd;
-    if sy == 2026 && start_val < launch {
-        start_mm = 4;
-        start_dd = 19;
+    if sy == LAUNCH_YEAR && start_val < LAUNCH_YYYYMMDD {
+        start_mm = LAUNCH_MM;
+        start_dd = LAUNCH_DD;
     }
     let start_val = sy * 10000 + start_mm * 100 + start_dd;
-    if start_val < launch {
-        eprintln!("Date range must not start before 2026-04-19: {input}");
+    if start_val < LAUNCH_YYYYMMDD {
+        eprintln!(
+            "Date range must not start before {LAUNCH_YEAR}-{LAUNCH_MM:02}-{LAUNCH_DD:02}: {input}"
+        );
         std::process::exit(1);
     }
     let end_val = ey * 10000 + end_mm * 100 + end_dd;
@@ -299,7 +314,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', or 'type-stats'.",
+                "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', 'type-stats', or 'gen-stats'.",
                 args[1]
             );
             std::process::exit(1);
@@ -381,6 +396,10 @@ fn main() {
 
     if merge && overwrite {
         eprintln!("Error: --merge and --overwrite are mutually exclusive");
+        std::process::exit(1);
+    }
+    if merge && output_path == "-" {
+        eprintln!("Error: --merge requires -o FILE (cannot merge to stdout)");
         std::process::exit(1);
     }
     if output_path != "-" && !merge && !overwrite && std::path::Path::new(&output_path).is_file() {
@@ -507,7 +526,7 @@ fn main() {
         match result {
             Some(r) => {
                 ok_count += 1;
-                let puzzle_json = puzzle_to_json(r, *level as usize);
+                let puzzle_json = puzzle_to_json(r);
                 if let Some(Value::Object(day)) = year_map.get_mut(&key) {
                     day.insert(format!("{level}"), puzzle_json);
                 }
@@ -541,10 +560,6 @@ fn main() {
     }
 
     if merge {
-        assert!(
-            output_path != "-",
-            "--merge requires -o FILE (cannot merge to stdout)"
-        );
         let existing = std::fs::read_to_string(&output_path).unwrap_or_else(|_| "{}".into());
         let mut existing: serde_json::Map<String, Value> =
             serde_json::from_str(&existing).expect("invalid JSON in output file");
@@ -553,8 +568,8 @@ fn main() {
                 .entry(date)
                 .or_insert_with(|| Value::Object(serde_json::Map::new()));
             if let (Value::Object(existing_day), Value::Object(new_levels)) = (entry, levels) {
-                for (lvl, puzzle) in new_levels {
-                    existing_day.insert(lvl, puzzle);
+                for (level_key, puzzle) in new_levels {
+                    existing_day.insert(level_key, puzzle);
                 }
             }
         }
@@ -570,8 +585,8 @@ fn main() {
     }
 }
 
-// Indent the date and level keys for readable git diffs; keep each puzzle on
-// one compact line. Iteration order is sorted (MMDD dates → chronological).
+/// Indent the date and level keys for readable git diffs; keep each puzzle on
+/// one compact line. Iteration order is sorted (MMDD dates → chronological).
 fn format_year(year: &serde_json::Map<String, Value>) -> String {
     let mut out = String::from("{\n");
     let n = year.len();
@@ -595,7 +610,7 @@ fn format_year(year: &serde_json::Map<String, Value>) -> String {
     out
 }
 
-fn puzzle_to_json(result: &GenerateResult, _level: usize) -> Value {
+fn puzzle_to_json(result: &GenerateResult) -> Value {
     serialize::puzzle_to_compact_value(&result.question_types, &result.fp)
 }
 
@@ -606,26 +621,11 @@ fn dates_in_year(
     end_mm: u32,
     end_dd: u32,
 ) -> Vec<(u32, u32)> {
-    let days_in_month = |m: u32| -> u32 {
-        match m {
-            1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
-            4 | 6 | 9 | 11 => 30,
-            2 => {
-                if year.is_multiple_of(4) && (!year.is_multiple_of(100) || year.is_multiple_of(400))
-                {
-                    29
-                } else {
-                    28
-                }
-            }
-            _ => 0,
-        }
-    };
     let mut result = Vec::new();
     let mut mm = start_mm;
     let mut dd = start_dd;
     while mm <= 12 {
-        while dd <= days_in_month(mm) {
+        while dd <= days_in_month(year, mm) {
             if mm > end_mm || (mm == end_mm && dd > end_dd) {
                 return result;
             }
@@ -739,9 +739,10 @@ mod tests {
         let deadline = std::time::Instant::now() + duration;
         let puzzles = all_puzzles();
         assert!(!puzzles.is_empty());
-        let today = today_yyyymmdd();
         let mut failures: Vec<String> = Vec::new();
 
+        // Form errors are covered by `generated_puzzles_wellformed` (whole corpus,
+        // no deadline); this test only checks unique-solvability and validity.
         for (key, fp) in &puzzles {
             if std::time::Instant::now() > deadline {
                 break;
@@ -770,21 +771,6 @@ mod tests {
                     failures.push(format!("{key}: Q{} fails validation", qi + 1));
                 }
             }
-
-            let is_past = puzzle_is_past(key, today);
-            let form_errors = check_form::check_form(fp);
-            for e in &form_errors {
-                let is_warning = matches!(e.severity, check_form::Severity::Warning);
-                if is_warning && is_past {
-                    continue;
-                }
-                failures.push(format!(
-                    "{key} Q{}: {:?}: {}",
-                    e.qi + 1,
-                    e.severity,
-                    e.message
-                ));
-            }
         }
 
         eprintln!(
@@ -795,7 +781,7 @@ mod tests {
         assert!(failures.is_empty(), "uniqueness failures: {failures:?}");
     }
 
-    // Howard Hinnant's civil_from_days: http://howardhinnant.github.io/date_algorithms.html
+    /// Howard Hinnant's civil_from_days: http://howardhinnant.github.io/date_algorithms.html
     fn today_yyyymmdd() -> u32 {
         let days = (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -815,8 +801,8 @@ mod tests {
         (y as u32) * 10000 + m as u32 * 100 + d as u32
     }
 
-    // key format: "YYYY.json/MMDD-level". Returns false (treat as not-past)
-    // when the year isn't a 4-digit number.
+    /// key format: "YYYY.json/MMDD-level". Returns false (treat as not-past)
+    /// when the year isn't a 4-digit number.
     fn puzzle_is_past(key: &str, today: u32) -> bool {
         let Some((year_part, rest)) = key.split_once('.') else {
             return false;

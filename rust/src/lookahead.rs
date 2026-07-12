@@ -113,6 +113,10 @@ fn probe_candidate(
         if drs.is_empty() {
             break;
         }
+        // Sort by rule ordinal so the chain (and thus which contradiction surfaces
+        // first) is deterministic, independent of deduce()'s emission order.
+        // `run_engine` applies its batch unsorted — it needs only the fixpoint, not a
+        // stable chain — so the asymmetry is deliberate.
         drs.sort_by_key(|dr| dr.rule as u8);
         for dr in &drs {
             // A rule whose conclusion conflicts with `hyp` refutes the hypothesis.

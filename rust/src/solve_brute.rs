@@ -34,6 +34,14 @@ pub fn solve(
     solutions
 }
 
+/// Branch order for the backtracking `search`, chosen to prune early:
+///  - AnswerIsSelf last: every option is self-consistent, so it never contradicts and
+///    branching on it early just multiplies the tree (see check_answer's AnswerIsSelf
+///    → always Valid).
+///  - most-referenced questions first: assigning an AnswerOf target propagates forces
+///    to all its referrers, collapsing the most branches per decision.
+///  - globals (whole-board rules) after locals, since they can't be evaluated until
+///    their inputs are assigned anyway.
 fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
     let n = fp.n;
     let mut ref_count = [0u8; MAX_N];
@@ -95,8 +103,8 @@ fn compute_range_masks(fp: &FlatPuzzle) -> [u16; MAX_N] {
     masks
 }
 
-// If question qi is answered, does it force a specific answer at another position?
-// Returns (target_position, forced_letter) if so.
+/// If question qi is answered, does it force a specific answer at another position?
+/// Returns (target_position, forced_letter) if so.
 fn get_force(
     fp: &FlatPuzzle,
     current: &[Option<Answer>; MAX_N],
@@ -349,16 +357,18 @@ fn has_contradiction(
         if answers[i].is_none() {
             continue;
         }
-        if check_rule(fp, answers, n, i, all_answered, assigned, range_masks) {
+        if rule_violated(fp, answers, n, i, all_answered, assigned, range_masks) {
             return true;
         }
     }
 
     for i in fp.global_indices.iter() {
-        if answers[i].is_none() {
+        // `just_assigned` is always in its own `affected_by` list, so a global
+        // `just_assigned` was already checked in the loop above; skip the re-run.
+        if i == just_assigned || answers[i].is_none() {
             continue;
         }
-        if check_rule(fp, answers, n, i, all_answered, assigned, range_masks) {
+        if rule_violated(fp, answers, n, i, all_answered, assigned, range_masks) {
             return true;
         }
     }
@@ -366,7 +376,9 @@ fn has_contradiction(
     false
 }
 
-fn check_rule(
+/// Returns true when question `i`'s rule is *violated* by the current partial
+/// assignment — i.e. this branch can be pruned.
+fn rule_violated(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
     n: usize,
@@ -451,6 +463,11 @@ fn check_rule(
     false
 }
 
+/// Soundness linchpin: true only when `t`'s verdict at `qi` is already *final* —
+/// no future assignment can change it — so `rule_violated` may treat a current
+/// Invalid as a real contradiction and prune. Returning true too early prunes
+/// valid branches (unsound, dropped solutions); a conservative `false` is always
+/// safe, only slower. Add new arms only after confirming the verdict can't flip.
 fn can_fully_evaluate_local(
     t: &QuestionType,
     assigned: u16,

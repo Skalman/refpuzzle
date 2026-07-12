@@ -201,12 +201,16 @@ pub(crate) fn run_hint_engine_from(
     (out.solved, out.state)
 }
 
+/// Upper bound on a single question's candidate-value pool: one value per
+/// question index (≤ `MAX_N`) plus a handful of specials (NONE, counts up to n).
+const MAX_VALUE_POOL: usize = 20;
+
 pub(crate) fn valid_values(
     qt: &QuestionType,
     qi: usize,
     n: usize,
     oc: usize,
-) -> ArrayVec<OptionValue, 20> {
+) -> ArrayVec<OptionValue, MAX_VALUE_POOL> {
     let mut out = ArrayVec::new();
     let mut push_num = |v: usize| out.push(OptionValue::num(v as u8));
     match *qt {
@@ -539,6 +543,55 @@ pub(crate) fn fill_one_question(
     }
 }
 
+/// Emit one question's filled-options trace line (diagnostic `trace` mode only).
+/// `true_stmt_types` must be `Some` for a TrueStmt question (its claim types).
+fn trace_question(
+    qi: usize,
+    qt: &QuestionType,
+    options_qi: &[OptionValue; 5],
+    option_count: usize,
+    true_stmt_types: Option<&[QuestionType; 5]>,
+    rng: &Rng,
+) {
+    let vals: Vec<Value> = (0..option_count)
+        .map(|oi| {
+            let s = options_qi[oi];
+            if matches!(qt, QuestionType::TrueStmt) || s.is_none() || s.is_unused() {
+                Value::Null
+            } else {
+                json!(s.value())
+            }
+        })
+        .collect();
+    let mut obj = json!({
+        "t": "question",
+        "qi": qi,
+        "type": format_type_tag(qt),
+        "options": vals,
+        "rng": rng.state(),
+    });
+    if matches!(qt, QuestionType::TrueStmt) {
+        let types = true_stmt_types.expect("TrueStmt qi must have populated claim types");
+        let claims: Vec<Value> = (0..option_count)
+            .map(|oi| {
+                let v = options_qi[oi];
+                if v.is_unused() {
+                    Value::Null
+                } else {
+                    let val = if v.is_none() {
+                        Value::Null
+                    } else {
+                        json!(v.value())
+                    };
+                    json!({ "questionType": format_claim_qt(&types[oi]), "value": val })
+                }
+            })
+            .collect();
+        obj["claims"] = json!(claims);
+    }
+    eprintln!("{obj}");
+}
+
 pub fn fill_options(
     question_types: &[QuestionType; MAX_N],
     solution: &[Answer; MAX_N],
@@ -568,47 +621,14 @@ pub fn fill_options(
         }
 
         if trace {
-            let vals: Vec<Value> = (0..option_count)
-                .map(|oi| {
-                    let s = options[qi][oi];
-                    if matches!(qt, QuestionType::TrueStmt) || s.is_none() || s.is_unused() {
-                        Value::Null
-                    } else {
-                        json!(s.value())
-                    }
-                })
-                .collect();
-            let mut obj = json!({
-                "t": "question",
-                "qi": qi,
-                "type": format_type_tag(qt),
-                "options": vals,
-                "rng": rng.state(),
-            });
-            if matches!(qt, QuestionType::TrueStmt) {
-                let types = true_stmt_question_types
-                    .as_ref()
-                    .expect("TrueStmt qi must have populated claim types");
-                let claims: Vec<Value> = (0..option_count)
-                    .map(|oi| {
-                        let v = options[qi][oi];
-                        if v.is_unused() {
-                            Value::Null
-                        } else {
-                            let val = if v.is_none() {
-                                Value::Null
-                            } else {
-                                json!(v.value())
-                            };
-                            let mut co = json!({"questionType": "", "value": val});
-                            co["questionType"] = format_claim_qt(&types[oi]);
-                            co
-                        }
-                    })
-                    .collect();
-                obj["claims"] = json!(claims);
-            }
-            eprintln!("{}", obj);
+            trace_question(
+                qi,
+                qt,
+                &options[qi],
+                option_count,
+                true_stmt_question_types.as_ref(),
+                rng,
+            );
         }
     }
 
@@ -728,11 +748,11 @@ fn is_counting_type(qt: &QuestionType) -> bool {
 }
 
 fn pick_distractors(
-    vals: &ArrayVec<OptionValue, 20>,
+    vals: &ArrayVec<OptionValue, MAX_VALUE_POOL>,
     correct: OptionValue,
     rng: &mut Rng,
 ) -> [OptionValue; 4] {
-    let mut pool = [OptionValue::UNUSED; 20];
+    let mut pool = [OptionValue::UNUSED; MAX_VALUE_POOL];
     let mut plen = 0;
     for &v in vals {
         if v != correct {
@@ -755,7 +775,7 @@ fn place_numeric_distractors(
     slots: &mut [OptionValue; 5],
     correct_oi: usize,
     correct_val: OptionValue,
-    val_pool: &ArrayVec<OptionValue, 20>,
+    val_pool: &ArrayVec<OptionValue, MAX_VALUE_POOL>,
     rng: &mut Rng,
 ) {
     slots[correct_oi] = correct_val;
@@ -824,6 +844,9 @@ fn claim_category(claim: &Claim) -> u16 {
         QuestionType::FirstWith { answer } => 600 + answer as u16,
         QuestionType::LastWith { answer } => 700 + answer as u16,
         QuestionType::MostCommon => 800,
+        // ClosestAfter/Before vary by both answer and index, so fold them into one
+        // category number. Stride 20 (> MAX_N) gives each answer its own index band,
+        // and 5 answers * 20 + max index stays under the +100 gap to the next kind.
         QuestionType::ClosestAfter {
             answer,
             after_index,
@@ -1120,17 +1143,17 @@ fn try_make_claim(
                 0
             };
             let mut found: Option<usize> = None;
-            let mut count = 0;
             for i in 0..n {
                 if (i + 1) % 2 == parity && sol[i] == a {
+                    if found.is_some() {
+                        // Found more than one.
+                        return None;
+                    }
                     found = Some(i);
-                    count += 1;
                 }
             }
-            if count != 1 {
-                return None;
-            }
-            let value = found.map_or(OptionValue::NONE, |p| OptionValue::num(p as u8));
+            // Return None if nothing found.
+            let value = OptionValue::num(found? as u8);
             let question_type = if kind == QuestionTypeKind::OnlyOdd {
                 QuestionType::OnlyOdd { answer: a }
             } else {
@@ -1276,10 +1299,9 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng, option_count: usize) -> 
             }
             rng.int(0, before_index as i32 - 1) as u8
         }
-        QuestionType::AnswerOf { .. }
-        | QuestionType::MostCommon
-        | QuestionType::LeastCommon
-        | QuestionType::NoOtherHasAnswer => rng.pick_letter(option_count) as u8,
+        QuestionType::AnswerOf { .. } | QuestionType::MostCommon | QuestionType::LeastCommon => {
+            rng.pick_letter(option_count) as u8
+        }
         QuestionType::EqualCount { answer } => {
             let v = rng.pick_letter(option_count) as u8;
             if v == answer as u8 {
@@ -1287,7 +1309,15 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng, option_count: usize) -> 
             }
             v
         }
-        _ => return None,
+        // Not claim subjects (not in `CLAIM_TYPES`), so a claim never carries these.
+        QuestionType::PrevSame
+        | QuestionType::NextSame
+        | QuestionType::OnlySame
+        | QuestionType::SameAs
+        | QuestionType::AnswerIsSelf
+        | QuestionType::LetterDist { .. }
+        | QuestionType::TrueStmt
+        | QuestionType::NoOtherHasAnswer => return None,
     };
     let new_value = OptionValue::num(new_val);
     if new_value == claim.value {

@@ -163,8 +163,13 @@ pub enum QuestionTypeKind {
     AnswerIsSelf,
     LetterDist,
     TrueStmt,
+    /// Must stay last: `QUESTION_KIND_COUNT` derives from `SameAsWhich as usize + 1`.
     SameAsWhich,
 }
+
+/// Number of [`QuestionTypeKind`] variants — the length of a per-kind array
+/// (recipe caps, selection counts). Derives from the last variant.
+pub const QUESTION_KIND_COUNT: usize = QuestionTypeKind::SameAsWhich as usize + 1;
 
 /// Coarse "families" of question kinds that read as similar to a solver. Used
 /// only by generation to dampen picking a *second* kind from the same family

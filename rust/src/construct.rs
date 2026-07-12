@@ -30,7 +30,7 @@ pub struct LevelRecipe {
     /// The pool the remaining slots are filled from.
     pub allowed: &'static [QuestionTypeKind],
     /// Per-type max occurrences (default 3; unit variants 1 — see `DEFAULT_CAPS`).
-    pub caps: [u8; 32],
+    pub caps: [u8; QUESTION_KIND_COUNT],
     /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
     /// indexed by `QuestionGroup as usize`.
     pub damping: [f64; QUESTION_GROUP_COUNT],
@@ -47,8 +47,8 @@ pub struct LevelRecipe {
     pub lookahead_deduce_until: usize,
 }
 
-const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
-    let mut c = [3u8; 32];
+const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; QUESTION_KIND_COUNT] {
+    let mut c = [3u8; QUESTION_KIND_COUNT];
     let mut i = 0;
     while i < overrides.len() {
         c[overrides[i].0 as usize] = overrides[i].1;
@@ -57,7 +57,7 @@ const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; 32] {
     c
 }
 
-const DEFAULT_CAPS: [u8; 32] = caps_with(&[
+const DEFAULT_CAPS: [u8; QUESTION_KIND_COUNT] = caps_with(&[
     (QuestionTypeKind::LetterDist, 1),
     // AnswerOf: no entry here — each recipe caps it at n-1 (its structural max,
     // since wire needs one non-AnswerOf question to root the chains) via
@@ -84,7 +84,7 @@ const DEFAULT_CAPS: [u8; 32] = caps_with(&[
 /// structural maximum, since `wire_answer_of_targets` needs at least one
 /// non-AnswerOf question to root the reference chains. Each recipe sets this so a
 /// hard-to-fill skeleton can lean on the always-fits AnswerOf all the way up.
-const fn caps_max_answer_of(question_count: usize) -> [u8; 32] {
+const fn caps_max_answer_of(question_count: usize) -> [u8; QUESTION_KIND_COUNT] {
     let mut c = DEFAULT_CAPS;
     c[QuestionTypeKind::AnswerOf as usize] = (question_count - 1) as u8;
     c
@@ -538,7 +538,7 @@ fn select_kinds(
     n: usize,
     rng: &mut Rng,
 ) -> ArrayVec<QuestionTypeKind, MAX_N> {
-    let mut sel = KindSelection::new(recipe.caps);
+    let mut selection = KindSelection::new(recipe.caps);
     // Similarity groups that already have a member picked; a fired group's later
     // candidates are damped below. Both the first skeleton and every
     // `regenerate_skeleton` retry route through here, so damping applies to both.
@@ -547,10 +547,10 @@ fn select_kinds(
     for &(kind, count) in recipe.required {
         for _ in 0..count {
             assert!(
-                sel.room_for(kind),
+                selection.room_for(kind),
                 "level recipe requires {kind:?} but has a too strict cap"
             );
-            sel.take(kind);
+            selection.take(kind);
             // Required picks pre-fire their group, so a later optional draw of
             // the same family is damped from the start.
             if let Some(g) = kind.group() {
@@ -559,9 +559,9 @@ fn select_kinds(
         }
     }
     assert!(
-        sel.picked_kinds.len() <= n,
+        selection.picked_kinds.len() <= n,
         "level recipe requires {} types but the level has only {n} slots",
-        sel.picked_kinds.len()
+        selection.picked_kinds.len()
     );
 
     // Recipe fixes the number of AnswerOf questions: sample the per-puzzle target
@@ -570,21 +570,21 @@ fn select_kinds(
     // not the random draw.
     if !recipe.answer_of_counts.is_empty() {
         let target = (weighted_pick(recipe.answer_of_counts, rng) as usize).min(n - 1);
-        sel.cap_per_kind[AnswerOf as usize] = target as u8;
+        selection.cap_per_kind[AnswerOf as usize] = target as u8;
         for _ in 0..target {
-            sel.take(AnswerOf);
+            selection.take(AnswerOf);
         }
     }
 
     // Only kinds with room left; a kind is evicted the moment it fills, so
     // every draw below places exactly one kind (no wasted picks).
-    let mut eligible: ArrayVec<QuestionTypeKind, 32> = recipe
+    let mut eligible: ArrayVec<QuestionTypeKind, QUESTION_KIND_COUNT> = recipe
         .allowed
         .iter()
         .copied()
-        .filter(|&k| sel.room_for(k))
+        .filter(|&k| selection.room_for(k))
         .collect();
-    while sel.picked_kinds.len() < n {
+    while selection.picked_kinds.len() < n {
         assert!(
             !eligible.is_empty(),
             "level recipe can't fill {n} slots: pool capped out"
@@ -610,13 +610,13 @@ fn select_kinds(
         if let Some(g) = kind.group() {
             fired[g as usize] = true;
         }
-        sel.take(kind);
-        if !sel.room_for(kind) {
+        selection.take(kind);
+        if !selection.room_for(kind) {
             eligible.swap_remove(index);
         }
     }
 
-    sel.picked_kinds
+    selection.picked_kinds
 }
 
 /// Running tally during selection: the chosen kinds plus per-kind counts used
@@ -624,12 +624,12 @@ fn select_kinds(
 #[derive(Default)]
 struct KindSelection {
     picked_kinds: ArrayVec<QuestionTypeKind, MAX_N>,
-    count_per_kind: [u8; 32],
-    cap_per_kind: [u8; 32],
+    count_per_kind: [u8; QUESTION_KIND_COUNT],
+    cap_per_kind: [u8; QUESTION_KIND_COUNT],
 }
 
 impl KindSelection {
-    fn new(cap_per_kind: [u8; 32]) -> KindSelection {
+    fn new(cap_per_kind: [u8; QUESTION_KIND_COUNT]) -> KindSelection {
         // Only caps are non-default; picked_kinds starts empty and counts at zero.
         KindSelection {
             cap_per_kind,
@@ -831,6 +831,10 @@ impl SolutionAndKindsBuilder {
                 .copied()
                 .find(|&x| x != a && x != a + 1 && !self.is_decided(x))?
         };
+        // First non-banned letter that won't form an adjacent pair. The `unwrap_or`
+        // fallback is unreachable in shipped recipes — ConsecIdent is oc=5-only, where
+        // a qualifying letter always exists. At oc=3 it could fall back to a banned A,
+        // so ConsecIdent must stay out of oc=3 recipes.
         let l = letters(self.oc)
             .find(|&l| !self.banned[l.idx()] && !self.would_pair(host, l))
             .unwrap_or(Answer::A);
@@ -898,21 +902,21 @@ impl SolutionAndKindsBuilder {
         rng: &mut Rng,
     ) -> Answer {
         // Candidate answers: legal letters, narrowed below as coverage tightens.
-        let mut cands: ArrayVec<Answer, 5> = letters(self.oc)
+        let mut candidates: ArrayVec<Answer, 5> = letters(self.oc)
             .filter(|&l| !(self.banned[l.idx()] || self.no_pairs && self.would_pair(qi, l)))
             .collect();
         if must_cover {
-            cands = cands
+            candidates = candidates
                 .iter()
                 .copied()
                 .filter(|l| missing.contains(l))
                 .collect();
         }
-        if cands.is_empty() {
+        if candidates.is_empty() {
             // Relax the no-pair rule (if the new pair breaks a structural kind,
             // parametrize's satisfy-check drops it to AnswerOf); a still-missing
             // coverage letter keeps priority.
-            cands = if must_cover {
+            candidates = if must_cover {
                 missing.iter().copied().collect()
             } else {
                 letters(self.oc)
@@ -922,8 +926,12 @@ impl SolutionAndKindsBuilder {
         }
         // Always non-empty after the relax: only OnlySame + NoOther ban a letter
         // (≤2), and oc ≥ 3, so an unbanned letter always remains.
-        assert!(!cands.is_empty(), "no candidate answer (oc={})", self.oc);
-        rng.pick(&cands)
+        assert!(
+            !candidates.is_empty(),
+            "no candidate answer (oc={})",
+            self.oc
+        );
+        rng.pick(&candidates)
     }
 
     /// The start index of an adjacent equal pair shared by the pair-sharers: an
@@ -1053,7 +1061,7 @@ const ANSWER_OF_CHAIN_PROB: f64 = 0.5;
 /// which `caps`/count-forcing guarantee by holding AnswerOf to ≤ n-1; the
 /// `roots.is_empty()` branch handles the degenerate all-`AnswerOf` case.
 fn wire_answer_of_targets(types: &mut [QuestionType; MAX_N], n: usize, rng: &mut Rng) {
-    // Set `from`'s AnswerOf target to `to`.
+    /// Set `from`'s AnswerOf target to `to`.
     fn point(types: &mut [QuestionType; MAX_N], from: usize, to: usize) {
         types[from] = QuestionType::AnswerOf {
             question_index: to as u8,
@@ -1152,22 +1160,23 @@ fn pick_reserve(
     placed: &[QuestionType],
     rng: &mut Rng,
 ) -> Option<QuestionType> {
-    let mut pool: ArrayVec<QuestionTypeKind, 32> = recipe.allowed.iter().copied().collect();
+    let mut pool: ArrayVec<QuestionTypeKind, QUESTION_KIND_COUNT> =
+        recipe.allowed.iter().copied().collect();
     rng.shuffle(&mut pool);
-    for r in pool {
+    for kind in pool {
         // When the recipe fixes the number of AnswerOf questions, select_kinds already
         // set it; don't let reserve substitutions inflate it past the sampled target.
-        if r == AnswerOf && !recipe.answer_of_counts.is_empty() {
+        if kind == AnswerOf && !recipe.answer_of_counts.is_empty() {
             continue;
         }
-        // How many `r`s are already committed: placed so far, plus those still
-        // planned in later slots. Adding one here must keep the total within cap.
-        let committed = placed.iter().filter(|qt| qt.kind() == r).count()
-            + kind_of[qi + 1..n].iter().filter(|&&k| k == r).count();
-        if committed >= usize::from(recipe.caps[r as usize]) {
+        // How many of this kind are already committed: placed so far, plus those
+        // still planned in later slots. Adding one here must keep within cap.
+        let committed = placed.iter().filter(|qt| qt.kind() == kind).count()
+            + kind_of[qi + 1..n].iter().filter(|&&k| k == kind).count();
+        if committed >= usize::from(recipe.caps[kind as usize]) {
             continue;
         }
-        if let Some(qt) = try_parametrize_kind(r, qi, n, oc, sol, all_targets, placed, rng) {
+        if let Some(qt) = try_parametrize_kind(kind, qi, n, oc, sol, all_targets, placed, rng) {
             return Some(qt);
         }
     }
@@ -1236,7 +1245,14 @@ pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
         QuestionType::ClosestAfter { .. } => "ClosestAfter",
         QuestionType::ClosestBefore { .. } => "ClosestBefore",
         QuestionType::SameAsWhich { .. } => "SameAsWhich",
-        _ => "Unknown",
+        // Never claim subjects (not in `CLAIM_TYPES`).
+        QuestionType::PrevSame
+        | QuestionType::NextSame
+        | QuestionType::OnlySame
+        | QuestionType::SameAs
+        | QuestionType::AnswerIsSelf
+        | QuestionType::LetterDist { .. }
+        | QuestionType::TrueStmt => "Invalid",
     };
     let mut obj = serde_json::Map::new();
     obj.insert("type".into(), serde_json::json!(type_name));
@@ -1347,23 +1363,23 @@ pub(crate) fn random_type_params(
         }
         QuestionTypeKind::LetterDist => {
             let mut pool = [0u8; MAX_N];
-            let mut plen = 0;
+            let mut pool_len = 0;
             for j in 0..n {
                 if j != qi && (assigned & (1 << j)) != 0 {
-                    pool[plen] = j as u8;
-                    plen += 1;
+                    pool[pool_len] = j as u8;
+                    pool_len += 1;
                 }
             }
-            if plen == 0 {
+            if pool_len == 0 {
                 for j in 0..n {
                     if j != qi {
-                        pool[plen] = j as u8;
-                        plen += 1;
+                        pool[pool_len] = j as u8;
+                        pool_len += 1;
                     }
                 }
             }
             Some(QuestionType::LetterDist {
-                question_index: rng.pick(&pool[..plen]),
+                question_index: rng.pick(&pool[..pool_len]),
             })
         }
         QuestionTypeKind::ClosestAfter => {
@@ -1444,6 +1460,9 @@ pub(crate) fn random_type_params(
             let has_match = LETTERS
                 .iter()
                 .any(|&l| l != ref_letter && count_letter(solution, l, n) == ref_count);
+            // When no other letter shares ref's count the "equal count" reads as a
+            // near-miss, so keep it only ~40% of the time (reject 3 of 5 draws) to
+            // thin them out; a natural match (has_match) is always kept.
             if !has_match && rng.int(0, 4) > 1 {
                 return None;
             }
@@ -1458,17 +1477,17 @@ pub(crate) fn random_type_params(
         }
         QuestionTypeKind::SameAsWhich => {
             let mut pool = [0u8; MAX_N];
-            let mut plen = 0;
+            let mut pool_len = 0;
             for j in 0..n {
                 if j != qi && (assigned & (1 << j)) != 0 {
-                    pool[plen] = j as u8;
-                    plen += 1;
+                    pool[pool_len] = j as u8;
+                    pool_len += 1;
                 }
             }
-            if plen == 0 {
+            if pool_len == 0 {
                 return None;
             }
-            let ref_qi = rng.pick(&pool[..plen]) as usize;
+            let ref_qi = rng.pick(&pool[..pool_len]) as usize;
             if solution[ref_qi] == solution[qi] {
                 return None;
             }

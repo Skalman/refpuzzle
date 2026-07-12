@@ -29,6 +29,8 @@ export function wasmReady(): Promise<unknown> {
   return wasmReadyPromise;
 }
 
+// Inverse of `lib.rs::validity_to_u8`; the encoding is documented on the Rust
+// `Validity` enum (check_answer.rs). Keep all three in sync.
 function validityFromU8(v: number): Validity {
   switch (v) {
     case 0:

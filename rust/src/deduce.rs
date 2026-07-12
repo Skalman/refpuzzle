@@ -1623,9 +1623,13 @@ pub fn deduce_with_rule_except(
     deduce_impl(fp, state, RuleFilter::Except(exclude), true, true, None)
 }
 
-// Inlining specializes per caller — the bool/RuleFilter args become
-// constants and large match arms get DCE'd. Native generator benefits;
-// wasm pays in size since each specialization is a full copy.
+/// Shared implementation behind `deduce` / `deduce_assuming_unique` / `deduce_fast`
+/// and the test variants: scans each question (or just `question_scope`) and emits
+/// the deductions its rules license. `filter`, `include_slow`, and `assume_unique`
+/// are the knobs the public wrappers pin to fixed presets.
+///
+/// Inlined per caller on native so the arg constants fold and dead match arms get
+/// DCE'd; left outlined on wasm, where each specialization would bloat the download.
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
 fn deduce_impl(
     fp: &FlatPuzzle,
@@ -2510,7 +2514,7 @@ mod tests {
         Some(std::time::Duration::from_secs(5))
     }
 
-    // Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
+    /// Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
     fn playground_link(puzzle: &Value, states: &[Value], n: usize) -> String {
         use base64::Engine;
         use base64::engine::general_purpose::URL_SAFE_NO_PAD;

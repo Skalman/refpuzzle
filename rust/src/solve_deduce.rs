@@ -107,6 +107,12 @@ pub struct EngineOutcome {
     pub contradiction: Option<usize>,
 }
 
+/// Outer-loop iteration cap for the offline verify engine, as `n * this`. Each pass
+/// applies at least one deduction or one lookahead elimination, and a puzzle settles
+/// in far fewer passes per question; the factor is generous slack that still bounds a
+/// non-converging engine.
+pub const VERIFY_ITERS_PER_QUESTION: usize = 30;
+
 /// The single deduce→lookahead solve loop shared by generation
 /// (`run_hint_engine`), the offline `check` / `solve`, and (via wasm) the browser.
 /// Every behavioral difference between those callers is captured by `cfg`;
@@ -119,27 +125,22 @@ pub fn run_engine<S: StepSink>(
     sink: &mut S,
 ) -> EngineOutcome {
     let n = fp.n;
-    let mut tel = EngineTelemetry::default();
+    let all_answered = |st: &State| (0..n).all(|i| st.answers[i].is_some());
+    let mut telemetry = EngineTelemetry::default();
     let mut contradiction = None;
 
     for _ in 0..max_iters {
-        if (0..n).all(|i| state.answers[i].is_some()) {
-            let solved = check_answers(fp, &state.answers);
-            return EngineOutcome {
-                solved,
-                state,
-                telemetry: tel,
-                contradiction,
-            };
+        if all_answered(&state) {
+            break;
         }
 
-        tel.deduce_calls += 1;
+        telemetry.deduce_calls += 1;
         let drs = if cfg.assuming_unique {
             deduce_assuming_unique(fp, &state)
         } else {
             deduce(fp, &state)
         };
-        tel.deduce_results += drs.len() as u32;
+        telemetry.deduce_results += drs.len() as u32;
         if !drs.is_empty() {
             for dr in &drs {
                 // First self-contradiction wins; keep solving so `check` still gets
@@ -157,18 +158,18 @@ pub fn run_engine<S: StepSink>(
         if cfg.lookahead_deduce_until == 0 {
             break;
         }
-        tel.lookahead_calls += 1;
+        telemetry.lookahead_calls += 1;
         let t = wasm_now();
         let lr = lookahead(
             fp,
             &state,
             cfg.lookahead_deduce_until,
             cfg.lookahead_full,
-            &mut tel.deduce_calls_in_lookahead,
+            &mut telemetry.deduce_calls_in_lookahead,
         );
-        tel.lookahead_us += us(t);
+        telemetry.lookahead_us += us(t);
         if let Some(lr) = lr {
-            tel.lookahead_hits += 1;
+            telemetry.lookahead_hits += 1;
             sink.on_lookahead(&lr);
             state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;
@@ -177,9 +178,9 @@ pub fn run_engine<S: StepSink>(
         break;
     }
     EngineOutcome {
-        solved: false,
+        solved: all_answered(&state) && check_answers(fp, &state.answers),
         state,
-        telemetry: tel,
+        telemetry,
         contradiction,
     }
 }
@@ -215,7 +216,7 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
         fp,
         fp.initial_state,
         EngineConfig::verify(),
-        fp.n * 30,
+        fp.n * VERIFY_ITERS_PER_QUESTION,
         &mut NoSteps,
     );
     SolveResult {

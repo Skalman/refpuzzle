@@ -118,8 +118,8 @@ fn extract_year(path: &str) -> String {
 }
 
 fn make_url(year: &str, day: &str, lvl: &str, steps: &[String]) -> String {
-    let mm = &day[..2];
-    let dd = &day[2..4];
+    let mm = day.get(..2).expect("day key must be MMDD");
+    let dd = day.get(2..4).expect("day key must be MMDD");
     let hash = steps.join(".");
     format!("http://localhost:5173/{year}-{mm}-{dd}/{lvl}?debug#{hash}")
 }
@@ -131,17 +131,6 @@ fn solution_str_to_steps(sol: &str) -> Vec<String> {
         .collect()
 }
 
-fn count_answered(steps: &[String]) -> usize {
-    let mut set = std::collections::HashSet::new();
-    for s in steps {
-        if s.chars().last().is_some_and(|c| c.is_uppercase()) {
-            let qi: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
-            set.insert(qi);
-        }
-    }
-    set.len()
-}
-
 // ── Compute ──
 
 fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
@@ -149,7 +138,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     let oc = fp.option_count;
 
     let cr = run_check(fp, key);
-    let answered = count_answered(&cr.steps);
+    let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
 
     let solutions = solve_brute::solve(fp, None, 10);
 
@@ -304,7 +293,9 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
     let mut puzzles = Vec::new();
 
     for (day, levels) in obj {
-        let levels = levels.as_object().unwrap();
+        let levels = levels
+            .as_object()
+            .unwrap_or_else(|| panic!("day {day:?}: levels must be an object"));
         for (lvl, puzzle) in levels {
             let key = format!("{day}-{lvl}");
             if let Some(t) = target
@@ -335,8 +326,7 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
 
 fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool {
     let n = r.n;
-    let day = &r.key[..4];
-    let lvl = &r.key[5..];
+    let (day, lvl) = r.key.split_once('-').expect("check key must be MMDD-L");
 
     let has_form_warns = !r.form_warnings.is_empty();
     let has_errors = !r.solve_ok
@@ -353,6 +343,8 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         red("CONTRADICTION")
     } else if !r.solve_ok {
         red("STUCK")
+    } else if r.brute_count == 0 {
+        red("UNSOLVABLE")
     } else if r.brute_count != 1 {
         red("AMBIGUOUS")
     } else if has_form_warns {
@@ -631,7 +623,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
             dim(&format!("{} n/a", stuck.len() + contradictions.len()))
         )
     };
-    writeln!(w, "    answer validity:    {validity_label}").unwrap();
+    writeln!(w, "    answer validity     {validity_label}").unwrap();
     writeln!(
         w,
         "    unique answer       {}, {}",
@@ -974,7 +966,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
         fp,
         fp.initial_state,
         solve_deduce::EngineConfig::verify(),
-        fp.n * 30,
+        fp.n * solve_deduce::VERIFY_ITERS_PER_QUESTION,
         &mut log,
     );
     // `run_engine` flags a self-contradiction (an unsound rule forcing a cell two
