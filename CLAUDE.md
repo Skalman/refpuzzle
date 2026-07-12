@@ -16,12 +16,9 @@
 - Puzzle engine + generator live in Rust (`rust/src/`), compiled to wasm
   via `wasm-pack` and loaded from `src/lib/wasm.ts`. Browser runtime uses
   wasm exclusively for check_answer / deduce / lookahead / solve / generate.
-- `pnpm gen` and `pnpm check` are thin wrappers for `cargo run -- gen` / `check`.
 - `pnpm test` runs the Rust test suite (`cargo test --release`); TS code is
   covered by `pnpm lint` (type-checking) and the wasm boundary itself.
-- `pnpm wasm` rebuilds `rust/pkg/`; `pnpm build` does it as part of the build.
 - All cargo commands run in the root dir, not in rust/
-- Preact + preact-iso frontend, no backend
 - Rust owns all question types, logic, and prose. The frontend never models
   a `QuestionType`; it holds the compact blob plus rendered board text
   (`PuzzleHandle.renderBoard` → question prompt + option labels) and marks.
