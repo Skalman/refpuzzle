@@ -705,13 +705,11 @@ fn apply_positional_forward(
                             DeduceAction::Eliminate { qi, oi },
                         );
                     }
-                    for j in scan_start..pos {
-                        if answers[j] == Some(answer) {
-                            push(
-                                DeduceRule::FirstClosestAfterEarlierMatch,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
-                        }
+                    if (scan_start..pos).any(|j| answers[j] == Some(answer)) {
+                        push(
+                            DeduceRule::FirstClosestAfterEarlierMatch,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
                     }
                     if oi == answer.idx() && qi >= scan_start && qi < pos {
                         push(
@@ -1157,10 +1155,7 @@ fn apply_positional_backward(
                             DeduceAction::Eliminate { qi, oi },
                         );
                     }
-                    if ((pos + 1)..scan_end)
-                        .rev()
-                        .any(|j| answers[j] == Some(answer))
-                    {
+                    if ((pos + 1)..scan_end).any(|j| answers[j] == Some(answer)) {
                         push(
                             DeduceRule::LastClosestBeforeLaterMatch,
                             DeduceAction::Eliminate { qi, oi },
