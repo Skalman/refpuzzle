@@ -1,7 +1,7 @@
 use arrayvec::ArrayVec;
 
 use crate::check_answer::{Validity, check_answer};
-use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_fast};
+use crate::deduce::{DeduceResult, apply_action, contradiction_question, deduce, deduce_fast};
 use crate::types::*;
 
 #[derive(Clone, Debug)]
@@ -166,67 +166,10 @@ fn probe_candidate(
     None
 }
 
-/// If `action`'s conclusion conflicts with `hyp` — a `Force` to a cell already
-/// answered otherwise or whose target option is eliminated, or an
-/// `Eliminate`/`EliminateMulti` striking a cell's current answer — the question
-/// where the conflict surfaces. `None` if the action is consistent with `hyp`.
-/// Sibling of `solve_deduce::contradiction_qi`, but also flags the
-/// forced-onto-eliminated case that one omits.
-fn contradiction_question(action: &DeduceAction, hyp: &State) -> Option<usize> {
-    match *action {
-        DeduceAction::Force { qi, answer } => {
-            let conflicts = (hyp.answers[qi].is_some() && hyp.answers[qi] != Some(answer))
-                || (hyp.eliminated[qi] >> answer.idx()) & 1 == 1;
-            conflicts.then_some(qi)
-        }
-        DeduceAction::Eliminate { qi, oi } => {
-            (hyp.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
-        }
-        DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => {
-            let mut qm = question_mask;
-            while qm != 0 {
-                let i = qm.trailing_zeros() as usize;
-                qm &= qm - 1;
-                if let Some(a) = hyp.answers[i]
-                    && (option_mask >> a.idx()) & 1 == 1
-                {
-                    return Some(i);
-                }
-            }
-            None
-        }
-    }
-}
-
-fn apply_action(action: &DeduceAction, hyp: &mut State) {
-    match *action {
-        DeduceAction::Force { qi, answer } => {
-            hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
-            hyp.answers[qi] = Some(answer);
-        }
-        DeduceAction::Eliminate { qi, oi } => {
-            hyp.eliminated[qi] |= 1 << oi;
-        }
-        DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => {
-            let mut qm = question_mask;
-            while qm != 0 {
-                let i = qm.trailing_zeros() as usize;
-                qm &= qm - 1;
-                hyp.eliminated[i] |= option_mask;
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::deduce::DeduceAction;
     use serde_json::Value;
 
     #[test]
@@ -308,8 +251,8 @@ mod tests {
     }
 
     /// A contradiction is attributed to the conflicting action's target question,
-    /// not the assumption; the forced-onto-eliminated case (which
-    /// `solve_deduce::contradiction_qi` omits) is still detected.
+    /// not the assumption, including the forced-onto-eliminated case (which the
+    /// probe relies on to refute a hypothesis).
     #[test]
     fn contradiction_question_reports_the_conflicting_target() {
         let mut st = State {
@@ -333,7 +276,7 @@ mod tests {
             Some(3)
         );
         // Force onto a cell whose target option is eliminated (cell unanswered) →
-        // that cell. This is the case solve_deduce's twin misses.
+        // that cell (the refutation signal the lookahead probe relies on).
         let mut st_elim = State {
             answers: [None; MAX_N],
             eliminated: [0; MAX_N],

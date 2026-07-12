@@ -1,6 +1,9 @@
 use crate::build::{us, wasm_now};
 use crate::check_answer::check_answers;
-use crate::deduce::{DeduceAction, DeduceResult, deduce, deduce_assuming_unique};
+use crate::deduce::{
+    DeduceAction, DeduceResult, apply_action, contradiction_question, deduce,
+    deduce_assuming_unique,
+};
 use crate::lookahead::{LookaheadResult, lookahead};
 use crate::types::*;
 
@@ -146,7 +149,7 @@ pub fn run_engine<S: StepSink>(
                 // First self-contradiction wins; keep solving so `check` still gets
                 // the full trajectory and generation asserts after the fact.
                 if contradiction.is_none() {
-                    contradiction = contradiction_qi(&dr.action, &state);
+                    contradiction = contradiction_question(&dr.action, &state);
                 }
                 sink.on_deduce(dr);
                 apply_action(&dr.action, &mut state);
@@ -182,28 +185,6 @@ pub fn run_engine<S: StepSink>(
         state,
         telemetry,
         contradiction,
-    }
-}
-
-/// The question a deduction would contradict — a `Force` to an already-decided
-/// cell with a different answer, or an `Eliminate`/`EliminateMulti` removing a
-/// decided answer — or `None` if consistent with the current state.
-fn contradiction_qi(action: &DeduceAction, state: &State) -> Option<usize> {
-    match *action {
-        DeduceAction::Force { qi, answer } => match state.answers[qi] {
-            Some(a) if a != answer => Some(qi),
-            _ => None,
-        },
-        DeduceAction::Eliminate { qi, oi } => {
-            (state.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
-        }
-        DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => (0..MAX_N).find(|&i| {
-            (question_mask >> i) & 1 == 1
-                && state.answers[i].is_some_and(|a| (option_mask >> a.idx()) & 1 == 1)
-        }),
     }
 }
 
@@ -262,29 +243,6 @@ pub fn format_step(step: &SolveStep) -> Vec<String> {
 
 pub fn format_steps(steps: &[SolveStep]) -> Vec<String> {
     steps.iter().flat_map(format_step).collect()
-}
-
-fn apply_action(action: &DeduceAction, state: &mut State) {
-    match *action {
-        DeduceAction::Force { qi, answer } => {
-            state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
-            state.answers[qi] = Some(answer);
-        }
-        DeduceAction::Eliminate { qi, oi } => {
-            state.eliminated[qi] |= 1 << oi;
-        }
-        DeduceAction::EliminateMulti {
-            question_mask,
-            option_mask,
-        } => {
-            let mut qm = question_mask;
-            while qm != 0 {
-                let i = qm.trailing_zeros() as usize;
-                qm &= qm - 1;
-                state.eliminated[i] |= option_mask;
-            }
-        }
-    }
 }
 
 #[cfg(test)]

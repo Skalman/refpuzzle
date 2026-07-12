@@ -133,6 +133,69 @@ pub struct DeduceResult {
     pub rule: DeduceRule,
 }
 
+/// The question where `action`'s conclusion conflicts with `state`, or `None` if
+/// consistent: a `Force` onto a cell already answered otherwise *or* whose target
+/// option is eliminated, or an `Eliminate`/`EliminateMulti` striking a cell's
+/// current answer. Shared by `run_engine`'s deduce loop (real state) and
+/// `lookahead`'s hypothesis probe — in the latter, forcing an already-eliminated
+/// option is the primary way a hypothesis gets refuted. A sound engine on a
+/// well-posed puzzle never contradicts the real state; `run_engine` surfaces it so
+/// generation fails loud on an unsound rule and `check` reports the culprit.
+pub(crate) fn contradiction_question(action: &DeduceAction, state: &State) -> Option<usize> {
+    match *action {
+        DeduceAction::Force { qi, answer } => {
+            let conflicts = (state.answers[qi].is_some() && state.answers[qi] != Some(answer))
+                || (state.eliminated[qi] >> answer.idx()) & 1 == 1;
+            conflicts.then_some(qi)
+        }
+        DeduceAction::Eliminate { qi, oi } => {
+            (state.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
+        }
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            let mut qm = question_mask;
+            while qm != 0 {
+                let i = qm.trailing_zeros() as usize;
+                qm &= qm - 1;
+                if let Some(a) = state.answers[i]
+                    && (option_mask >> a.idx()) & 1 == 1
+                {
+                    return Some(i);
+                }
+            }
+            None
+        }
+    }
+}
+
+/// Apply a `DeduceAction` to `state`: `Force` collapses the cell to the answer,
+/// `Eliminate`/`EliminateMulti` set the eliminated bits. Shared by `run_engine`
+/// and `lookahead`.
+pub(crate) fn apply_action(action: &DeduceAction, state: &mut State) {
+    match *action {
+        DeduceAction::Force { qi, answer } => {
+            state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
+            state.answers[qi] = Some(answer);
+        }
+        DeduceAction::Eliminate { qi, oi } => {
+            state.eliminated[qi] |= 1 << oi;
+        }
+        DeduceAction::EliminateMulti {
+            question_mask,
+            option_mask,
+        } => {
+            let mut qm = question_mask;
+            while qm != 0 {
+                let i = qm.trailing_zeros() as usize;
+                qm &= qm - 1;
+                state.eliminated[i] |= option_mask;
+            }
+        }
+    }
+}
+
 // ── Helpers ──
 
 #[inline(always)]
