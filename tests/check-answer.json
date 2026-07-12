@@ -551,6 +551,31 @@
       "expect": "pending"
     },
     {
+      "name": "answer_of: target's claimed letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 0, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "AnswerOf",
+            "q": 1
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "b", ""],
+      "expect": "invalid"
+    },
+    {
       "section": "=== letter_distance ==="
     },
     {
@@ -714,6 +739,34 @@
       },
       "state": ["A", "", "", ""],
       "expect": "pending"
+    },
+    {
+      "name": "same_answer_as: target's letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "a", "", ""],
+      "expect": "invalid"
     },
     {
       "section": "=== unique_answer ==="
@@ -1744,6 +1797,34 @@
       "expect": "pending"
     },
     {
+      "name": "only_same: target's letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "OnlySame"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "a", "", ""],
+      "expect": "invalid"
+    },
+    {
       "section": "=== consecutive_identical ==="
     },
     {
@@ -2047,6 +2128,39 @@
       "expect": "pending"
     },
     {
+      "name": "only_odd: target's letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "OnlyOdd",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "B", "a", "B", "B"],
+      "expect": "invalid"
+    },
+    {
       "name": "only_odd: claims None but odd position has A → invalid",
       "qi": 0,
       "puzzle": {
@@ -2234,6 +2348,39 @@
       },
       "state": ["B", "A", "B", "", "B"],
       "expect": "pending"
+    },
+    {
+      "name": "only_even: target's letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [0, 1, 2, 3, 4],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "OnlyEven",
+            "a": 0
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["B", "a", "B", "B", "B"],
+      "expect": "invalid"
     },
     {
       "name": "only_even: claims None but even position has A → invalid",
@@ -3234,6 +3381,39 @@
       },
       "state": ["C", "A", "", "C", "B"],
       "expect": "pending"
+    },
+    {
+      "name": "same_answer_which: target's letter struck out → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "B", "C", "b"],
+      "expect": "invalid"
     },
     {
       "section": "=== unanswered question ==="

@@ -353,6 +353,10 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                         Validity::Invalid
                     }
                 }
+                // The target can never take the claimed letter if it's struck out there.
+                None if eliminated[question_index as usize] & (1u8 << value.value()) != 0 => {
+                    Validity::Invalid
+                }
                 None => Validity::Pending,
             }
         }
@@ -409,6 +413,8 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                         Validity::Invalid
                     }
                 }
+                // Impossible if qi's letter is already struck out at the target.
+                None if eliminated[v] & (1u8 << self_letter.idx()) != 0 => Validity::Invalid,
                 None => Validity::Pending,
             }
         }
@@ -433,6 +439,8 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                         Validity::Invalid
                     }
                 }
+                // Impossible if the ref's letter is already struck out at the target.
+                None if eliminated[v] & (1u8 << ref_ans.idx()) != 0 => Validity::Invalid,
                 None => Validity::Pending,
             }
         }
@@ -509,6 +517,10 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if let Some(ta) = answers[target]
                     && ta != self_letter
                 {
+                    return Validity::Invalid;
+                }
+                // Target can't take qi's letter if it's struck out there.
+                if answers[target].is_none() && eliminated[target] & amask != 0 {
                     return Validity::Invalid;
                 }
 
@@ -630,6 +642,10 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if let Some(pa) = answers[p]
                     && pa != answer
                 {
+                    return Validity::Invalid;
+                }
+                // Target can't take `answer` if it's struck out there.
+                if answers[p].is_none() && eliminated[p] & amask != 0 {
                     return Validity::Invalid;
                 }
 
