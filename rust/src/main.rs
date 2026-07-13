@@ -197,6 +197,34 @@ fn print_help() {
     eprintln!("  refpuzzle check puzzles/daily/2051.json --json | refpuzzle format-check");
 }
 
+/// Consume the value after a value-taking flag `name` (currently at `args[*i]`),
+/// advancing `*i` onto it. Exits with a message on the two user errors the bare
+/// `i += 1; args[i]` mishandled: a trailing flag (which index-panicked) and a
+/// value that is really the next flag (e.g. `-o -l`). `-` passes through as the
+/// stdout sentinel for `-o`/`--output`.
+fn flag_value<'a>(args: &'a [String], i: &mut usize, name: &str) -> &'a str {
+    *i += 1;
+    let Some(value) = args.get(*i) else {
+        eprintln!("Error: {name} requires a value");
+        std::process::exit(1);
+    };
+    if value.starts_with('-') && value != "-" {
+        eprintln!("Error: {name} requires a value, but found flag '{value}'");
+        std::process::exit(1);
+    }
+    value
+}
+
+/// [`flag_value`] plus a parse to `T`, exiting cleanly (not panicking) when the
+/// value is malformed.
+fn flag_parse<T: std::str::FromStr>(args: &[String], i: &mut usize, name: &str) -> T {
+    let value = flag_value(args, i, name);
+    value.parse().unwrap_or_else(|_| {
+        eprintln!("Error: {name} expects a valid value, got '{value}'");
+        std::process::exit(1);
+    })
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -217,10 +245,16 @@ fn main() {
             for arg in &args[2..] {
                 match arg.as_str() {
                     "--json" => json_output = true,
+                    // Reject unknown flags rather than swallowing them as the
+                    // file path / target.
+                    s if s.starts_with('-') && s != "-" => {
+                        eprintln!("Unknown option: {s}");
+                        std::process::exit(1);
+                    }
                     s if file.is_none() => file = Some(s.to_string()),
                     s if target.is_none() => target = Some(s.to_string()),
                     other => {
-                        eprintln!("Unknown option: {other}");
+                        eprintln!("Unexpected argument: {other}");
                         std::process::exit(1);
                     }
                 }
@@ -243,17 +277,10 @@ fn main() {
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
-                    "--attempts" | "-a" => {
-                        i += 1;
-                        attempts = args[i].parse().expect("invalid attempts");
-                    }
-                    "--seed" => {
-                        i += 1;
-                        seed = args[i].parse().expect("invalid seed");
-                    }
+                    "--attempts" | "-a" => attempts = flag_parse(&args, &mut i, "--attempts"),
+                    "--seed" => seed = flag_parse(&args, &mut i, "--seed"),
                     "--output" | "-o" => {
-                        i += 1;
-                        output = Some(args[i].clone());
+                        output = Some(flag_value(&args, &mut i, "--output").to_string())
                     }
                     other => {
                         eprintln!("Unknown option: {other}");
@@ -280,28 +307,18 @@ fn main() {
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
-                    "--seed" => {
-                        i += 1;
-                        seed = args[i].parse().expect("invalid seed");
-                    }
-                    "--attempts" | "-a" => {
-                        i += 1;
-                        attempts = args[i].parse().expect("invalid attempts");
-                    }
-                    "--count" | "-n" => {
-                        i += 1;
-                        count = args[i].parse().expect("invalid count");
-                    }
+                    "--seed" => seed = flag_parse(&args, &mut i, "--seed"),
+                    "--attempts" | "-a" => attempts = flag_parse(&args, &mut i, "--attempts"),
+                    "--count" | "-n" => count = flag_parse(&args, &mut i, "--count"),
                     "--level" | "-l" => {
-                        i += 1;
-                        let l = args[i].parse().expect("invalid level");
-                        assert!((1..=6).contains(&l), "level must be 1-6");
+                        let l: usize = flag_parse(&args, &mut i, "--level");
+                        if !(1..=6).contains(&l) {
+                            eprintln!("Error: level must be 1-6");
+                            std::process::exit(1);
+                        }
                         level = Some(l);
                     }
-                    "--origin" => {
-                        i += 1;
-                        origin = args[i].clone();
-                    }
+                    "--origin" => origin = flag_value(&args, &mut i, "--origin").to_string(),
                     other => {
                         eprintln!("Unknown option: {other}");
                         std::process::exit(1);
@@ -334,19 +351,17 @@ fn main() {
     let mut i = 2;
     while i < args.len() {
         match args[i].as_str() {
-            "--attempts" | "-a" => {
-                i += 1;
-                max_attempts = args[i].parse().expect("invalid attempts");
-            }
+            "--attempts" | "-a" => max_attempts = flag_parse(&args, &mut i, "--attempts"),
             "--level" | "-l" => {
-                i += 1;
-                let l: u8 = args[i].parse().expect("invalid level");
-                assert!((1..=6).contains(&l), "level must be 1-6");
+                let l: u8 = flag_parse(&args, &mut i, "--level");
+                if !(1..=6).contains(&l) {
+                    eprintln!("Error: level must be 1-6");
+                    std::process::exit(1);
+                }
                 level_filter = Some(l);
             }
             "--output" | "-o" => {
-                i += 1;
-                output_path = Some(args[i].clone());
+                output_path = Some(flag_value(&args, &mut i, "--output").to_string())
             }
             "--merge" | "-m" => {
                 merge = true;
@@ -354,10 +369,7 @@ fn main() {
             "--overwrite" => {
                 overwrite = true;
             }
-            "--threads" | "-t" => {
-                i += 1;
-                threads = Some(args[i].parse().expect("invalid thread count"));
-            }
+            "--threads" | "-t" => threads = Some(flag_parse(&args, &mut i, "--threads")),
             "--stats" => {
                 show_stats = true;
             }
@@ -368,6 +380,12 @@ fn main() {
             other => {
                 if other.starts_with('-') {
                     eprintln!("Unknown option: {other}");
+                    std::process::exit(1);
+                }
+                if date_range_str.is_some() {
+                    eprintln!(
+                        "Error: unexpected extra argument '{other}' (date range already set)"
+                    );
                     std::process::exit(1);
                 }
                 date_range_str = Some(other.to_string());
