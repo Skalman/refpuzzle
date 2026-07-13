@@ -1232,10 +1232,18 @@ fn make_false_claim(
             return fc;
         }
     }
+    // Give up: emit a guaranteed-false but in-range CountAnswer(A) claim. The
+    // true count of A is `count_a`; any other value in 0..=n is false, so use
+    // count+1 (or count-1 when the count is already at the ceiling n).
+    let count_a = count_letter(sol, Answer::A, n);
+    let value = if count_a < n as i32 {
+        count_a + 1
+    } else {
+        count_a - 1
+    };
     Claim {
         question_type: QuestionType::CountAnswer { answer: Answer::A },
-        // Intentionally out of range: caller treats this as "give up" sentinel.
-        value: OptionValue::num(n as u8 + 1),
+        value: OptionValue::num(value as u8),
     }
 }
 
