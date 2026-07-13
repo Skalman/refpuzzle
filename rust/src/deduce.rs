@@ -475,13 +475,13 @@ fn apply_count(
 
     if let Some(a) = answers[qi] {
         // Answered count qi: CountSaturated / CountMustMatch{Force,Elim}.
-        let s = fp.options[qi][a.idx()];
-        if !s.is_num() {
+        let ov = fp.options[qi][a.idx()];
+        if !ov.is_num() {
             return;
         }
-        let on = s.value();
+        let ov = ov.value();
 
-        if cr.min() == on && cr.possible > 0 {
+        if cr.min() == ov && cr.possible > 0 {
             for j in from..to {
                 if answers[j].is_none() {
                     let remaining_bits = !eliminated[j] & ALL_OPTIONS_MASK;
@@ -502,7 +502,7 @@ fn apply_count(
             }
         }
 
-        if cr.max() == on && cr.possible > 0 {
+        if cr.max() == ov && cr.possible > 0 {
             if cr.possible == 1 {
                 for j in from..to {
                     if answers[j].is_none()
@@ -560,19 +560,19 @@ fn apply_count(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if !s.is_num() {
+            let ov = fp.options[qi][oi];
+            if !ov.is_num() {
                 // NONE/UNUSED on a count option is meaningless: any
                 // claim that count == null is impossible.
-                if s.is_none() {
+                if ov.is_none() {
                     exceeded_mask |= 1 << oi;
                 }
                 continue;
             }
-            let on = s.value();
-            if cr.min() > on {
+            let ov = ov.value();
+            if cr.min() > ov {
                 exceeded_mask |= 1 << oi;
-            } else if cr.max() < on {
+            } else if cr.max() < ov {
                 impossible_mask |= 1 << oi;
             }
         }
@@ -616,9 +616,9 @@ fn apply_only_odd_even(
         if is_elim(eliminated, qi, oi) {
             continue;
         }
-        let s = fp.options[qi][oi];
-        if s.is_num() {
-            let pos = usize::from(s.value());
+        let ov = fp.options[qi][oi];
+        if ov.is_num() {
+            let pos = usize::from(ov.value());
             if (pos + 1) % 2 != parity {
                 push(
                     DeduceRule::OnlyOddEvenWrongParity,
@@ -641,7 +641,8 @@ fn apply_only_odd_even(
                     );
                 }
             }
-        } else if s.is_none() && (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
+        } else if ov.is_none()
+            && (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
         {
             push(
                 DeduceRule::OnlyOddEvenNoneMatch,
@@ -660,9 +661,9 @@ fn apply_only_odd_even(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_num() {
-                let v = usize::from(s.value());
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let v = usize::from(ov.value());
                 if v < n {
                     claimed |= 1 << v;
                 }
@@ -715,9 +716,9 @@ fn apply_positional_forward(
 
     if let Some(a) = ans {
         // PositionalRangeAnswered: positions before the claimed target can't have `answer`.
-        let s = fp.options[qi][a.idx()];
-        if s.is_num() {
-            let v = usize::from(s.value());
+        let ov = fp.options[qi][a.idx()];
+        if ov.is_num() {
+            let v = usize::from(ov.value());
             let letter_oi = answer.idx();
             let mut q_mask = 0u16;
             for j in scan_start..v {
@@ -744,9 +745,9 @@ fn apply_positional_forward(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_num() {
-                let pos = usize::from(s.value());
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let pos = usize::from(ov.value());
                 if pos < scan_start || pos >= n {
                     push(
                         DeduceRule::FirstClosestAfterOutOfRange,
@@ -781,7 +782,7 @@ fn apply_positional_forward(
                         );
                     }
                 }
-            } else if s.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+            } else if ov.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
                 push(
                     DeduceRule::FirstClosestAfterNoneMatch,
                     DeduceAction::Eliminate { qi, oi },
@@ -794,9 +795,9 @@ fn apply_positional_forward(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_num() {
-                let v = usize::from(s.value());
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let v = usize::from(ov.value());
                 if v < min_pos {
                     min_pos = v;
                 }
@@ -1165,9 +1166,9 @@ fn apply_positional_backward(
 
     if let Some(a) = ans {
         // PositionalRangeAnswered: positions after the claimed target can't have `answer`.
-        let s = fp.options[qi][a.idx()];
-        if s.is_num() {
-            let v = usize::from(s.value());
+        let ov = fp.options[qi][a.idx()];
+        if ov.is_num() {
+            let v = usize::from(ov.value());
             let letter_oi = answer.idx();
             let mut q_mask = 0u16;
             for j in (v + 1)..scan_end {
@@ -1194,9 +1195,9 @@ fn apply_positional_backward(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_num() {
-                let pos = usize::from(s.value());
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let pos = usize::from(ov.value());
                 if pos >= scan_end {
                     push(
                         DeduceRule::LastClosestBeforeOutOfRange,
@@ -1231,7 +1232,7 @@ fn apply_positional_backward(
                         );
                     }
                 }
-            } else if s.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
+            } else if ov.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
                 push(
                     DeduceRule::LastClosestBeforeNoneMatch,
                     DeduceAction::Eliminate { qi, oi },
@@ -1244,9 +1245,9 @@ fn apply_positional_backward(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_num() {
-                let v = usize::from(s.value());
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let v = usize::from(ov.value());
                 if max_pos.is_none_or(|m| v > m) {
                     max_pos = Some(v);
                 }
@@ -1296,10 +1297,10 @@ fn apply_same_shared(
     let ans = answers[qi];
 
     if let Some(a) = ans {
-        let s = fp.options[qi][a.idx()];
+        let ov = fp.options[qi][a.idx()];
         // Reverse: qi answered with an index → force that target qi to qi's letter.
-        if s.is_num() {
-            let target_qi = usize::from(s.value());
+        if ov.is_num() {
+            let target_qi = usize::from(ov.value());
             if target_qi < n && answers[target_qi].is_none() {
                 push(
                     reverse_rule,
@@ -1314,7 +1315,7 @@ fn apply_same_shared(
         // OnlySameNoneForward: an answered None means qi's answer is unique,
         // so no other question can have that letter. Sound; not gated on
         // assume_unique.
-        if include_slow && s.is_none() {
+        if include_slow && ov.is_none() {
             for j in 0..n {
                 if j == qi {
                     continue;
@@ -1333,16 +1334,16 @@ fn apply_same_shared(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_none() {
+            let ov = fp.options[qi][oi];
+            if ov.is_none() {
                 if (0..n).any(|j| j != qi && answers[j] == Some(Answer::from(oi as u8))) {
                     push(
                         DeduceRule::OnlySameNoneMatch,
                         DeduceAction::Eliminate { qi, oi },
                     );
                 }
-            } else if s.is_num() {
-                let pos = usize::from(s.value());
+            } else if ov.is_num() {
+                let pos = usize::from(ov.value());
                 if pos == qi {
                     push(
                         DeduceRule::OnlySameSelfRef,
@@ -1383,9 +1384,9 @@ fn apply_prev_or_next_same(
     let (none_rule, out_rule, ruled_out_rule, closer_rule) = rules;
 
     if let Some(a) = answers[qi] {
-        let s = fp.options[qi][a.idx()];
-        if s.is_num() {
-            let target_qi = usize::from(s.value());
+        let ov = fp.options[qi][a.idx()];
+        if ov.is_num() {
+            let target_qi = usize::from(ov.value());
             if target_qi < n && answers[target_qi].is_none() {
                 push(
                     DeduceRule::PrevNextOnlySameReverse,
@@ -1423,16 +1424,16 @@ fn apply_prev_or_next_same(
             if is_elim(eliminated, qi, oi) {
                 continue;
             }
-            let s = fp.options[qi][oi];
-            if s.is_none() {
+            let ov = fp.options[qi][oi];
+            if ov.is_none() {
                 if range
                     .clone()
                     .any(|j| answers[j] == Some(Answer::from(oi as u8)))
                 {
                     push(none_rule, DeduceAction::Eliminate { qi, oi });
                 }
-            } else if s.is_num() {
-                let pos = usize::from(s.value());
+            } else if ov.is_num() {
+                let pos = usize::from(ov.value());
                 if !range.contains(&pos) {
                     push(out_rule, DeduceAction::Eliminate { qi, oi });
                 }
@@ -1488,12 +1489,12 @@ fn apply_extremum_count<const IS_LEAST: bool>(
         if is_elim(eliminated, qi, oi) {
             continue;
         }
-        let v = fp.options[qi][oi].value();
+        let ov = fp.options[qi][oi];
         // Skip NONE/UNUSED sentinels and any out-of-range letter claim.
-        if usize::from(v) >= oc {
+        if !ov.is_num() || usize::from(ov.value()) >= oc {
             continue;
         }
-        let claimed = v as usize;
+        let claimed = usize::from(ov.value());
 
         let mut adj_min = min_count;
         let mut adj_max = max_count;
@@ -1803,12 +1804,12 @@ fn deduce_impl(
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
-                    let s = fp.options[qi][oi];
-                    if !s.is_num() {
+                    let ov = fp.options[qi][oi];
+                    if !ov.is_num() {
                         continue;
                     }
-                    let on = s.value();
-                    if on < max_known || on > max_possible {
+                    let ov = ov.value();
+                    if ov < max_known || ov > max_possible {
                         push(
                             DeduceRule::MostCommonCountElim,
                             DeduceAction::Eliminate { qi, oi },
@@ -1829,13 +1830,17 @@ fn deduce_impl(
                 let target_qi = question_index as usize;
                 if let Some(a) = ans {
                     // Reverse: qi answered → force the target qi.
-                    let implied = fp.options[qi][a.idx()].value();
-                    if implied <= 4 && target_qi < n && answers[target_qi].is_none() {
+                    let ov = fp.options[qi][a.idx()];
+                    if ov.is_num()
+                        && ov.value() <= 4
+                        && target_qi < n
+                        && answers[target_qi].is_none()
+                    {
                         push(
                             DeduceRule::AnswerOfReverse,
                             DeduceAction::Force {
                                 qi: target_qi,
-                                answer: Answer::from(implied),
+                                answer: Answer::from(ov.value()),
                             },
                         );
                     }
@@ -1845,7 +1850,8 @@ fn deduce_impl(
                     if let Some(target) = target_ans {
                         let mut best: Option<usize> = None;
                         for oi in 0..fp.option_count {
-                            if fp.options[qi][oi].value() == target as u8 {
+                            let ov = fp.options[qi][oi];
+                            if ov.is_num() && ov.value() == target as u8 {
                                 if !is_elim(eliminated, qi, oi) {
                                     best = Some(oi);
                                     break;
@@ -1869,7 +1875,11 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let ov = fp.options[qi][oi].value();
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
+                            continue;
+                        }
+                        let ov = ov.value();
                         if ov <= 4 {
                             if let Some(target) = target_ans {
                                 if target as u8 != ov {
@@ -1893,10 +1903,10 @@ fn deduce_impl(
                 if let Some(a) = ans {
                     // Reverse (src answered): narrow target's options to those at the claimed distance.
                     if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
-                        let s = fp.options[qi][a.idx()];
-                        if !s.is_unused() {
+                        let ov = fp.options[qi][a.idx()];
+                        if !ov.is_unused() {
                             // NONE distance is unsatisfiable: every non-eliminated option
-                            // ends up in elim_mask (the `actual == s.value()` check is
+                            // ends up in elim_mask (the `actual == ov.value()` check is
                             // skipped when the source's distance value is null).
                             let mut elim_mask = 0u8;
                             let mut valid_count = 0u8;
@@ -1906,7 +1916,7 @@ fn deduce_impl(
                                     continue;
                                 }
                                 let actual = (oi as u8).abs_diff(a as u8);
-                                if s.is_num() && actual == s.value() {
+                                if ov.is_num() && actual == ov.value() {
                                     valid_count += 1;
                                     valid_oi = oi;
                                 } else {
@@ -1939,10 +1949,10 @@ fn deduce_impl(
                     if let Some(other_ans) = target_ans {
                         let other_idx = other_ans as u8;
                         if let Some(oi) = exactly_one(0..5, |oi| {
-                            let s = fp.options[qi][oi];
+                            let ov = fp.options[qi][oi];
                             !is_elim(eliminated, qi, oi)
-                                && s.is_num()
-                                && (oi as u8).abs_diff(other_idx) == s.value()
+                                && ov.is_num()
+                                && (oi as u8).abs_diff(other_idx) == ov.value()
                         }) {
                             push(
                                 DeduceRule::LetterDistForward,
@@ -1957,19 +1967,19 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let s = fp.options[qi][oi];
+                        let ov = fp.options[qi][oi];
                         let max_dist = oi.max(4 - oi) as u8;
-                        if s.is_num() && s.value() > max_dist {
+                        if ov.is_num() && ov.value() > max_dist {
                             push(
                                 DeduceRule::LetterDistImpossible,
                                 DeduceAction::Eliminate { qi, oi },
                             );
                         }
                         if let Some(other) = target_ans {
-                            // s is NONE/UNUSED: dist (always ≥ 0) can never equal it.
-                            // s is num: literal distance comparison.
+                            // ov is NONE/UNUSED: dist (always ≥ 0) can never equal it.
+                            // ov is num: literal distance comparison.
                             let dist = (oi as u8).abs_diff(other as u8);
-                            let matches = s.is_num() && dist == s.value();
+                            let matches = ov.is_num() && dist == ov.value();
                             if !matches {
                                 push(
                                     DeduceRule::LetterDistWrong,
@@ -1977,11 +1987,11 @@ fn deduce_impl(
                                 );
                             }
                         }
-                        if s.is_num() && target_ans.is_none() && s.value() <= max_dist {
-                            let on = s.value();
+                        if ov.is_num() && target_ans.is_none() && ov.value() <= max_dist {
+                            let ov = ov.value();
                             let no_match = !(0..5usize).any(|ti| {
                                 !is_elim(eliminated, target_qi, ti)
-                                    && (oi as u8).abs_diff(ti as u8) == on
+                                    && (oi as u8).abs_diff(ti as u8) == ov
                             });
                             if no_match {
                                 push(
@@ -2000,10 +2010,10 @@ fn deduce_impl(
                                 continue;
                             }
                             let compatible = (0..5usize).any(|si| {
-                                let s = fp.options[qi][si];
+                                let ov = fp.options[qi][si];
                                 !is_elim(eliminated, qi, si)
-                                    && s.is_num()
-                                    && (oi as u8).abs_diff(si as u8) == s.value()
+                                    && ov.is_num()
+                                    && (oi as u8).abs_diff(si as u8) == ov.value()
                             });
                             if !compatible {
                                 elim_mask |= 1 << oi;
@@ -2060,11 +2070,11 @@ fn deduce_impl(
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
-                    let s = fp.options[qi][oi];
-                    if !s.is_num() {
+                    let ov = fp.options[qi][oi];
+                    if !ov.is_num() {
                         continue;
                     }
-                    let pos = usize::from(s.value());
+                    let pos = usize::from(ov.value());
                     if pos + 1 < n {
                         possible_pairs |= 1 << pos;
                     }
@@ -2107,9 +2117,9 @@ fn deduce_impl(
                 if let Some(a) = ans {
                     // Forward force/elim/both (qi answered).
                     if include_slow {
-                        let s = fp.options[qi][a.idx()];
-                        if s.is_num() && usize::from(s.value()) + 1 < n {
-                            let p = usize::from(s.value());
+                        let ov = fp.options[qi][a.idx()];
+                        if ov.is_num() && usize::from(ov.value()) + 1 < n {
+                            let p = usize::from(ov.value());
                             let poss_a = !eliminated[p] & ALL_OPTIONS_MASK;
                             let poss_b = !eliminated[p + 1] & ALL_OPTIONS_MASK;
                             let ans_a = answers[p];
@@ -2193,9 +2203,9 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let s = fp.options[qi][oi];
-                        if s.is_num() {
-                            let pos = usize::from(s.value());
+                        let ov = fp.options[qi][oi];
+                        if ov.is_num() {
+                            let pos = usize::from(ov.value());
                             if pos + 1 >= n {
                                 push(
                                     DeduceRule::ConsecIdentOutOfRange,
@@ -2219,7 +2229,7 @@ fn deduce_impl(
                                     }
                                 }
                             }
-                        } else if s.is_none()
+                        } else if ov.is_none()
                             && (0..n.saturating_sub(1)).any(|i| {
                                 matches!(
                                     (answers[i], answers[i + 1]),
@@ -2240,18 +2250,18 @@ fn deduce_impl(
                     if is_elim(eliminated, qi, oi) {
                         continue;
                     }
-                    let s = fp.options[qi][oi];
-                    if !s.is_num() {
+                    let ov = fp.options[qi][oi];
+                    if !ov.is_num() {
                         continue;
                     }
-                    let on = usize::from(s.value());
-                    if on == answer.idx() {
+                    let ov = usize::from(ov.value());
+                    if ov == answer.idx() {
                         push(
                             DeduceRule::EqualCountSelfRef,
                             DeduceAction::Eliminate { qi, oi },
                         );
                     }
-                    let claimed = Answer::from(on as u8);
+                    let claimed = Answer::from(ov as u8);
                     if claimed != answer {
                         // Impossible iff the upper bound on one letter's count
                         // is below the lower bound on the other's. Both bounds
@@ -2310,9 +2320,9 @@ fn deduce_impl(
                 if let Some(a) = ans {
                     // Reverse.
                     if include_slow {
-                        let s = fp.options[qi][a.idx()];
-                        if s.is_num() {
-                            let j = usize::from(s.value());
+                        let ov = fp.options[qi][a.idx()];
+                        if ov.is_num() {
+                            let j = usize::from(ov.value());
                             if j < n {
                                 let j_ans = answers[j];
                                 if let Some(ra) = ref_ans
@@ -2345,11 +2355,11 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let s = fp.options[qi][oi];
-                        if !s.is_num() {
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
                             continue;
                         }
-                        let j = usize::from(s.value());
+                        let j = usize::from(ov.value());
                         if j < n && j != qi && j != qi_ref {
                             let wrong = match answers[j] {
                                 Some(ja) => ja != ra,
@@ -2435,11 +2445,11 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let s = fp.options[qi][oi];
-                        if !s.is_num() {
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
                             continue;
                         }
-                        let pos = usize::from(s.value());
+                        let pos = usize::from(ov.value());
                         if pos >= n || pos == qi {
                             continue;
                         }

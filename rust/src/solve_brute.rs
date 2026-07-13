@@ -115,12 +115,12 @@ fn get_force(
     let t = &fp.question_types[qi];
     match *t {
         QuestionType::AnswerOf { question_index } => {
-            let claimed = fp.options[qi][ai].value();
-            if claimed < 5 {
-                Some((question_index as usize, Answer::from(claimed)))
-            } else {
-                None
+            let ov = fp.options[qi][ai];
+            if !ov.is_num() {
+                return None;
             }
+            let claimed = ov.value();
+            (claimed < 5).then_some((question_index as usize, Answer::from(claimed)))
         }
         QuestionType::FirstWith { answer }
         | QuestionType::LastWith { answer }
@@ -128,30 +128,30 @@ fn get_force(
         | QuestionType::ClosestBefore { answer, .. }
         | QuestionType::OnlyOdd { answer }
         | QuestionType::OnlyEven { answer } => {
-            let s = fp.options[qi][ai];
-            if !s.is_num() {
+            let ov = fp.options[qi][ai];
+            if !ov.is_num() {
                 return None;
             }
-            let v = s.value() as usize;
+            let v = ov.value() as usize;
             (v < fp.n).then_some((v, answer))
         }
         QuestionType::SameAs
         | QuestionType::OnlySame
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            let s = fp.options[qi][ai];
-            if !s.is_num() {
+            let ov = fp.options[qi][ai];
+            if !ov.is_num() {
                 return None;
             }
-            let v = s.value() as usize;
+            let v = ov.value() as usize;
             (v < fp.n).then_some((v, letter))
         }
         QuestionType::SameAsWhich { question_index } => {
-            let s = fp.options[qi][ai];
-            if !s.is_num() {
+            let ov = fp.options[qi][ai];
+            if !ov.is_num() {
                 return None;
             }
-            let v = s.value() as usize;
+            let v = ov.value() as usize;
             if v < fp.n {
                 current[question_index as usize].map(|ref_ans| (v, ref_ans))
             } else {
@@ -203,7 +203,8 @@ fn propagate_forces(
                 let target_oi = current[qi].unwrap() as u8;
                 let mut found: Option<usize> = None;
                 for oi in 0..fp.option_count {
-                    if fp.options[j][oi].value() == target_oi {
+                    let ov = fp.options[j][oi];
+                    if ov.is_num() && ov.value() == target_oi {
                         if found.is_some() {
                             found = None;
                             break;
@@ -409,11 +410,11 @@ fn rule_violated(
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
-            let s = fp.options[i][answer_i.idx()];
-            if s.is_unused() {
+            let ov = fp.options[i][answer_i.idx()];
+            if !ov.is_num() {
                 return false;
             }
-            let opt_val = s.value();
+            let ov = ov.value();
 
             let (range_start, range_end) = match *t {
                 QuestionType::CountAnswer { .. } => (0, n),
@@ -431,16 +432,16 @@ fn rule_violated(
                     remaining += 1;
                 }
             }
-            if count > opt_val || count + remaining < opt_val {
+            if count > ov || count + remaining < ov {
                 return true;
             }
         }
         QuestionType::CountVowel | QuestionType::CountConsonant => {
-            let s = fp.options[i][answer_i.idx()];
-            if s.is_unused() {
+            let ov = fp.options[i][answer_i.idx()];
+            if !ov.is_num() {
                 return false;
             }
-            let opt_val = s.value();
+            let ov = ov.value();
             let is_vowel = matches!(*t, QuestionType::CountVowel);
             let mut count: u8 = 0;
             let mut remaining: u8 = 0;
@@ -453,7 +454,7 @@ fn rule_violated(
                     count += 1;
                 }
             }
-            if count > opt_val || count + remaining < opt_val {
+            if count > ov || count + remaining < ov {
                 return true;
             }
         }
