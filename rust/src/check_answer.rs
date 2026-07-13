@@ -876,9 +876,13 @@ fn count_matches(ov: OptionValue, count: usize) -> bool {
     ov.is_num() && ov.value() as usize == count
 }
 
-/// Like `check_claim`, but assumes `answers` is fully populated; returns bool.
-/// Same caveat applies: this is a **semantic** check (does the claim hold given
-/// these answers?), not a wellformedness check.
+/// Like `check_claim`, but assumes `answers` is fully populated (no partial
+/// state, no eliminations); returns bool instead of `Validity`. Verified
+/// equivalent to `check_claim().is_valid()` on a fully-answered board (see
+/// `tests::check_claim_fast_matches_check_claim`) for every `CLAIM_TYPES`
+/// kind — the only kinds a caller ever passes in. The remaining arms exist
+/// for exhaustiveness and are covered by the same test, but no caller reaches
+/// them today.
 // Inlined on native for the generator's inner loop; outlined on wasm
 // where every duplicated body shows up in the download.
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
@@ -976,31 +980,51 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             counts[ov] == min && counts[..option_count].iter().filter(|&&c| c == min).count() == 1
         }
         QuestionType::NoOtherHasAnswer => {
-            if !ov.is_num() {
+            if !ov.is_num() || ov.value() > 4 {
                 return false;
             }
             let letter = Answer::from(ov.value());
             (0..n).filter(|&j| j != qi).all(|j| answers[j] != letter)
         }
         QuestionType::EqualCount { answer } => {
-            if !ov.is_num() || (ov.value() as usize) >= option_count {
-                return false;
+            if ov.is_none() {
+                let ref_count = answers.iter().filter(|&&a| a == answer).count();
+                !LETTERS[..option_count].iter().any(|&l| {
+                    l != answer && answers.iter().filter(|&&a| a == l).count() == ref_count
+                })
+            } else if ov.is_num() && (ov.value() as usize) < option_count {
+                let ov = ov.value() as usize;
+                if ov == answer.idx() {
+                    false
+                } else {
+                    let ref_count = answers.iter().filter(|&&a| a == answer).count();
+                    answers
+                        .iter()
+                        .filter(|&&a| a == Answer::from(ov as u8))
+                        .count()
+                        == ref_count
+                }
+            } else {
+                false
             }
-            let ov = ov.value() as usize;
-            if ov == answer.idx() {
-                return false;
-            }
-            let ref_count = answers.iter().filter(|&&a| a == answer).count();
-            answers
-                .iter()
-                .filter(|&&a| a == Answer::from(ov as u8))
-                .count()
-                == ref_count
         }
-        QuestionType::ConsecIdent => pos_matches(
-            ov,
-            (0..n.saturating_sub(1)).find(|&i| answers[i] == answers[i + 1]),
-        ),
+        QuestionType::ConsecIdent => {
+            let mut found: Option<usize> = None;
+            let mut count = 0;
+            for i in 0..n.saturating_sub(1) {
+                if answers[i] == answers[i + 1] {
+                    if count == 0 {
+                        found = Some(i);
+                    }
+                    count += 1;
+                }
+            }
+            match count {
+                0 => ov.is_none(),
+                1 => pos_matches(ov, found),
+                _ => false,
+            }
+        }
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = matches!(claim.question_type, QuestionType::OnlyEven { .. }) as usize;
             let mut found: Option<usize> = None;
@@ -1207,5 +1231,141 @@ mod tests {
 
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
+    }
+
+    fn minimal_fp(n: usize, oc: usize) -> FlatPuzzle {
+        let question_types = [QuestionType::AnswerIsSelf; MAX_N];
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
+        FlatPuzzle {
+            question_types,
+            options: [[OptionValue::UNUSED; 5]; MAX_N],
+            true_stmt_question_types: None,
+            affected_by,
+            global_indices,
+            n,
+            option_count: oc,
+            initial_state: State::initial(oc),
+        }
+    }
+
+    /// Property test: on random fully-answered boards, `check_claim_fast` must
+    /// agree with `check_claim(..).is_valid()` for every candidate claim value,
+    /// across every kind it implements (all but `AnswerIsSelf`/`TrueStmt`, which
+    /// are never claim subjects — see `CLAIM_TYPES` in build.rs). Locks the
+    /// equivalence the doc comment on `check_claim_fast` promises.
+    #[test]
+    fn check_claim_fast_matches_check_claim() {
+        use crate::rng::Rng;
+
+        // Every value a claim could plausibly carry: all in-range
+        // positions/counts, all five letters (including ones beyond `oc`, to
+        // probe the phantom-letter bound checks), and NONE. Capped below
+        // `MAX_N` rather than at `n`: values in `[n, MAX_N)` are still
+        // well-formed positions in a *larger* puzzle and exercise the
+        // `>= n` guards; `MAX_N` itself indexes past the fixed-size answers
+        // array, which is the pre-existing §2 boundary issue, not this test's
+        // target.
+        let values: Vec<OptionValue> = (0..MAX_N as u8)
+            .map(OptionValue::num)
+            .chain(std::iter::once(OptionValue::NONE))
+            .collect();
+
+        let mut checked = 0u64;
+        for seed in 0..200u32 {
+            let mut rng = Rng::new(seed);
+            let n = rng.int(2, MAX_N as i32) as usize;
+            let oc = if rng.int(0, 1) == 0 { 3 } else { 5 };
+            let mut sol = [Answer::A; MAX_N];
+            for a in sol.iter_mut().take(n) {
+                *a = rng.pick_letter(oc);
+            }
+
+            let fp = minimal_fp(n, oc);
+            let mut state = fp.initial_state;
+            for i in 0..n {
+                state.answers[i] = Some(sol[i]);
+            }
+
+            for qi in 0..n {
+                let other_qi = loop {
+                    let c = rng.int(0, n as i32 - 1) as usize;
+                    if c != qi {
+                        break c as u8;
+                    }
+                };
+                let answer = rng.pick_letter(oc);
+                let before_index = rng.int(0, n as i32) as u8;
+                let after_index = rng.int(0, (n as i32 - 1).max(0)) as u8;
+
+                let kinds = [
+                    QuestionType::CountAnswer { answer },
+                    QuestionType::CountAnswerBefore {
+                        answer,
+                        before_index,
+                    },
+                    QuestionType::CountAnswerAfter {
+                        answer,
+                        after_index,
+                    },
+                    QuestionType::CountVowel,
+                    QuestionType::CountConsonant,
+                    QuestionType::MostCommonCount,
+                    QuestionType::ClosestAfter {
+                        after_index,
+                        answer,
+                    },
+                    QuestionType::ClosestBefore {
+                        before_index,
+                        answer,
+                    },
+                    QuestionType::FirstWith { answer },
+                    QuestionType::LastWith { answer },
+                    QuestionType::PrevSame,
+                    QuestionType::NextSame,
+                    QuestionType::OnlySame,
+                    QuestionType::SameAs,
+                    QuestionType::OnlyOdd { answer },
+                    QuestionType::OnlyEven { answer },
+                    QuestionType::ConsecIdent,
+                    QuestionType::AnswerOf {
+                        question_index: other_qi,
+                    },
+                    QuestionType::LeastCommon,
+                    QuestionType::MostCommon,
+                    QuestionType::NoOtherHasAnswer,
+                    QuestionType::EqualCount { answer },
+                    QuestionType::LetterDist {
+                        question_index: other_qi,
+                    },
+                    QuestionType::SameAsWhich {
+                        question_index: other_qi,
+                    },
+                ];
+
+                let opt = OptionPos {
+                    qi,
+                    oi: sol[qi].idx(),
+                };
+                for question_type in kinds {
+                    for &value in &values {
+                        let claim = Claim {
+                            question_type,
+                            value,
+                        };
+                        let fast = check_claim_fast(oc, &sol[..n], qi, &claim);
+                        let slow = check_claim(&fp, state, opt, claim).is_valid();
+                        assert_eq!(
+                            fast,
+                            slow,
+                            "seed {seed} n={n} oc={oc} qi={qi} sol={:?} claim={:?}",
+                            &sol[..n],
+                            claim
+                        );
+                        checked += 1;
+                    }
+                }
+            }
+        }
+        eprintln!("check_claim_fast_matches_check_claim: {checked} comparisons");
     }
 }
