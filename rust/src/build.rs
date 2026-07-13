@@ -300,7 +300,20 @@ pub(crate) fn valid_values(
             }
             out.push(OptionValue::NONE);
         }
-        _ => {
+        QuestionType::SameAsWhich { question_index } => {
+            // Structural domain only: any other real question except self (qi) and
+            // the referenced question. NONE is never valid — a well-formed
+            // SameAsWhich always has a match (fill_one_question guarantees it).
+            // Whether a candidate is *also* a valid answer (target shares the ref's
+            // answer) is key-dependent and enforced downstream by
+            // check_well_posed_given_options, not here.
+            for v in 0..n {
+                if v != qi && v != question_index as usize {
+                    push_num(v);
+                }
+            }
+        }
+        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => {
             for v in 0..n {
                 push_num(v);
             }
@@ -1225,7 +1238,7 @@ fn make_false_claim(
 ) -> Claim {
     for _ in 0..30 {
         let base = make_true_claim(sol, qi, n, rng, option_count);
-        let fc = perturb_claim(base, n, rng, option_count);
+        let fc = perturb_claim(base, qi, n, rng, option_count);
         if let Some(fc) = fc
             && !check_claim_fast(option_count, &sol[..n], qi, &fc)
         {
@@ -1247,7 +1260,13 @@ fn make_false_claim(
     }
 }
 
-fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng, option_count: usize) -> Option<Claim> {
+fn perturb_claim(
+    claim: Claim,
+    qi: usize,
+    n: usize,
+    rng: &mut Rng,
+    option_count: usize,
+) -> Option<Claim> {
     // Count-type perturbation: offset the existing claim value. Done in i8
     // because the offset is signed (-2..=2) and the base may be NONE
     // (treated as -1 for "the count was null"). Range is [-3, MAX_N+2].
@@ -1270,9 +1289,22 @@ fn perturb_claim(claim: Claim, n: usize, rng: &mut Rng, option_count: usize) -> 
             perturb_count(n as u8 - after_index - 1, rng)?
         }
         QuestionType::CountAnswerBefore { before_index, .. } => perturb_count(before_index, rng)?,
-        QuestionType::FirstWith { .. }
-        | QuestionType::LastWith { .. }
-        | QuestionType::SameAsWhich { .. } => rng.int(0, n as i32 - 1) as u8,
+        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => {
+            rng.int(0, n as i32 - 1) as u8
+        }
+        QuestionType::SameAsWhich { question_index } => {
+            // A distractor must point at a real *other* question. Self (qi) and the
+            // referenced question are structurally invalid targets (check_answer
+            // rejects both) that no deduce rule can eliminate — only lookahead — so
+            // reject them here rather than ship a nonsense distractor. The remaining
+            // human-true case (target shares the ref's answer) is rejected by
+            // make_false_claim's check_claim_fast gate.
+            let ov = rng.int(0, n as i32 - 1) as u8;
+            if usize::from(ov) == qi || ov == question_index {
+                return None;
+            }
+            ov
+        }
         QuestionType::ConsecIdent => {
             // Valid pool: [0, n-1) — pair (v, v+1) requires v+1 < n.
             if n < 2 {

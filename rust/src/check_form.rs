@@ -170,7 +170,26 @@ fn check_claim_form(
                 None
             }
         }
-        QuestionType::SameAsWhich { .. } => (ov >= n).then(oor),
+        QuestionType::SameAsWhich { question_index } => {
+            // Self / subject-ref / out-of-range are all structurally invalid targets
+            // (check_answer rejects them unconditionally) and un-eliminable by deduce.
+            // Error, mirroring SameAs — the value can never be a correct answer.
+            if ov == qi {
+                error(format!("SameAsWhich option {} references itself", opt.oi))
+            } else if ov == usize::from(*question_index) {
+                error(format!(
+                    "SameAsWhich option {} references its subject question {ov}",
+                    opt.oi
+                ))
+            } else if ov >= n {
+                error(format!(
+                    "SameAsWhich option {} references out-of-range question {ov}",
+                    opt.oi
+                ))
+            } else {
+                None
+            }
+        }
         QuestionType::AnswerOf { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
@@ -278,6 +297,7 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                     | QuestionType::LeastCommon
                     | QuestionType::MostCommon
                     | QuestionType::LetterDist { .. }
+                    | QuestionType::SameAsWhich { .. }
             );
             if null_not_allowed {
                 for oi in 0..oc {
