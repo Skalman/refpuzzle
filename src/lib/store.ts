@@ -14,7 +14,7 @@ export interface SavedState {
   hints: Map<number, number>;
 }
 
-export const PUZZLE_VERSION = 2;
+export const PUZZLE_VERSION = 3;
 const VERSION_KEY = "refpuzzle:version";
 const PREFIX = "refpuzzle:puzzle:";
 const LETTERS = ["A", "B", "C", "D", "E"];
