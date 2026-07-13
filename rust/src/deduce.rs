@@ -370,10 +370,10 @@ fn compute_count_bounds(
             } else if is_elim(eliminated, k, oi) {
                 continue;
             }
-            let v = fp.options[k][oi];
-            if v.is_num() {
-                lo = lo.min(v.value());
-                hi = hi.max(v.value());
+            let ov = fp.options[k][oi];
+            if ov.is_num() {
+                lo = lo.min(ov.value());
+                hi = hi.max(ov.value());
             }
         }
         if lo == u8::MAX {
@@ -663,9 +663,9 @@ fn apply_only_odd_even(
             }
             let ov = fp.options[qi][oi];
             if ov.is_num() {
-                let v = usize::from(ov.value());
-                if v < n {
-                    claimed |= 1 << v;
+                let ov = usize::from(ov.value());
+                if ov < n {
+                    claimed |= 1 << ov;
                 }
             }
         }
@@ -718,10 +718,10 @@ fn apply_positional_forward(
         // PositionalRangeAnswered: positions before the claimed target can't have `answer`.
         let ov = fp.options[qi][a.idx()];
         if ov.is_num() {
-            let v = usize::from(ov.value());
+            let ov = usize::from(ov.value());
             let letter_oi = answer.idx();
             let mut q_mask = 0u16;
-            for j in scan_start..v {
+            for j in scan_start..ov {
                 if answers[j].is_some() {
                     continue;
                 }
@@ -797,9 +797,9 @@ fn apply_positional_forward(
             }
             let ov = fp.options[qi][oi];
             if ov.is_num() {
-                let v = usize::from(ov.value());
-                if v < min_pos {
-                    min_pos = v;
+                let ov = usize::from(ov.value());
+                if ov < min_pos {
+                    min_pos = ov;
                 }
             }
         }
@@ -1168,10 +1168,10 @@ fn apply_positional_backward(
         // PositionalRangeAnswered: positions after the claimed target can't have `answer`.
         let ov = fp.options[qi][a.idx()];
         if ov.is_num() {
-            let v = usize::from(ov.value());
+            let ov = usize::from(ov.value());
             let letter_oi = answer.idx();
             let mut q_mask = 0u16;
-            for j in (v + 1)..scan_end {
+            for j in (ov + 1)..scan_end {
                 if answers[j].is_some() {
                     continue;
                 }
@@ -1247,9 +1247,9 @@ fn apply_positional_backward(
             }
             let ov = fp.options[qi][oi];
             if ov.is_num() {
-                let v = usize::from(ov.value());
-                if max_pos.is_none_or(|m| v > m) {
-                    max_pos = Some(v);
+                let ov = usize::from(ov.value());
+                if max_pos.is_none_or(|m| ov > m) {
+                    max_pos = Some(ov);
                 }
             }
         }
@@ -2322,16 +2322,16 @@ fn deduce_impl(
                     if include_slow {
                         let ov = fp.options[qi][a.idx()];
                         if ov.is_num() {
-                            let j = usize::from(ov.value());
-                            if j < n {
-                                let j_ans = answers[j];
+                            let ov = usize::from(ov.value());
+                            if ov < n {
+                                let j_ans = answers[ov];
                                 if let Some(ra) = ref_ans
                                     && j_ans.is_none()
-                                    && !is_elim(eliminated, j, ra.idx())
+                                    && !is_elim(eliminated, ov, ra.idx())
                                 {
                                     push(
                                         DeduceRule::SameAsWhichReverse,
-                                        DeduceAction::Force { qi: j, answer: ra },
+                                        DeduceAction::Force { qi: ov, answer: ra },
                                     );
                                 }
                                 if let Some(ja) = j_ans
@@ -2359,11 +2359,11 @@ fn deduce_impl(
                         if !ov.is_num() {
                             continue;
                         }
-                        let j = usize::from(ov.value());
-                        if j < n && j != qi && j != qi_ref {
-                            let wrong = match answers[j] {
+                        let ov = usize::from(ov.value());
+                        if ov < n && ov != qi && ov != qi_ref {
+                            let wrong = match answers[ov] {
                                 Some(ja) => ja != ra,
-                                None => is_elim(eliminated, j, ra.idx()),
+                                None => is_elim(eliminated, ov, ra.idx()),
                             };
                             if wrong {
                                 push(
@@ -2493,12 +2493,12 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let v = fp.options[qi][oi];
-                        if !v.is_num() {
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
                             continue;
                         }
-                        let d = v.value() as usize;
-                        if d < oc && bounds.lower(&cells, d) > max_least {
+                        let ov = ov.value() as usize;
+                        if ov < oc && bounds.lower(&cells, ov) > max_least {
                             push(
                                 DeduceRule::LeastCommonCountFloor,
                                 DeduceAction::Eliminate { qi, oi },
@@ -2532,12 +2532,12 @@ fn deduce_impl(
                         if is_elim(eliminated, qi, oi) {
                             continue;
                         }
-                        let v = fp.options[qi][oi];
-                        if !v.is_num() {
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
                             continue;
                         }
-                        let d = v.value() as usize;
-                        if d < oc && bounds.upper(&cells, d) < min_most {
+                        let ov = ov.value() as usize;
+                        if ov < oc && bounds.upper(&cells, ov) < min_most {
                             push(
                                 DeduceRule::MostCommonCountCeil,
                                 DeduceAction::Eliminate { qi, oi },

@@ -555,11 +555,11 @@ fn trace_question(
 ) {
     let vals: Vec<Value> = (0..option_count)
         .map(|oi| {
-            let s = options_qi[oi];
-            if matches!(qt, QuestionType::TrueStmt) || s.is_none() || s.is_unused() {
+            let ov = options_qi[oi];
+            if matches!(qt, QuestionType::TrueStmt) || ov.is_none() || ov.is_unused() {
                 Value::Null
             } else {
-                json!(s.value())
+                json!(ov.value())
             }
         })
         .collect();
@@ -574,14 +574,14 @@ fn trace_question(
         let types = true_stmt_types.expect("TrueStmt qi must have populated claim types");
         let claims: Vec<Value> = (0..option_count)
             .map(|oi| {
-                let v = options_qi[oi];
-                if v.is_unused() {
+                let ov = options_qi[oi];
+                if ov.is_unused() {
                     Value::Null
                 } else {
-                    let val = if v.is_none() {
+                    let val = if ov.is_none() {
                         Value::Null
                     } else {
-                        json!(v.value())
+                        json!(ov.value())
                     };
                     json!({ "questionType": format_claim_qt(&types[oi]), "value": val })
                 }
@@ -1154,7 +1154,7 @@ fn try_make_claim(
                 }
             }
             // Return None if nothing found.
-            let value = OptionValue::num(found? as u8);
+            let ov = OptionValue::num(found? as u8);
             let question_type = if kind == QuestionTypeKind::OnlyOdd {
                 QuestionType::OnlyOdd { answer: a }
             } else {
@@ -1162,7 +1162,7 @@ fn try_make_claim(
             };
             Some(Claim {
                 question_type,
-                value,
+                value: ov,
             })
         }
         QuestionTypeKind::SameAsWhich => {
@@ -1445,21 +1445,21 @@ mod tests {
                     }
                     let slots = &fp.options[qi];
                     let mut seen: Vec<u8> = Vec::new();
-                    for &s in &slots[..oc] {
-                        if !s.is_num() {
+                    for &ov in &slots[..oc] {
+                        if !ov.is_num() {
                             continue;
                         }
-                        let v = s.value();
-                        if seen.contains(&v) {
+                        let ov = ov.value();
+                        if seen.contains(&ov) {
                             eprintln!(
-                                "FAIL: {name} (seed={seed}) Q{}: duplicate option value {v} in {:?}",
+                                "FAIL: {name} (seed={seed}) Q{}: duplicate option value {ov} in {:?}",
                                 qi + 1,
                                 &slots[..oc]
                             );
                             case_failed = true;
                             break;
                         }
-                        seen.push(v);
+                        seen.push(ov);
                     }
                     if case_failed {
                         break;

@@ -143,11 +143,11 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
             let type_tag = format::format_type_tag(&fp.question_types[qi]);
             let options: Vec<Option<i64>> = (0..oc)
                 .map(|oi| {
-                    let s = fp.options[qi][oi];
-                    if matches!(fp.question_types[qi], QuestionType::TrueStmt) || !s.is_num() {
+                    let ov = fp.options[qi][oi];
+                    if matches!(fp.question_types[qi], QuestionType::TrueStmt) || !ov.is_num() {
                         None
                     } else {
-                        Some(s.value() as i64)
+                        Some(ov.value() as i64)
                     }
                 })
                 .collect();

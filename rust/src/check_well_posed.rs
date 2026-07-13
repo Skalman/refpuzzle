@@ -162,14 +162,14 @@ fn ambiguating_distractor(
         if oi == answer_slot {
             continue;
         }
-        let v = fp.options[qi][oi];
-        if v.is_num() {
-            let t = usize::from(v.value());
-            if t < fp.n && t != qi && t != ref_q && sol[t] == matched {
+        let ov = fp.options[qi][oi];
+        if ov.is_num() {
+            let ov = usize::from(ov.value());
+            if ov < fp.n && ov != qi && ov != ref_q && sol[ov] == matched {
                 return Some(format!(
                     "{:?} distractor (option {oi}) points to Q{} which shares the matched answer {}",
                     fp.question_types[qi].kind(),
-                    t + 1,
+                    ov + 1,
                     matched.as_char(),
                 ));
             }

@@ -115,7 +115,7 @@ fn check_claim_form(
     fp: &FlatPuzzle,
     opt: OptionPos,
     qt: &QuestionType,
-    value: OptionValue,
+    ov: OptionValue,
 ) -> Option<(String, Severity)> {
     let n = fp.n;
     let oc = fp.option_count;
@@ -123,38 +123,38 @@ fn check_claim_form(
 
     // NONE / UNUSED: no value-level checks apply. Whether NONE is *disallowed*
     // for the type is enforced separately in `check_form`'s main loop.
-    if !value.is_num() {
+    if !ov.is_num() {
         return None;
     }
-    let v = usize::from(value.value());
-    let oor = || (format!("value {v} out of range"), Severity::Warning);
+    let ov = usize::from(ov.value());
+    let oor = || (format!("value {ov} out of range"), Severity::Warning);
 
     match qt {
         QuestionType::CountAnswer { .. }
         | QuestionType::CountVowel
         | QuestionType::CountConsonant
-        | QuestionType::MostCommonCount => (v > n).then(oor),
+        | QuestionType::MostCommonCount => (ov > n).then(oor),
         QuestionType::CountAnswerBefore { before_index, .. } => {
-            (v > usize::from(*before_index)).then(oor)
+            (ov > usize::from(*before_index)).then(oor)
         }
         QuestionType::CountAnswerAfter { after_index, .. } => {
-            (v + 1 + usize::from(*after_index) > n).then(oor)
+            (ov + 1 + usize::from(*after_index) > n).then(oor)
         }
-        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => (v >= n).then(oor),
+        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => (ov >= n).then(oor),
         QuestionType::ClosestAfter { after_index, .. } => {
-            (v <= usize::from(*after_index) || v >= n).then(oor)
+            (ov <= usize::from(*after_index) || ov >= n).then(oor)
         }
         QuestionType::ClosestBefore { before_index, .. } => {
-            (v >= usize::from(*before_index)).then(oor)
+            (ov >= usize::from(*before_index)).then(oor)
         }
-        QuestionType::NextSame => (v <= qi || v >= n).then(oor),
-        QuestionType::PrevSame => (v >= qi).then(oor),
+        QuestionType::NextSame => (ov <= qi || ov >= n).then(oor),
+        QuestionType::PrevSame => (ov >= qi).then(oor),
         QuestionType::SameAs => {
-            if v == qi {
+            if ov == qi {
                 error(format!("SameAs option {} references itself", opt.oi))
-            } else if v >= n {
+            } else if ov >= n {
                 error(format!(
-                    "SameAs option {} references out-of-range question {v}",
+                    "SameAs option {} references out-of-range question {ov}",
                     opt.oi
                 ))
             } else {
@@ -162,41 +162,41 @@ fn check_claim_form(
             }
         }
         QuestionType::OnlySame => {
-            if v == qi {
+            if ov == qi {
                 warning(format!("OnlySame option {} references itself", opt.oi))
-            } else if v >= n {
+            } else if ov >= n {
                 Some(oor())
             } else {
                 None
             }
         }
-        QuestionType::SameAsWhich { .. } => (v >= n).then(oor),
+        QuestionType::SameAsWhich { .. } => (ov >= n).then(oor),
         QuestionType::AnswerOf { .. }
         | QuestionType::LeastCommon
         | QuestionType::MostCommon
-        | QuestionType::NoOtherHasAnswer => (v >= oc).then(|| {
+        | QuestionType::NoOtherHasAnswer => (ov >= oc).then(|| {
             (
-                format!("letter index {v} outside option count {oc}"),
+                format!("letter index {ov} outside option count {oc}"),
                 Severity::Error,
             )
         }),
         QuestionType::EqualCount { answer } => {
-            if v == answer.idx() {
+            if ov == answer.idx() {
                 warning(format!(
                     "EqualCount({}) points to {} (self-referencing)",
                     answer.as_char(),
                     answer.as_char()
                 ))
-            } else if v >= oc {
+            } else if ov >= oc {
                 Some(oor())
             } else {
                 None
             }
         }
-        QuestionType::OnlyOdd { .. } => (v >= n || v % 2 != 0).then(oor),
-        QuestionType::OnlyEven { .. } => (v >= n || v % 2 != 1).then(oor),
-        QuestionType::ConsecIdent => (v + 1 >= n).then(oor),
-        QuestionType::AnswerIsSelf | QuestionType::LetterDist { .. } => (v >= oc).then(oor),
+        QuestionType::OnlyOdd { .. } => (ov >= n || ov % 2 != 0).then(oor),
+        QuestionType::OnlyEven { .. } => (ov >= n || ov % 2 != 1).then(oor),
+        QuestionType::ConsecIdent => (ov + 1 >= n).then(oor),
+        QuestionType::AnswerIsSelf | QuestionType::LetterDist { .. } => (ov >= oc).then(oor),
         // Claims cannot be TrueStmt — nesting is not allowed.
         QuestionType::TrueStmt => error("TrueStmt is not a valid claim type".to_string()),
     }
@@ -298,8 +298,8 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
             // NONE / UNUSED internally by returning no error).
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
-                let value = fp.options[qi][oi];
-                if value.is_unused() {
+                let ov = fp.options[qi][oi];
+                if ov.is_unused() {
                     // UNUSED is only legal past `oc`.
                     errors.push(FormError {
                         qi,
@@ -308,7 +308,7 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                     });
                     continue;
                 }
-                if let Some((msg, sev)) = check_claim_form(fp, opt, qt, value) {
+                if let Some((msg, sev)) = check_claim_form(fp, opt, qt, ov) {
                     errors.push(FormError {
                         qi,
                         message: format!("Option {oi}: {msg}"),

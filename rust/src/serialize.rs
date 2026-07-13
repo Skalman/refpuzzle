@@ -82,11 +82,11 @@ fn option_row_json(qt: &QuestionType, qi: usize, oc: usize, fp: &FlatPuzzle) -> 
     }
     let row: Vec<Value> = (0..oc)
         .map(|oi| {
-            let s = fp.options[qi][oi];
-            if !s.is_num() {
+            let ov = fp.options[qi][oi];
+            if !ov.is_num() {
                 Value::Null
             } else {
-                json!(s.value())
+                json!(ov.value())
             }
         })
         .collect();

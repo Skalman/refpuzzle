@@ -132,8 +132,8 @@ fn get_force(
             if !ov.is_num() {
                 return None;
             }
-            let v = ov.value() as usize;
-            (v < fp.n).then_some((v, answer))
+            let ov = ov.value() as usize;
+            (ov < fp.n).then_some((ov, answer))
         }
         QuestionType::SameAs
         | QuestionType::OnlySame
@@ -143,17 +143,17 @@ fn get_force(
             if !ov.is_num() {
                 return None;
             }
-            let v = ov.value() as usize;
-            (v < fp.n).then_some((v, letter))
+            let ov = ov.value() as usize;
+            (ov < fp.n).then_some((ov, letter))
         }
         QuestionType::SameAsWhich { question_index } => {
             let ov = fp.options[qi][ai];
             if !ov.is_num() {
                 return None;
             }
-            let v = ov.value() as usize;
-            if v < fp.n {
-                current[question_index as usize].map(|ref_ans| (v, ref_ans))
+            let ov = ov.value() as usize;
+            if ov < fp.n {
+                current[question_index as usize].map(|ref_ans| (ov, ref_ans))
             } else {
                 None
             }

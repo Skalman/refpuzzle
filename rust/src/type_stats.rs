@@ -406,13 +406,13 @@ fn write_answer_freq(md: &mut String, levels: &[LevelData]) {
                 keys.extend(pv.keys());
             }
             let letter = is_letter_valued(*kind);
-            let label = |v: OptionValue| -> String {
-                if v.is_none() {
+            let label = |ov: OptionValue| -> String {
+                if ov.is_none() {
                     "None".into()
-                } else if letter && v.value() < 5 {
-                    LETTER_LABELS[v.value() as usize].into()
+                } else if letter && ov.value() < 5 {
+                    LETTER_LABELS[ov.value() as usize].into()
                 } else {
-                    v.value().to_string()
+                    ov.value().to_string()
                 }
             };
 

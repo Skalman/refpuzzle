@@ -77,16 +77,16 @@ pub(crate) fn count_matching(
     CountResult { count, remaining }
 }
 
-fn count_validity(cr: CountResult, value: OptionValue) -> Validity {
+fn count_validity(cr: CountResult, ov: OptionValue) -> Validity {
     // NONE/UNUSED on a count: malformed but check_answer routes them here for
     // semantic evaluation. Treat as Invalid (the count can never be null).
-    if !value.is_num() {
+    if !ov.is_num() {
         return Validity::Invalid;
     }
-    let value = value.value();
-    if cr.count > value || cr.count + cr.remaining < value {
+    let ov = ov.value();
+    if cr.count > ov || cr.count + cr.remaining < ov {
         Validity::Invalid
-    } else if cr.count == value && cr.remaining == 0 {
+    } else if cr.count == ov && cr.remaining == 0 {
         Validity::Valid
     } else {
         Validity::Pending
@@ -264,7 +264,7 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [u8; 5] {
 /// `answers[...]`). For form checks, see `check_form::check_claim_form`.
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     let qt = &claim.question_type;
-    let value = claim.value;
+    let ov = claim.value;
     let qi = opt.qi;
     let self_oi = opt.oi;
     let self_letter = Answer::from(self_oi as u8);
@@ -280,27 +280,27 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         | QuestionType::CountAnswerAfter { answer, .. } => {
             let (from, to) = count_range(qt, n);
             let cr = count_matching(answers, eliminated, Pred::IsAnswer(answer), from, to);
-            count_validity(cr, value)
+            count_validity(cr, ov)
         }
 
         QuestionType::CountVowel => {
             let cr = count_matching(answers, eliminated, Pred::IsVowel, 0, n);
-            count_validity(cr, value)
+            count_validity(cr, ov)
         }
 
         QuestionType::CountConsonant => {
             let cr = count_matching(answers, eliminated, Pred::IsConsonant, 0, n);
-            count_validity(cr, value)
+            count_validity(cr, ov)
         }
 
         QuestionType::MostCommonCount => {
-            if !value.is_num() {
+            if !ov.is_num() {
                 return Validity::Invalid;
             }
-            let v = value.value();
+            let ov = ov.value();
             let c = fill_counts(answers, n);
             for i in 0..5 {
-                if c[i] > v {
+                if c[i] > ov {
                     return Validity::Invalid;
                 }
             }
@@ -308,7 +308,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 return Validity::Pending;
             }
             let max = c.iter().copied().max().unwrap_or(0);
-            if max == v {
+            if max == ov {
                 Validity::Valid
             } else {
                 Validity::Invalid
@@ -316,45 +316,34 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         }
 
         // ── Positional: first/closest-after ──
-        QuestionType::FirstWith { answer } => {
-            first_in_range(answers, eliminated, answer, 0, n, value)
-        }
+        QuestionType::FirstWith { answer } => first_in_range(answers, eliminated, answer, 0, n, ov),
         QuestionType::ClosestAfter {
             after_index,
             answer,
-        } => first_in_range(
-            answers,
-            eliminated,
-            answer,
-            after_index as usize + 1,
-            n,
-            value,
-        ),
+        } => first_in_range(answers, eliminated, answer, after_index as usize + 1, n, ov),
 
         // ── Positional: last/closest-before ──
-        QuestionType::LastWith { answer } => {
-            last_in_range(answers, eliminated, answer, 0, n, value)
-        }
+        QuestionType::LastWith { answer } => last_in_range(answers, eliminated, answer, 0, n, ov),
         QuestionType::ClosestBefore {
             before_index,
             answer,
-        } => last_in_range(answers, eliminated, answer, 0, before_index as usize, value),
+        } => last_in_range(answers, eliminated, answer, 0, before_index as usize, ov),
 
         // ── Reference ──
         QuestionType::AnswerOf { question_index } => {
-            if !value.is_num() || value.value() > 4 {
+            if !ov.is_num() || ov.value() > 4 {
                 return Validity::Invalid;
             }
             match answers[question_index as usize] {
                 Some(target) => {
-                    if target as u8 == value.value() {
+                    if target as u8 == ov.value() {
                         Validity::Valid
                     } else {
                         Validity::Invalid
                     }
                 }
                 // The target can never take the claimed letter if it's struck out there.
-                None if eliminated[question_index as usize] & (1u8 << value.value()) != 0 => {
+                None if eliminated[question_index as usize] & (1u8 << ov.value()) != 0 => {
                     Validity::Invalid
                 }
                 None => Validity::Pending,
@@ -363,11 +352,11 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
 
         QuestionType::LetterDist { question_index } => match answers[question_index as usize] {
             Some(other) => {
-                if !value.is_num() {
+                if !ov.is_num() {
                     return Validity::Invalid;
                 }
                 let dist = (self_oi as u8).abs_diff(other as u8);
-                if dist == value.value() {
+                if dist == ov.value() {
                     Validity::Valid
                 } else {
                     Validity::Invalid
@@ -377,7 +366,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         },
 
         QuestionType::SameAs => {
-            if value.is_none() {
+            if ov.is_none() {
                 // "none": valid iff no other question shares qi's (candidate) answer.
                 let amask = 1u8 << self_letter.idx();
                 let mut could_exist = false;
@@ -398,14 +387,14 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     Validity::Valid
                 };
             }
-            if !value.is_num() {
+            if !ov.is_num() {
                 return Validity::Invalid;
             }
-            let v = value.value() as usize;
-            if v >= n || v == qi {
+            let ov = ov.value() as usize;
+            if ov >= n || ov == qi {
                 return Validity::Invalid;
             }
-            match answers[v] {
+            match answers[ov] {
                 Some(ta) => {
                     if ta == self_letter {
                         Validity::Valid
@@ -414,24 +403,24 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     }
                 }
                 // Impossible if qi's letter is already struck out at the target.
-                None if eliminated[v] & (1u8 << self_letter.idx()) != 0 => Validity::Invalid,
+                None if eliminated[ov] & (1u8 << self_letter.idx()) != 0 => Validity::Invalid,
                 None => Validity::Pending,
             }
         }
 
         QuestionType::SameAsWhich { question_index } => {
-            if !value.is_num() {
+            if !ov.is_num() {
                 return Validity::Invalid;
             }
-            let v = value.value() as usize;
-            if v >= n || v == qi || v == question_index as usize {
+            let ov = ov.value() as usize;
+            if ov >= n || ov == qi || ov == question_index as usize {
                 return Validity::Invalid;
             }
             let ref_ans = match answers[question_index as usize] {
                 Some(a) => a,
                 None => return Validity::Pending,
             };
-            match answers[v] {
+            match answers[ov] {
                 Some(ta) => {
                     if ta == ref_ans {
                         Validity::Valid
@@ -440,18 +429,18 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     }
                 }
                 // Impossible if the ref's letter is already struck out at the target.
-                None if eliminated[v] & (1u8 << ref_ans.idx()) != 0 => Validity::Invalid,
+                None if eliminated[ov] & (1u8 << ref_ans.idx()) != 0 => Validity::Invalid,
                 None => Validity::Pending,
             }
         }
 
         // ── NoOtherHasAnswer: "not the answer to any OTHER question" ──
         QuestionType::NoOtherHasAnswer => {
-            if !value.is_num() || value.value() > 4 {
+            if !ov.is_num() || ov.value() > 4 {
                 return Validity::Invalid;
             }
-            let letter = Answer::from(value.value());
-            let amask = 1u8 << value.value();
+            let letter = Answer::from(ov.value());
+            let amask = 1u8 << ov.value();
             let mut others: u8 = 0;
             let mut could_match: u8 = 0;
             for j in 0..n {
@@ -476,17 +465,15 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
         // ── Previous/Next same ──
         // No pre-range check: first_in_range/last_in_range already reject a numeric
         // position outside `start..end` (here `0..qi` / `qi+1..n`).
-        QuestionType::PrevSame => last_in_range(answers, eliminated, self_letter, 0, qi, value),
+        QuestionType::PrevSame => last_in_range(answers, eliminated, self_letter, 0, qi, ov),
 
-        QuestionType::NextSame => {
-            first_in_range(answers, eliminated, self_letter, qi + 1, n, value)
-        }
+        QuestionType::NextSame => first_in_range(answers, eliminated, self_letter, qi + 1, n, ov),
 
         // ── Only same ──
         QuestionType::OnlySame => {
             let amask = 1u8 << self_oi;
 
-            if value.is_none() {
+            if ov.is_none() {
                 let mut matches: u8 = 0;
                 let mut could_match: u8 = 0;
                 for j in 0..n {
@@ -506,10 +493,10 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 } else {
                     Validity::Pending
                 }
-            } else if !value.is_num() || value.value() as usize >= n {
+            } else if !ov.is_num() || ov.value() as usize >= n {
                 Validity::Invalid
             } else {
-                let target = value.value() as usize;
+                let target = ov.value() as usize;
                 if target == qi {
                     return Validity::Invalid;
                 }
@@ -550,30 +537,30 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
 
         // ── Consecutive identical ──
         QuestionType::ConsecIdent => {
-            if value.is_num() {
-                let p = value.value() as usize;
-                if p + 1 >= n {
+            if ov.is_num() {
+                let ov = ov.value() as usize;
+                if ov + 1 >= n {
                     return Validity::Invalid;
                 }
 
-                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1])
+                if let (Some(pa), Some(pb)) = (answers[ov], answers[ov + 1])
                     && pa != pb
                 {
                     return Validity::Invalid;
                 }
 
-                let poss_a = !eliminated[p] & ALL_OPTIONS_MASK;
-                let poss_b = !eliminated[p + 1] & ALL_OPTIONS_MASK;
+                let poss_a = !eliminated[ov] & ALL_OPTIONS_MASK;
+                let poss_b = !eliminated[ov + 1] & ALL_OPTIONS_MASK;
                 if poss_a & poss_b == 0 {
                     return Validity::Invalid;
                 }
-                if let Some(pa) = answers[p]
-                    && eliminated[p + 1] & (1 << pa.idx()) != 0
+                if let Some(pa) = answers[ov]
+                    && eliminated[ov + 1] & (1 << pa.idx()) != 0
                 {
                     return Validity::Invalid;
                 }
-                if let Some(pb) = answers[p + 1]
-                    && eliminated[p] & (1 << pb.idx()) != 0
+                if let Some(pb) = answers[ov + 1]
+                    && eliminated[ov] & (1 << pb.idx()) != 0
                 {
                     return Validity::Invalid;
                 }
@@ -581,7 +568,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 let mut other_confirmed_pairs: u8 = 0;
                 let mut uncertain_pairs: u8 = 0;
                 for j in 0..n.saturating_sub(1) {
-                    if j == p {
+                    if j == ov {
                         continue;
                     }
                     match (answers[j], answers[j + 1]) {
@@ -595,7 +582,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     return Validity::Invalid;
                 }
 
-                if let (Some(pa), Some(pb)) = (answers[p], answers[p + 1])
+                if let (Some(pa), Some(pb)) = (answers[ov], answers[ov + 1])
                     && pa == pb
                     && uncertain_pairs == 0
                 {
@@ -603,7 +590,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 }
 
                 Validity::Pending
-            } else if value.is_none() {
+            } else if ov.is_none() {
                 let mut any_confirmed_pair = false;
                 let mut any_uncertain = false;
                 for j in 0..n.saturating_sub(1) {
@@ -633,26 +620,26 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
             };
             let amask = 1u8 << answer.idx();
 
-            if value.is_num() {
-                let p = value.value() as usize;
-                if (p + 1) % 2 != parity {
+            if ov.is_num() {
+                let ov = ov.value() as usize;
+                if (ov + 1) % 2 != parity {
                     return Validity::Invalid;
                 }
 
-                if let Some(pa) = answers[p]
+                if let Some(pa) = answers[ov]
                     && pa != answer
                 {
                     return Validity::Invalid;
                 }
                 // Target can't take `answer` if it's struck out there.
-                if answers[p].is_none() && eliminated[p] & amask != 0 {
+                if answers[ov].is_none() && eliminated[ov] & amask != 0 {
                     return Validity::Invalid;
                 }
 
                 let mut other_matches: u8 = 0;
                 let mut other_remaining: u8 = 0;
                 for j in 0..n {
-                    if j == p || (j + 1) % 2 != parity {
+                    if j == ov || (j + 1) % 2 != parity {
                         continue;
                     }
                     match answers[j] {
@@ -665,12 +652,12 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 if other_matches > 0 {
                     return Validity::Invalid;
                 }
-                if answers[p] == Some(answer) && other_remaining == 0 {
+                if answers[ov] == Some(answer) && other_remaining == 0 {
                     Validity::Valid
                 } else {
                     Validity::Pending
                 }
-            } else if value.is_none() {
+            } else if ov.is_none() {
                 let mut any_match = false;
                 let mut any_could = false;
                 for j in 0..n {
@@ -698,11 +685,11 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
 
         // ── Equal count ──
         QuestionType::EqualCount { answer } => {
-            if value.is_num() {
-                if value.value() as usize >= oc {
+            if ov.is_num() {
+                if ov.value() as usize >= oc {
                     return Validity::Invalid;
                 }
-                let claimed = Answer::from(value.value());
+                let claimed = Answer::from(ov.value());
                 if claimed == answer {
                     return Validity::Invalid;
                 }
@@ -725,7 +712,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                     };
                 }
                 Validity::Pending
-            } else if value.is_none() {
+            } else if ov.is_none() {
                 if !all_answered(answers, n) {
                     return Validity::Pending;
                 }
@@ -745,18 +732,18 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
 
         // ── Global: need all answers ──
         QuestionType::LeastCommon | QuestionType::MostCommon => {
-            if !value.is_num() || value.value() as usize >= oc {
+            if !ov.is_num() || ov.value() as usize >= oc {
                 return Validity::Invalid;
             }
             if !all_answered(answers, n) {
                 return Validity::Pending;
             }
-            let v = value.value() as usize;
+            let ov = ov.value() as usize;
             let c = fill_counts(answers, n);
             match *qt {
                 QuestionType::LeastCommon => {
                     let min = c[..oc].iter().copied().min().unwrap_or(0);
-                    if c[v] == min && c[..oc].iter().filter(|&&x| x == min).count() == 1 {
+                    if c[ov] == min && c[..oc].iter().filter(|&&x| x == min).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -764,7 +751,7 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
                 }
                 QuestionType::MostCommon => {
                     let max = c[..oc].iter().copied().max().unwrap_or(0);
-                    if c[v] == max && c[..oc].iter().filter(|&&x| x == max).count() == 1 {
+                    if c[ov] == max && c[..oc].iter().filter(|&&x| x == max).count() == 1 {
                         Validity::Valid
                     } else {
                         Validity::Invalid
@@ -834,7 +821,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
         return Validity::Valid;
     }
 
-    let on = fp.options[qi][ai];
+    let ov = fp.options[qi][ai];
     // Value routing into check_claim, and how an UNUSED selected slot is handled —
     // the asymmetry is by design:
     //  - letter-valued types (AnswerOf, extrema) pass the stored value through, so an
@@ -842,14 +829,14 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
     //  - identity-option types take the value from the option index (never UNUSED);
     //  - all other (numeric) types short-circuit an UNUSED slot to Pending, treating
     //    an unfilled option as undecided rather than wrong.
-    let value = match *t {
-        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => on,
+    let ov = match *t {
+        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => ov,
         _ if t.has_identity_options() => OptionValue::num(ai as u8),
         _ => {
-            if on.is_unused() {
+            if ov.is_unused() {
                 return Validity::Pending;
             }
-            on
+            ov
         }
     };
     maybe_consistent(
@@ -859,7 +846,7 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
             OptionPos { qi, oi: ai },
             Claim {
                 question_type: *t,
-                value,
+                value: ov,
             },
         ),
         t,
@@ -875,18 +862,18 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }
 
-/// True iff `value` represents this position: `Some(p)` matches `num(p)`,
+/// True iff `ov` represents this position: `Some(p)` matches `num(p)`,
 /// `None` matches `NONE`. Used by position-finder arms in `check_claim_fast`.
-fn pos_matches(value: OptionValue, pos: Option<usize>) -> bool {
+fn pos_matches(ov: OptionValue, pos: Option<usize>) -> bool {
     match pos {
-        Some(p) => value.is_num() && value.value() as usize == p,
-        None => value.is_none(),
+        Some(p) => ov.is_num() && ov.value() as usize == p,
+        None => ov.is_none(),
     }
 }
 
-/// True iff `value` is `num(c)` with `c == count`. NONE / UNUSED never match.
-fn count_matches(value: OptionValue, count: usize) -> bool {
-    value.is_num() && value.value() as usize == count
+/// True iff `ov` is `num(c)` with `c == count`. NONE / UNUSED never match.
+fn count_matches(ov: OptionValue, count: usize) -> bool {
+    ov.is_num() && ov.value() as usize == count
 }
 
 /// Like `check_claim`, but assumes `answers` is fully populated; returns bool.
@@ -897,22 +884,22 @@ fn count_matches(value: OptionValue, count: usize) -> bool {
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
 pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
     let n = answers.len();
-    let value = claim.value;
+    let ov = claim.value;
     match claim.question_type {
         QuestionType::CountAnswer { answer } => {
-            count_matches(value, answers.iter().filter(|&&a| a == answer).count())
+            count_matches(ov, answers.iter().filter(|&&a| a == answer).count())
         }
         QuestionType::CountConsonant => {
-            count_matches(value, answers.iter().filter(|&&a| !a.is_vowel()).count())
+            count_matches(ov, answers.iter().filter(|&&a| !a.is_vowel()).count())
         }
         QuestionType::CountVowel => {
-            count_matches(value, answers.iter().filter(|&&a| a.is_vowel()).count())
+            count_matches(ov, answers.iter().filter(|&&a| a.is_vowel()).count())
         }
         QuestionType::CountAnswerAfter {
             answer,
             after_index,
         } => count_matches(
-            value,
+            ov,
             answers[(after_index as usize + 1)..]
                 .iter()
                 .filter(|&&a| a == answer)
@@ -922,38 +909,38 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             answer,
             before_index,
         } => count_matches(
-            value,
+            ov,
             answers[..before_index as usize]
                 .iter()
                 .filter(|&&a| a == answer)
                 .count(),
         ),
         QuestionType::AnswerOf { question_index } => {
-            count_matches(value, answers[question_index as usize].idx())
+            count_matches(ov, answers[question_index as usize].idx())
         }
         QuestionType::FirstWith { answer } => {
-            pos_matches(value, answers.iter().position(|&a| a == answer))
+            pos_matches(ov, answers.iter().position(|&a| a == answer))
         }
         QuestionType::LastWith { answer } => {
-            pos_matches(value, answers.iter().rposition(|&a| a == answer))
+            pos_matches(ov, answers.iter().rposition(|&a| a == answer))
         }
         QuestionType::MostCommon => {
-            if !value.is_num() || (value.value() as usize) >= option_count {
+            if !ov.is_num() || (ov.value() as usize) >= option_count {
                 return false;
             }
-            let v = value.value() as usize;
+            let ov = ov.value() as usize;
             let mut counts = [0u16; 5];
             for &a in answers {
                 counts[a.idx()] += 1;
             }
             let max = *counts[..option_count].iter().max().unwrap_or(&0);
-            counts[v] == max && counts[..option_count].iter().filter(|&&c| c == max).count() == 1
+            counts[ov] == max && counts[..option_count].iter().filter(|&&c| c == max).count() == 1
         }
         QuestionType::ClosestAfter {
             after_index,
             answer,
         } => pos_matches(
-            value,
+            ov,
             answers[(after_index as usize + 1)..]
                 .iter()
                 .position(|&a| a == answer)
@@ -963,7 +950,7 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             before_index,
             answer,
         } => pos_matches(
-            value,
+            ov,
             answers[..before_index as usize]
                 .iter()
                 .rposition(|&a| a == answer),
@@ -974,44 +961,44 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
                 counts[a.idx()] += 1;
             }
             let max = *counts[..option_count].iter().max().unwrap_or(&0);
-            count_matches(value, max as usize)
+            count_matches(ov, max as usize)
         }
         QuestionType::LeastCommon => {
-            if !value.is_num() || (value.value() as usize) >= option_count {
+            if !ov.is_num() || (ov.value() as usize) >= option_count {
                 return false;
             }
-            let v = value.value() as usize;
+            let ov = ov.value() as usize;
             let mut counts = [0u16; 5];
             for &a in answers {
                 counts[a.idx()] += 1;
             }
             let min = *counts[..option_count].iter().min().unwrap_or(&0);
-            counts[v] == min && counts[..option_count].iter().filter(|&&c| c == min).count() == 1
+            counts[ov] == min && counts[..option_count].iter().filter(|&&c| c == min).count() == 1
         }
         QuestionType::NoOtherHasAnswer => {
-            if !value.is_num() {
+            if !ov.is_num() {
                 return false;
             }
-            let letter = Answer::from(value.value());
+            let letter = Answer::from(ov.value());
             (0..n).filter(|&j| j != qi).all(|j| answers[j] != letter)
         }
         QuestionType::EqualCount { answer } => {
-            if !value.is_num() || (value.value() as usize) >= option_count {
+            if !ov.is_num() || (ov.value() as usize) >= option_count {
                 return false;
             }
-            let v = value.value() as usize;
-            if v == answer.idx() {
+            let ov = ov.value() as usize;
+            if ov == answer.idx() {
                 return false;
             }
             let ref_count = answers.iter().filter(|&&a| a == answer).count();
             answers
                 .iter()
-                .filter(|&&a| a == Answer::from(v as u8))
+                .filter(|&&a| a == Answer::from(ov as u8))
                 .count()
                 == ref_count
         }
         QuestionType::ConsecIdent => pos_matches(
-            value,
+            ov,
             (0..n.saturating_sub(1)).find(|&i| answers[i] == answers[i + 1]),
         ),
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
@@ -1025,18 +1012,18 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
                 }
             }
             match count {
-                0 => value.is_none(),
-                1 => pos_matches(value, found),
+                0 => ov.is_none(),
+                1 => pos_matches(ov, found),
                 _ => false,
             }
         }
         QuestionType::PrevSame => {
             let self_ans = answers[qi];
-            pos_matches(value, (0..qi).rev().find(|&i| answers[i] == self_ans))
+            pos_matches(ov, (0..qi).rev().find(|&i| answers[i] == self_ans))
         }
         QuestionType::NextSame => {
             let self_ans = answers[qi];
-            pos_matches(value, ((qi + 1)..n).find(|&i| answers[i] == self_ans))
+            pos_matches(ov, ((qi + 1)..n).find(|&i| answers[i] == self_ans))
         }
         QuestionType::OnlySame => {
             let self_ans = answers[qi];
@@ -1049,8 +1036,8 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
                 }
             }
             match count {
-                0 => value.is_none(),
-                1 => pos_matches(value, found),
+                0 => ov.is_none(),
+                1 => pos_matches(ov, found),
                 _ => false,
             }
         }
@@ -1058,25 +1045,25 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
             let self_ans = answers[qi];
             let any_match = (0..n).any(|i| i != qi && answers[i] == self_ans);
             if !any_match {
-                value.is_none()
-            } else if value.is_num() {
-                let v = value.value() as usize;
-                v < n && v != qi && answers[v] == self_ans
+                ov.is_none()
+            } else if ov.is_num() {
+                let ov = ov.value() as usize;
+                ov < n && ov != qi && answers[ov] == self_ans
             } else {
                 false
             }
         }
         QuestionType::SameAsWhich { question_index } => {
-            if !value.is_num() {
+            if !ov.is_num() {
                 return false;
             }
-            let v = value.value() as usize;
+            let ov = ov.value() as usize;
             let ref_ans = answers[question_index as usize];
-            v < n && v != qi && v != question_index as usize && answers[v] == ref_ans
+            ov < n && ov != qi && ov != question_index as usize && answers[ov] == ref_ans
         }
         QuestionType::LetterDist { question_index } => {
             let dist = (answers[qi] as u8).abs_diff(answers[question_index as usize] as u8);
-            count_matches(value, dist as usize)
+            count_matches(ov, dist as usize)
         }
         QuestionType::AnswerIsSelf | QuestionType::TrueStmt => false,
     }

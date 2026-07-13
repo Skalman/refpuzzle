@@ -240,15 +240,15 @@ mod wasm_api {
                     let qt = &fp.question_types[qi];
                     let options = (0..fp.option_count)
                         .map(|oi| {
-                            let value = fp.options[qi][oi];
+                            let ov = fp.options[qi][oi];
                             match (qt, fp.true_stmt_question_types.as_ref()) {
                                 (QuestionType::TrueStmt, Some(types)) => {
                                     render::claim_label(&Claim {
                                         question_type: types[oi],
-                                        value,
+                                        value: ov,
                                     })
                                 }
-                                _ => render::option_label(qt, value),
+                                _ => render::option_label(qt, ov),
                             }
                         })
                         .collect();

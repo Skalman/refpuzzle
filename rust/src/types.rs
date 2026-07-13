@@ -558,13 +558,13 @@ impl FlatPuzzle {
             return None;
         }
         let types = self.true_stmt_question_types.as_ref()?;
-        let value = self.options[qi][oi];
-        if value.is_unused() {
+        let ov = self.options[qi][oi];
+        if ov.is_unused() {
             return None;
         }
         Some(Claim {
             question_type: types[oi],
-            value,
+            value: ov,
         })
     }
 }

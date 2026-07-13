@@ -86,21 +86,21 @@ pub fn question_text(qt: &QuestionType) -> String {
 /// The label for one option `value` of `qt`. `NONE`/`UNUSED` render as the
 /// type's empty marker ("None", or "?" for letter-valued types); `TrueStmt`
 /// rows carry claim text instead (see [`claim_label`]) so their label is empty.
-pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
+pub fn option_label(qt: &QuestionType, ov: OptionValue) -> String {
     use QuestionType::*;
-    let v = value.is_num().then(|| value.value());
+    let ov = ov.is_num().then(|| ov.value());
     match qt {
         // TrueStmt rows carry claim text (see `claim_label`), not a plain label.
         TrueStmt => String::new(),
         // Letter-valued: the option is itself an answer letter ("?" if unknown).
         AnswerOf { .. } | LeastCommon | MostCommon | NoOtherHasAnswer | AnswerIsSelf => {
-            v.map_or_else(|| "?".to_string(), |x| LETTERS[x as usize].to_string())
+            ov.map_or_else(|| "?".to_string(), |ov| LETTERS[ov as usize].to_string())
         }
         // The consecutive pair, e.g. "4-5".
-        ConsecIdent => v.map_or_else(|| "None".to_string(), |x| format!("{}-{}", x + 1, x + 2)),
+        ConsecIdent => ov.map_or_else(|| "None".to_string(), |x| format!("{}-{}", x + 1, x + 2)),
         // A letter with a matching count.
         EqualCount { .. } => {
-            v.map_or_else(|| "None".to_string(), |x| LETTERS[x as usize].to_string())
+            ov.map_or_else(|| "None".to_string(), |x| LETTERS[x as usize].to_string())
         }
         // 1-based question position.
         ClosestAfter { .. }
@@ -113,7 +113,7 @@ pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
         | SameAs
         | SameAsWhich { .. }
         | OnlyOdd { .. }
-        | OnlyEven { .. } => v.map_or_else(|| "None".to_string(), |x| (x + 1).to_string()),
+        | OnlyEven { .. } => ov.map_or_else(|| "None".to_string(), |x| (x + 1).to_string()),
         // Raw number (a count, or a LetterDist distance).
         CountAnswer { .. }
         | CountAnswerBefore { .. }
@@ -121,7 +121,7 @@ pub fn option_label(qt: &QuestionType, value: OptionValue) -> String {
         | CountVowel
         | CountConsonant
         | MostCommonCount
-        | LetterDist { .. } => v.map_or_else(|| "None".to_string(), |x| x.to_string()),
+        | LetterDist { .. } => ov.map_or_else(|| "None".to_string(), |x| x.to_string()),
     }
 }
 

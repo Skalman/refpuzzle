@@ -62,7 +62,7 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
     let qt = fp.question_types[qi];
     // The value the chosen option asserts (a count, a letter index, or a
     // 1-based-in-prose question index depending on the kind); NONE = "no such".
-    let value = fp.options[qi][ai];
+    let ov = fp.options[qi][ai];
     let n = fp.n;
     let answers = &state.answers;
 
@@ -72,17 +72,17 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
         | CountAnswerBefore { .. }
         | CountAnswerAfter { .. }
         | CountVowel
-        | CountConsonant => count_invalid_reason(fp, state, qi, &qt, value),
+        | CountConsonant => count_invalid_reason(fp, state, qi, &qt, ov),
 
         AnswerOf { question_index } => {
             let k = question_index as usize;
             let target = answers[k]?;
-            (value.is_num() && target.idx() as u8 != value.value()).then(|| {
+            (ov.is_num() && target.idx() as u8 != ov.value()).then(|| {
                 format!(
                     "{} claims {}'s answer is {}, but {} is answered {target}",
                     q(qi),
                     q(k),
-                    LETTERS[value.value() as usize],
+                    LETTERS[ov.value() as usize],
                     q(k)
                 )
             })
@@ -90,11 +90,11 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
 
         LetterDist { question_index } => {
             let other = answers[question_index as usize]?;
-            let v = value.is_num().then(|| value.value())?;
+            let ov = ov.is_num().then(|| ov.value())?;
             let dist = (ai as i32 - other.idx() as i32).unsigned_abs() as u8;
-            (dist != v).then(|| {
+            (dist != ov).then(|| {
                 format!(
-                    "{} claims letter distance {v}, but {a} is {dist} letters from {}'s answer {other}",
+                    "{} claims letter distance {ov}, but {a} is {dist} letters from {}'s answer {other}",
                     q(qi),
                     q(question_index as usize)
                 )
@@ -109,7 +109,7 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
             )
         }),
 
-        FirstWith { answer } => forward_invalid_reason(state, qi, "first", 0, answer, value, n),
+        FirstWith { answer } => forward_invalid_reason(state, qi, "first", 0, answer, ov, n),
         ClosestAfter {
             after_index,
             answer,
@@ -119,36 +119,28 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
             "closest",
             after_index as usize + 1,
             answer,
-            value,
+            ov,
             n,
         ),
 
-        LastWith { answer } => backward_invalid_reason(state, qi, "last", n, answer, value, n),
+        LastWith { answer } => backward_invalid_reason(state, qi, "last", n, answer, ov, n),
         ClosestBefore {
             before_index,
             answer,
-        } => backward_invalid_reason(
-            state,
-            qi,
-            "closest",
-            before_index as usize,
-            answer,
-            value,
-            n,
-        ),
+        } => backward_invalid_reason(state, qi, "closest", before_index as usize, answer, ov, n),
 
         SameAs => {
-            let v = value.is_num().then(|| value.value() as usize)?;
-            if v >= n {
+            let ov = ov.is_num().then(|| ov.value() as usize)?;
+            if ov >= n {
                 return None;
             }
-            let av = answers[v]?;
+            let av = answers[ov]?;
             (av != a).then(|| {
                 format!(
                     "{} claims same answer as {}, but {} is {av} and {} is {a}",
                     q(qi),
-                    q(v),
-                    q(v),
+                    q(ov),
+                    q(ov),
                     q(qi)
                 )
             })
@@ -177,25 +169,25 @@ fn count_invalid_reason(
     state: &State,
     qi: usize,
     qt: &QuestionType,
-    value: OptionValue,
+    ov: OptionValue,
 ) -> Option<String> {
     let pred = count_pred(qt)?;
-    let v = value.is_num().then(|| value.value())?;
+    let ov = ov.is_num().then(|| ov.value())?;
     let (from, to) = count_range(qt, fp.n);
     let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
-    if cr.count > v {
+    if cr.count > ov {
         return Some(format!(
-            "{} claims {v} {}, but there are already {}",
+            "{} claims {ov} {}, but there are already {}",
             q(qi),
-            count_rule_label(qt, v),
+            count_rule_label(qt, ov),
             cr.count
         ));
     }
-    if cr.count + cr.remaining < v {
+    if cr.count + cr.remaining < ov {
         return Some(format!(
-            "{} claims {v} {}, but at most {} are possible",
+            "{} claims {ov} {}, but at most {} are possible",
             q(qi),
-            count_rule_label(qt, v),
+            count_rule_label(qt, ov),
             cr.count + cr.remaining
         ));
     }
@@ -210,11 +202,11 @@ fn forward_invalid_reason(
     label: &str,
     scan_start: usize,
     answer: Answer,
-    value: OptionValue,
+    ov: OptionValue,
     n: usize,
 ) -> Option<String> {
     let answers = &state.answers;
-    let Some(v) = value.is_num().then(|| value.value() as usize) else {
+    let Some(ov) = ov.is_num().then(|| ov.value() as usize) else {
         return (scan_start..n)
             .find(|&j| answers[j] == Some(answer))
             .map(|j| {
@@ -225,26 +217,26 @@ fn forward_invalid_reason(
                 )
             });
     };
-    if v < n
-        && let Some(av) = answers[v]
+    if ov < n
+        && let Some(av) = answers[ov]
         && av != answer
     {
         return Some(format!(
             "{} claims {label} {answer} is {}, but {} is answered {av}",
             q(qi),
-            q(v),
-            q(v)
+            q(ov),
+            q(ov)
         ));
     }
-    (scan_start..v)
+    (scan_start..ov)
         .find(|&j| answers[j] == Some(answer))
         .map(|j| {
             format!(
                 "{} claims {label} {answer} is {}, but {} has answer {answer} and comes before {}",
                 q(qi),
-                q(v),
+                q(ov),
                 q(j),
-                q(v)
+                q(ov)
             )
         })
 }
@@ -256,11 +248,11 @@ fn backward_invalid_reason(
     label: &str,
     before_idx: usize,
     answer: Answer,
-    value: OptionValue,
+    ov: OptionValue,
     n: usize,
 ) -> Option<String> {
     let answers = &state.answers;
-    let Some(v) = value.is_num().then(|| value.value() as usize) else {
+    let Some(ov) = ov.is_num().then(|| ov.value() as usize) else {
         return (0..before_idx)
             .find(|&j| answers[j] == Some(answer))
             .map(|j| {
@@ -271,27 +263,27 @@ fn backward_invalid_reason(
                 )
             });
     };
-    if v < n
-        && let Some(av) = answers[v]
+    if ov < n
+        && let Some(av) = answers[ov]
         && av != answer
     {
         return Some(format!(
             "{} claims {label} {answer} is {}, but {} is answered {av}",
             q(qi),
-            q(v),
-            q(v)
+            q(ov),
+            q(ov)
         ));
     }
-    (v + 1..before_idx)
+    (ov + 1..before_idx)
         .rev()
         .find(|&j| answers[j] == Some(answer))
         .map(|j| {
             format!(
                 "{} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}",
                 q(qi),
-                q(v),
+                q(ov),
                 q(j),
-                q(v)
+                q(ov)
             )
         })
 }
@@ -333,8 +325,8 @@ fn is_elim(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
 
 /// The option value `answer` selects at question `qi`, if numeric.
 fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
-    let v = fp.options[qi][answer.idx()];
-    v.is_num().then(|| v.value())
+    let ov = fp.options[qi][answer.idx()];
+    ov.is_num().then(|| ov.value())
 }
 
 /// Over/at-most count check shared by the count kinds (`CountAnswer`,
@@ -345,7 +337,7 @@ fn count_kind_elim_detail(
     qt: &QuestionType,
     qi: usize,
     letter: Answer,
-    vnum: Option<u8>,
+    ov: Option<u8>,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
@@ -353,24 +345,24 @@ fn count_kind_elim_detail(
     let pred = count_pred(qt)?;
     let (from, to) = count_range(qt, n);
     let cr = count_matching(answers, eliminated, pred, from, to);
-    if let Some(v) = vnum {
-        if cr.count > v {
+    if let Some(ov) = ov {
+        if cr.count > ov {
             return detail(
                 format!(
-                    "{} option {letter} claims {v} {}, but there are already {}.",
+                    "{} option {letter} claims {ov} {}, but there are already {}.",
                     q(qi),
-                    count_rule_label(qt, v),
+                    count_rule_label(qt, ov),
                     cr.count
                 ),
                 None,
             );
         }
-        if cr.count + cr.remaining < v {
+        if cr.count + cr.remaining < ov {
             return detail(
                 format!(
-                    "{} option {letter} claims {v} {}, but at most {} are possible.",
+                    "{} option {letter} claims {ov} {}, but at most {} are possible.",
                     q(qi),
-                    count_rule_label(qt, v),
+                    count_rule_label(qt, ov),
                     cr.count + cr.remaining
                 ),
                 None,
@@ -390,14 +382,14 @@ fn forward_positional_elim_detail(
     answer: Answer,
     qi: usize,
     letter: Answer,
-    vnum: Option<u8>,
+    ov: Option<u8>,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
 ) -> Option<ElimDetail> {
-    match vnum {
-        Some(v) => {
-            let target = v as usize;
+    match ov {
+        Some(ov) => {
+            let target = ov as usize;
             if target < scan_start || target >= n {
                 return detail(
                     format!(
@@ -650,7 +642,7 @@ fn parity_elim_detail(
     None
 }
 
-/// Why option `oi` (value `value`) of question `qi` is being eliminated. Mirrors
+/// Why option `oi` (value `ov`) of question `qi` is being eliminated. Mirrors
 /// the TS `explainElimDetail`. Only called for options the engine has ruled out,
 /// so a matching reason is expected; `None` means no phrasing for this kind.
 ///
@@ -661,14 +653,14 @@ pub fn explain_elim_detail(
     qt: &QuestionType,
     qi: usize,
     oi: usize,
-    value: OptionValue,
+    ov: OptionValue,
     state: &State,
     n: usize,
 ) -> Option<ElimDetail> {
     let letter = LETTERS[oi];
     let answers = &state.answers;
     let eliminated = &state.eliminated;
-    let vnum = value.is_num().then(|| value.value());
+    let ov = ov.is_num().then(|| ov.value());
 
     match qt {
         QuestionType::CountAnswer { .. }
@@ -676,11 +668,11 @@ pub fn explain_elim_detail(
         | QuestionType::CountAnswerAfter { .. }
         | QuestionType::CountVowel
         | QuestionType::CountConsonant => {
-            count_kind_elim_detail(qt, qi, letter, vnum, answers, eliminated, n)
+            count_kind_elim_detail(qt, qi, letter, ov, answers, eliminated, n)
         }
 
         QuestionType::MostCommonCount => {
-            if let Some(v) = vnum {
+            if let Some(ov) = ov {
                 let mut counts = [0u8; 5];
                 for i in 0..n {
                     if let Some(a) = answers[i] {
@@ -688,11 +680,11 @@ pub fn explain_elim_detail(
                     }
                 }
                 let max_known = counts.iter().copied().max().unwrap();
-                if v < max_known {
-                    let s = if v == 1 { "" } else { "s" };
+                if ov < max_known {
+                    let s = if ov == 1 { "" } else { "s" };
                     return detail(
                         format!(
-                            "{} option {letter} claims the most common answer appears {v} time{s}, but one already appears {max_known} times.",
+                            "{} option {letter} claims the most common answer appears {ov} time{s}, but one already appears {max_known} times.",
                             q(qi)
                         ),
                         None,
@@ -711,10 +703,10 @@ pub fn explain_elim_detail(
                     }
                     max_possible = max_possible.max(c + r);
                 }
-                if v > max_possible {
+                if ov > max_possible {
                     return detail(
                         format!(
-                            "{} option {letter} claims the most common answer appears {v} times, but at most {max_possible} are possible.",
+                            "{} option {letter} claims the most common answer appears {ov} times, but at most {max_possible} are possible.",
                             q(qi)
                         ),
                         None,
@@ -733,13 +725,13 @@ pub fn explain_elim_detail(
             *answer,
             qi,
             letter,
-            vnum,
+            ov,
             answers,
             eliminated,
             n,
         ),
         QuestionType::FirstWith { answer } => forward_positional_elim_detail(
-            "first", 0, *answer, qi, letter, vnum, answers, eliminated, n,
+            "first", 0, *answer, qi, letter, ov, answers, eliminated, n,
         ),
 
         QuestionType::ClosestBefore {
@@ -751,23 +743,23 @@ pub fn explain_elim_detail(
             *answer,
             qi,
             letter,
-            vnum,
+            ov,
             answers,
             eliminated,
         ),
-        QuestionType::LastWith { answer } => backward_positional_elim_detail(
-            "last", n, *answer, qi, letter, vnum, answers, eliminated,
-        ),
+        QuestionType::LastWith { answer } => {
+            backward_positional_elim_detail("last", n, *answer, qi, letter, ov, answers, eliminated)
+        }
 
         QuestionType::OnlyOdd { answer } => parity_elim_detail(
-            1, "even", "odd", *answer, qi, letter, vnum, answers, eliminated, n,
+            1, "even", "odd", *answer, qi, letter, ov, answers, eliminated, n,
         ),
         QuestionType::OnlyEven { answer } => parity_elim_detail(
-            0, "odd", "even", *answer, qi, letter, vnum, answers, eliminated, n,
+            0, "odd", "even", *answer, qi, letter, ov, answers, eliminated, n,
         ),
 
         QuestionType::AnswerOf { question_index } => {
-            if let Some(v) = vnum
+            if let Some(v) = ov
                 && v < 5
                 && is_elim(eliminated, *question_index as usize, v as usize)
             {
@@ -789,7 +781,7 @@ pub fn explain_elim_detail(
 
         QuestionType::SameAsWhich { question_index } => {
             if let Some(ref_ans) = answers[*question_index as usize]
-                && let Some(v) = vnum
+                && let Some(v) = ov
                 && (v as usize) < n
             {
                 let k = *question_index as usize;
@@ -828,7 +820,7 @@ pub fn explain_elim_detail(
         QuestionType::LetterDist { question_index } => {
             let k = *question_index as usize;
             let max_dist = oi.max(4 - oi) as u8;
-            if let Some(v) = vnum
+            if let Some(v) = ov
                 && v > max_dist
             {
                 return detail(
@@ -841,7 +833,7 @@ pub fn explain_elim_detail(
             }
             match answers[k] {
                 Some(other) => {
-                    if let Some(v) = vnum {
+                    if let Some(v) = ov {
                         let dist = (oi as i32 - other.idx() as i32).unsigned_abs() as u8;
                         if dist != v {
                             return detail(
@@ -856,7 +848,7 @@ pub fn explain_elim_detail(
                     }
                 }
                 None => {
-                    if let Some(v) = vnum {
+                    if let Some(v) = ov {
                         let any_possible = (0..5).any(|ti| {
                             !is_elim(eliminated, k, ti)
                                 && (oi as i32 - ti as i32).unsigned_abs() as u8 == v
@@ -878,7 +870,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::ConsecIdent => {
-            match vnum {
+            match ov {
                 Some(v) => {
                     let start = v as usize;
                     if start + 1 >= n {
@@ -943,7 +935,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::PrevSame => {
-            match vnum {
+            match ov {
                 None => {
                     for j in 0..qi {
                         if answers[j] == Some(letter) {
@@ -1002,7 +994,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::NextSame => {
-            match vnum {
+            match ov {
                 None => {
                     for j in (qi + 1)..n {
                         if answers[j] == Some(letter) {
@@ -1061,7 +1053,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::OnlySame => {
-            match vnum {
+            match ov {
                 None => {
                     for j in 0..n {
                         if j != qi && answers[j] == Some(letter) {
@@ -1120,7 +1112,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::SameAs => {
-            if let Some(v) = vnum {
+            if let Some(v) = ov {
                 let target = v as usize;
                 if target == qi {
                     return detail(
@@ -1164,7 +1156,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::EqualCount { answer } => {
-            if let Some(v) = vnum {
+            if let Some(v) = ov {
                 if LETTERS[v as usize] == *answer {
                     return detail(
                         format!(
@@ -1226,7 +1218,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::LeastCommon => {
-            if let Some(v) = vnum
+            if let Some(v) = ov
                 && v < 5
             {
                 let mut counts = [0u8; 5];
@@ -1278,7 +1270,7 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::MostCommon => {
-            if let Some(v) = vnum
+            if let Some(v) = ov
                 && v < 5
             {
                 let mut counts = [0u8; 5];
@@ -1889,9 +1881,9 @@ fn find_positional_range_source(
                         if is_elim(&state.eliminated, src, si) {
                             continue;
                         }
-                        let o = fp.options[src][si];
-                        if o.is_num() && (o.value() as usize) < min_pos {
-                            min_pos = o.value() as usize;
+                        let ov = fp.options[src][si];
+                        if ov.is_num() && (ov.value() as usize) < min_pos {
+                            min_pos = ov.value() as usize;
                         }
                     }
                     return Some((
@@ -1935,9 +1927,9 @@ fn find_positional_range_source(
                         if is_elim(&state.eliminated, src, si) {
                             continue;
                         }
-                        let o = fp.options[src][si];
-                        if o.is_num() && (o.value() as i32) > max_pos {
-                            max_pos = o.value() as i32;
+                        let ov = fp.options[src][si];
+                        if ov.is_num() && (ov.value() as i32) > max_pos {
+                            max_pos = ov.value() as i32;
                         }
                     }
                     return Some((
@@ -2049,7 +2041,7 @@ pub fn explain_elimination(
 ) -> Vec<ExplainStep> {
     let letter = LETTERS[oi];
     let qt = fp.question_types[qi];
-    let value = fp.options[qi][oi];
+    let ov = fp.options[qi][oi];
     let n = fp.n;
     let answers = &state.answers;
     let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
@@ -2252,9 +2244,9 @@ pub fn explain_elimination(
         return steps;
     }
 
-    if matches!(rule, DeduceRule::LeastCommonCountFloor) && value.is_num() && value.value() < 5 {
-        let claimed = LETTERS[value.value() as usize];
-        if let Some((src_qi, floor)) = find_count_floor_source(fp, state, value.value() as usize) {
+    if matches!(rule, DeduceRule::LeastCommonCountFloor) && ov.is_num() && ov.value() < 5 {
+        let claimed = LETTERS[ov.value() as usize];
+        if let Some((src_qi, floor)) = find_count_floor_source(fp, state, ov.value() as usize) {
             let src_qt = fp.question_types[src_qi];
             steps.push(try_looking(&[qi, src_qi]));
             steps.push(what_if());
@@ -2267,9 +2259,9 @@ pub fn explain_elimination(
         // No count-question floor: fall through to the cell-based explanation.
     }
 
-    if matches!(rule, DeduceRule::MostCommonCountCeil) && value.is_num() && value.value() < 5 {
-        let claimed = LETTERS[value.value() as usize];
-        if let Some((src_qi, ceil)) = find_count_ceil_source(fp, state, value.value() as usize) {
+    if matches!(rule, DeduceRule::MostCommonCountCeil) && ov.is_num() && ov.value() < 5 {
+        let claimed = LETTERS[ov.value() as usize];
+        if let Some((src_qi, ceil)) = find_count_ceil_source(fp, state, ov.value() as usize) {
             let src_qt = fp.question_types[src_qi];
             steps.push(try_looking(&[qi, src_qi]));
             steps.push(what_if());
@@ -2303,7 +2295,7 @@ pub fn explain_elimination(
     }
 
     // Generic fallback: the per-type elimination reason.
-    let detail = explain_elim_detail(&qt, qi, oi, value, state, n);
+    let detail = explain_elim_detail(&qt, qi, oi, ov, state, n);
     if let Some(other) = detail.as_ref().and_then(|d| d.other_qi) {
         steps.push(try_looking(&[qi, other]));
     }
@@ -2585,8 +2577,8 @@ pub fn explain_lookahead(
                     handled = true;
                 }
                 if !handled {
-                    let value = fp.options[eqi][oi];
-                    match explain_elim_detail(&fp.question_types[eqi], eqi, oi, value, &hyp, n) {
+                    let ov = fp.options[eqi][oi];
+                    match explain_elim_detail(&fp.question_types[eqi], eqi, oi, ov, &hyp, n) {
                         Some(d) => {
                             lines.push(format!(
                                 "Eliminate {} option {}: {}",
