@@ -1739,10 +1739,10 @@ fn deduce_impl(
         if question_scope.is_some_and(|only| only != qi) {
             continue;
         }
-        let t = &fp.question_types[qi];
+        let qt = &fp.question_types[qi];
         let ans = answers[qi];
 
-        match *t {
+        match *qt {
             QuestionType::CountAnswer { answer } => {
                 apply_count(
                     fp,

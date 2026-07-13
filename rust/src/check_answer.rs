@@ -93,8 +93,8 @@ fn count_validity(cr: CountResult, ov: OptionValue) -> Validity {
     }
 }
 
-pub(crate) fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
-    match *t {
+pub(crate) fn count_range(qt: &QuestionType, n: usize) -> (usize, usize) {
+    match *qt {
         QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
         QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
         _ => (0, n),
@@ -105,8 +105,8 @@ pub(crate) fn count_range(t: &QuestionType, n: usize) -> (usize, usize) {
 /// kind. Mirrors the TS `countPred`; lets `explain` reproduce count-based
 /// contradiction reasons off the same primitive `check_answer` counts with.
 #[allow(dead_code)] // wired into explain (and thence wasm) in a later increment
-pub(crate) fn count_pred(t: &QuestionType) -> Option<Pred> {
-    match *t {
+pub(crate) fn count_pred(qt: &QuestionType) -> Option<Pred> {
+    match *qt {
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => Some(Pred::IsAnswer(answer)),
@@ -769,16 +769,16 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     }
 }
 
-fn affected_by_own_answer(t: &QuestionType, qi: usize) -> bool {
-    match *t {
+fn affected_by_own_answer(qt: &QuestionType, qi: usize) -> bool {
+    match *qt {
         QuestionType::AnswerOf { question_index } => question_index as usize == qi,
         QuestionType::SameAsWhich { question_index } => question_index as usize == qi,
         _ => true,
     }
 }
 
-fn maybe_consistent(result: Validity, t: &QuestionType, qi: usize) -> Validity {
-    if result == Validity::Valid && affected_by_own_answer(t, qi) {
+fn maybe_consistent(result: Validity, qt: &QuestionType, qi: usize) -> Validity {
+    if result == Validity::Valid && affected_by_own_answer(qt, qi) {
         Validity::Consistent
     } else {
         result
@@ -797,9 +797,9 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
         }
     };
     let ai = a.idx();
-    let t = &fp.question_types[qi];
+    let qt = &fp.question_types[qi];
 
-    if matches!(t, QuestionType::TrueStmt) {
+    if matches!(qt, QuestionType::TrueStmt) {
         let selected_claim = match fp.claim_at(qi, ai) {
             Some(c) => c,
             None => return Validity::Invalid,
@@ -829,9 +829,9 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
     //  - identity-option types take the value from the option index (never UNUSED);
     //  - all other (numeric) types short-circuit an UNUSED slot to Pending, treating
     //    an unfilled option as undecided rather than wrong.
-    let ov = match *t {
+    let ov = match *qt {
         QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => ov,
-        _ if t.has_identity_options() => OptionValue::num(ai as u8),
+        _ if qt.has_identity_options() => OptionValue::num(ai as u8),
         _ => {
             if ov.is_unused() {
                 return Validity::Pending;
@@ -845,11 +845,11 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
             state,
             OptionPos { qi, oi: ai },
             Claim {
-                question_type: *t,
+                question_type: *qt,
                 value: ov,
             },
         ),
-        t,
+        qt,
         qi,
     )
 }

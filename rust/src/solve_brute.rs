@@ -112,8 +112,8 @@ fn get_force(
 ) -> Option<(usize, Answer)> {
     let letter = current[qi]?;
     let ai = letter.idx();
-    let t = &fp.question_types[qi];
-    match *t {
+    let qt = &fp.question_types[qi];
+    match *qt {
         QuestionType::AnswerOf { question_index } => {
             let ov = fp.options[qi][ai];
             if !ov.is_num() {
@@ -388,10 +388,10 @@ fn rule_violated(
     assigned: u16,
     range_masks: &[u16; MAX_N],
 ) -> bool {
-    let t = &fp.question_types[i];
+    let qt = &fp.question_types[i];
     let answer_i = answers[i].unwrap();
 
-    if (all_answered || can_fully_evaluate_local(t, assigned, range_masks, i))
+    if (all_answered || can_fully_evaluate_local(qt, assigned, range_masks, i))
         && !check_answer(
             fp,
             State {
@@ -406,7 +406,7 @@ fn rule_violated(
     }
 
     // Forward checking for counting types
-    match *t {
+    match *qt {
         QuestionType::CountAnswer { answer }
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
@@ -416,7 +416,7 @@ fn rule_violated(
             }
             let ov = ov.value();
 
-            let (range_start, range_end) = match *t {
+            let (range_start, range_end) = match *qt {
                 QuestionType::CountAnswer { .. } => (0, n),
                 QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
                 QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
@@ -442,7 +442,7 @@ fn rule_violated(
                 return false;
             }
             let ov = ov.value();
-            let is_vowel = matches!(*t, QuestionType::CountVowel);
+            let is_vowel = matches!(*qt, QuestionType::CountVowel);
             let mut count: u8 = 0;
             let mut remaining: u8 = 0;
             for j in 0..n {
@@ -464,18 +464,18 @@ fn rule_violated(
     false
 }
 
-/// Soundness linchpin: true only when `t`'s verdict at `qi` is already *final* —
+/// Soundness linchpin: true only when `qt`'s verdict at `qi` is already *final* —
 /// no future assignment can change it — so `rule_violated` may treat a current
 /// Invalid as a real contradiction and prune. Returning true too early prunes
 /// valid branches (unsound, dropped solutions); a conservative `false` is always
 /// safe, only slower. Add new arms only after confirming the verdict can't flip.
 fn can_fully_evaluate_local(
-    t: &QuestionType,
+    qt: &QuestionType,
     assigned: u16,
     range_masks: &[u16; MAX_N],
     qi: usize,
 ) -> bool {
-    match *t {
+    match *qt {
         QuestionType::AnswerIsSelf => true,
         QuestionType::PrevSame => {
             let mut mask = 0u16;

@@ -499,11 +499,11 @@ impl FlatPuzzle {
         let mut global_indices = SmallList::new();
 
         for i in 0..n {
-            let t = &question_types[i];
-            if t.is_global() {
+            let qt = &question_types[i];
+            if qt.is_global() {
                 global_indices.push(i as u8);
             } else {
-                match *t {
+                match *qt {
                     QuestionType::AnswerOf { question_index } => {
                         affected_by[question_index as usize].push(i as u8);
                     }
