@@ -254,15 +254,22 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [u8; 5] {
 
 // ── Main function ──
 
-/// Evaluate the **semantic truth** of a claim against the current puzzle state.
-/// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`.
+/// Shared implementation behind [`check_claim`] and [`check_claim_fast`]. The
+/// match only ever reads two things off a puzzle: its question count `n` and
+/// option count `oc` — so it's parameterized on those instead of a
+/// `&FlatPuzzle`, letting `check_claim_fast` build a throwaway `State` from a
+/// flat `&[Answer]` slice without needing a whole `FlatPuzzle`.
 ///
 /// This is NOT a wellformedness check. Although it incidentally short-circuits
 /// on some structural issues (parity mismatch, value out of [0..=4] for letter
 /// types), it assumes the claim is already well-formed and behaves unpredictably
 /// otherwise (e.g. AnswerOf with an out-of-range `question_index` panics on
 /// `answers[...]`). For form checks, see `check_form::check_claim_form`.
-pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
+// Inlined on native so both wrappers can force the whole match into their call
+// sites (`check_claim_fast` is the generator's hot path); outlined on wasm
+// where every duplicated body shows up in the download.
+#[cfg_attr(not(target_arch = "wasm32"), inline(always))]
+fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Claim) -> Validity {
     let qt = &claim.question_type;
     let ov = claim.value;
     let qi = opt.qi;
@@ -270,8 +277,6 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     let self_letter = Answer::from(self_oi as u8);
     let answers = &state.answers;
     let eliminated = &state.eliminated;
-    let n = fp.n;
-    let oc = fp.option_count;
 
     match *qt {
         // ── Counting ──
@@ -769,6 +774,13 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     }
 }
 
+/// Evaluate the **semantic truth** of a claim against the current puzzle state.
+/// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`. See
+/// [`check_claim_core`] for the implementation and its caveats.
+pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
+    check_claim_core(fp.n, fp.option_count, state, opt, claim)
+}
+
 fn affected_by_own_answer(qt: &QuestionType, qi: usize) -> bool {
     match *qt {
         QuestionType::AnswerOf { question_index } => question_index as usize == qi,
@@ -862,235 +874,31 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
     (0..fp.n).all(|qi| check_answer(fp, state, qi).is_valid())
 }
 
-/// True iff `ov` represents this position: `Some(p)` matches `num(p)`,
-/// `None` matches `NONE`. Used by position-finder arms in `check_claim_fast`.
-fn pos_matches(ov: OptionValue, pos: Option<usize>) -> bool {
-    match pos {
-        Some(p) => ov.is_num() && ov.value() as usize == p,
-        None => ov.is_none(),
-    }
-}
-
-/// True iff `ov` is `num(c)` with `c == count`. NONE / UNUSED never match.
-fn count_matches(ov: OptionValue, count: usize) -> bool {
-    ov.is_num() && ov.value() as usize == count
-}
-
-/// Like `check_claim`, but assumes `answers` is fully populated (no partial
-/// state, no eliminations); returns bool instead of `Validity`. Verified
-/// equivalent to `check_claim().is_valid()` on a fully-answered board (see
-/// `tests::check_claim_fast_matches_check_claim`) for every `CLAIM_TYPES`
-/// kind — the only kinds a caller ever passes in. The remaining arms exist
-/// for exhaustiveness and are covered by the same test, but no caller reaches
-/// them today.
+/// Like `check_claim`, but assumes `answers` is fully populated; returns bool.
+/// Same caveat applies: this is a **semantic** check (does the claim hold given
+/// these answers?), not a wellformedness check.
+///
+/// Builds a throwaway fully-answered `State` from the flat slice and defers to
+/// `check_claim_core`. Eliminated bits only ever gate `None` answer slots there,
+/// so leaving them at `State::initial`'s phantom-only mask (rather than
+/// reconstructing "everything but the known answer") is sound — every slot up
+/// to `n` is `Some`. Equivalence to `check_claim` is pinned by
+/// `tests::check_claim_fast_matches_check_claim`.
 // Inlined on native for the generator's inner loop; outlined on wasm
 // where every duplicated body shows up in the download.
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
 pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
     let n = answers.len();
-    let ov = claim.value;
-    match claim.question_type {
-        QuestionType::CountAnswer { answer } => {
-            count_matches(ov, answers.iter().filter(|&&a| a == answer).count())
-        }
-        QuestionType::CountConsonant => {
-            count_matches(ov, answers.iter().filter(|&&a| !a.is_vowel()).count())
-        }
-        QuestionType::CountVowel => {
-            count_matches(ov, answers.iter().filter(|&&a| a.is_vowel()).count())
-        }
-        QuestionType::CountAnswerAfter {
-            answer,
-            after_index,
-        } => count_matches(
-            ov,
-            answers[(after_index as usize + 1)..]
-                .iter()
-                .filter(|&&a| a == answer)
-                .count(),
-        ),
-        QuestionType::CountAnswerBefore {
-            answer,
-            before_index,
-        } => count_matches(
-            ov,
-            answers[..before_index as usize]
-                .iter()
-                .filter(|&&a| a == answer)
-                .count(),
-        ),
-        QuestionType::AnswerOf { question_index } => {
-            count_matches(ov, answers[question_index as usize].idx())
-        }
-        QuestionType::FirstWith { answer } => {
-            pos_matches(ov, answers.iter().position(|&a| a == answer))
-        }
-        QuestionType::LastWith { answer } => {
-            pos_matches(ov, answers.iter().rposition(|&a| a == answer))
-        }
-        QuestionType::MostCommon => {
-            if !ov.is_num() || (ov.value() as usize) >= option_count {
-                return false;
-            }
-            let ov = ov.value() as usize;
-            let mut counts = [0u16; 5];
-            for &a in answers {
-                counts[a.idx()] += 1;
-            }
-            let max = *counts[..option_count].iter().max().unwrap_or(&0);
-            counts[ov] == max && counts[..option_count].iter().filter(|&&c| c == max).count() == 1
-        }
-        QuestionType::ClosestAfter {
-            after_index,
-            answer,
-        } => pos_matches(
-            ov,
-            answers[(after_index as usize + 1)..]
-                .iter()
-                .position(|&a| a == answer)
-                .map(|i| after_index as usize + 1 + i),
-        ),
-        QuestionType::ClosestBefore {
-            before_index,
-            answer,
-        } => pos_matches(
-            ov,
-            answers[..before_index as usize]
-                .iter()
-                .rposition(|&a| a == answer),
-        ),
-        QuestionType::MostCommonCount => {
-            let mut counts = [0u16; 5];
-            for &a in answers {
-                counts[a.idx()] += 1;
-            }
-            let max = *counts[..option_count].iter().max().unwrap_or(&0);
-            count_matches(ov, max as usize)
-        }
-        QuestionType::LeastCommon => {
-            if !ov.is_num() || (ov.value() as usize) >= option_count {
-                return false;
-            }
-            let ov = ov.value() as usize;
-            let mut counts = [0u16; 5];
-            for &a in answers {
-                counts[a.idx()] += 1;
-            }
-            let min = *counts[..option_count].iter().min().unwrap_or(&0);
-            counts[ov] == min && counts[..option_count].iter().filter(|&&c| c == min).count() == 1
-        }
-        QuestionType::NoOtherHasAnswer => {
-            if !ov.is_num() || ov.value() > 4 {
-                return false;
-            }
-            let letter = Answer::from(ov.value());
-            (0..n).filter(|&j| j != qi).all(|j| answers[j] != letter)
-        }
-        QuestionType::EqualCount { answer } => {
-            if ov.is_none() {
-                let ref_count = answers.iter().filter(|&&a| a == answer).count();
-                !LETTERS[..option_count].iter().any(|&l| {
-                    l != answer && answers.iter().filter(|&&a| a == l).count() == ref_count
-                })
-            } else if ov.is_num() && (ov.value() as usize) < option_count {
-                let ov = ov.value() as usize;
-                if ov == answer.idx() {
-                    false
-                } else {
-                    let ref_count = answers.iter().filter(|&&a| a == answer).count();
-                    answers
-                        .iter()
-                        .filter(|&&a| a == Answer::from(ov as u8))
-                        .count()
-                        == ref_count
-                }
-            } else {
-                false
-            }
-        }
-        QuestionType::ConsecIdent => {
-            let mut found: Option<usize> = None;
-            let mut count = 0;
-            for i in 0..n.saturating_sub(1) {
-                if answers[i] == answers[i + 1] {
-                    if count == 0 {
-                        found = Some(i);
-                    }
-                    count += 1;
-                }
-            }
-            match count {
-                0 => ov.is_none(),
-                1 => pos_matches(ov, found),
-                _ => false,
-            }
-        }
-        QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
-            let parity = matches!(claim.question_type, QuestionType::OnlyEven { .. }) as usize;
-            let mut found: Option<usize> = None;
-            let mut count = 0;
-            for i in 0..n {
-                if i % 2 == parity && answers[i] == answer {
-                    found = Some(i);
-                    count += 1;
-                }
-            }
-            match count {
-                0 => ov.is_none(),
-                1 => pos_matches(ov, found),
-                _ => false,
-            }
-        }
-        QuestionType::PrevSame => {
-            let self_ans = answers[qi];
-            pos_matches(ov, (0..qi).rev().find(|&i| answers[i] == self_ans))
-        }
-        QuestionType::NextSame => {
-            let self_ans = answers[qi];
-            pos_matches(ov, ((qi + 1)..n).find(|&i| answers[i] == self_ans))
-        }
-        QuestionType::OnlySame => {
-            let self_ans = answers[qi];
-            let mut found: Option<usize> = None;
-            let mut count = 0;
-            for i in 0..n {
-                if i != qi && answers[i] == self_ans {
-                    found = Some(i);
-                    count += 1;
-                }
-            }
-            match count {
-                0 => ov.is_none(),
-                1 => pos_matches(ov, found),
-                _ => false,
-            }
-        }
-        QuestionType::SameAs => {
-            let self_ans = answers[qi];
-            let any_match = (0..n).any(|i| i != qi && answers[i] == self_ans);
-            if !any_match {
-                ov.is_none()
-            } else if ov.is_num() {
-                let ov = ov.value() as usize;
-                ov < n && ov != qi && answers[ov] == self_ans
-            } else {
-                false
-            }
-        }
-        QuestionType::SameAsWhich { question_index } => {
-            if !ov.is_num() {
-                return false;
-            }
-            let ov = ov.value() as usize;
-            let ref_ans = answers[question_index as usize];
-            ov < n && ov != qi && ov != question_index as usize && answers[ov] == ref_ans
-        }
-        QuestionType::LetterDist { question_index } => {
-            let dist = (answers[qi] as u8).abs_diff(answers[question_index as usize] as u8);
-            count_matches(ov, dist as usize)
-        }
-        QuestionType::AnswerIsSelf | QuestionType::TrueStmt => false,
-    }
+    let mut state = State::initial(option_count);
+    state.answers[..n]
+        .iter_mut()
+        .zip(answers)
+        .for_each(|(slot, &a)| *slot = Some(a));
+    let opt = OptionPos {
+        qi,
+        oi: answers[qi].idx(),
+    };
+    check_claim_core(n, option_count, state, opt, *claim).is_valid()
 }
 
 #[cfg(test)]
