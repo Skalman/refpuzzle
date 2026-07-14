@@ -52,8 +52,8 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
         let b_self = matches!(fp.question_types[b], QuestionType::AnswerIsSelf) as u8;
         a_self.cmp(&b_self).then_with(|| {
             ref_count[b].cmp(&ref_count[a]).then_with(|| {
-                let a_global = fp.question_types[a].is_solver_global() as u8;
-                let b_global = fp.question_types[b].is_solver_global() as u8;
+                let a_global = fp.question_types[a].affected_by_any_answer() as u8;
+                let b_global = fp.question_types[b].affected_by_any_answer() as u8;
                 a_global.cmp(&b_global)
             })
         })

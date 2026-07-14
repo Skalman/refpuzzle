@@ -365,7 +365,9 @@ impl QuestionType {
         )
     }
 
-    pub fn is_global(&self) -> bool {
+    /// True when the answer depends on the whole board — a change to *any* other
+    /// answer can flip it — rather than on a fixed set of positions.
+    pub fn affected_by_any_answer(&self) -> bool {
         matches!(
             self,
             QuestionType::CountAnswer { .. }
@@ -385,25 +387,6 @@ impl QuestionType {
                 | QuestionType::LastWith { .. }
                 | QuestionType::SameAs
                 | QuestionType::SameAsWhich { .. }
-        )
-    }
-
-    pub fn is_solver_global(&self) -> bool {
-        matches!(
-            self,
-            QuestionType::CountAnswer { .. }
-                | QuestionType::CountVowel
-                | QuestionType::CountConsonant
-                | QuestionType::LeastCommon
-                | QuestionType::MostCommon
-                | QuestionType::MostCommonCount
-                | QuestionType::NoOtherHasAnswer
-                | QuestionType::EqualCount { .. }
-                | QuestionType::TrueStmt
-                | QuestionType::OnlySame
-                | QuestionType::ConsecIdent
-                | QuestionType::OnlyOdd { .. }
-                | QuestionType::OnlyEven { .. }
         )
     }
 }
@@ -500,7 +483,7 @@ impl FlatPuzzle {
 
         for i in 0..n {
             let qt = &question_types[i];
-            if qt.is_global() {
+            if qt.affected_by_any_answer() {
                 global_indices.push(i as u8);
             } else {
                 match *qt {
