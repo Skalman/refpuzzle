@@ -2760,7 +2760,7 @@ mod tests {
 
     #[test]
     fn test_deduce_soundness_fuzz() {
-        use crate::build::fill_options;
+        use crate::fill::fill_options;
         use crate::rng::Rng;
         use crate::solve_brute::solve;
 

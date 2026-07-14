@@ -5,7 +5,6 @@
     clippy::should_implement_trait
 )]
 
-pub mod build;
 pub mod check_answer;
 pub mod check_form;
 pub mod check_well_posed;
@@ -13,6 +12,7 @@ pub mod construct;
 pub mod deduce;
 pub mod difficulty;
 pub mod explain;
+pub mod fill;
 pub mod format;
 pub mod lookahead;
 pub mod render;
@@ -33,13 +33,13 @@ static ALLOCATOR: lol_alloc::AssumeSingleThreaded<lol_alloc::FreeListAllocator> 
 
 #[cfg(target_arch = "wasm32")]
 mod wasm_api {
-    use crate::build;
     use crate::check_answer::{Validity, check_answer};
     use crate::check_form::{Severity, check_form};
     use crate::construct;
     use crate::deduce::{DeduceAction, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
     use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
+    use crate::fill;
     use crate::lookahead::lookahead_shortest;
     use crate::render;
     use crate::rng::Rng;
@@ -273,7 +273,7 @@ mod wasm_api {
             return Err(err("level must be 1..=6"));
         }
         let profile = &PROFILES[(level - 1) as usize];
-        let mut stats = build::Stats::default();
+        let mut stats = fill::Stats::default();
         // The generator fixes the key on the first skeleton and retries internally, so one
         // seed suffices. `seed * 17` matches the CLI's `task_seeds` derivation
         // (main.rs), so a puzzle generated here is identical to the same

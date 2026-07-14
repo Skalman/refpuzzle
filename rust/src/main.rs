@@ -1,6 +1,5 @@
 #![allow(clippy::needless_range_loop)]
 
-mod build;
 mod check;
 mod check_answer;
 mod check_form;
@@ -9,6 +8,7 @@ mod construct;
 mod deduce;
 mod diagnose;
 mod difficulty;
+mod fill;
 // Consumers (wasm exposure, flip of the TS explain.ts) arrive in later increments.
 #[allow(dead_code)]
 mod explain;
@@ -29,8 +29,8 @@ mod test_util;
 mod type_stats;
 mod types;
 
-use build::GenerateResult;
 use difficulty::PROFILES;
+use fill::GenerateResult;
 use rng::Rng;
 use serde_json::Value;
 use std::time::Instant;
@@ -480,14 +480,14 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), Option<GenerateResult>, build::Stats)> = tasks
+    let results: Vec<((usize, u8), Option<GenerateResult>, fill::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), &seed)| {
             let (mm, dd) = days[day_idx];
             let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
-            let mut stats = build::Stats::default();
+            let mut stats = fill::Stats::default();
             // The generator fixes the answer key on the first skeleton and only
             // re-rolls the questions, so one seed suffices. A `None` means the key
             // admitted no unique puzzle within the budget, which shouldn't happen;
@@ -527,7 +527,7 @@ fn main() {
         })
         .collect();
 
-    let mut stats = build::Stats::default();
+    let mut stats = fill::Stats::default();
     for (_, _, s) in &results {
         stats.merge(s);
     }

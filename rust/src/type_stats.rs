@@ -1,6 +1,6 @@
-use crate::build::{self, GenerateResult};
 use crate::construct;
 use crate::difficulty::PROFILES;
+use crate::fill::{self, GenerateResult};
 use crate::rng::Rng;
 use crate::solve_deduce::solve;
 use crate::types::{OptionValue, QuestionTypeKind};
@@ -76,7 +76,7 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     let mut successes = 0u32;
     let mut total_calls = 0u32;
     let max_calls = attempts.saturating_mul(100);
-    let mut bstats = build::Stats::default(); // accumulates across all generate() calls, rejected included
+    let mut bstats = fill::Stats::default(); // accumulates across all generate() calls, rejected included
 
     while successes < attempts && total_calls < max_calls {
         // Seed uses the pre-increment call index, so the sequence is stable.

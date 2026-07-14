@@ -1,9 +1,9 @@
-use crate::build::{us, wasm_now};
 use crate::check_answer::check_answers;
 use crate::deduce::{
     DeduceAction, DeduceResult, apply_action, contradiction_question, deduce,
     deduce_assuming_unique,
 };
+use crate::fill::{us, wasm_now};
 use crate::lookahead::{LookaheadResult, lookahead};
 use crate::types::*;
 
