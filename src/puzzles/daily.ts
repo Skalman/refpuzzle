@@ -39,7 +39,7 @@ export function parseCompactYear(
 // it, so every render path runs after init).
 function buildPuzzle(compact: CompactPuzzle, id: string): Puzzle {
   const optionCount = compact.o[0]?.length ?? 5;
-  const handle = createPuzzleHandle(compact);
+  const handle = createPuzzleHandle(compact, id);
   const questions = handle.renderBoard();
   handle.free();
   return { id, optionCount, questions, compact };

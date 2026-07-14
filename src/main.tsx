@@ -29,7 +29,7 @@ void wasmReady().then(
   (e: unknown) => {
     console.error("wasm init failed", e);
     window.showFatalError?.(e);
-    if (import.meta.env.PROD) trackFatalError(e);
+    if (import.meta.env.PROD) trackFatalError(e, "wasm_init_failed");
   },
 );
 

@@ -16,6 +16,7 @@ import {
 } from "../engine/state.ts";
 import type { CompactPuzzle } from "../puzzles/daily.ts";
 import { parseCompactPuzzle } from "../puzzles/daily.ts";
+import { trackFatalError } from "./analytics.ts";
 
 let wasmReadyPromise: Promise<unknown> | null = null;
 
@@ -69,28 +70,63 @@ function answerIndicesFromMarks(marks: Marks[], optionCount: number) {
   return { answers: answers.map((a) => (a === null ? null : L2I[a])), eliminated };
 }
 
-export function createPuzzleHandle(compact: CompactPuzzle): PuzzleHandle {
-  const wasm = new WasmPuzzle(JSON.stringify(compact));
+let fatalReported = false;
+
+/**
+ * Runs a wasm call. A Rust panic (`panic="abort"`) traps as a RuntimeError (message
+ * only "unreachable" — `op`/`puzzle`/`params` are the real diagnostics); it doesn't
+ * poison the instance, so surface the #fatal bug UI once + log + rethrow rather than
+ * latch the engine off. A non-RuntimeError (malformed-puzzle JsError) passes through.
+ */
+function tryWasm<T>(ctx: { op: string; puzzle?: string; params?: unknown }, call: () => T): T {
+  try {
+    return call();
+  } catch (e) {
+    if (e instanceof WebAssembly.RuntimeError && !fatalReported) {
+      fatalReported = true;
+      if (import.meta.env.PROD) {
+        trackFatalError(e, "wasm_panicked", { op: ctx.op, puzzle: ctx.puzzle, params: ctx.params });
+      }
+      window.showFatalError?.(ctx.puzzle ? `${ctx.op} @ ${ctx.puzzle}` : ctx.op, {
+        title: "The puzzle engine hit a bug",
+        body:
+          "Something in the puzzle engine failed — a bug, not your device. It's been " +
+          "logged for the developers. Reloading may clear it.",
+      });
+    }
+    throw e;
+  }
+}
+
+export function createPuzzleHandle(compact: CompactPuzzle, puzzle?: string): PuzzleHandle {
+  const wasm = tryWasm({ op: "new", puzzle }, () => new WasmPuzzle(JSON.stringify(compact)));
   const wrapper: PuzzleHandle = {
     checkAllAnswers(marks, optionCount) {
       const state = answerIndicesFromMarks(marks, optionCount);
-      const out = wasm.checkAllAnswers(state);
-      const result: Validity[] = new Array(out.length);
-      for (let i = 0; i < out.length; i++) result[i] = validityFromU8(out[i]);
-      return result;
+      return tryWasm({ op: "checkAllAnswers", puzzle, params: state }, () => {
+        const out = wasm.checkAllAnswers(state);
+        const result: Validity[] = new Array(out.length);
+        for (let i = 0; i < out.length; i++) result[i] = validityFromU8(out[i]);
+        return result;
+      });
     },
     solve() {
       // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.solve() as (Answer | null)[];
+      return tryWasm({ op: "solve", puzzle }, () => wasm.solve() as (Answer | null)[]);
     },
     nextStep(answers, eliminated) {
       const answerIndices = answers.map((a) => (a === null ? null : L2I[a]));
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.nextStep({ answers: answerIndices, eliminated }) as SolveStep | null;
+      const state = { answers: answerIndices, eliminated };
+      return tryWasm({ op: "nextStep", puzzle, params: state }, () => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return wasm.nextStep(state) as SolveStep | null;
+      });
     },
     renderBoard() {
-      // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-      return wasm.renderBoard() as RenderedQuestion[];
+      return tryWasm({ op: "renderBoard", puzzle }, () => {
+        // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+        return wasm.renderBoard() as RenderedQuestion[];
+      });
     },
     free() {
       handleRegistry.unregister(wrapper);
@@ -102,17 +138,19 @@ export function createPuzzleHandle(compact: CompactPuzzle): PuzzleHandle {
 }
 
 /**
- * Generate one puzzle on the fly. `seed` is any u32; `level` is 1..6.
- * Returns a rendered {@link Puzzle} (board text cached) or null if generation
- * failed. Caller must already have awaited {@link wasmReady}.
+ * Generate one puzzle on the fly. `seed` is any u32; `level` is 1..6; `id` is the
+ * `/date/level` path. Returns a rendered {@link Puzzle}, or null if generation
+ * recoverably failed (budget exhausted, bad JSON). Caller must have awaited
+ * {@link wasmReady}. A Rust panic surfaces the fatal UI via {@link tryWasm}.
  */
 export function generatePuzzle(seed: number, level: number, id: string): Puzzle | null {
   try {
-    const json = wasmGeneratePuzzle(seed, level);
+    const json = tryWasm({ op: "generate", puzzle: id, params: { seed, level } }, () =>
+      wasmGeneratePuzzle(seed, level),
+    );
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const compact = JSON.parse(json) as CompactPuzzle;
-    const p = parseCompactPuzzle(compact);
-    return { ...p, id };
+    return { ...parseCompactPuzzle(compact), id };
   } catch {
     return null;
   }

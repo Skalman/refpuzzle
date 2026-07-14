@@ -53,7 +53,7 @@ async function revalidateOne(puzzleId: string): Promise<void> {
     const state = loadState(puzzleId, n);
     if (!state || !state.completed) return;
 
-    const handle = createPuzzleHandle(puzzle.compact);
+    const handle = createPuzzleHandle(puzzle.compact, puzzleId);
     const validities = handle.checkAllAnswers(
       state.questions.map((q) => q.marks),
       puzzle.optionCount,

@@ -120,7 +120,7 @@ export function PuzzleView({
     void (async () => {
       await wasmReady();
       if (cancelled) return;
-      const handle = createPuzzleHandle(puzzle.compact);
+      const handle = createPuzzleHandle(puzzle.compact, puzzle.id);
       handleRef.current = handle;
       const initial = handle.checkAllAnswers(
         questionsRef.current.map((q) => q.marks),

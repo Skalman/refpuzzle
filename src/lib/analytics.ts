@@ -55,16 +55,21 @@ export function getClientInfo(): { os: string; browser: string; standalone?: tru
 }
 
 /**
- * Reports a fatal wasm-init failure — the case that surfaces the inline #fatal
- * fallback (see index.html / main.tsx). The reason + stack distinguish a
- * poisoned cache from a genuine compile/network failure.
+ * Reports a fatal error behind the inline #fatal fallback (see index.html).
+ * @param event Error event name
+ * @param opts For a panic, `op` is the trapping call, `puzzle` its ID, and `params` the call inputs
  */
-export function trackFatalError(error: unknown): void {
-  track("wasm_init_failed", {
+export function trackFatalError(
+  error: unknown,
+  event: string,
+  opts?: { op?: string; puzzle?: string; params?: unknown },
+): void {
+  track(event, {
     message: error instanceof Error ? error.message : String(error),
     stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
     ua: navigator.userAgent,
     ...parseUA(),
+    ...opts,
   });
 }
 
