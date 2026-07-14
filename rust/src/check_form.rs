@@ -1,3 +1,7 @@
+//! Structural well-formedness of a parsed puzzle (option counts, index ranges,
+//! claim shape) — is the *shape* legal, independent of any answer key? For the
+//! semantic "is this claim true?" check see `check_answer::check_claim`.
+
 use crate::types::*;
 
 #[derive(Debug)]

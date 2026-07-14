@@ -1,3 +1,7 @@
+//! Play-time validity: is an answer to question `qi` valid / pending / invalid on
+//! the current (possibly partial) board? `check_claim` is the single authority the
+//! solver, generator, and UI all share.
+
 use crate::types::*;
 
 /// Play-time verdict for a single question. This is a **wasm wire contract**: the

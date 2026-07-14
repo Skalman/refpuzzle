@@ -1,3 +1,7 @@
+//! CLI harness for `refpuzzle check`: runs a puzzle (or a whole year file)
+//! through solve / deduce / form / well-posed and prints a verdict. Not on the
+//! play or generate path.
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::io::Write;
