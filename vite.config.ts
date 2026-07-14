@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import { preact } from "@preact/preset-vite";
 import wasm from "vite-plugin-wasm";
+import { minify as minifyHtml } from "html-minifier-terser";
 import { brotliCompressSync, constants } from "node:zlib";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
@@ -82,8 +83,35 @@ function brotliPlugin(): Plugin {
   };
 }
 
+// Vite leaves index.html and its inline <script>/<style> unminified. Runs last,
+// after every tag has been injected.
+function htmlMinifyPlugin(): Plugin {
+  return {
+    name: "html-minify",
+    apply: "build",
+    transformIndexHtml: {
+      order: "post",
+      handler(html) {
+        return minifyHtml(html, {
+          collapseWhitespace: true,
+          removeComments: true,
+          minifyJS: true,
+          minifyCSS: true,
+        });
+      },
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [preact(), wasm(), versionPlugin(), wasmPreloadPlugin(), brotliPlugin()],
+  plugins: [
+    preact(),
+    wasm(),
+    versionPlugin(),
+    wasmPreloadPlugin(),
+    brotliPlugin(),
+    htmlMinifyPlugin(),
+  ],
   build: {
     target: "es2018",
   },
