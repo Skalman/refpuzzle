@@ -172,6 +172,7 @@ fn parse_date_range(input: &str) -> DateRange {
 fn print_help() {
     eprintln!("Usage: refpuzzle gen <date-range> -o FILE [options]");
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
+    eprintln!("       refpuzzle check -   (reads a year map or single puzzle from stdin)");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
     eprintln!(
@@ -195,6 +196,7 @@ fn print_help() {
     eprintln!("  refpuzzle check puzzles/daily/2051.json");
     eprintln!("  refpuzzle check puzzles/daily/2051.json 0315-4");
     eprintln!("  refpuzzle check puzzles/daily/2051.json --json | refpuzzle format-check");
+    eprintln!("  echo '{{\"o\":[...],\"q\":[...]}}' | refpuzzle check -");
 }
 
 /// Consume the value after a value-taking flag `name` (currently at `args[*i]`),

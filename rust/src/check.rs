@@ -73,6 +73,10 @@ pub struct CheckOutput {
     pub path: String,
     pub year: String,
     pub target: Option<String>,
+    /// Input was a single bare puzzle blob (no date/level context) rather than a
+    /// year map — render the detailed single view and suppress date-based URLs.
+    #[serde(default)]
+    pub single: bool,
     pub puzzles: Vec<PuzzleCheckResult>,
 }
 
@@ -87,8 +91,13 @@ pub struct PuzzleCheckResult {
     pub solve_ok: bool,
     pub solve_answered: usize,
     pub solve_steps: Vec<String>,
+    /// Shareable link opened on the solver's resolved cells. A date route for the
+    /// served corpus; a self-contained `/playground` link (blob embedded) otherwise.
+    pub solve_link: String,
     pub brute_count: usize,
     pub brute_solutions: Vec<String>,
+    /// One link per `brute_solutions` entry, same shape as `solve_link`.
+    pub brute_links: Vec<String>,
     pub hint_brute_match: bool,
     pub validity_ok: bool,
     pub validity_per_question: Vec<String>,
@@ -117,11 +126,14 @@ fn extract_year(path: &str) -> String {
     s[s.len().saturating_sub(4)..].to_string()
 }
 
+/// Dev server the generated links point at (date routes and `/playground` alike).
+const ORIGIN: &str = "http://localhost:5173";
+
 fn make_url(year: &str, day: &str, lvl: &str, steps: &[String]) -> String {
     let mm = day.get(..2).expect("day key must be MMDD");
     let dd = day.get(2..4).expect("day key must be MMDD");
     let hash = steps.join(".");
-    format!("http://localhost:5173/{year}-{mm}-{dd}/{lvl}?debug#{hash}")
+    format!("{ORIGIN}/{year}-{mm}-{dd}/{lvl}?debug#{hash}")
 }
 
 fn solution_str_to_steps(sol: &str) -> Vec<String> {
@@ -184,7 +196,10 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
         .collect()
 }
 
-fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
+/// `year = Some(y)` (always non-empty) renders date-route links (served corpus,
+/// key is MMDD-L); `year = None` renders self-contained `/playground` links with
+/// the puzzle blob embedded (single puzzles, stdin, files outside the corpus).
+fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleCheckResult {
     let n = fp.n;
     let oc = fp.option_count;
 
@@ -215,14 +230,29 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
             solve_ok: true,
             solve_answered: 0,
             solve_steps: Vec::new(),
+            solve_link: String::new(),
             brute_count: 1,
             brute_solutions: Vec::new(),
+            brute_links: Vec::new(),
             hint_brute_match: true,
             validity_ok: true,
             validity_per_question: vec!["n/a".to_string(); n],
             ambiguous: Vec::new(),
         };
     }
+
+    // Link renderer: a date route the dev server resolves for the served corpus, or
+    // a self-contained `/playground` link (blob + resolved cells) for everything
+    // else. `steps` feeds the date hash; `state` feeds the playground history.
+    let make_link = |state: &State, steps: &[String]| -> String {
+        match year {
+            Some(year) => {
+                let (day, lvl) = key.split_once('-').expect("dated key must be MMDD-L");
+                make_url(year, day, lvl, steps)
+            }
+            None => serialize::playground_link(ORIGIN, &fp.question_types, fp, state),
+        }
+    };
 
     let cr = run_check(fp, key);
     let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
@@ -239,6 +269,17 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         .iter()
         .map(|sol| sol.iter().take(n).map(|a| a.as_char()).collect())
         .collect();
+    let brute_links: Vec<String> = solutions
+        .iter()
+        .zip(&brute_solutions)
+        .map(|(sol, sol_str)| {
+            let state = State {
+                answers: std::array::from_fn(|i| (i < n).then(|| sol[i])),
+                eliminated: [0; MAX_N],
+            };
+            make_link(&state, &solution_str_to_steps(sol_str))
+        })
+        .collect();
 
     let hint_brute_match = if cr.ok && solutions.len() == 1 {
         (0..n).all(|i| cr.answers[i] == Some(solutions[0][i]))
@@ -250,6 +291,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         answers: cr.answers,
         eliminated: cr.eliminated,
     };
+    let solve_link = make_link(&state, &cr.steps);
     let validity_ok = if cr.ok {
         (0..n).all(|i| {
             let v = check_answer::check_answer(fp, state, i);
@@ -305,8 +347,10 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
         solve_ok: cr.ok,
         solve_answered: answered,
         solve_steps: cr.steps,
+        solve_link,
         brute_count,
         brute_solutions,
+        brute_links,
         hint_brute_match,
         validity_ok,
         validity_per_question,
@@ -314,12 +358,44 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str) -> PuzzleCheckResult {
     }
 }
 
+/// Read the check input, treating `-` as stdin (mirrors `-o -` on `gen`).
+fn read_input(path: &str) -> String {
+    if path == "-" {
+        std::io::read_to_string(std::io::stdin()).expect("failed to read stdin")
+    } else {
+        std::fs::read_to_string(path).unwrap_or_else(|e| panic!("can't read {path}: {e}"))
+    }
+}
+
 fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
-    let data: Value =
-        serde_json::from_str(&std::fs::read_to_string(path).expect("can't read file"))
-            .expect("invalid JSON");
+    let data: Value = serde_json::from_str(&read_input(path)).expect("invalid JSON");
+
+    // A bare single-puzzle blob carries "o"/"q" at the top level; a year map's
+    // top-level keys are MMDD dates. Check the blob directly — it has no date/level
+    // context, so it gets a synthetic key and `/playground` links (year = None).
+    if data.get("o").is_some() && data.get("q").is_some() {
+        let fp = serialize::parse_puzzle(&data).unwrap_or_else(|| {
+            eprintln!("Error: input is not a valid puzzle");
+            std::process::exit(1);
+        });
+        return CheckOutput {
+            path: path.to_string(),
+            year: String::new(),
+            target: None,
+            single: true,
+            puzzles: vec![check_one_puzzle(&fp, "puzzle", None)],
+        };
+    }
+
     let obj = data.as_object().expect("top-level must be object");
     let year = extract_year(path);
+    // Date routes only resolve for the served corpus; puzzles read from anywhere
+    // else (including stdin) get self-contained `/playground` links instead. An
+    // empty year (unnamed path) folds to None so `make_link` sees one signal.
+    let link_year = path
+        .contains("puzzles/daily")
+        .then_some(year.as_str())
+        .filter(|y| !y.is_empty());
 
     let mut puzzles = Vec::new();
 
@@ -341,7 +417,7 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
                     continue;
                 }
             };
-            puzzles.push(check_one_puzzle(&fp, &key));
+            puzzles.push(check_one_puzzle(&fp, &key, link_year));
         }
     }
 
@@ -349,15 +425,15 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
         path: path.to_string(),
         year,
         target: target.map(|s| s.to_string()),
+        single: false,
         puzzles,
     }
 }
 
 // ── Format ──
 
-fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool {
+fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     let n = r.n;
-    let (day, lvl) = r.key.split_once('-').expect("check key must be MMDD-L");
 
     let has_form_warns = !r.form_warnings.is_empty();
     let has_errors = !r.solve_ok
@@ -481,7 +557,7 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         red(&format!("stuck {}/{n}", r.solve_answered))
     };
     writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead").unwrap();
-    writeln!(w, "    {}", dim(&make_url(year, day, lvl, &r.solve_steps))).unwrap();
+    writeln!(w, "    {}", dim(&r.solve_link)).unwrap();
 
     // Brute
     if r.brute_count == 1 {
@@ -492,8 +568,7 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
             green(&format!("1 solution ({})", r.brute_solutions[0]))
         )
         .unwrap();
-        let steps = solution_str_to_steps(&r.brute_solutions[0]);
-        writeln!(w, "    {}", dim(&make_url(year, day, lvl, &steps))).unwrap();
+        writeln!(w, "    {}", dim(&r.brute_links[0])).unwrap();
     } else {
         writeln!(
             w,
@@ -504,8 +579,7 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult, year: &str) -> bool 
         .unwrap();
         for (i, sol) in r.brute_solutions.iter().enumerate() {
             writeln!(w, "    #{} {sol}", i + 1).unwrap();
-            let steps = solution_str_to_steps(sol);
-            writeln!(w, "      {}", dim(&make_url(year, day, lvl, &steps))).unwrap();
+            writeln!(w, "      {}", dim(&r.brute_links[i])).unwrap();
         }
     }
 
@@ -753,6 +827,17 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
 
 // ── Entry points ──
 
+/// Render a computed `CheckOutput` and return whether it contained errors. A
+/// single puzzle or a targeted lookup gets the detailed per-puzzle view; a whole
+/// year map gets the summary.
+fn render_check_output(w: &mut impl Write, output: &CheckOutput) -> bool {
+    if (output.single || output.target.is_some()) && !output.puzzles.is_empty() {
+        format_single(w, &output.puzzles[0])
+    } else {
+        format_full(w, &output.puzzles, &output.path)
+    }
+}
+
 pub fn check_command(path: &str, target: Option<&str>, json_output: bool) {
     let output = compute_check_output(path, target);
 
@@ -761,12 +846,7 @@ pub fn check_command(path: &str, target: Option<&str>, json_output: bool) {
     } else {
         init_color(std::io::IsTerminal::is_terminal(&std::io::stderr()));
         let mut w = std::io::stderr().lock();
-        let has_errors = if output.target.is_some() && !output.puzzles.is_empty() {
-            format_single(&mut w, &output.puzzles[0], &output.year)
-        } else {
-            format_full(&mut w, &output.puzzles, &output.path)
-        };
-        if has_errors {
+        if render_check_output(&mut w, &output) {
             std::process::exit(1);
         }
     }
@@ -777,12 +857,7 @@ pub fn format_check_stdin() {
     let input = std::io::read_to_string(std::io::stdin()).expect("failed to read stdin");
     let output: CheckOutput = serde_json::from_str(&input).expect("invalid JSON");
     let mut w = std::io::stdout().lock();
-    let has_errors = if output.target.is_some() && !output.puzzles.is_empty() {
-        format_single(&mut w, &output.puzzles[0], &output.year)
-    } else {
-        format_full(&mut w, &output.puzzles, &output.path)
-    };
-    if has_errors {
+    if render_check_output(&mut w, &output) {
         std::process::exit(1);
     }
 }
