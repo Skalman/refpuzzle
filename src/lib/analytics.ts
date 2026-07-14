@@ -54,6 +54,20 @@ export function getClientInfo(): { os: string; browser: string; standalone?: tru
   return { ...parseUA(), standalone: standalone || undefined };
 }
 
+/**
+ * Reports a fatal wasm-init failure — the case that surfaces the inline #fatal
+ * fallback (see index.html / main.tsx). The reason + stack distinguish a
+ * poisoned cache from a genuine compile/network failure.
+ */
+export function trackFatalError(error: unknown): void {
+  track("wasm_init_failed", {
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack?.slice(0, 500) : undefined,
+    ua: navigator.userAgent,
+    ...parseUA(),
+  });
+}
+
 export function setupErrorTracking(): void {
   window.onerror = (msg, _src, _line, _col, error) => {
     track("js_error", {

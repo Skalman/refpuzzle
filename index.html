@@ -13,10 +13,172 @@
       if (t) document.documentElement.setAttribute("data-theme", t);
       var dark = t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches);
       document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1117" : "#f8f9fa";
-</script>
+    </script>
+    <!-- Fallback shown when the app never mounts (see main.tsx). Self-contained,
+         so it works without the bundle. -->
+    <style>
+      #fatal {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.55);
+        font:
+          1rem/1.5 system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: var(--text, #1a1a2e);
+      }
+      #fatal:not([hidden]) {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #fatal .fatal-card {
+        width: 100%;
+        max-width: 28rem;
+        background: #fff;
+        background: var(--bg-surface, #fff);
+        border: 1px solid var(--border, #d0d3d9);
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+      }
+      #fatal h2 {
+        margin: 0 0 0.6rem;
+        font-size: 1.1rem;
+      }
+      #fatal p {
+        margin: 0.4rem 0;
+        font-size: 0.9rem;
+      }
+      #fatal .fatal-detail {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.8rem;
+        background: var(--bg-hover, #f0f1f3);
+        padding: 0.5rem 0.7rem;
+        border-radius: 6px;
+        word-break: break-word;
+      }
+      #fatal .fatal-actions {
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+        margin-top: 1rem;
+      }
+      #fatal button {
+        font: inherit;
+        font-size: 0.85rem;
+        padding: 0.4rem 0.85rem;
+        border-radius: 6px;
+        border: 1px solid var(--border, #d0d3d9);
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+      }
+      #fatal .fatal-primary {
+        background: #6366f1;
+        background: var(--accent, #6366f1);
+        border-color: var(--accent, #6366f1);
+        color: #fff;
+        font-weight: 600;
+      }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+
+    <div id="fatal" hidden role="alert">
+      <div class="fatal-card">
+        <h2 id="fatal-title">Couldn't load Refpuzzle</h2>
+        <p id="fatal-body">
+          The puzzle engine failed to start. This usually clears up after a cache reset — most often
+          needed once after the app updates.
+        </p>
+        <p id="fatal-detail" class="fatal-detail" hidden></p>
+        <div class="fatal-actions">
+          <button id="fatal-reload">Reload</button>
+          <button id="fatal-reset" class="fatal-primary">Reset cache &amp; reload</button>
+        </div>
+      </div>
+    </div>
+    <script>
+      (function () {
+        function resetAndReload() {
+          var jobs = [];
+          try {
+            if (navigator.serviceWorker) {
+              jobs.push(
+                navigator.serviceWorker.getRegistrations().then(function (regs) {
+                  return Promise.all(
+                    regs.map(function (r) {
+                      return r.unregister();
+                    }),
+                  );
+                }),
+              );
+            }
+            if (window.caches) {
+              jobs.push(
+                caches.keys().then(function (keys) {
+                  return Promise.all(
+                    keys.map(function (k) {
+                      return caches.delete(k);
+                    }),
+                  );
+                }),
+              );
+            }
+          } catch (e) {}
+          var reload = function () {
+            location.reload();
+          };
+          Promise.all(jobs).then(reload, reload);
+        }
+
+        // detail → mono box; opts.title/body override the headline/description.
+        window.showFatalError = function (detail, opts) {
+          var el = document.getElementById("fatal");
+          if (!el) return;
+          clearTimeout(bootTimeout);
+          opts = opts || {};
+          if (opts.title) document.getElementById("fatal-title").textContent = opts.title;
+          if (opts.body) document.getElementById("fatal-body").textContent = opts.body;
+          var message = detail && detail.message ? detail.message : detail;
+          if (message != null && message !== "") {
+            var d = document.getElementById("fatal-detail");
+            d.textContent = String(message);
+            d.hidden = false;
+          }
+          el.hidden = false;
+        };
+
+        // Old browsers skip the ES module and never run main.tsx (which cancels
+        // this). A fire means the bundle never loaded: report and show the fallback.
+        var bootTimeout = setTimeout(function () {
+          // XHR, not sendBeacon: old browsers may lack it, and we aren't unloading.
+          try {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/analytics.php");
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.send(JSON.stringify({ event: "boot_timeout", props: { ua: navigator.userAgent } }));
+          } catch (e) {}
+          window.showFatalError(null, {
+            title: "Refpuzzle didn't load",
+            body: "It's taking longer than expected. Your browser may be out of date, or your connection dropped. Try reloading — a cache reset can also help.",
+          });
+        }, 10000);
+        window.cancelBootTimeout = function () {
+          clearTimeout(bootTimeout);
+        };
+
+        document.getElementById("fatal-reset").onclick = resetAndReload;
+        document.getElementById("fatal-reload").onclick = function () {
+          location.reload();
+        };
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

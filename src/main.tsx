@@ -1,10 +1,21 @@
 import { render } from "preact";
 import "./index.css"; // oxlint-disable-line import/no-unassigned-import
 import { App } from "./App.tsx";
-import { setupErrorTracking } from "./lib/analytics.ts";
+import { setupErrorTracking, trackFatalError } from "./lib/analytics.ts";
 import { migrateLocalStorage } from "./lib/store.ts";
 import { revalidateIfNeeded } from "./lib/revalidate.ts";
 import { wasmReady } from "./lib/wasm.ts";
+
+// Provided by the inline #fatal fallback in index.html (works without the bundle).
+declare global {
+  interface Window {
+    showFatalError?: (detail?: unknown, opts?: { title?: string; body?: string }) => void;
+    cancelBootTimeout?: () => void;
+  }
+}
+
+// The bundle ran, so cancel the inline boot watchdog.
+window.cancelBootTimeout?.();
 
 migrateLocalStorage();
 revalidateIfNeeded();
@@ -17,8 +28,8 @@ void wasmReady().then(
   () => render(<App />, document.getElementById("app")!),
   (e: unknown) => {
     console.error("wasm init failed", e);
-    const app = document.getElementById("app");
-    if (app) app.textContent = "Failed to load. Please refresh the page.";
+    window.showFatalError?.(e);
+    if (import.meta.env.PROD) trackFatalError(e);
   },
 );
 
