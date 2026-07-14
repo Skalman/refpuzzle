@@ -131,6 +131,10 @@ fn probe_candidate(
             apply_action(&dr.action, &mut hyp);
             if !chain.is_full() {
                 chain.push(*dr);
+            } else {
+                unreachable!(
+                    "lookahead chain exceeded capacity — a probe's deductions are bounded by the board's cell count"
+                )
             }
         }
         if contradiction_qi.is_some() {
