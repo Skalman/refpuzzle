@@ -2571,17 +2571,8 @@ fn deduce_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_util::slow_test_duration;
     use serde_json::Value;
-
-    fn slow_test_duration() -> Option<std::time::Duration> {
-        if std::env::var("REFPUZZLE_FAST_TESTS").is_ok() {
-            return Some(std::time::Duration::from_millis(200));
-        }
-        if cfg!(debug_assertions) {
-            panic!("slow test — run with --release or set REFPUZZLE_FAST_TESTS=1");
-        }
-        Some(std::time::Duration::from_secs(5))
-    }
 
     /// Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
     fn playground_link(puzzle: &Value, states: &[Value], n: usize) -> String {

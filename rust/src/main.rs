@@ -22,6 +22,10 @@ mod serialize;
 mod solve_brute;
 #[allow(dead_code)]
 mod solve_deduce;
+#[cfg(test)]
+mod test_symmetry;
+#[cfg(test)]
+mod test_util;
 mod type_stats;
 mod types;
 
@@ -658,62 +662,45 @@ fn dates_in_year(
     result
 }
 
+/// Every shipped daily puzzle as `(label, FlatPuzzle)`, read from the daily dir
+/// (one file per year). Shared by the generator fuzz tests and the symmetry sweep.
+#[cfg(test)]
+pub(crate) fn daily_puzzles() -> Vec<(String, FlatPuzzle)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../public/puzzles/daily");
+    let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read {}: {e}", dir.display()))
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            (path.extension()?.to_str()? == "json").then_some(path)
+        })
+        .collect();
+    files.sort();
+    let mut puzzles = Vec::new();
+    for path in &files {
+        let filename = path.file_name().unwrap().to_str().unwrap();
+        let text = std::fs::read_to_string(path)
+            .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
+        let data: Value = serde_json::from_str(&text)
+            .unwrap_or_else(|e| panic!("invalid JSON in {}: {e}", path.display()));
+        for (day, levels) in data.as_object().unwrap() {
+            let Some(levels) = levels.as_object() else {
+                continue;
+            };
+            for (lvl, puzzle) in levels {
+                let key = format!("{filename}/{day}-{lvl}");
+                let fp = serialize::parse_puzzle(puzzle)
+                    .unwrap_or_else(|| panic!("failed to parse daily puzzle {key}"));
+                puzzles.push((key, fp));
+            }
+        }
+    }
+    puzzles
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn puzzle_json_files() -> Vec<std::path::PathBuf> {
-        let manifest_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let daily_dir = manifest_dir.join("../public/puzzles/daily");
-        let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&daily_dir)
-            .unwrap_or_else(|e| panic!("cannot read {}: {e}", daily_dir.display()))
-            .filter_map(|entry| {
-                let path = entry.ok()?.path();
-                if path.extension().and_then(|s| s.to_str()) == Some("json") {
-                    Some(path)
-                } else {
-                    None
-                }
-            })
-            .collect();
-        files.sort();
-        files
-    }
-
-    fn slow_test_duration() -> Option<std::time::Duration> {
-        if std::env::var("REFPUZZLE_FAST_TESTS").is_ok() {
-            return Some(std::time::Duration::from_millis(200));
-        }
-        if cfg!(debug_assertions) {
-            panic!("slow test — run with --release or set REFPUZZLE_FAST_TESTS=1");
-        }
-        Some(std::time::Duration::from_secs(5))
-    }
-
-    fn all_puzzles() -> Vec<(String, FlatPuzzle)> {
-        let mut puzzles = Vec::new();
-        for path in &puzzle_json_files() {
-            let filename = path.file_name().unwrap().to_str().unwrap();
-            let text = std::fs::read_to_string(path)
-                .unwrap_or_else(|e| panic!("cannot read {}: {e}", path.display()));
-            let data: Value = serde_json::from_str(&text)
-                .unwrap_or_else(|e| panic!("invalid JSON in {}: {e}", path.display()));
-            let obj = data.as_object().unwrap();
-            for (day, levels) in obj {
-                let levels = match levels.as_object() {
-                    Some(l) => l,
-                    None => continue,
-                };
-                for (lvl, puzzle) in levels {
-                    let key = format!("{filename}/{day}-{lvl}");
-                    if let Some(fp) = serialize::parse_puzzle(puzzle) {
-                        puzzles.push((key, fp));
-                    }
-                }
-            }
-        }
-        puzzles
-    }
+    use crate::test_util::slow_test_duration;
 
     #[test]
     fn generated_puzzles_hint_solvable() {
@@ -721,7 +708,7 @@ mod tests {
             return;
         };
         let deadline = std::time::Instant::now() + duration;
-        let puzzles = all_puzzles();
+        let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());
         let mut failures: Vec<String> = Vec::new();
 
@@ -757,7 +744,7 @@ mod tests {
             return;
         };
         let deadline = std::time::Instant::now() + duration;
-        let puzzles = all_puzzles();
+        let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());
         let mut failures: Vec<String> = Vec::new();
 
@@ -838,7 +825,7 @@ mod tests {
 
     #[test]
     fn generated_puzzles_wellformed() {
-        let puzzles = all_puzzles();
+        let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());
         let today = today_yyyymmdd();
         let mut failures: Vec<String> = Vec::new();

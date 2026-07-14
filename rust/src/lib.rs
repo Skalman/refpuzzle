@@ -20,6 +20,8 @@ pub mod rng;
 pub mod serialize;
 pub mod solve_brute;
 pub mod solve_deduce;
+#[cfg(test)]
+mod test_util;
 pub mod types;
 
 // Smaller allocator (~1–2 KB vs dlmalloc's ~10 KB) for the wasm bundle.
