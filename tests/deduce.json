@@ -3483,30 +3483,6 @@
       "expect": "1c"
     },
     {
-      "name": "UniqueAlreadyUsed: not yet implemented → no elimination",
-      "rule": "UniqueAlreadyUsed",
-      "puzzle": {
-        "o": [
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", ""],
-      "expect": null
-    },
-    {
       "section": "=== LeastCommon ==="
     },
     {

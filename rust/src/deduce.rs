@@ -89,7 +89,6 @@ deduce_rules! {
     NextSameCloser,
     OnlySameSelfRef,
     OnlySameRuledOut,
-    UniqueAlreadyUsed,
     LeastCommonElim,
     LeastCommonForce,
     LeastCommonCountFloor,
