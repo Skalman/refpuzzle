@@ -99,7 +99,7 @@ pub fn gen_stats(
                             n: skeleton.n,
                             filled,
                             total: skeleton.n * oc,
-                            solutions: solve(&fp, None, 2).len(),
+                            solutions: solve(&fp, 2).len(),
                             stuck: (0..skeleton.n)
                                 .filter(|&qi| state.answers[qi].is_none())
                                 .collect(),

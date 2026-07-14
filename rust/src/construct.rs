@@ -475,7 +475,7 @@ pub(crate) fn validate_and_repair(
 
     let (did_solve, state) = run_hint_engine(fp, stats, lookahead_deduce_until);
     if did_solve {
-        let solutions = solve(fp, None, 2);
+        let solutions = solve(fp, 2);
         assert_accepted(fp, solutions.len(), label);
         return Verdict::Accepted;
     }
@@ -1656,7 +1656,7 @@ mod tests {
                 let fp = &result.fp;
                 let n = fp.n;
                 // the generator emits uniquely-solvable puzzles; recover the key by solving.
-                let solutions = solve(fp, None, 2);
+                let solutions = solve(fp, 2);
                 assert_eq!(
                     solutions.len(),
                     1,

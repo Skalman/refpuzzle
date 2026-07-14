@@ -767,7 +767,7 @@ mod tests {
             if std::time::Instant::now() > deadline {
                 break;
             }
-            let solutions = solve_brute::solve(fp, None, 2);
+            let solutions = solve_brute::solve(fp, 2);
             if solutions.len() != 1 {
                 failures.push(format!("{key}: found {} solutions", solutions.len()));
                 continue;

@@ -2,14 +2,8 @@ use crate::check_answer::{check_answer, check_answers};
 use crate::types::*;
 use arrayvec::ArrayVec;
 
-pub fn solve(
-    fp: &FlatPuzzle,
-    fixed: Option<&[Option<Answer>; MAX_N]>,
-    max_solutions: usize,
-) -> Vec<[Answer; MAX_N]> {
+pub fn solve(fp: &FlatPuzzle, max_solutions: usize) -> Vec<[Answer; MAX_N]> {
     let n = fp.n;
-    let default_fixed = [None; MAX_N];
-    let fixed = fixed.unwrap_or(&default_fixed);
     let mut solutions: Vec<[Answer; MAX_N]> = Vec::new();
     let mut current = [None::<Answer>; MAX_N];
     let order = compute_search_order(fp);
@@ -20,7 +14,6 @@ pub fn solve(
 
     search(
         fp,
-        fixed,
         &mut solutions,
         &mut current,
         &order,
@@ -237,7 +230,6 @@ fn undo_propagation(
 
 fn search(
     fp: &FlatPuzzle,
-    fixed: &[Option<Answer>; MAX_N],
     solutions: &mut Vec<[Answer; MAX_N]>,
     current: &mut [Option<Answer>; MAX_N],
     order: &[u8; MAX_N],
@@ -270,7 +262,6 @@ fn search(
     if current[qi].is_some() {
         search(
             fp,
-            fixed,
             solutions,
             current,
             order,
@@ -283,31 +274,6 @@ fn search(
         return;
     }
 
-    if let Some(letter) = fixed[qi] {
-        current[qi] = Some(letter);
-        *assigned_bits |= bit;
-        let mut forced = ArrayVec::<usize, MAX_N>::new();
-        let ok = propagate_forces(fp, current, assigned_bits, qi, &mut forced);
-        if ok && !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
-            search(
-                fp,
-                fixed,
-                solutions,
-                current,
-                order,
-                all_bits,
-                assigned_bits,
-                range_masks,
-                depth + 1,
-                max_solutions,
-            );
-        }
-        undo_propagation(current, assigned_bits, &forced);
-        current[qi] = None;
-        *assigned_bits &= !bit;
-        return;
-    }
-
     for &letter in &LETTERS[..fp.option_count] {
         current[qi] = Some(letter);
         *assigned_bits |= bit;
@@ -316,7 +282,6 @@ fn search(
         if ok && !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
             search(
                 fp,
-                fixed,
                 solutions,
                 current,
                 order,

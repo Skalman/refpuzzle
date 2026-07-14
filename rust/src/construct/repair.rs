@@ -106,7 +106,7 @@ fn repair_pass(
         let (solved, advanced_state) =
             run_hint_engine_from(fp, *state, stats, lookahead_deduce_until);
         if solved {
-            let solutions = solve(fp, None, 2);
+            let solutions = solve(fp, 2);
             if solutions.len() != 1 {
                 // Not actually unique — the edit added a second valid answer.
                 stats.repair_ambiguous += 1;

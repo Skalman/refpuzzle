@@ -257,7 +257,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
     let cr = run_check(fp, key);
     let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
 
-    let solutions = solve_brute::solve(fp, None, 10);
+    let solutions = solve_brute::solve(fp, 10);
 
     let unique_solution = if solutions.len() == 1 {
         Some(solutions[0][..n].as_ref())
@@ -1040,7 +1040,7 @@ fn report_first_incorrect_if_needed(
     }
     *conflict_reported = true;
 
-    let solutions = brute_solutions.get_or_insert_with(|| solve_brute::solve(fp, None, 2));
+    let solutions = brute_solutions.get_or_insert_with(|| solve_brute::solve(fp, 2));
     match solutions.len() {
         0 => {
             eprintln!(

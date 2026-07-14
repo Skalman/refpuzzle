@@ -2877,7 +2877,7 @@ mod tests {
             }));
             let Ok(fp) = fp else { continue };
 
-            let solutions = solve(&fp, None, 2);
+            let solutions = solve(&fp, 2);
             if solutions.len() != 1 {
                 continue;
             }
