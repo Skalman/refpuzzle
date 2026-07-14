@@ -74,6 +74,13 @@ fn compute_range_masks(fp: &FlatPuzzle) -> [u16; MAX_N] {
                 }
                 m
             }
+            QuestionType::PrevSame => {
+                let mut m = 0u16;
+                for j in 0..i {
+                    m |= 1 << j;
+                }
+                m
+            }
             QuestionType::ClosestAfter { after_index, .. }
             | QuestionType::CountAnswerAfter { after_index, .. } => {
                 let mut m = 0u16;
@@ -442,16 +449,10 @@ fn can_fully_evaluate_local(
 ) -> bool {
     match *qt {
         QuestionType::AnswerIsSelf => true,
-        QuestionType::PrevSame => {
-            let mut mask = 0u16;
-            for j in 0..qi {
-                mask |= 1 << j;
-            }
-            (assigned & mask) == mask
-        }
         QuestionType::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
         QuestionType::LetterDist { question_index } => (assigned & (1 << question_index)) != 0,
-        QuestionType::NextSame
+        QuestionType::PrevSame
+        | QuestionType::NextSame
         | QuestionType::ClosestAfter { .. }
         | QuestionType::ClosestBefore { .. }
         | QuestionType::CountAnswerBefore { .. }
