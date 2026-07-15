@@ -1063,7 +1063,7 @@ mod tests {
     /// Property test: on random fully-answered boards, `check_claim_fast` must
     /// agree with `check_claim(..).is_valid()` for every candidate claim value,
     /// across every kind it implements (all but `AnswerIsSelf`/`TrueStmt`, which
-    /// are never claim subjects — see `CLAIM_TYPES` in fill.rs). Locks the
+    /// are never claim subjects — see `is_claim_type` in fill.rs). Locks the
     /// equivalence the doc comment on `check_claim_fast` promises.
     #[test]
     fn check_claim_fast_matches_check_claim() {

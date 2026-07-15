@@ -273,7 +273,7 @@ pub enum QuestionType {
 }
 
 impl QuestionTypeKind {
-    pub fn all() -> &'static [QuestionTypeKind] {
+    pub const fn all() -> &'static [QuestionTypeKind] {
         use QuestionTypeKind::*;
         &[
             CountAnswer,

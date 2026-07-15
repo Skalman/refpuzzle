@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::check_answer::check_claim_fast;
 use crate::check_form;
-use crate::construct::format_claim_qt;
+use crate::construct::{format_claim_qt, random_type_params};
 use crate::format::format_type_tag;
 use crate::rng::Rng;
 use crate::types::*;
@@ -556,6 +556,20 @@ pub fn correct_option_value(
         QuestionType::LetterDist { question_index } => num(usize::from(
             (sol[qi] as u8).abs_diff(sol[question_index as usize] as u8),
         )),
+        // Letter-valued: the correct option is the extreme-count letter's index,
+        // matching how `place_letter_distractors` encodes these rows. Ties resolve
+        // to the first such letter and are rejected by `check_claim_fast`.
+        QuestionType::MostCommon | QuestionType::LeastCommon => {
+            let counts = &letter_counts(sol, n)[..option_count];
+            let target = if matches!(*qt, QuestionType::MostCommon) {
+                counts.iter().max()
+            } else {
+                counts.iter().min()
+            };
+            target
+                .and_then(|&t| counts.iter().position(|&c| c == t))
+                .map_or(OptionValue::UNUSED, num)
+        }
         _ => OptionValue::UNUSED,
     }
 }
@@ -743,41 +757,51 @@ fn build_claims(
     *true_stmt_question_types = Some(types);
 }
 
-// Position-dependent kinds (NextSame, PrevSame) must NOT appear here: a claim
-// has no qi of its own, so valid_values can't compute the right pool for them.
-// The const block below enforces this at compile time.
-const CLAIM_TYPES: &[QuestionTypeKind] = &[
-    QuestionTypeKind::CountAnswer,
-    QuestionTypeKind::CountConsonant,
-    QuestionTypeKind::CountVowel,
-    QuestionTypeKind::CountAnswerAfter,
-    QuestionTypeKind::CountAnswerBefore,
-    QuestionTypeKind::AnswerOf,
-    QuestionTypeKind::FirstWith,
-    QuestionTypeKind::LastWith,
-    QuestionTypeKind::MostCommon,
-    QuestionTypeKind::ClosestAfter,
-    QuestionTypeKind::ClosestBefore,
-    QuestionTypeKind::MostCommonCount,
-    QuestionTypeKind::LeastCommon,
-    QuestionTypeKind::EqualCount,
-    QuestionTypeKind::ConsecIdent,
-    QuestionTypeKind::OnlyOdd,
-    QuestionTypeKind::OnlyEven,
-    QuestionTypeKind::SameAsWhich,
-];
+/// Whether a question kind can be a TrueStmt claim.
+const fn is_claim_type(kind: QuestionTypeKind) -> bool {
+    use QuestionTypeKind::*;
+    match kind {
+        CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
+        | MostCommonCount | ClosestAfter | ClosestBefore | FirstWith | LastWith | OnlyOdd
+        | OnlyEven | ConsecIdent | LeastCommon | MostCommon | EqualCount | SameAsWhich => true,
 
-const _: () = {
+        // Relative to own question's answer is slightly confusing for `TrueStmt` claims.
+        PrevSame | NextSame | OnlySame | SameAs | LetterDist | AnswerOf | NoOtherHasAnswer => false,
+        // Uninteresting.
+        AnswerIsSelf => false,
+        // Recursive claims aren't supported.
+        TrueStmt => false,
+    }
+}
+
+/// The claim kinds, derived once from `is_claim_type` so the pick pool and the
+/// predicate can't drift apart.
+const CLAIM_KIND_COUNT: usize = {
+    let all = QuestionTypeKind::all();
+    let mut count = 0;
     let mut i = 0;
-    while i < CLAIM_TYPES.len() {
-        match CLAIM_TYPES[i] {
-            QuestionTypeKind::NextSame | QuestionTypeKind::PrevSame => {
-                panic!("CLAIM_TYPES must not contain position-dependent kinds");
-            }
-            _ => {}
+    while i < all.len() {
+        if is_claim_type(all[i]) {
+            count += 1;
         }
         i += 1;
     }
+    count
+};
+
+const CLAIM_KINDS: [QuestionTypeKind; CLAIM_KIND_COUNT] = {
+    let all = QuestionTypeKind::all();
+    let mut out = [QuestionTypeKind::CountAnswer; CLAIM_KIND_COUNT];
+    let mut i = 0;
+    let mut j = 0;
+    while i < all.len() {
+        if is_claim_type(all[i]) {
+            out[j] = all[i];
+            j += 1;
+        }
+        i += 1;
+    }
+    out
 };
 
 fn try_make_claim(
@@ -787,250 +811,22 @@ fn try_make_claim(
     rng: &mut Rng,
     option_count: usize,
 ) -> Option<Claim> {
-    let kind = rng.pick(CLAIM_TYPES);
-    match kind {
-        QuestionTypeKind::CountAnswer => {
-            let a = rng.pick_letter(option_count);
-            Some(Claim {
-                question_type: QuestionType::CountAnswer { answer: a },
-                value: OptionValue::num(count_letter(sol, a, n) as u8),
-            })
-        }
-        QuestionTypeKind::CountConsonant => Some(Claim {
-            question_type: QuestionType::CountConsonant,
-            value: OptionValue::num((0..n).filter(|&i| !sol[i].is_vowel()).count() as u8),
-        }),
-        QuestionTypeKind::CountVowel => Some(Claim {
-            question_type: QuestionType::CountVowel,
-            value: OptionValue::num((0..n).filter(|&i| sol[i].is_vowel()).count() as u8),
-        }),
-        QuestionTypeKind::CountAnswerAfter => {
-            assert!(
-                n >= option_count,
-                "indexed claim requires n >= option_count"
-            );
-            let a = rng.pick_letter(option_count);
-            let ai = rng.int(0, n as i32 - option_count as i32) as u8;
-            Some(Claim {
-                question_type: QuestionType::CountAnswerAfter {
-                    answer: a,
-                    after_index: ai,
-                },
-                value: OptionValue::num(
-                    ((ai as usize + 1)..n).filter(|&i| sol[i] == a).count() as u8
-                ),
-            })
-        }
-        QuestionTypeKind::CountAnswerBefore => {
-            assert!(
-                n >= option_count,
-                "indexed claim requires n >= option_count"
-            );
-            let a = rng.pick_letter(option_count);
-            let bi = rng.int(option_count as i32 - 1, n as i32 - 1) as u8;
-            Some(Claim {
-                question_type: QuestionType::CountAnswerBefore {
-                    answer: a,
-                    before_index: bi,
-                },
-                value: OptionValue::num((0..bi as usize).filter(|&i| sol[i] == a).count() as u8),
-            })
-        }
-        QuestionTypeKind::AnswerOf => {
-            // Pick a target qi != qi (the TrueStmt's own position).
-            if n < 2 {
-                return None;
-            }
-            let mut target = rng.int(0, n as i32 - 2) as usize;
-            if target >= qi {
-                target += 1;
-            }
-            Some(Claim {
-                question_type: QuestionType::AnswerOf {
-                    question_index: target as u8,
-                },
-                value: OptionValue::num(sol[target] as u8),
-            })
-        }
-        QuestionTypeKind::FirstWith => {
-            let a = rng.pick_letter(option_count);
-            let first = (0..n).find(|&i| sol[i] == a)?;
-            Some(Claim {
-                question_type: QuestionType::FirstWith { answer: a },
-                value: OptionValue::num(first as u8),
-            })
-        }
-        QuestionTypeKind::LastWith => {
-            let a = rng.pick_letter(option_count);
-            let last = (0..n).rev().find(|&i| sol[i] == a)?;
-            Some(Claim {
-                question_type: QuestionType::LastWith { answer: a },
-                value: OptionValue::num(last as u8),
-            })
-        }
-        QuestionTypeKind::MostCommon => {
-            let counts = letter_counts(sol, n);
-            let max = *counts.iter().max().unwrap_or(&0);
-            let most: ArrayVec<Answer, 5> = LETTERS
-                .iter()
-                .filter(|&&a| counts[a.idx()] == max)
-                .copied()
-                .collect();
-            if most.len() != 1 {
-                return None;
-            }
-            Some(Claim {
-                question_type: QuestionType::MostCommon,
-                value: OptionValue::num(most[0] as u8),
-            })
-        }
-        QuestionTypeKind::ClosestAfter => {
-            assert!(
-                n >= option_count,
-                "indexed claim requires n >= option_count"
-            );
-            let a = rng.pick_letter(option_count);
-            let ai = rng.int(0, n as i32 - option_count as i32) as u8;
-            let target = ((ai as usize + 1)..n).find(|&i| sol[i] == a)?;
-            Some(Claim {
-                question_type: QuestionType::ClosestAfter {
-                    answer: a,
-                    after_index: ai,
-                },
-                value: OptionValue::num(target as u8),
-            })
-        }
-        QuestionTypeKind::ClosestBefore => {
-            assert!(
-                n >= option_count,
-                "indexed claim requires n >= option_count"
-            );
-            let a = rng.pick_letter(option_count);
-            let bi = rng.int(option_count as i32 - 1, n as i32 - 1) as u8;
-            let target = (0..bi as usize).rev().find(|&i| sol[i] == a)?;
-            Some(Claim {
-                question_type: QuestionType::ClosestBefore {
-                    answer: a,
-                    before_index: bi,
-                },
-                value: OptionValue::num(target as u8),
-            })
-        }
-        QuestionTypeKind::MostCommonCount => {
-            let counts = letter_counts(sol, n);
-            let max = *counts.iter().max().unwrap_or(&0);
-            Some(Claim {
-                question_type: QuestionType::MostCommonCount,
-                value: OptionValue::num(max as u8),
-            })
-        }
-        QuestionTypeKind::LeastCommon => {
-            let counts = &letter_counts(sol, n)[..option_count];
-            let min = *counts.iter().min().unwrap_or(&0);
-            if counts.iter().filter(|&&c| c == min).count() != 1 {
-                return None;
-            }
-            let idx = counts.iter().position(|&c| c == min).unwrap();
-            Some(Claim {
-                question_type: QuestionType::LeastCommon,
-                value: OptionValue::num(idx as u8),
-            })
-        }
-        QuestionTypeKind::EqualCount => {
-            let ref_ans = rng.pick_letter(option_count);
-            let ref_count = count_letter(sol, ref_ans, n);
-            let mut candidates = ArrayVec::<Answer, 5>::new();
-            for &l in &LETTERS {
-                if l != ref_ans && count_letter(sol, l, n) == ref_count {
-                    candidates.push(l);
-                }
-            }
-            if candidates.is_empty() {
-                return None;
-            }
-            let target = rng.pick(&candidates);
-            Some(Claim {
-                question_type: QuestionType::EqualCount { answer: ref_ans },
-                value: OptionValue::num(target as u8),
-            })
-        }
-        QuestionTypeKind::ConsecIdent => {
-            let mut pair_pos: Option<usize> = None;
-            let mut pair_count = 0;
-            for i in 0..n.saturating_sub(1) {
-                if sol[i] == sol[i + 1] {
-                    if pair_count == 0 {
-                        pair_pos = Some(i);
-                    }
-                    pair_count += 1;
-                }
-            }
-            if pair_count > 1 {
-                return None;
-            }
-            Some(Claim {
-                question_type: QuestionType::ConsecIdent,
-                value: pair_pos.map_or(OptionValue::NONE, |p| OptionValue::num(p as u8)),
-            })
-        }
-        QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
-            let a = rng.pick_letter(option_count);
-            let parity = if kind == QuestionTypeKind::OnlyOdd {
-                1
-            } else {
-                0
-            };
-            let mut found: Option<usize> = None;
-            for i in 0..n {
-                if (i + 1) % 2 == parity && sol[i] == a {
-                    if found.is_some() {
-                        // Found more than one.
-                        return None;
-                    }
-                    found = Some(i);
-                }
-            }
-            // Return None if nothing found.
-            let ov = OptionValue::num(found? as u8);
-            let question_type = if kind == QuestionTypeKind::OnlyOdd {
-                QuestionType::OnlyOdd { answer: a }
-            } else {
-                QuestionType::OnlyEven { answer: a }
-            };
-            Some(Claim {
-                question_type,
-                value: ov,
-            })
-        }
-        QuestionTypeKind::SameAsWhich => {
-            // Pick a ref_qi != qi (the TrueStmt's own position).
-            if n < 2 {
-                return None;
-            }
-            let mut ref_qi = rng.int(0, n as i32 - 2) as usize;
-            if ref_qi >= qi {
-                ref_qi += 1;
-            }
-            let ref_ans = sol[ref_qi];
-            let mut matches = ArrayVec::<usize, MAX_N>::new();
-            for i in 0..n {
-                if i != ref_qi && i != qi && sol[i] == ref_ans {
-                    matches.push(i);
-                }
-            }
-            if matches.is_empty() {
-                return None;
-            }
-            let target = rng.pick(&matches);
-            Some(Claim {
-                question_type: QuestionType::SameAsWhich {
-                    question_index: ref_qi as u8,
-                },
-                value: OptionValue::num(target as u8),
-            })
-        }
-        _ => None,
+    // Generate a claim type exactly as question types are generated, then take its
+    // true value for this solution. `is_num` drops null values (TrueStmt claims never
+    // assert null); `check_claim_fast` drops types whose true value isn't a valid
+    // unique claim here (non-unique OnlyOdd/ConsecIdent, MostCommon/LeastCommon tie).
+    let kind = rng.pick(&CLAIM_KINDS);
+    let all_assigned = (1u16 << n) - 1;
+    let question_type = random_type_params(kind, qi, n, option_count, sol, all_assigned, rng)?;
+    let value = correct_option_value(&question_type, qi, sol, n, option_count);
+    if !value.is_num() {
+        return None;
     }
+    let claim = Claim {
+        question_type,
+        value,
+    };
+    check_claim_fast(option_count, &sol[..n], qi, &claim).then_some(claim)
 }
 
 fn make_true_claim(
@@ -1042,7 +838,6 @@ fn make_true_claim(
 ) -> Claim {
     for _ in 0..20 {
         if let Some(claim) = try_make_claim(sol, qi, n, rng, option_count) {
-            debug_assert!(check_claim_fast(option_count, &sol[..n], qi, &claim));
             return claim;
         }
     }
@@ -1051,6 +846,38 @@ fn make_true_claim(
         question_type: QuestionType::CountAnswer { answer: a },
         value: OptionValue::num(count_letter(sol, a, n) as u8),
     }
+}
+
+/// A plausible wrong value for a claim of type `qt` given its correct value: prefer
+/// a near-miss (correct ±1/±2) that's a real option, else any other option value.
+/// Never NONE — TrueStmt claims don't assert null. `check_claim_fast` at the call
+/// site is the final arbiter of falseness (an EqualCount near-miss, say, can land on
+/// a second true answer).
+fn false_claim_value(
+    qt: &QuestionType,
+    correct: OptionValue,
+    qi: usize,
+    n: usize,
+    option_count: usize,
+    rng: &mut Rng,
+) -> Option<OptionValue> {
+    let pool = valid_values(qt, qi, n, option_count);
+    let c = correct.value() as i32;
+    let near: ArrayVec<OptionValue, 4> = [-2, -1, 1, 2]
+        .into_iter()
+        .filter(|&off| c + off >= 0)
+        .map(|off| OptionValue::num((c + off) as u8))
+        .filter(|&v| v != correct && pool.contains(&v))
+        .collect();
+    if !near.is_empty() {
+        return Some(rng.pick(&near));
+    }
+    let rest: ArrayVec<OptionValue, MAX_VALUE_POOL> = pool
+        .iter()
+        .copied()
+        .filter(|&v| v.is_num() && v != correct)
+        .collect();
+    (!rest.is_empty()).then(|| rng.pick(&rest))
 }
 
 fn make_false_claim(
@@ -1062,11 +889,16 @@ fn make_false_claim(
 ) -> Claim {
     for _ in 0..30 {
         let base = make_true_claim(sol, qi, n, rng, option_count);
-        let fc = perturb_claim(base, qi, n, rng, option_count);
-        if let Some(fc) = fc
-            && !check_claim_fast(option_count, &sol[..n], qi, &fc)
+        if let Some(value) =
+            false_claim_value(&base.question_type, base.value, qi, n, option_count, rng)
         {
-            return fc;
+            let fc = Claim {
+                question_type: base.question_type,
+                value,
+            };
+            if !check_claim_fast(option_count, &sol[..n], qi, &fc) {
+                return fc;
+            }
         }
     }
     // Give up: emit a guaranteed-false but in-range CountAnswer(A) claim. The
@@ -1082,116 +914,6 @@ fn make_false_claim(
         question_type: QuestionType::CountAnswer { answer: Answer::A },
         value: OptionValue::num(value as u8),
     }
-}
-
-fn perturb_claim(
-    claim: Claim,
-    qi: usize,
-    n: usize,
-    rng: &mut Rng,
-    option_count: usize,
-) -> Option<Claim> {
-    // Count-type perturbation: offset the existing claim value. Done in i8
-    // because the offset is signed (-2..=2) and the base may be NONE
-    // (treated as -1 for "the count was null"). Range is [-3, MAX_N+2].
-    let perturb_count = |max: u8, rng: &mut Rng| -> Option<u8> {
-        let offsets: [i8; 4] = [-2, -1, 1, 2];
-        let base: i8 = if claim.value.is_num() {
-            claim.value.value() as i8
-        } else {
-            -1
-        };
-        let v = base + rng.pick(&offsets);
-        u8::try_from(v).ok().filter(|&v| v <= max)
-    };
-    let new_val: u8 = match claim.question_type {
-        QuestionType::CountAnswer { .. }
-        | QuestionType::CountConsonant
-        | QuestionType::CountVowel
-        | QuestionType::MostCommonCount => perturb_count(n as u8, rng)?,
-        QuestionType::CountAnswerAfter { after_index, .. } => {
-            perturb_count(n as u8 - after_index - 1, rng)?
-        }
-        QuestionType::CountAnswerBefore { before_index, .. } => perturb_count(before_index, rng)?,
-        QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => {
-            rng.int(0, n as i32 - 1) as u8
-        }
-        QuestionType::SameAsWhich { question_index } => {
-            // A distractor must point at a real *other* question. Self (qi) and the
-            // referenced question are structurally invalid targets (check_answer
-            // rejects both) that no deduce rule can eliminate — only lookahead — so
-            // reject them here rather than ship a nonsense distractor. The remaining
-            // human-true case (target shares the ref's answer) is rejected by
-            // make_false_claim's check_claim_fast gate.
-            let ov = rng.int(0, n as i32 - 1) as u8;
-            if usize::from(ov) == qi || ov == question_index {
-                return None;
-            }
-            ov
-        }
-        QuestionType::ConsecIdent => {
-            // Valid pool: [0, n-1) — pair (v, v+1) requires v+1 < n.
-            if n < 2 {
-                return None;
-            }
-            rng.int(0, n as i32 - 2) as u8
-        }
-        QuestionType::OnlyOdd { .. } => {
-            // Valid pool: 0-indexed even positions {0, 2, 4, …} (= 1-indexed odd).
-            if n == 0 {
-                return None;
-            }
-            (rng.int(0, (n as i32 - 1) / 2) * 2) as u8
-        }
-        QuestionType::OnlyEven { .. } => {
-            // Valid pool: 0-indexed odd positions {1, 3, 5, …} (= 1-indexed even).
-            if n < 2 {
-                return None;
-            }
-            (rng.int(0, (n as i32 - 2) / 2) * 2 + 1) as u8
-        }
-        QuestionType::ClosestAfter { after_index, .. } => {
-            // Valid pool: (after_index, n).
-            if (after_index as usize) + 1 >= n {
-                return None;
-            }
-            rng.int(after_index as i32 + 1, n as i32 - 1) as u8
-        }
-        QuestionType::ClosestBefore { before_index, .. } => {
-            // Valid pool: [0, before_index).
-            if before_index == 0 {
-                return None;
-            }
-            rng.int(0, before_index as i32 - 1) as u8
-        }
-        QuestionType::AnswerOf { .. } | QuestionType::MostCommon | QuestionType::LeastCommon => {
-            rng.pick_letter(option_count) as u8
-        }
-        QuestionType::EqualCount { answer } => {
-            let v = rng.pick_letter(option_count) as u8;
-            if v == answer as u8 {
-                return None;
-            }
-            v
-        }
-        // Not claim subjects (not in `CLAIM_TYPES`), so a claim never carries these.
-        QuestionType::PrevSame
-        | QuestionType::NextSame
-        | QuestionType::OnlySame
-        | QuestionType::SameAs
-        | QuestionType::AnswerIsSelf
-        | QuestionType::LetterDist { .. }
-        | QuestionType::TrueStmt
-        | QuestionType::NoOtherHasAnswer => return None,
-    };
-    let new_value = OptionValue::num(new_val);
-    if new_value == claim.value {
-        return None;
-    }
-    Some(Claim {
-        value: new_value,
-        ..claim
-    })
 }
 
 #[cfg(test)]

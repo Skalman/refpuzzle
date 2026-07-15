@@ -1296,7 +1296,7 @@ pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
         QuestionType::ClosestAfter { .. } => "ClosestAfter",
         QuestionType::ClosestBefore { .. } => "ClosestBefore",
         QuestionType::SameAsWhich { .. } => "SameAsWhich",
-        // Never claim subjects (not in `CLAIM_TYPES`).
+        // Never claim subjects (`is_claim_type` == false).
         QuestionType::PrevSame
         | QuestionType::NextSame
         | QuestionType::OnlySame
