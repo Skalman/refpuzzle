@@ -110,7 +110,7 @@ fn mirror_option_value(qt: &QuestionType, ov: OptionValue, n: usize) -> OptionVa
 fn mirror_qtype(qt: QuestionType, n: usize) -> QuestionType {
     use QuestionType::*;
     let m = |idx: u8| (n as u8) - 1 - idx;
-    let parity_flips = n % 2 == 0;
+    let parity_flips = n.is_multiple_of(2);
     match qt {
         ClosestAfter {
             after_index,
@@ -506,6 +506,6 @@ fn letter_reversal_symmetry() {
         "letter reversal",
         reverse_letters,
         |s, _n, oc| reverse_solution_letters(s, oc),
-        |st, n, oc| reverse_state_letters(st, n, oc),
+        reverse_state_letters,
     );
 }
