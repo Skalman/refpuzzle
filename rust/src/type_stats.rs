@@ -1,6 +1,6 @@
 use crate::construct;
+use crate::construct::GenerateResult;
 use crate::difficulty::PROFILES;
-use crate::fill::GenerateResult;
 use crate::rng::Rng;
 use crate::solve_deduce::solve;
 use crate::stats::Stats;

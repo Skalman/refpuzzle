@@ -6,61 +6,7 @@ use crate::check_form;
 use crate::construct::format_claim_qt;
 use crate::format::format_type_tag;
 use crate::rng::Rng;
-use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
-use crate::stats::Stats;
 use crate::types::*;
-
-pub struct GenerateResult {
-    pub question_types: [QuestionType; MAX_N],
-    pub fp: FlatPuzzle,
-    pub n: usize,
-}
-
-pub fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
-    let mut arr = [None; MAX_N];
-    for i in 0..n {
-        arr[i] = Some(sol[i]);
-    }
-    arr
-}
-
-pub(crate) fn run_hint_engine(
-    fp: &FlatPuzzle,
-    stats: &mut Stats,
-    lookahead_deduce_until: usize,
-) -> (bool, State) {
-    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until)
-}
-
-/// Generation's accept-gate solve: the shared [`run_engine`] under the `generation`
-/// config (sound `deduce`, lookahead bounded to the recipe depth), with the outer
-/// loop capped at `n * 15`. Steps aren't recorded — `NoSteps` inlines away, so this
-/// hot path carries no tracing overhead — and the loop telemetry is folded into
-/// `stats` for the `--stats` report.
-pub(crate) fn run_hint_engine_from(
-    fp: &FlatPuzzle,
-    state: State,
-    stats: &mut Stats,
-    lookahead_deduce_until: usize,
-) -> (bool, State) {
-    let out = run_engine(
-        fp,
-        state,
-        EngineConfig::generation(lookahead_deduce_until),
-        fp.n * 15,
-        &mut NoSteps,
-    );
-    // A sound engine never forces a cell two ways; if it does, an unsound deduce
-    // rule slipped through — fail loud rather than emit a corrupt puzzle.
-    if let Some(qi) = out.contradiction {
-        panic!(
-            "run_hint_engine: engine self-contradicted at Q{} — an unsound deduce rule",
-            qi + 1
-        );
-    }
-    stats.merge_engine(&out.telemetry);
-    (out.solved, out.state)
-}
 
 /// Upper bound on a single question's candidate-value pool: one value per
 /// question index (≤ `MAX_N`) plus a handful of specials (NONE, counts up to n).

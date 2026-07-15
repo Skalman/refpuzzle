@@ -31,8 +31,8 @@ mod time;
 mod type_stats;
 mod types;
 
+use construct::GenerateResult;
 use difficulty::PROFILES;
-use fill::GenerateResult;
 use rng::Rng;
 use serde_json::Value;
 use std::time::Instant;

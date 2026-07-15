@@ -13,11 +13,10 @@ use arrayvec::ArrayVec;
 use crate::check_answer::check_answer;
 use crate::check_form::check_form;
 use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given_options};
-use crate::fill::{
-    GenerateResult, assert_accepted, count_letter, fill_options, run_hint_engine, to_optional,
-};
+use crate::fill::{assert_accepted, count_letter, fill_options};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
+use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
 use crate::stats::{FallbackCounts, SkeletonStats, Stats};
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
@@ -336,6 +335,58 @@ pub fn regenerate_skeleton(
 /// wasm on-the-fly generator share it, so a daily generated in-browser matches
 /// the same seed baked by `gen`.
 pub const DEFAULT_MAX_REGENERATIONS: usize = 100;
+
+pub struct GenerateResult {
+    pub question_types: [QuestionType; MAX_N],
+    pub fp: FlatPuzzle,
+    pub n: usize,
+}
+
+fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
+    let mut arr = [None; MAX_N];
+    for i in 0..n {
+        arr[i] = Some(sol[i]);
+    }
+    arr
+}
+
+fn run_hint_engine(
+    fp: &FlatPuzzle,
+    stats: &mut Stats,
+    lookahead_deduce_until: usize,
+) -> (bool, State) {
+    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until)
+}
+
+/// Generation's accept-gate solve: the shared [`run_engine`] under the `generation`
+/// config (sound `deduce`, lookahead bounded to the recipe depth), with the outer
+/// loop capped at `n * 15`. Steps aren't recorded — `NoSteps` inlines away, so this
+/// hot path carries no tracing overhead — and the loop telemetry is folded into
+/// `stats` for the `--stats` report.
+fn run_hint_engine_from(
+    fp: &FlatPuzzle,
+    state: State,
+    stats: &mut Stats,
+    lookahead_deduce_until: usize,
+) -> (bool, State) {
+    let out = run_engine(
+        fp,
+        state,
+        EngineConfig::generation(lookahead_deduce_until),
+        fp.n * 15,
+        &mut NoSteps,
+    );
+    // A sound engine never forces a cell two ways; if it does, an unsound deduce
+    // rule slipped through — fail loud rather than emit a corrupt puzzle.
+    if let Some(qi) = out.contradiction {
+        panic!(
+            "run_hint_engine: engine self-contradicted at Q{} — an unsound deduce rule",
+            qi + 1
+        );
+    }
+    stats.merge_engine(&out.telemetry);
+    (out.solved, out.state)
+}
 
 /// Full generation: decide the answer key once, then search for questions that
 /// make it solvable + unique. The first skeleton fixes the key; every later
