@@ -1,3 +1,7 @@
+//! Option filling: given a skeleton's question types and answer key, encode each
+//! question's full option row — the correct value plus its distractors — and the
+//! per-option claims for TrueStmt questions.
+
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
