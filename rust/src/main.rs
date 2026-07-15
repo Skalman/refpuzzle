@@ -467,10 +467,7 @@ fn main() {
         .map(|&(day_idx, level)| {
             let (mm, dd) = days[day_idx];
             let date_key = year * 10000 + mm * 100 + dd;
-            date_key
-                .wrapping_mul(31)
-                .wrapping_add(level as u32)
-                .wrapping_mul(17)
+            rng::daily_seed(date_key, level as u32)
         })
         .collect();
 

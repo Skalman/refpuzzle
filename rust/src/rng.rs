@@ -63,3 +63,15 @@ impl Rng {
         }
     }
 }
+
+/// Single source of truth for the daily-puzzle RNG seed: `(date_key * 31 + level) * 17`,
+/// where `date_key = year*10000 + mm*100 + dd`. Shared by native `gen` (main.rs),
+/// on-the-fly wasm generation (wasm_api), and the TS pre-baker (daily.ts), which passes
+/// `(date_key, level)` in. The constants are load-bearing: changing them re-rolls the
+/// whole baked corpus.
+pub fn daily_seed(date_key: u32, level: u32) -> u32 {
+    date_key
+        .wrapping_mul(31)
+        .wrapping_add(level)
+        .wrapping_mul(17)
+}

@@ -138,15 +138,17 @@ export function createPuzzleHandle(compact: CompactPuzzle, puzzle?: string): Puz
 }
 
 /**
- * Generate one puzzle on the fly. `seed` is any u32; `level` is 1..6; `id` is the
- * `/date/level` path. Returns a rendered {@link Puzzle}, or null if generation
- * recoverably failed (budget exhausted, bad JSON). Caller must have awaited
- * {@link wasmReady}. A Rust panic surfaces the fatal UI via {@link tryWasm}.
+ * Generate one puzzle on the fly. `dateKey` is `year*10000 + mm*100 + dd`; `level` is
+ * 1..6; `id` is the `/date/level` path. Rust derives the RNG seed from `(dateKey, level)`
+ * (see `rng::daily_seed`), so this matches the baked corpus. Returns a rendered
+ * {@link Puzzle}, or null if generation recoverably failed (budget exhausted, bad JSON).
+ * Caller must have awaited {@link wasmReady}. A Rust panic surfaces the fatal UI via
+ * {@link tryWasm}.
  */
-export function generatePuzzle(seed: number, level: number, id: string): Puzzle | null {
+export function generatePuzzle(dateKey: number, level: number, id: string): Puzzle | null {
   try {
-    const json = tryWasm({ op: "generate", puzzle: id, params: { seed, level } }, () =>
-      wasmGeneratePuzzle(seed, level),
+    const json = tryWasm({ op: "generate", puzzle: id, params: { dateKey, level } }, () =>
+      wasmGeneratePuzzle(dateKey, level),
     );
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
     const compact = JSON.parse(json) as CompactPuzzle;

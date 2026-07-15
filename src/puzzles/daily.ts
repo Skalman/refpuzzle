@@ -129,8 +129,7 @@ async function generateDay(dateStr: string): Promise<Record<string, Puzzle> | nu
   const dateKey = y * 10000 + m * 100 + d;
   const day: Record<string, Puzzle> = {};
   for (let level = 1; level <= 6; level++) {
-    const seed = (Math.imul(dateKey, 31) + level) >>> 0;
-    const p = generatePuzzle(seed, level, puzzleId(dateStr, level));
+    const p = generatePuzzle(dateKey, level, puzzleId(dateStr, level));
     if (!p) return null;
     day[String(level)] = p;
   }

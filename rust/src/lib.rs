@@ -269,17 +269,17 @@ mod wasm_api {
     /// exhausted its retry budget. Mirrors the seed-retry loop the native
     /// CLI uses in `main.rs`.
     #[wasm_bindgen(js_name = generatePuzzle)]
-    pub fn generate_puzzle(seed: u32, level: u8) -> Result<String, JsError> {
+    pub fn generate_puzzle(date_key: u32, level: u8) -> Result<String, JsError> {
         if !(1..=6).contains(&level) {
             return Err(err("level must be 1..=6"));
         }
         let profile = &PROFILES[(level - 1) as usize];
         let mut stats = crate::stats::Stats::default();
         // The generator fixes the key on the first skeleton and retries internally, so one
-        // seed suffices. `seed * 17` matches the CLI's `task_seeds` derivation
-        // (main.rs), so a puzzle generated here is identical to the same
-        // date/level built by `gen`.
-        let mut rng = Rng::new(seed.wrapping_mul(17));
+        // seed suffices. `daily_seed` is the shared `(date_key, level)` → seed contract
+        // (rng.rs), so a puzzle generated here is identical to the same date/level built
+        // by native `gen`.
+        let mut rng = Rng::new(crate::rng::daily_seed(date_key, level as u32));
         match construct::generate(
             &construct::RECIPES[(level - 1) as usize],
             profile.question_count,
