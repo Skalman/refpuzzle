@@ -480,7 +480,7 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), Option<GenerateResult>, stats::Stats)> = tasks
+    let results: Vec<((usize, u8), GenerateResult, stats::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), &seed)| {
@@ -493,22 +493,20 @@ fn main() {
             // admitted no unique puzzle within the budget, which shouldn't happen;
             // surface it loudly.
             let mut rng = Rng::new(seed);
-            let result = Some(
-                construct::generate(
-                    &construct::RECIPES[level as usize - 1],
-                    profile.question_count,
-                    profile.option_count,
-                    &mut rng,
-                    max_attempts,
-                    &mut stats,
-                    &label,
+            let result = construct::generate(
+                &construct::RECIPES[level as usize - 1],
+                profile.question_count,
+                profile.option_count,
+                &mut rng,
+                max_attempts,
+                &mut stats,
+                &label,
+            )
+            .unwrap_or_else(|| {
+                panic!(
+                    "{label}: no unique puzzle within {max_attempts} regenerations (seed {seed})"
                 )
-                .unwrap_or_else(|| {
-                    panic!(
-                        "{label}: no unique puzzle within {max_attempts} regenerations (seed {seed})",
-                    )
-                }),
-            );
+            });
             done_by_level[level as usize - 1].fetch_add(1, Ordering::Relaxed);
             if let Ok(mut last) = last_report.try_lock()
                 && last.elapsed().as_secs() >= 15
@@ -534,8 +532,6 @@ fn main() {
 
     // Assemble into { "MMDD": { "1": ..., ..., "6": ... }, ... }
     let mut year_map = serde_json::Map::new();
-    let mut ok_count = 0;
-    let mut fail_count = 0;
 
     for &(mm, dd) in &days {
         year_map.insert(
@@ -547,18 +543,9 @@ fn main() {
     for ((day_idx, level), result, _) in &results {
         let (mm, dd) = days[*day_idx];
         let key = format!("{mm:02}{dd:02}");
-        match result {
-            Some(r) => {
-                ok_count += 1;
-                let puzzle_json = puzzle_to_json(r);
-                if let Some(Value::Object(day)) = year_map.get_mut(&key) {
-                    day.insert(format!("{level}"), puzzle_json);
-                }
-            }
-            None => {
-                fail_count += 1;
-                eprintln!("  FAILED: {} L{}", key, level);
-            }
+        let puzzle_json = puzzle_to_json(result);
+        if let Some(Value::Object(day)) = year_map.get_mut(&key) {
+            day.insert(format!("{level}"), puzzle_json);
         }
     }
 
@@ -569,10 +556,7 @@ fn main() {
     eprintln!("  Year:    {year}");
     eprintln!("  Start:   {start}");
     eprintln!("  Days:    {day_count}");
-    eprintln!(
-        "  Puzzles: {ok_count}/{} ({fail_count} failed)",
-        tasks.len()
-    );
+    eprintln!("  Puzzles: {}", tasks.len());
     eprintln!(
         "  Time:    {:.2}s ({:.3}ms per day)",
         elapsed.as_secs_f64(),
