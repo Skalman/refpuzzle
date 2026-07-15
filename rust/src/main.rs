@@ -29,11 +29,11 @@ mod test_util;
 mod time;
 mod types;
 
-use construct::GenerateResult;
 use difficulty::PROFILES;
 use rng::Rng;
 use serde_json::Value;
 use std::time::Instant;
+use types::FlatPuzzle;
 #[cfg(test)]
 use types::*;
 
@@ -477,7 +477,7 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), GenerateResult, stats::Stats)> = tasks
+    let results: Vec<((usize, u8), FlatPuzzle, stats::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), &seed)| {
@@ -615,8 +615,8 @@ fn format_year(year: &serde_json::Map<String, Value>) -> String {
     out
 }
 
-fn puzzle_to_json(result: &GenerateResult) -> Value {
-    serialize::puzzle_to_compact_value(&result.question_types, &result.fp)
+fn puzzle_to_json(result: &FlatPuzzle) -> Value {
+    serialize::puzzle_to_compact_value(result)
 }
 
 fn dates_in_year(

@@ -336,12 +336,6 @@ pub fn regenerate_skeleton(
 /// the same seed baked by `gen`.
 pub const DEFAULT_MAX_REGENERATIONS: usize = 100;
 
-pub struct GenerateResult {
-    pub question_types: [QuestionType; MAX_N],
-    pub fp: FlatPuzzle,
-    pub n: usize,
-}
-
 fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
     let mut arr = [None; MAX_N];
     for i in 0..n {
@@ -411,7 +405,7 @@ pub fn generate(
     max_regenerations: usize,
     stats: &mut Stats,
     label: &str,
-) -> Option<GenerateResult> {
+) -> Option<FlatPuzzle> {
     let mut solution: Option<[Answer; MAX_N]> = None;
     // Iterate `1 + max_regenerations` times: the first builds the key-fixing
     // skeleton, each retry regenerates only the questions for that key.
@@ -465,13 +459,7 @@ pub fn generate(
                     );
                 }
             }
-            // Repair only edits options, so types are unchanged from `skeleton.types`;
-            // read them off `fp`, the value we return anyway.
-            return Some(GenerateResult {
-                question_types: fp.question_types,
-                fp,
-                n: skeleton.n,
-            });
+            return Some(fp);
         }
     }
     None
@@ -1687,7 +1675,7 @@ mod tests {
                     continue;
                 };
                 produced += 1;
-                let fp = &result.fp;
+                let fp = &result;
                 let n = fp.n;
                 // the generator emits uniquely-solvable puzzles; recover the key by solving.
                 let solutions = solve(fp, 2);

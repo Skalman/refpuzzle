@@ -1,10 +1,9 @@
 use crate::construct;
-use crate::construct::GenerateResult;
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::solve_deduce::solve;
 use crate::stats::Stats;
-use crate::types::{OptionValue, QuestionTypeKind};
+use crate::types::{FlatPuzzle, OptionValue, QuestionTypeKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 const LETTER_LABELS: [&str; 5] = ["A", "B", "C", "D", "E"];
@@ -166,8 +165,8 @@ fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
 }
 
 /// Fold one generated puzzle into the running per-type tallies.
-fn tally_puzzle(result: &GenerateResult, per_type: &mut BTreeMap<QuestionTypeKind, TypeStats>) {
-    let solution = solve(&result.fp).answers;
+fn tally_puzzle(result: &FlatPuzzle, per_type: &mut BTreeMap<QuestionTypeKind, TypeStats>) {
+    let solution = solve(result).answers;
     let mut counts_this_puzzle: BTreeMap<QuestionTypeKind, usize> = BTreeMap::new();
 
     for qi in 0..result.n {
@@ -182,8 +181,8 @@ fn tally_puzzle(result: &GenerateResult, per_type: &mut BTreeMap<QuestionTypeKin
         };
         let correct_oi = correct as usize;
 
-        for oi in 0..result.fp.option_count {
-            let v = result.fp.options[qi][oi];
+        for oi in 0..result.option_count {
+            let v = result.options[qi][oi];
             *entry.position_values[oi].entry(v).or_insert(0) += 1;
             if oi == correct_oi {
                 *entry.correct_values.entry(v).or_insert(0) += 1;

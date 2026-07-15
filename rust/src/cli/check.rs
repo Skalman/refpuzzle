@@ -249,7 +249,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
                 let (day, lvl) = key.split_once('-').expect("dated key must be MMDD-L");
                 make_url(year, day, lvl, steps)
             }
-            None => serialize::playground_link(ORIGIN, &fp.question_types, fp, state),
+            None => serialize::playground_link(ORIGIN, fp, state),
         }
     };
 

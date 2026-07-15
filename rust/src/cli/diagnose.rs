@@ -112,7 +112,7 @@ pub fn gen_stats(
                             answers: (0..skeleton.n)
                                 .map(|qi| skeleton.solution[qi].as_char())
                                 .collect(),
-                            link: playground_link(origin, &fp.question_types, &fp, &state),
+                            link: playground_link(origin, &fp, &state),
                         });
                     }
                     (solved, filled)

@@ -290,7 +290,7 @@ mod wasm_api {
             "wasm",
         ) {
             Some(result) => {
-                let value = puzzle_to_compact_value(&result.question_types, &result.fp);
+                let value = puzzle_to_compact_value(&result);
                 Ok(serde_json::to_string(&value).unwrap())
             }
             None => Err(err("generator exhausted retry budget")),

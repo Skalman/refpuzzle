@@ -8,18 +8,13 @@ use crate::types::*;
 /// compact JSON))[&h=<play history>]`. Native-only: deflate/base64 aren't pulled
 /// into the wasm build.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn playground_link(
-    origin: &str,
-    question_types: &[QuestionType; MAX_N],
-    fp: &FlatPuzzle,
-    state: &State,
-) -> String {
+pub fn playground_link(origin: &str, fp: &FlatPuzzle, state: &State) -> String {
     use base64::Engine;
     use flate2::Compression;
     use flate2::write::DeflateEncoder;
     use std::io::Write;
 
-    let json = serde_json::to_string(&puzzle_to_compact_value(question_types, fp)).unwrap();
+    let json = serde_json::to_string(&puzzle_to_compact_value(fp)).unwrap();
     let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
     enc.write_all(json.as_bytes()).unwrap();
     let p = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(enc.finish().unwrap());
@@ -49,7 +44,8 @@ pub fn playground_link(
 /// Inverse of `parse_puzzle`: serialize an in-memory `FlatPuzzle` (plus its
 /// original `question_types` slice) back to the compact `{q, o, t?}` JSON
 /// shape stored on disk and accepted by the parser.
-pub fn puzzle_to_compact_value(question_types: &[QuestionType; MAX_N], fp: &FlatPuzzle) -> Value {
+pub fn puzzle_to_compact_value(fp: &FlatPuzzle) -> Value {
+    let question_types = &fp.question_types;
     let n = fp.n;
     let oc = fp.option_count;
     let mut obj = serde_json::Map::new();
