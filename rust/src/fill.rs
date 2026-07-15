@@ -10,29 +10,6 @@ use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
 use crate::stats::Stats;
 use crate::types::*;
 
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) type WasmInstant = std::time::Instant;
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn wasm_now() -> WasmInstant {
-    std::time::Instant::now()
-}
-#[cfg(not(target_arch = "wasm32"))]
-pub(crate) fn us(t: WasmInstant) -> u64 {
-    t.elapsed().as_micros() as u64
-}
-
-#[cfg(target_arch = "wasm32")]
-#[derive(Copy, Clone)]
-pub(crate) struct WasmInstant;
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn wasm_now() -> WasmInstant {
-    WasmInstant
-}
-#[cfg(target_arch = "wasm32")]
-pub(crate) fn us(_t: WasmInstant) -> u64 {
-    0
-}
-
 pub struct GenerateResult {
     pub question_types: [QuestionType; MAX_N],
     pub fp: FlatPuzzle,

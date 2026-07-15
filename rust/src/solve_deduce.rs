@@ -3,8 +3,8 @@ use crate::deduce::{
     DeduceAction, DeduceResult, apply_action, contradiction_question, deduce,
     deduce_assuming_unique,
 };
-use crate::fill::{us, wasm_now};
 use crate::lookahead::{LookaheadResult, lookahead};
+use crate::time::{us, wasm_now};
 use crate::types::*;
 
 /// Which variant of the shared solve engine to run. The presets are the engines

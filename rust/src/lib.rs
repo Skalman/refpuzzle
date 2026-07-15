@@ -23,6 +23,7 @@ pub mod solve_deduce;
 pub mod stats;
 #[cfg(test)]
 mod test_util;
+pub mod time;
 pub mod types;
 
 // Smaller allocator (~1–2 KB vs dlmalloc's ~10 KB) for the wasm bundle.

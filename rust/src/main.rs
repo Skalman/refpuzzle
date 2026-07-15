@@ -27,6 +27,7 @@ mod stats;
 mod test_symmetry;
 #[cfg(test)]
 mod test_util;
+mod time;
 mod type_stats;
 mod types;
 
