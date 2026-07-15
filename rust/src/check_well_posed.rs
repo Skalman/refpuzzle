@@ -1,4 +1,4 @@
-//! Well-posedness: does question `qi` have *exactly one* valid answer given the
+//! Well-posedness: does question `qi` have *exactly one* answer that holds under the
 //! answer key? (Existence + uniqueness — a discrete problem has no stability
 //! notion, so Hadamard's third condition is vacuous here.) Split by what the check
 //! depends on, which dictates where in the pipeline it can run:
@@ -101,7 +101,7 @@ pub fn check_well_posed_given_key(
 }
 
 /// Well-posedness that depends on the filled option/claim values. `None` if `qi`
-/// has a unique answer; `Some(reason)` if a distractor is *also* valid (SameAs /
+/// has a unique answer; `Some(reason)` if a distractor *also* holds (SameAs /
 /// SameAsWhich) or the true-claim count isn't exactly one (TrueStmt). Called at the
 /// accept-gate, the repair keep-gate, and `refpuzzle check`.
 pub fn check_well_posed_given_options(
