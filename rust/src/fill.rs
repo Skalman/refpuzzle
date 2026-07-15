@@ -805,8 +805,12 @@ fn try_make_claim(
             value: OptionValue::num((0..n).filter(|&i| sol[i].is_vowel()).count() as u8),
         }),
         QuestionTypeKind::CountAnswerAfter => {
+            assert!(
+                n >= option_count,
+                "indexed claim requires n >= option_count"
+            );
             let a = rng.pick_letter(option_count);
-            let ai = rng.int(0, (n as i32 - 5).max(0)) as u8;
+            let ai = rng.int(0, n as i32 - option_count as i32) as u8;
             Some(Claim {
                 question_type: QuestionType::CountAnswerAfter {
                     answer: a,
@@ -818,11 +822,12 @@ fn try_make_claim(
             })
         }
         QuestionTypeKind::CountAnswerBefore => {
-            if n < 5 {
-                return None;
-            }
+            assert!(
+                n >= option_count,
+                "indexed claim requires n >= option_count"
+            );
             let a = rng.pick_letter(option_count);
-            let bi = rng.int(4, n as i32 - 1) as u8;
+            let bi = rng.int(option_count as i32 - 1, n as i32 - 1) as u8;
             Some(Claim {
                 question_type: QuestionType::CountAnswerBefore {
                     answer: a,
@@ -880,8 +885,12 @@ fn try_make_claim(
             })
         }
         QuestionTypeKind::ClosestAfter => {
+            assert!(
+                n >= option_count,
+                "indexed claim requires n >= option_count"
+            );
             let a = rng.pick_letter(option_count);
-            let ai = rng.int(0, (n as i32 - 2).max(0)) as u8;
+            let ai = rng.int(0, n as i32 - option_count as i32) as u8;
             let target = ((ai as usize + 1)..n).find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::ClosestAfter {
@@ -892,8 +901,12 @@ fn try_make_claim(
             })
         }
         QuestionTypeKind::ClosestBefore => {
+            assert!(
+                n >= option_count,
+                "indexed claim requires n >= option_count"
+            );
             let a = rng.pick_letter(option_count);
-            let bi = rng.int(2, n as i32 - 1) as u8;
+            let bi = rng.int(option_count as i32 - 1, n as i32 - 1) as u8;
             let target = (0..bi as usize).rev().find(|&i| sol[i] == a)?;
             Some(Claim {
                 question_type: QuestionType::ClosestBefore {
