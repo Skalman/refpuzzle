@@ -8,9 +8,10 @@ use arrayvec::ArrayVec;
 
 use crate::check_well_posed::check_well_posed_given_options;
 use crate::deduce::deduce_question;
-use crate::fill::{Stats, assert_accepted, run_hint_engine_from, valid_values};
+use crate::fill::{assert_accepted, run_hint_engine_from, valid_values};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
+use crate::stats::Stats;
 use crate::types::*;
 
 /// Repeatedly run a repair pass (mutate one distractor per stuck question, gate

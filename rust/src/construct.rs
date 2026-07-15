@@ -14,11 +14,11 @@ use crate::check_answer::check_answer;
 use crate::check_form::check_form;
 use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given_options};
 use crate::fill::{
-    FallbackCounts, GenerateResult, SkeletonStats, Stats, assert_accepted, count_letter,
-    fill_options, run_hint_engine, to_optional,
+    GenerateResult, assert_accepted, count_letter, fill_options, run_hint_engine, to_optional,
 };
 use crate::rng::Rng;
 use crate::solve_brute::solve;
+use crate::stats::{FallbackCounts, SkeletonStats, Stats};
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
 

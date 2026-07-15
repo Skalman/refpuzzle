@@ -8,10 +8,11 @@ use std::io::IsTerminal;
 
 use crate::construct::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
 use crate::difficulty::PROFILES;
-use crate::fill::{Stats, fill_options};
+use crate::fill::fill_options;
 use crate::rng::Rng;
 use crate::serialize::playground_link;
 use crate::solve_brute::solve;
+use crate::stats::Stats;
 
 struct StuckCase {
     level: usize,

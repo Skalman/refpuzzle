@@ -22,6 +22,7 @@ mod serialize;
 mod solve_brute;
 #[allow(dead_code)]
 mod solve_deduce;
+mod stats;
 #[cfg(test)]
 mod test_symmetry;
 #[cfg(test)]
@@ -480,14 +481,14 @@ fn main() {
     let last_report = std::sync::Mutex::new(Instant::now());
     let total = tasks.len();
 
-    let results: Vec<((usize, u8), Option<GenerateResult>, fill::Stats)> = tasks
+    let results: Vec<((usize, u8), Option<GenerateResult>, stats::Stats)> = tasks
         .par_iter()
         .zip(task_seeds.par_iter())
         .map(|(&(day_idx, level), &seed)| {
             let (mm, dd) = days[day_idx];
             let label = format!("{mm:02}{dd:02}-{level}");
             let profile = &PROFILES[level as usize - 1];
-            let mut stats = fill::Stats::default();
+            let mut stats = stats::Stats::default();
             // The generator fixes the answer key on the first skeleton and only
             // re-rolls the questions, so one seed suffices. A `None` means the key
             // admitted no unique puzzle within the budget, which shouldn't happen;
@@ -527,7 +528,7 @@ fn main() {
         })
         .collect();
 
-    let mut stats = fill::Stats::default();
+    let mut stats = stats::Stats::default();
     for (_, _, s) in &results {
         stats.merge(s);
     }

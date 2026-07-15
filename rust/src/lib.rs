@@ -20,6 +20,7 @@ pub mod rng;
 pub mod serialize;
 pub mod solve_brute;
 pub mod solve_deduce;
+pub mod stats;
 #[cfg(test)]
 mod test_util;
 pub mod types;
@@ -39,7 +40,6 @@ mod wasm_api {
     use crate::deduce::{DeduceAction, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
     use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
-    use crate::fill;
     use crate::lookahead::lookahead_shortest;
     use crate::render;
     use crate::rng::Rng;
@@ -273,7 +273,7 @@ mod wasm_api {
             return Err(err("level must be 1..=6"));
         }
         let profile = &PROFILES[(level - 1) as usize];
-        let mut stats = fill::Stats::default();
+        let mut stats = crate::stats::Stats::default();
         // The generator fixes the key on the first skeleton and retries internally, so one
         // seed suffices. `seed * 17` matches the CLI's `task_seeds` derivation
         // (main.rs), so a puzzle generated here is identical to the same
