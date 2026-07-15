@@ -515,7 +515,31 @@ impl FlatPuzzle {
                             affected_by[j].push(i as u8);
                         }
                     }
-                    _ => {} // AnswerIsSelf or similar
+                    // Positional, self-only: no cross-question edges.
+                    QuestionType::AnswerIsSelf => {}
+                    // Whole-board variants are routed to global_indices by the
+                    // `if` above and never reach here. Listed explicitly (rather
+                    // than a catch-all) so a new positional variant is a compile
+                    // error until its dependency edges are decided.
+                    QuestionType::CountAnswer { .. }
+                    | QuestionType::CountVowel
+                    | QuestionType::CountConsonant
+                    | QuestionType::MostCommonCount
+                    | QuestionType::FirstWith { .. }
+                    | QuestionType::LastWith { .. }
+                    | QuestionType::OnlySame
+                    | QuestionType::SameAs
+                    | QuestionType::OnlyOdd { .. }
+                    | QuestionType::OnlyEven { .. }
+                    | QuestionType::ConsecIdent
+                    | QuestionType::LeastCommon
+                    | QuestionType::MostCommon
+                    | QuestionType::NoOtherHasAnswer
+                    | QuestionType::EqualCount { .. }
+                    | QuestionType::TrueStmt
+                    | QuestionType::SameAsWhich { .. } => {
+                        unreachable!("whole-board variant handled by affected_by_any_answer")
+                    }
                 }
             }
             affected_by[i].push(i as u8);
