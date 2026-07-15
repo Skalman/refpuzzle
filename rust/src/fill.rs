@@ -816,8 +816,7 @@ fn try_make_claim(
     // assert null); `check_claim_fast` drops types whose true value isn't a valid
     // unique claim here (non-unique OnlyOdd/ConsecIdent, MostCommon/LeastCommon tie).
     let kind = rng.pick(&CLAIM_KINDS);
-    let all_assigned = (1u16 << n) - 1;
-    let question_type = random_type_params(kind, qi, n, option_count, sol, all_assigned, rng)?;
+    let question_type = random_type_params(kind, qi, n, option_count, sol, rng)?;
     let value = correct_option_value(&question_type, qi, sol, n, option_count);
     if !value.is_num() {
         return None;

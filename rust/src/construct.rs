@@ -1067,8 +1067,6 @@ fn parametrize(
     rng: &mut Rng,
     fallbacks: &mut FallbackCounts,
 ) -> [QuestionType; MAX_N] {
-    // Every answer is decided now, so reference types may target any question.
-    let all_targets = if n >= 16 { u16::MAX } else { (1u16 << n) - 1 };
     let mut types = [QuestionType::AnswerIsSelf; MAX_N];
     let mut placed: ArrayVec<QuestionType, MAX_N> = ArrayVec::new();
 
@@ -1077,13 +1075,9 @@ fn parametrize(
         // fitting kind from the level's own pool; else the generic backstop (an
         // AnswerOf placeholder, which always fits and is wired below). The two
         // fallbacks are counted separately.
-        let qt = if let Some(qt) =
-            try_parametrize_kind(kind_of[qi], qi, n, oc, sol, all_targets, &placed, rng)
-        {
+        let qt = if let Some(qt) = try_parametrize_kind(kind_of[qi], qi, n, oc, sol, &placed, rng) {
             qt
-        } else if let Some(qt) =
-            pick_reserve(recipe, qi, n, oc, sol, all_targets, kind_of, &placed, rng)
-        {
+        } else if let Some(qt) = pick_reserve(recipe, qi, n, oc, sol, kind_of, &placed, rng) {
             fallbacks.reserve += 1;
             qt
         } else {
@@ -1206,7 +1200,6 @@ fn pick_reserve(
     n: usize,
     oc: usize,
     sol: &[Answer; MAX_N],
-    all_targets: u16,
     kind_of: &[QuestionTypeKind; MAX_N],
     placed: &[QuestionType],
     rng: &mut Rng,
@@ -1227,7 +1220,7 @@ fn pick_reserve(
         if committed >= usize::from(recipe.caps[kind as usize]) {
             continue;
         }
-        if let Some(qt) = try_parametrize_kind(kind, qi, n, oc, sol, all_targets, placed, rng) {
+        if let Some(qt) = try_parametrize_kind(kind, qi, n, oc, sol, placed, rng) {
             return Some(qt);
         }
     }
@@ -1244,7 +1237,6 @@ fn try_parametrize_kind(
     n: usize,
     oc: usize,
     sol: &[Answer; MAX_N],
-    all_targets: u16,
     placed: &[QuestionType],
     rng: &mut Rng,
 ) -> Option<QuestionType> {
@@ -1252,7 +1244,7 @@ fn try_parametrize_kind(
     // pre-check — a doomed kind just fails `check_well_posed_given_key` and the
     // reserve substitutes it (feasibility is deferred to the reserve/downstream).
     for _ in 0..10 {
-        if let Some(qt) = random_type_params(kind, qi, n, oc, sol, all_targets, rng)
+        if let Some(qt) = random_type_params(kind, qi, n, oc, sol, rng)
             && !placed.contains(&qt)
             && check_well_posed_given_key(n, oc, sol, qi, qt).is_none()
         {
@@ -1375,7 +1367,6 @@ pub(crate) fn random_type_params(
     n: usize,
     option_count: usize,
     solution: &[Answer; MAX_N],
-    assigned: u16,
     rng: &mut Rng,
 ) -> Option<QuestionType> {
     match kind {
@@ -1416,17 +1407,9 @@ pub(crate) fn random_type_params(
             let mut pool = [0u8; MAX_N];
             let mut pool_len = 0;
             for j in 0..n {
-                if j != qi && (assigned & (1 << j)) != 0 {
+                if j != qi {
                     pool[pool_len] = j as u8;
                     pool_len += 1;
-                }
-            }
-            if pool_len == 0 {
-                for j in 0..n {
-                    if j != qi {
-                        pool[pool_len] = j as u8;
-                        pool_len += 1;
-                    }
                 }
             }
             Some(QuestionType::LetterDist {
@@ -1530,7 +1513,7 @@ pub(crate) fn random_type_params(
             let mut pool = [0u8; MAX_N];
             let mut pool_len = 0;
             for j in 0..n {
-                if j != qi && (assigned & (1 << j)) != 0 {
+                if j != qi {
                     pool[pool_len] = j as u8;
                     pool_len += 1;
                 }
