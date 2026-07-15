@@ -7,7 +7,6 @@ use serde_json::Value;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::check_answer;
 use crate::check_form;
 use crate::check_well_posed;
 use crate::deduce;
@@ -103,8 +102,6 @@ pub struct PuzzleCheckResult {
     /// One link per `brute_solutions` entry, same shape as `solve_link`.
     pub brute_links: Vec<String>,
     pub hint_brute_match: bool,
-    pub validity_ok: bool,
-    pub validity_per_question: Vec<String>,
     /// Questions without a unique answer for the key — `check_well_posed_given_key`
     /// (histogram/structural) and `check_well_posed_given_options` (SameAs/SameAsWhich/TrueStmt).
     pub ambiguous: Vec<String>,
@@ -239,8 +236,6 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
             brute_solutions: Vec::new(),
             brute_links: Vec::new(),
             hint_brute_match: true,
-            validity_ok: true,
-            validity_per_question: vec!["n/a".to_string(); n],
             ambiguous: Vec::new(),
         };
     }
@@ -296,30 +291,6 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
         eliminated: cr.eliminated,
     };
     let solve_link = make_link(&state, &cr.steps);
-    let validity_ok = if cr.ok {
-        (0..n).all(|i| {
-            let v = check_answer::check_answer(fp, state, i);
-            v.is_valid() || v == check_answer::Validity::Pending
-        })
-    } else {
-        true
-    };
-    let validity_per_question: Vec<String> = (0..n)
-        .map(|i| {
-            if cr.ok {
-                match check_answer::check_answer(fp, state, i) {
-                    check_answer::Validity::Valid => "valid",
-                    check_answer::Validity::Consistent => "consistent",
-                    check_answer::Validity::Invalid => "invalid",
-                    check_answer::Validity::Pending => "pending",
-                    check_answer::Validity::Neutral => "neutral",
-                }
-                .into()
-            } else {
-                "n/a".into()
-            }
-        })
-        .collect();
 
     // Well-posedness: with the key known (unique brute solution), no question may
     // have a second valid answer.
@@ -356,8 +327,6 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
         brute_solutions,
         brute_links,
         hint_brute_match,
-        validity_ok,
-        validity_per_question,
         ambiguous,
     }
 }
@@ -443,14 +412,11 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     let has_errors = !r.solve_ok
         || r.brute_count != 1
         || !r.hint_brute_match
-        || !r.validity_ok
         || !r.ambiguous.is_empty()
         || !r.form_errors.is_empty();
 
     let verdict = if !r.hint_brute_match {
         red("MISMATCH")
-    } else if !r.validity_ok {
-        red("INVALID")
     } else if !r.solve_ok && r.solve_answered == n {
         red("CONTRADICTION")
     } else if !r.solve_ok {
@@ -595,19 +561,6 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     };
     writeln!(w, "  {:<28} {match_label}", "Deduce+lookahead vs brute").unwrap();
 
-    // Validity
-    let validity_label = if r.validity_ok {
-        green("ok")
-    } else {
-        red("INVALID")
-    };
-    writeln!(w, "  {:<28} {validity_label}", "Answer validity").unwrap();
-    if !r.validity_ok {
-        for (i, v) in r.validity_per_question.iter().enumerate() {
-            writeln!(w, "    {}", dim(&format!("Q{}: {v}", i + 1))).unwrap();
-        }
-    }
-
     has_errors
 }
 
@@ -625,7 +578,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
     let mut contradictions: Vec<&str> = Vec::new();
     let mut ambiguous: Vec<&str> = Vec::new();
     let mut mismatches: Vec<&str> = Vec::new();
-    let mut validity_fails: Vec<&str> = Vec::new();
     let mut not_answerable: Vec<&str> = Vec::new();
 
     for r in results {
@@ -646,9 +598,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         if !r.hint_brute_match {
             mismatches.push(&r.key);
         }
-        if !r.validity_ok {
-            validity_fails.push(&r.key);
-        }
         if !r.ambiguous.is_empty() {
             not_answerable.push(&r.key);
         }
@@ -660,7 +609,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         &contradictions,
         &ambiguous,
         &mismatches,
-        &validity_fails,
         &not_answerable,
         &form_errors,
     ] {
@@ -675,7 +623,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         || !contradictions.is_empty()
         || !ambiguous.is_empty()
         || !mismatches.is_empty()
-        || !validity_fails.is_empty()
         || !not_answerable.is_empty();
 
     let verdict = if has_errors {
@@ -730,22 +677,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         bad_n(mismatches.len(), "mismatch")
     )
     .unwrap();
-    let validity_label = if stuck.is_empty() && contradictions.is_empty() && ambiguous.is_empty() {
-        format!(
-            "{}, {}",
-            ok_n(total - validity_fails.len()),
-            bad_n(validity_fails.len(), "invalid")
-        )
-    } else {
-        let applicable = total - stuck.len() - contradictions.len();
-        format!(
-            "{}, {} ({})",
-            ok_n(applicable - validity_fails.len()),
-            bad_n(validity_fails.len(), "invalid"),
-            dim(&format!("{} n/a", stuck.len() + contradictions.len()))
-        )
-    };
-    writeln!(w, "    answer validity     {validity_label}").unwrap();
     writeln!(
         w,
         "    unique answer       {}, {}",
@@ -803,15 +734,6 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
                 "  Mismatch ({}): {}",
                 mismatches.len(),
                 mismatches.join(" ")
-            )
-            .unwrap();
-        }
-        if !validity_fails.is_empty() {
-            writeln!(
-                w,
-                "  Validity ({}): {}",
-                validity_fails.len(),
-                validity_fails.join(" ")
             )
             .unwrap();
         }
