@@ -1,12 +1,11 @@
 #![allow(clippy::needless_range_loop)]
 
-mod check;
 mod check_answer;
 mod check_form;
 mod check_well_posed;
+mod cli;
 mod construct;
 mod deduce;
-mod diagnose;
 mod difficulty;
 mod fill;
 // Consumers (wasm exposure, flip of the TS explain.ts) arrive in later increments.
@@ -28,7 +27,6 @@ mod test_symmetry;
 #[cfg(test)]
 mod test_util;
 mod time;
-mod type_stats;
 mod types;
 
 use construct::GenerateResult;
@@ -271,11 +269,11 @@ fn main() {
                 eprintln!("Usage: refpuzzle check <file.json> [MMDD-level] [--json]");
                 std::process::exit(1);
             }
-            check::check_command(file.as_ref().unwrap(), target.as_deref(), json_output);
+            cli::check::check_command(file.as_ref().unwrap(), target.as_deref(), json_output);
             return;
         }
         "format-check" => {
-            check::format_check_stdin();
+            cli::check::format_check_stdin();
             return;
         }
         "type-stats" => {
@@ -302,10 +300,10 @@ fn main() {
                 eprintln!("  -o FILE   output file (required, - for stdout)");
                 std::process::exit(1);
             };
-            type_stats::type_stats(attempts, seed, &output);
+            cli::type_stats::type_stats(attempts, seed, &output);
             return;
         }
-        // generation quality diagnostic (see src/diagnose.rs).
+        // generation quality diagnostic (see src/cli/diagnose.rs).
         "gen-stats" => {
             let mut seed: u32 = 1;
             let mut attempts: usize = 200;
@@ -334,7 +332,7 @@ fn main() {
                 }
                 i += 1;
             }
-            diagnose::gen_stats(seed, attempts, count, level, &origin);
+            cli::diagnose::gen_stats(seed, attempts, count, level, &origin);
             return;
         }
         _ => {
@@ -718,7 +716,7 @@ mod tests {
             if std::time::Instant::now() > deadline {
                 break;
             }
-            let cr = check::run_check(fp, key);
+            let cr = cli::check::run_check(fp, key);
             let ok = cr.ok;
             if !ok {
                 failures.push(key.clone());
