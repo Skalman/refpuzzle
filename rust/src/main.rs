@@ -704,9 +704,7 @@ mod tests {
 
     #[test]
     fn generated_puzzles_hint_solvable() {
-        let Some(duration) = slow_test_duration() else {
-            return;
-        };
+        let duration = slow_test_duration();
         let deadline = std::time::Instant::now() + duration;
         let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());
@@ -740,9 +738,7 @@ mod tests {
 
     #[test]
     fn generated_puzzles_unique_solution() {
-        let Some(duration) = slow_test_duration() else {
-            return;
-        };
+        let duration = slow_test_duration();
         let deadline = std::time::Instant::now() + duration;
         let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());

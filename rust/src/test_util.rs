@@ -15,10 +15,10 @@ pub(crate) fn fast_tests() -> bool {
 }
 
 /// Fuzz-loop time budget derived from [`fast_tests`].
-pub(crate) fn slow_test_duration() -> Option<std::time::Duration> {
-    Some(if fast_tests() {
+pub(crate) fn slow_test_duration() -> std::time::Duration {
+    if fast_tests() {
         std::time::Duration::from_millis(200)
     } else {
         std::time::Duration::from_secs(5)
-    })
+    }
 }
