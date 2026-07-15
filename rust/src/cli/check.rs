@@ -790,38 +790,6 @@ pub fn format_check_stdin() {
 
 // ── Conflict detection (used by run_check) ──
 
-#[derive(Clone)]
-struct LookaheadTrace {
-    eliminate_qi: usize,
-    eliminate_oi: usize,
-    assumption_qi: usize,
-    assumption_answer: Answer,
-    contradiction_qi: usize,
-    chain: Vec<deduce::DeduceResult>,
-}
-
-#[derive(Clone)]
-enum CheckAction {
-    Force {
-        qi: usize,
-        answer: Answer,
-        rule: deduce::DeduceRule,
-    },
-    Eliminate {
-        qi: usize,
-        oi: usize,
-        rule: deduce::DeduceRule,
-    },
-    EliminateMulti {
-        question_mask: u16,
-        option_mask: u8,
-        rule: deduce::DeduceRule,
-    },
-    LookaheadEliminate {
-        trace: LookaheadTrace,
-    },
-}
-
 struct IncorrectActionReport {
     index: usize,
     summary: String,
@@ -854,80 +822,81 @@ fn format_deduce_action(action: &deduce::DeduceAction) -> String {
 }
 
 fn first_incorrect_action(
-    actions: &[CheckAction],
+    steps: &[solve_deduce::SolveStep],
     solution: &[Answer; MAX_N],
     n: usize,
 ) -> Option<IncorrectActionReport> {
-    for (idx, action) in actions.iter().enumerate() {
-        match action {
-            CheckAction::Force { qi, answer, rule } => {
-                if solution[*qi] != *answer {
-                    return Some(IncorrectActionReport {
-                        index: idx + 1,
-                        summary: format!(
-                            "force Q{}={} by {} (expected {})",
-                            *qi + 1,
-                            answer.as_char(),
-                            rule.to_str(),
-                            solution[*qi].as_char(),
-                        ),
-                        details: Vec::new(),
-                    });
-                }
-            }
-            CheckAction::Eliminate { qi, oi, rule } => {
-                if solution[*qi] == Answer::from(*oi as u8) {
-                    return Some(IncorrectActionReport {
-                        index: idx + 1,
-                        summary: format!(
-                            "eliminate Q{}{} by {} (eliminates true answer)",
-                            *qi + 1,
-                            Answer::from(*oi as u8).as_char(),
-                            rule.to_str(),
-                        ),
-                        details: Vec::new(),
-                    });
-                }
-            }
-            CheckAction::EliminateMulti {
-                question_mask,
-                option_mask,
-                rule,
-            } => {
-                for qi in 0..n {
-                    if (question_mask >> qi) & 1 == 0 {
-                        continue;
-                    }
-                    let sol_oi = solution[qi].idx();
-                    if (option_mask >> sol_oi) & 1 == 1 {
+    for (idx, step) in steps.iter().enumerate() {
+        match step {
+            solve_deduce::SolveStep::Deduce(dr) => match dr.action {
+                deduce::DeduceAction::Force { qi, answer } => {
+                    if solution[qi] != answer {
                         return Some(IncorrectActionReport {
                             index: idx + 1,
                             summary: format!(
-                                "eliminate-multi by {} removes Q{}{} (true answer)",
-                                rule.to_str(),
+                                "force Q{}={} by {} (expected {})",
                                 qi + 1,
+                                answer.as_char(),
+                                dr.rule.to_str(),
                                 solution[qi].as_char(),
                             ),
                             details: Vec::new(),
                         });
                     }
                 }
-            }
-            CheckAction::LookaheadEliminate { trace } => {
-                if solution[trace.eliminate_qi] == Answer::from(trace.eliminate_oi as u8) {
+                deduce::DeduceAction::Eliminate { qi, oi } => {
+                    if solution[qi] == Answer::from(oi as u8) {
+                        return Some(IncorrectActionReport {
+                            index: idx + 1,
+                            summary: format!(
+                                "eliminate Q{}{} by {} (eliminates true answer)",
+                                qi + 1,
+                                Answer::from(oi as u8).as_char(),
+                                dr.rule.to_str(),
+                            ),
+                            details: Vec::new(),
+                        });
+                    }
+                }
+                deduce::DeduceAction::EliminateMulti {
+                    question_mask,
+                    option_mask,
+                } => {
+                    for qi in 0..n {
+                        if (question_mask >> qi) & 1 == 0 {
+                            continue;
+                        }
+                        let sol_oi = solution[qi].idx();
+                        if (option_mask >> sol_oi) & 1 == 1 {
+                            return Some(IncorrectActionReport {
+                                index: idx + 1,
+                                summary: format!(
+                                    "eliminate-multi by {} removes Q{}{} (true answer)",
+                                    dr.rule.to_str(),
+                                    qi + 1,
+                                    solution[qi].as_char(),
+                                ),
+                                details: Vec::new(),
+                            });
+                        }
+                    }
+                }
+            },
+            solve_deduce::SolveStep::Lookahead(lr) => {
+                if solution[lr.eliminate_qi] == Answer::from(lr.eliminate_oi as u8) {
                     let mut details = vec![
                         format!(
                             "assumption: Q{}={}",
-                            trace.assumption_qi + 1,
-                            trace.assumption_answer.as_char()
+                            lr.assumption_qi + 1,
+                            lr.assumption_answer.as_char()
                         ),
-                        format!("contradiction at Q{}", trace.contradiction_qi + 1),
+                        format!("contradiction at Q{}", lr.contradiction_qi + 1),
                     ];
-                    if trace.chain.is_empty() {
+                    if lr.chain.is_empty() {
                         details.push("deduction chain: (empty)".to_string());
                     } else {
                         details.push("deduction chain:".to_string());
-                        for (i, dr) in trace.chain.iter().enumerate() {
+                        for (i, dr) in lr.chain.iter().enumerate() {
                             details.push(format!(
                                 "  {}. {} via {}",
                                 i + 1,
@@ -941,8 +910,8 @@ fn first_incorrect_action(
                         index: idx + 1,
                         summary: format!(
                             "lookahead eliminate Q{}{} (eliminates true answer)",
-                            trace.eliminate_qi + 1,
-                            Answer::from(trace.eliminate_oi as u8).as_char(),
+                            lr.eliminate_qi + 1,
+                            Answer::from(lr.eliminate_oi as u8).as_char(),
                         ),
                         details,
                     });
@@ -951,49 +920,6 @@ fn first_incorrect_action(
         }
     }
     None
-}
-
-fn report_first_incorrect_if_needed(
-    key: &str,
-    fp: &FlatPuzzle,
-    actions: &[CheckAction],
-    n: usize,
-    conflict_reported: &mut bool,
-    brute_solutions: &mut Option<Vec<[Answer; MAX_N]>>,
-) {
-    if *conflict_reported {
-        return;
-    }
-    *conflict_reported = true;
-
-    let solutions = brute_solutions.get_or_insert_with(|| solve_brute::solve(fp, 2));
-    match solutions.len() {
-        0 => {
-            eprintln!(
-                "CONFLICT [{key}]: brute-force solver found no solutions; cannot locate first incorrect action"
-            );
-        }
-        1 => {
-            if let Some(report) = first_incorrect_action(actions, &solutions[0], n) {
-                eprintln!(
-                    "CONFLICT [{key}]: first incorrect action #{}: {}",
-                    report.index, report.summary
-                );
-                for line in report.details {
-                    eprintln!("CONFLICT [{key}]:   {line}");
-                }
-            } else {
-                eprintln!(
-                    "CONFLICT [{key}]: no incorrect force/elimination found before conflict against unique solution"
-                );
-            }
-        }
-        m => {
-            eprintln!(
-                "CONFLICT [{key}]: brute-force solver found {m} solutions; first incorrect action is ambiguous"
-            );
-        }
-    }
 }
 
 // ── Solve engine ──
@@ -1028,55 +954,37 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     }
 }
 
-/// Replay the recorded solve trace as a `CheckAction` log and, using brute as
-/// ground truth, print the first action that removed/contradicted the true
-/// answer. Only called when `run_engine` reported a self-contradiction.
+/// Using brute as ground truth, print the first recorded solve step that
+/// removed/contradicted the true answer. Only called when `run_engine`
+/// reported a self-contradiction.
 fn report_conflict(fp: &FlatPuzzle, key: &str, steps: &[solve_deduce::SolveStep]) {
-    let actions: Vec<CheckAction> = steps.iter().map(step_to_action).collect();
     eprintln!("CONFLICT [{key}]: hint engine forced a cell two ways — an unsound rule");
-    let mut conflict_reported = false;
-    let mut brute_solutions = None;
-    report_first_incorrect_if_needed(
-        key,
-        fp,
-        &actions,
-        fp.n,
-        &mut conflict_reported,
-        &mut brute_solutions,
-    );
-}
-
-fn step_to_action(step: &solve_deduce::SolveStep) -> CheckAction {
-    match step {
-        solve_deduce::SolveStep::Deduce(dr) => match dr.action {
-            deduce::DeduceAction::Force { qi, answer } => CheckAction::Force {
-                qi,
-                answer,
-                rule: dr.rule,
-            },
-            deduce::DeduceAction::Eliminate { qi, oi } => CheckAction::Eliminate {
-                qi,
-                oi,
-                rule: dr.rule,
-            },
-            deduce::DeduceAction::EliminateMulti {
-                question_mask,
-                option_mask,
-            } => CheckAction::EliminateMulti {
-                question_mask,
-                option_mask,
-                rule: dr.rule,
-            },
-        },
-        solve_deduce::SolveStep::Lookahead(lr) => CheckAction::LookaheadEliminate {
-            trace: LookaheadTrace {
-                eliminate_qi: lr.eliminate_qi,
-                eliminate_oi: lr.eliminate_oi,
-                assumption_qi: lr.assumption_qi,
-                assumption_answer: lr.assumption_answer,
-                contradiction_qi: lr.contradiction_qi,
-                chain: lr.chain.iter().copied().collect(),
-            },
-        },
+    let solutions = solve_brute::solve(fp, 2);
+    match solutions.len() {
+        0 => {
+            eprintln!(
+                "CONFLICT [{key}]: brute-force solver found no solutions; cannot locate first incorrect action"
+            );
+        }
+        1 => {
+            if let Some(report) = first_incorrect_action(steps, &solutions[0], fp.n) {
+                eprintln!(
+                    "CONFLICT [{key}]: first incorrect action #{}: {}",
+                    report.index, report.summary
+                );
+                for line in report.details {
+                    eprintln!("CONFLICT [{key}]:   {line}");
+                }
+            } else {
+                eprintln!(
+                    "CONFLICT [{key}]: no incorrect force/elimination found before conflict against unique solution"
+                );
+            }
+        }
+        m => {
+            eprintln!(
+                "CONFLICT [{key}]: brute-force solver found {m} solutions; first incorrect action is ambiguous"
+            );
+        }
     }
 }
