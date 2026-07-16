@@ -286,7 +286,7 @@ pub(crate) fn fill_one_question(
             place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
         QuestionType::SameAsWhich { question_index } => {
-            if correct_val.is_none() {
+            if !correct_val.is_num() {
                 panic!(
                     "fill_one_question: SameAsWhich at qi={qi} ref={question_index} but no other question shares the referenced answer — missing upstream guard"
                 );
@@ -484,6 +484,9 @@ fn place_distractors(
     }
 }
 
+/// The correct option value for `qt` under solution `sol`. `NONE` is a real answer
+/// for kinds that allow it; `UNUSED` is the "no valid value" sentinel for degenerate
+/// cases.
 pub fn correct_option_value(
     qt: &QuestionType,
     qi: usize,
@@ -531,10 +534,11 @@ pub fn correct_option_value(
             pos_or_none((0..n).find(|&i| i != qi && sol[i] == sol[qi]))
         }
         QuestionType::SameAsWhich { question_index } => {
+            // NONE is never valid here; a no-match is degenerate → UNUSED, not NONE.
             let ref_ans = sol[question_index as usize];
-            pos_or_none(
-                (0..n).find(|&i| i != qi && i != question_index as usize && sol[i] == ref_ans),
-            )
+            (0..n)
+                .find(|&i| i != qi && i != question_index as usize && sol[i] == ref_ans)
+                .map_or(OptionValue::UNUSED, num)
         }
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = match qt {
@@ -920,6 +924,55 @@ mod tests {
     use super::*;
     use crate::check_answer::check_answer;
     use serde_json::Value;
+
+    /// `may_be_none` must agree with a whole shipped year: a NONE correct answer may
+    /// only occur for a `may_be_none` kind, and every `may_be_none` kind must actually
+    /// occur with a NONE answer somewhere in the year — not witnessable across a full
+    /// year ⇒ not meaningfully reachable.
+    #[test]
+    fn may_be_none_agrees_with_corpus() {
+        use crate::serialize::parse_puzzle;
+        use crate::solve_brute::solve;
+
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../public/puzzles/daily/2027.json");
+        let text = std::fs::read_to_string(&path).expect("read 2027.json");
+        let data: Value = serde_json::from_str(&text).unwrap();
+
+        let mut witnessed = [false; QUESTION_KIND_COUNT];
+        for levels in data.as_object().unwrap().values() {
+            for puzzle in levels.as_object().unwrap().values() {
+                let fp = parse_puzzle(puzzle).expect("parse 2027 puzzle");
+                let sols = solve(&fp, 2);
+                assert_eq!(sols.len(), 1, "2027 puzzle is not uniquely solvable");
+                for qi in 0..fp.n {
+                    let kind = fp.question_types[qi].kind();
+                    // TrueStmt's answer selects a claim (an index), never a NONE value;
+                    // its stored option values are claim values, a different layer.
+                    if kind == QuestionTypeKind::TrueStmt {
+                        continue;
+                    }
+                    if fp.options[qi][sols[0][qi].idx()].is_none() {
+                        assert!(
+                            kind.may_be_none(),
+                            "NONE is the answer for non-may_be_none {kind:?}"
+                        );
+                        witnessed[kind as usize] = true;
+                    }
+                }
+            }
+        }
+
+        for &kind in QuestionTypeKind::all() {
+            assert_eq!(
+                kind.may_be_none(),
+                witnessed[kind as usize],
+                "{kind:?}: may_be_none={} but corpus-witnessed={}",
+                kind.may_be_none(),
+                witnessed[kind as usize]
+            );
+        }
+    }
 
     #[test]
     fn test_shared_fill_options() {

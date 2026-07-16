@@ -230,6 +230,31 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
     let n = fp.n;
     let oc = fp.option_count;
 
+    // option_count must be 3..=5; the per-question checks below assume a valid count.
+    if !(3..=5).contains(&oc) {
+        errors.push(FormError {
+            qi: 0,
+            message: format!("option count {oc} is not 3, 4, or 5"),
+            severity: Severity::Error,
+        });
+        return errors;
+    }
+
+    // At most one TrueStmt question. The claim array is puzzle-wide,
+    // so a second TrueStmt would silently share it and mis-evaluate. (A TrueStmt with
+    // no claim array at all is caught per-option below.)
+    let true_stmt_count = fp.question_types[..n]
+        .iter()
+        .filter(|qt| matches!(qt, QuestionType::TrueStmt))
+        .count();
+    if true_stmt_count > 1 {
+        errors.push(FormError {
+            qi: 0,
+            message: format!("{true_stmt_count} TrueStmt questions; at most one is allowed"),
+            severity: Severity::Error,
+        });
+    }
+
     for qi in 0..n {
         let qt = &fp.question_types[qi];
 
@@ -258,6 +283,15 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                 };
                 let cqt = &claim.question_type;
                 let cv = claim.value;
+                // A claim must assert a concrete value. NONE is sometimes technically valid, but
+                // shouldn't ever be emitted (it's considered "ugly").
+                if cv.is_none() {
+                    errors.push(FormError {
+                        qi,
+                        message: format!("TrueStmt option {oi}: claim asserts none"),
+                        severity: Severity::Warning,
+                    });
+                }
                 // The claim's own QT also needs structural checks.
                 if let Some((msg, sev)) = check_question_form(fp, qi, cqt) {
                     errors.push(FormError {
@@ -288,22 +322,8 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                 }
             }
 
-            // Per-qi: null disallowed for types whose value is always defined.
-            let null_not_allowed = matches!(
-                qt,
-                QuestionType::CountAnswer { .. }
-                    | QuestionType::CountAnswerBefore { .. }
-                    | QuestionType::CountAnswerAfter { .. }
-                    | QuestionType::CountVowel
-                    | QuestionType::CountConsonant
-                    | QuestionType::MostCommonCount
-                    | QuestionType::AnswerOf { .. }
-                    | QuestionType::LeastCommon
-                    | QuestionType::MostCommon
-                    | QuestionType::LetterDist { .. }
-                    | QuestionType::SameAsWhich { .. }
-            );
-            if null_not_allowed {
+            // Per-qi: NONE disallowed for kinds whose answer is always a value.
+            if !qt.kind().may_be_none() {
                 for oi in 0..oc {
                     if fp.options[qi][oi].is_none() {
                         errors.push(FormError {
@@ -344,4 +364,90 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
     }
 
     errors
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Build a `FlatPuzzle` directly from question types, option rows, and an
+    /// optional claim array — no JSON round-trip, so tests can construct the
+    /// malformed shapes `parse_puzzle` would otherwise coerce or reject.
+    fn flat(
+        question_types: &[QuestionType],
+        options: &[[OptionValue; 5]],
+        true_stmt_question_types: Option<[QuestionType; 5]>,
+        option_count: usize,
+    ) -> FlatPuzzle {
+        let n = question_types.len();
+        let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
+        let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
+        qts[..n].copy_from_slice(question_types);
+        opts[..options.len()].copy_from_slice(options);
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&qts, n);
+        FlatPuzzle {
+            question_types: qts,
+            options: opts,
+            true_stmt_question_types,
+            affected_by,
+            global_indices,
+            n,
+            option_count,
+            initial_state: State::initial(option_count),
+        }
+    }
+
+    #[test]
+    fn option_count_must_be_3_to_5() {
+        // oc=2 is what a ragged first option row can yield; parse never validates it.
+        let fp = flat(
+            &[QuestionType::AnswerIsSelf],
+            &[[OptionValue::UNUSED; 5]],
+            None,
+            2,
+        );
+        let errs = check_form(&fp);
+        assert!(
+            errs.iter()
+                .any(|e| matches!(e.severity, Severity::Error)
+                    && e.message.contains("option count 2")),
+            "oc=2 should be a fatal form error: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn multiple_true_stmt_is_error() {
+        let claims = [QuestionType::CountAnswer { answer: Answer::A }; 5];
+        let fp = flat(
+            &[QuestionType::TrueStmt, QuestionType::TrueStmt],
+            &[[OptionValue::num(0); 5], [OptionValue::num(0); 5]],
+            Some(claims),
+            5,
+        );
+        let errs = check_form(&fp);
+        assert!(
+            errs.iter().any(|e| matches!(e.severity, Severity::Error)
+                && e.message.contains("TrueStmt questions")),
+            "two TrueStmt questions should be a fatal form error: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn none_claim_is_warning() {
+        // A NONE claim value is flagged for any kind — even a may_be_none one like
+        // ConsecIdent, which the (removed) may_be_none-gated check would have missed.
+        let claims = [QuestionType::ConsecIdent; 5];
+        let fp = flat(
+            &[QuestionType::TrueStmt],
+            &[[OptionValue::NONE; 5]],
+            Some(claims),
+            5,
+        );
+        let errs = check_form(&fp);
+        assert!(
+            errs.iter().any(|e| matches!(e.severity, Severity::Warning)
+                && e.message.contains("claim asserts none")),
+            "a NONE claim value should warn: {errs:?}"
+        );
+    }
 }

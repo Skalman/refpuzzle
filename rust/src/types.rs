@@ -10,7 +10,7 @@ impl OptionValue {
     pub const NONE: Self = Self(0xFE);
     pub const UNUSED: Self = Self(0xFF);
 
-    pub fn num(v: u8) -> Self {
+    pub const fn num(v: u8) -> Self {
         debug_assert!(v < 0xFE);
         Self(v)
     }
@@ -81,13 +81,13 @@ pub const LETTERS: [Answer; 5] = [Answer::A, Answer::B, Answer::C, Answer::D, An
 pub const ALL_OPTIONS_MASK: u8 = 0b11111;
 
 impl Answer {
-    pub fn idx(self) -> usize {
+    pub const fn idx(self) -> usize {
         self as usize
     }
-    pub fn is_vowel(self) -> bool {
+    pub const fn is_vowel(self) -> bool {
         matches!(self, Answer::A | Answer::E)
     }
-    pub fn as_char(self) -> char {
+    pub const fn as_char(self) -> char {
         (b'A' + self as u8) as char
     }
 }
@@ -319,15 +319,30 @@ impl QuestionTypeKind {
             PrevSame | NextSame | OnlySame | SameAs => G::Sameness,
             OnlyOdd | OnlyEven => G::Parity,
             AnswerOf => G::AnswerOf,
+            // Uncategorized.
             ConsecIdent | NoOtherHasAnswer | AnswerIsSelf | LetterDist | TrueStmt | SameAsWhich => {
                 return None;
             }
         })
     }
+
+    /// Whether NONE can be this kind's correct answer; the complement is what
+    /// `check_form` rejects a NONE option value for. Pinned by the alignment test.
+    pub const fn may_be_none(self) -> bool {
+        use QuestionTypeKind::*;
+        match self {
+            ClosestAfter | ClosestBefore | FirstWith | LastWith | PrevSame | NextSame
+            | OnlySame | SameAs | OnlyOdd | OnlyEven | ConsecIdent | EqualCount => true,
+
+            CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
+            | MostCommonCount | AnswerOf | LeastCommon | MostCommon | NoOtherHasAnswer
+            | AnswerIsSelf | LetterDist | TrueStmt | SameAsWhich => false,
+        }
+    }
 }
 
 impl QuestionType {
-    pub fn kind(&self) -> QuestionTypeKind {
+    pub const fn kind(&self) -> QuestionTypeKind {
         match self {
             QuestionType::CountAnswer { .. } => QuestionTypeKind::CountAnswer,
             QuestionType::CountAnswerBefore { .. } => QuestionTypeKind::CountAnswerBefore,
