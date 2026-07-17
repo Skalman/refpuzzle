@@ -1,7 +1,6 @@
 import type { OptionMark } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import { IconCheck, IconX } from "./Icons.tsx";
-import { useOptionHighlight } from "./TutorialHighlight.ts";
 
 interface Props {
   index: number;
@@ -24,7 +23,6 @@ export function OptionButton({
   focused,
   onClick,
 }: Props) {
-  const tutorialHighlight = useOptionHighlight(questionIndex, index);
   const letter = LETTERS[index];
   const title = `${letter}: ${label}`;
 
@@ -33,7 +31,7 @@ export function OptionButton({
 
   return (
     <button
-      class={`option-btn ${mark} ${implied ? "implied" : ""}${tutorialHighlight ? " tutorial-option-highlight" : ""}`}
+      class={`option-btn ${mark} ${implied ? "implied" : ""}`}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       title={title}

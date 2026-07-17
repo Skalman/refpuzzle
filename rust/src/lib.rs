@@ -40,7 +40,7 @@ mod wasm_api {
     use crate::construct;
     use crate::deduce::{DeduceAction, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
-    use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
+    use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
     use crate::lookahead::lookahead_shortest;
     use crate::render;
     use crate::rng::Rng;
@@ -117,9 +117,12 @@ mod wasm_api {
     /// renders (`explain`) and the tutorial walks (applies `action`, shows
     /// `explain`).
     #[derive(Serialize)]
+    #[serde(rename_all = "camelCase")]
     struct StepApi {
         action: DeduceActionApi,
         explain: Vec<ExplainStep>,
+        /// 0-based questions to look at, for the L1 coach's arrows.
+        focus_qis: Vec<usize>,
     }
 
     /// One question's rendered board text: the prompt and one label per option.
@@ -214,17 +217,21 @@ mod wasm_api {
             let mut drs = deduce_assuming_unique(&self.fp, &s);
             drs.sort_by_key(|dr| dr.rule as u8);
             let api = if let Some(dr) = drs.first() {
+                let explain = explain_deduce(&self.fp, &s, dr);
                 StepApi {
                     action: action_to_api(dr.action),
-                    explain: explain_deduce(&self.fp, &s, dr),
+                    focus_qis: leading_questions(&explain),
+                    explain,
                 }
             } else if let Some(lr) = lookahead_shortest(&self.fp, &s) {
+                let explain = explain_lookahead(&self.fp, &s, &lr);
                 StepApi {
                     action: DeduceActionApi::Eliminate {
                         qi: lr.eliminate_qi,
                         oi: lr.eliminate_oi,
                     },
-                    explain: explain_lookahead(&self.fp, &s, &lr),
+                    focus_qis: leading_questions(&explain),
+                    explain,
                 }
             } else {
                 return Ok(JsValue::NULL);
@@ -262,6 +269,17 @@ mod wasm_api {
                 })
                 .collect();
             serde_wasm_bindgen::to_value(&board).map_err(|e| err(&e.to_string()))
+        }
+
+        /// The L1 hint-arrow referent for every question (`null` for kinds L1
+        /// never uses). Resolved from the question types alone — the frontend
+        /// renders the geometry over the board. See `render::arrow_referent`.
+        #[wasm_bindgen(js_name = referents)]
+        pub fn referents(&self) -> Result<JsValue, JsError> {
+            let fp = &self.fp;
+            let refs: Vec<Option<render::ArrowReferent>> =
+                (0..fp.n).map(|qi| render::arrow_referent(fp, qi)).collect();
+            serde_wasm_bindgen::to_value(&refs).map_err(|e| err(&e.to_string()))
         }
     }
 

@@ -234,9 +234,6 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   const showKeyboardHelpRef = useRef(false);
 
   const tabsRef = useRef<HTMLDivElement>(null);
-  const [pendingTutorial, setPendingTutorial] = useState(false);
-  const [highlightTab, setHighlightTab] = useState<number | null>(null);
-  const [highlightHelp, setHighlightHelp] = useState(false);
 
   const selectLevel = useCallback(
     (level: number) => {
@@ -373,7 +370,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
               role="tab"
               aria-selected={activeLevel === level}
               tabIndex={activeLevel === level ? 0 : -1}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved && !stale ? "tab-solved" : ""} ${stale ? "tab-stale" : ""} ${started ? "tab-started" : ""}${highlightTab === level ? " tutorial-highlight-btn" : ""}`}
+              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved && !stale ? "tab-solved" : ""} ${stale ? "tab-stale" : ""} ${started ? "tab-started" : ""}`}
               onClick={() => selectLevel(level)}
             >
               {solved && !stale && (
@@ -414,21 +411,6 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
           initialHash={activeLevel === initialLevel ? initialHash : null}
           onNextPuzzle={handleNextLevel}
           onChanged={handleChanged}
-          onStartTutorial={() => {
-            if (activeLevel === 1) {
-              setPendingTutorial(true);
-            } else {
-              setHighlightTab(1);
-              setTimeout(() => {
-                setHighlightTab(null);
-                setPendingTutorial(true);
-                selectLevel(1);
-              }, 1200);
-            }
-          }}
-          autoStartTutorial={pendingTutorial && activeLevel === 1}
-          onTutorialConsumed={() => setPendingTutorial(false)}
-          onTutorialDone={() => setHighlightHelp(true)}
         />
       )}
 
@@ -441,7 +423,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         />
       )}
 
-      <InlineHelp highlight={highlightHelp} />
+      <InlineHelp />
 
       {puzzles && (
         <div class="print-only">

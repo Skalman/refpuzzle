@@ -5,7 +5,8 @@
 
 use std::collections::BTreeSet;
 
-use serde::Serialize;
+use serde::ser::SerializeMap;
+use serde::{Serialize, Serializer};
 
 use crate::check_answer::{count_matching, count_pred, count_range};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
@@ -13,14 +14,46 @@ use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};
 use crate::types::*;
 
-/// One rendered hint step: a single line, or a headed block of lines. Serializes
-/// to the wire shape the UI's `HintStep` renders: `{ type: "simple", text }` or
-/// `{ type: "complex", header, lines }`.
-#[derive(Debug, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
+/// One rendered hint step: a single line, a headed block, or a "look at these
+/// questions" pointer. All serialize to the wire shape the UI's `HintStep`
+/// renders — `{ type: "simple", text }` or `{ type: "complex", header, lines }`
+/// (a `Look` serializes as `simple` with its rendered text).
+#[derive(Debug, PartialEq)]
 pub enum ExplainStep {
-    Simple { text: String },
-    Complex { header: String, lines: Vec<String> },
+    Simple {
+        text: String,
+    },
+    Complex {
+        header: String,
+        lines: Vec<String>,
+    },
+    /// "Try looking at #a, #b." — keeps the referenced questions (0-based) so
+    /// consumers read them structurally instead of re-parsing the rendered text.
+    Look {
+        qis: Vec<usize>,
+    },
+}
+
+impl Serialize for ExplainStep {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut map = serializer.serialize_map(None)?;
+        match self {
+            ExplainStep::Simple { text } => {
+                map.serialize_entry("type", "simple")?;
+                map.serialize_entry("text", text)?;
+            }
+            ExplainStep::Complex { header, lines } => {
+                map.serialize_entry("type", "complex")?;
+                map.serialize_entry("header", header)?;
+                map.serialize_entry("lines", lines)?;
+            }
+            ExplainStep::Look { qis } => {
+                map.serialize_entry("type", "simple")?;
+                map.serialize_entry("text", &render_look(qis))?;
+            }
+        }
+        map.end()
+    }
 }
 
 fn simple(text: String) -> ExplainStep {
@@ -31,8 +64,36 @@ fn complex(header: String, lines: Vec<String>) -> ExplainStep {
     ExplainStep::Complex { header, lines }
 }
 
-/// "Try looking at #a and #b." with duplicate indices dropped (first-occurrence
-/// order kept). Mirrors the TS `tryLooking`.
+/// The questions an explanation sends the solver to look at (0-based, sorted) —
+/// the full set from its last `Look` step: every question the deduction reads,
+/// not just where the mark lands. Empty if it has no `Look`. The L1 coach names
+/// and points its arrows at these.
+pub fn leading_questions(steps: &[ExplainStep]) -> Vec<usize> {
+    let mut refs = steps
+        .iter()
+        .rev()
+        .find_map(|s| match s {
+            ExplainStep::Look { qis } => Some(qis.clone()),
+            _ => None,
+        })
+        .unwrap_or_default();
+    refs.sort_unstable();
+    refs.dedup();
+    refs
+}
+
+/// A `Look` step's rendered prose: "Try looking at #a, #b and #c.".
+fn render_look(qis: &[usize]) -> String {
+    let labels: Vec<String> = qis.iter().map(|&i| q(i)).collect();
+    let list = match labels.as_slice() {
+        [] => String::new(),
+        [only] => only.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+    };
+    format!("Try looking at {list}.")
+}
+
+/// A `Look` step over `qis`, duplicates dropped (first-occurrence order kept).
 fn try_looking(qis: &[usize]) -> ExplainStep {
     let mut unique: Vec<usize> = Vec::new();
     for &qi in qis {
@@ -40,12 +101,7 @@ fn try_looking(qis: &[usize]) -> ExplainStep {
             unique.push(qi);
         }
     }
-    let joined = unique
-        .iter()
-        .map(|&i| q(i))
-        .collect::<Vec<_>>()
-        .join(" and ");
-    simple(format!("Try looking at {joined}."))
+    ExplainStep::Look { qis: unique }
 }
 
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
@@ -2475,10 +2531,9 @@ pub fn explain_deduce(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> 
                     0
                 };
                 if let Some((src_qi, text)) = find_positional_range_source(fp, state, qis[0], oi) {
-                    let all_list = sorted_q_list(src_qi, &qis);
                     vec![
-                        simple(format!("Try looking at {}.", q(src_qi))),
-                        simple(format!("Try looking at {all_list}.")),
+                        try_looking(&[src_qi]),
+                        try_looking(&sorted_qs(src_qi, &qis)),
                         simple(format!("{q_list} can't be {opt_str}: {text}")),
                     ]
                 } else {
@@ -2489,13 +2544,10 @@ pub fn explain_deduce(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> 
                     explain_multi_elim(fp, state, qis[0], option_mask, result.rule);
                 let mut steps = Vec::new();
                 if let Some(other) = other_qi {
-                    steps.push(simple(format!("Try looking at {}.", q(other))));
-                    steps.push(simple(format!(
-                        "Try looking at {}.",
-                        sorted_q_list(other, &qis)
-                    )));
+                    steps.push(try_looking(&[other]));
+                    steps.push(try_looking(&sorted_qs(other, &qis)));
                 } else {
-                    steps.push(simple(format!("Try looking at {q_list}.")));
+                    steps.push(try_looking(&qis));
                 }
                 steps.push(simple(format!("{q_list} can't be {opt_str}: {text}")));
                 steps
@@ -2504,12 +2556,13 @@ pub fn explain_deduce(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> 
     }
 }
 
-/// `#a, #b, …` over `{extra} ∪ qis`, sorted (duplicates kept, matching the TS).
-fn sorted_q_list(extra: usize, qis: &[usize]) -> String {
+/// `{extra} ∪ qis`, sorted and deduplicated (0-based).
+fn sorted_qs(extra: usize, qis: &[usize]) -> Vec<usize> {
     let mut all = vec![extra];
     all.extend_from_slice(qis);
     all.sort_unstable();
-    all.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ")
+    all.dedup();
+    all
 }
 
 /// Narrate a refuted lookahead assumption: replay the chain, then the surfaced
@@ -2633,6 +2686,27 @@ mod tests {
     use crate::serialize::parse_puzzle;
     use arrayvec::ArrayVec;
     use serde_json::json;
+
+    #[test]
+    fn leading_questions_reads_last_look_step() {
+        // The last Look step wins (names the full set), sorted; non-Look ignored.
+        assert_eq!(
+            leading_questions(&[
+                try_looking(&[1]),
+                try_looking(&[1, 0]),
+                simple("#1 can't be A.".into()),
+            ]),
+            vec![0, 1]
+        );
+        // Single Look step.
+        assert_eq!(leading_questions(&[try_looking(&[2])]), vec![2]);
+        // No Look step → empty (the coach falls back to the action's target).
+        assert_eq!(
+            leading_questions(&[simple("#3 must be A.".into())]),
+            Vec::<usize>::new()
+        );
+        assert_eq!(leading_questions(&[]), Vec::<usize>::new());
+    }
 
     fn state_with(fp: &FlatPuzzle, answers: &[Option<Answer>]) -> State {
         let mut a = [None; MAX_N];
@@ -2770,7 +2844,7 @@ mod tests {
             steps,
             vec![
                 simple("Try looking at #1.".into()),
-                simple("Try looking at #1 and #2.".into()),
+                try_looking(&[0, 1]),
                 simple("#1 asks for #2's answer. #2 is B, so #1 must be B.".into()),
             ]
         );
@@ -2814,7 +2888,7 @@ mod tests {
             steps,
             vec![
                 simple("Try looking at #1.".into()),
-                simple("Try looking at #1 and #2.".into()),
+                try_looking(&[0, 1]),
                 simple("What if #1 is C?".into()),
                 simple(
                     "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."

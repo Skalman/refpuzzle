@@ -23,8 +23,8 @@
   a `QuestionType`; it holds the compact blob plus rendered board text
   (`PuzzleHandle.renderBoard` → question prompt + option labels) and marks.
 - TS engine survivors in `src/engine/`: `state.ts` (mark derivation),
-  `tutorial.ts` (scripted steps), `types.ts` (Puzzle/marks types + letter
-  helpers), `hint-types.ts` (hint wire types).
+  `types.ts` (Puzzle/marks types + letter helpers), `hint-types.ts` (hint wire
+  types), `coach-types.ts` (L1 in-play coach arrow/message types).
 - Puzzle data in `public/puzzles/daily/<year>.json` (compact form, parsed
   by wasm; the frontend hands the blob to Rust rather than expanding it).
 - Year JSON missing or doesn't contain the date → wasm generates on the

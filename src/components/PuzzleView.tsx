@@ -15,10 +15,9 @@ import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import { HistoryStrip, describeDiff } from "./HistoryStrip.tsx";
 import { HintStep } from "./HintStep.tsx";
-import { TutorialOverlay } from "./TutorialOverlay.tsx";
-import { TutorialWelcome } from "./TutorialWelcome.tsx";
-import { TutorialHighlightCtx } from "./TutorialHighlight.ts";
-import { useTutorial } from "./useTutorial.ts";
+import { CoachText } from "./CoachText.tsx";
+import { CoachArrows } from "./CoachArrows.tsx";
+import { useL1Coach } from "./useL1Coach.ts";
 import { useForceUpdate } from "../lib/hooks.ts";
 import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
@@ -43,10 +42,6 @@ interface PuzzleViewProps {
   ephemeral?: boolean;
   onNextPuzzle: () => void;
   onChanged: () => void;
-  onStartTutorial?: () => void;
-  autoStartTutorial?: boolean;
-  onTutorialConsumed?: () => void;
-  onTutorialDone?: () => void;
 }
 
 export function PuzzleView({
@@ -57,10 +52,6 @@ export function PuzzleView({
   ephemeral,
   onNextPuzzle,
   onChanged,
-  onStartTutorial,
-  autoStartTutorial,
-  onTutorialConsumed,
-  onTutorialDone,
 }: PuzzleViewProps) {
   const s = t();
   const debugMode =
@@ -115,6 +106,7 @@ export function PuzzleView({
     new Array(initState.questions.length).fill(V_NEUTRAL),
   );
   const handleRef = useRef<PuzzleHandle | null>(null);
+  const [handleReady, setHandleReady] = useState(false);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -127,11 +119,13 @@ export function PuzzleView({
         puzzle.optionCount,
       );
       setValidity(initial);
+      setHandleReady(true);
     })();
     return () => {
       cancelled = true;
       handleRef.current?.free();
       handleRef.current = null;
+      setHandleReady(false);
     };
   }, [puzzle]);
   const historyRef = useRef<QuestionState[][]>(initState.history);
@@ -157,7 +151,6 @@ export function PuzzleView({
     }
   }, [initCompleted, initState, puzzle.id, onChanged, ephemeral]);
   const historyBurstRef = useRef({ lastTime: 0 });
-  const tutorialReachedEnd = useRef(false);
 
   function trackHistoryBurst() {
     const now = Date.now();
@@ -185,7 +178,6 @@ export function PuzzleView({
   const numberBuf = useRef({ digits: "", timer: 0 });
   const controlsRef = useRef<HTMLDivElement>(null);
   const historyStripRef = useRef<HTMLDivElement>(null);
-  const tutorialHeadingRef = useRef<HTMLDivElement>(null);
 
   function setFocusedQuestion(v: number | null) {
     focusedQuestionRef.current = v;
@@ -281,30 +273,25 @@ export function PuzzleView({
     [puzzle, onChanged, analytics.meta, analytics.wasStarted, analytics.wasCompleted, ephemeral],
   );
 
-  const tutorial = useTutorial(puzzle, {
-    level,
-    questionsRef,
-    setQuestions,
-    setValidity,
-    historyRef,
-    historyIdxRef,
-    forceHistoryUpdate,
-    revalidate,
-    autoStartTutorial,
-    onTutorialConsumed,
-    onStartTutorial,
-    handleRef,
-  });
-
-  useEffect(() => {
-    if (tutorial.active) {
-      tutorialHeadingRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  }, [tutorial.active]);
-
   const completed = validity.length > 0 && validity.every(isValid);
   const completedRef = useRef(completed);
   completedRef.current = completed;
+
+  // L1-only ambient coach: calm intro text, idle nudges, and mistake notes,
+  // with reference arrows. Silent the instant the player engages. Replaces the
+  // old auto-solve tutorial; higher levels and playground get nothing.
+  const coachEnabled = level === 1 && !ephemeral;
+  const coachTextRef = useRef<HTMLDivElement>(null);
+  const coach = useL1Coach(puzzle, {
+    enabled: coachEnabled,
+    handleRef,
+    handleReady,
+    questions,
+    started: historyRef.current.length > 1,
+    completed,
+    // Coach hints land on the history track + hint count, like the Hint button.
+    onHint: pushHintMarker,
+  });
   const canUndo = historyIdxRef.current > 0;
   const canRedo = historyIdxRef.current < historyRef.current.length - 1;
 
@@ -471,7 +458,7 @@ export function PuzzleView({
 
   // Confetti + scroll to next puzzle on completion
   useEffect(() => {
-    if (!completed || analytics.wasCompleted.current || tutorial.active) return undefined;
+    if (!completed || analytics.wasCompleted.current) return undefined;
     analytics.wasCompleted.current = true;
     const m = analytics.meta.current;
     if (m.sessionStart != null) {
@@ -496,7 +483,7 @@ export function PuzzleView({
     puzzleCompleteRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     nextPuzzleRef.current?.focus({ preventScroll: true });
     return undefined;
-  }, [completed, level, puzzle.id, tutorial.active, analytics.meta, analytics.wasCompleted]);
+  }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted]);
 
   // Init roving tabindex on controls toolbar
   useEffect(() => {
@@ -715,82 +702,45 @@ export function PuzzleView({
 
   return (
     <>
-      {(tutorial.active || tutorial.welcome) && (
-        <div
-          class={`tutorial-scrim${tutorial.welcome && !tutorial.active ? " tutorial-scrim-welcome" : ""}`}
-        />
-      )}
-      <div class={`puzzle-view${tutorial.active || tutorial.welcome ? " tutorial-active" : ""}`}>
-        {tutorial.active && (
-          <div ref={tutorialHeadingRef} class="tutorial-heading">
-            Tutorial
-          </div>
-        )}
-        {tutorial.welcome && !tutorial.active && (
-          <TutorialWelcome
-            onStart={tutorial.startFromWelcome}
-            onDismiss={tutorial.dismissWelcome}
-          />
-        )}
+      <div class="puzzle-view">
+        {coachEnabled && !completed && <CoachText message={coach.message} boxRef={coachTextRef} />}
         {/* Questions */}
-        <TutorialHighlightCtx.Provider value={tutorial.active ? tutorial.highlight : null}>
-          <div
-            ref={gridRef}
-            class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}${tutorial.active || tutorial.welcome ? " tutorial-grid" : ""}${tutorial.active ? " tutorial-dimmed" : ""}${tutorial.welcome && !tutorial.active ? " tutorial-welcome-grid" : ""}`}
-            style={{
-              gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
-            }}
-            onKeyDown={handleGridKeyDown}
-            onFocusCapture={() => {
-              if (focusedQuestionRef.current == null) {
-                setFocusedQuestion(0);
-                setFocusedOption(0);
-              }
-            }}
-          >
-            {puzzle.questions.map((qDef, qi) => (
-              <QuestionRow
-                key={qDef.text}
-                index={qi}
-                question={qDef}
-                marks={questions[qi]?.marks ?? FRESH_MARKS}
-                validity={validity[qi] ?? "neutral"}
-                disabled={completed || tutorial.active}
-                focusedOption={focusedQuestion === qi ? focusedOption : null}
-                defaultFocus={focusedQuestion == null && qi === 0}
-                onOptionClick={stableOptionClick}
-              />
-            ))}
-          </div>
-        </TutorialHighlightCtx.Provider>
+        <div
+          ref={gridRef}
+          class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}`}
+          style={{
+            gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
+          }}
+          onKeyDown={handleGridKeyDown}
+          onFocusCapture={() => {
+            if (focusedQuestionRef.current == null) {
+              setFocusedQuestion(0);
+              setFocusedOption(0);
+            }
+          }}
+        >
+          {puzzle.questions.map((qDef, qi) => (
+            <QuestionRow
+              key={qDef.text}
+              index={qi}
+              question={qDef}
+              marks={questions[qi]?.marks ?? FRESH_MARKS}
+              validity={validity[qi] ?? "neutral"}
+              disabled={completed}
+              focusedOption={focusedQuestion === qi ? focusedOption : null}
+              defaultFocus={focusedQuestion == null && qi === 0}
+              onOptionClick={stableOptionClick}
+            />
+          ))}
+        </div>
 
-        {tutorial.active && (
-          <TutorialOverlay
-            steps={tutorial.steps}
-            onDismiss={() => {
-              if (!tutorialReachedEnd.current) {
-                track("tutorial_dismissed", {
-                  puzzleId: puzzle.id,
-                  level,
-                  ...getClientInfo(),
-                });
-              }
-              if (tutorialReachedEnd.current) onTutorialDone?.();
-              tutorialReachedEnd.current = false;
-              tutorial.dismiss();
-            }}
-            onSetHighlight={tutorial.setHighlight}
-            onApplyStep={tutorial.applyStep}
-            onUnapplyStep={tutorial.unapplyStep}
-            onDone={() => {
-              tutorial.setHighlight(null);
-              tutorialReachedEnd.current = true;
-              track("tutorial_completed", {
-                puzzleId: puzzle.id,
-                level,
-                ...getClientInfo(),
-              });
-            }}
+        {coachEnabled && !completed && (
+          <CoachArrows
+            message={coach.message}
+            gridRef={gridRef}
+            textRef={coachTextRef}
+            marks={questions.map((q) => q.marks)}
+            optionCount={puzzle.optionCount}
           />
         )}
 
@@ -819,7 +769,7 @@ export function PuzzleView({
         )}
 
         {/* Completion banner */}
-        {completed && !tutorial.active && (
+        {completed && (
           <div ref={puzzleCompleteRef} class="puzzle-complete">
             <span>{s.puzzle.solved}</span>
             {level < 6 ? (
@@ -881,15 +831,6 @@ export function PuzzleView({
           >
             <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
           </button>
-          {tutorial.isIntro && (
-            <button
-              class={`toolbar-accent-btn${tutorial.done ? " tutorial-highlight-btn" : ""}`}
-              onClick={tutorial.startManual}
-              disabled={completed || tutorial.active}
-            >
-              Tutorial
-            </button>
-          )}
           <span class="controls-spacer"></span>
           <span class="split-btn">
             <button class="toolbar-accent-btn" onClick={openSharePuzzle}>

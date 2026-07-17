@@ -41,6 +41,20 @@ export default {
     solvedBadge: "Solved",
     more: "More",
   },
+  // L1 in-play coach: calm, self-fading lines shown in the board padding. `#Q`
+  // and force-vs-eliminate wording are templated from the engine's next step.
+  coach: {
+    mentalModel:
+      "Every question is about this grid's own answers — fill it so every statement comes out true.",
+    markingGesture: "Tap once to eliminate, tap again to mark correct.",
+    // `qs` is a pre-formatted question list, e.g. "#1 and #3".
+    lookForce: (qs: string) => `You can already pin down an answer — take a look at ${qs}.`,
+    lookEliminate: (qs: string) => `You can already eliminate an option — take a look at ${qs}.`,
+    lookGeneric: "Start with whichever question you can already work out.",
+    guidedLead: "Here's one you can get:",
+    mistakeAnswer: (q: number) => `Your answer to #${q} looks off.`,
+    mistakeElim: (q: number) => `Your elimination on #${q} looks off.`,
+  },
   daily: {
     dayNumber: (num: number) => `Day #${num}`,
     dayLabel: (num: number, date: string) => `Day #${num} — ${date}`,

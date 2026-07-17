@@ -2,7 +2,6 @@ import { memo } from "preact/compat";
 import type { RenderedQuestion, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
-import { useQuestionHighlight } from "./TutorialHighlight.ts";
 import { OptionButton } from "./OptionButton.tsx";
 
 interface Props {
@@ -34,16 +33,12 @@ export const QuestionRow = memo(
     defaultFocus,
     onOptionClick,
   }: Props) {
-    const { highlighted, mute } = useQuestionHighlight(index);
     const labels = question.options;
     const isLong = labels.some((l) => l.length > LONG_THRESHOLD);
     const hasCorrect = marks.indexOf("correct") >= 0;
 
     return (
-      <div
-        class={`question-row${highlighted ? " tutorial-highlight" : ""}${mute ? " tutorial-mute-options" : ""}`}
-        data-qi={index}
-      >
+      <div class="question-row" data-qi={index}>
         <div class={`validity-bar ${validity}`} />
         <div class="question-header">
           <span class="question-num">{index + 1}.</span>
