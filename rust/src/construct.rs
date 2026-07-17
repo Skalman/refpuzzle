@@ -299,6 +299,7 @@ pub fn generate_skeleton(
     let SolutionAndKinds { solution, kind_of } =
         SolutionAndKindsBuilder::new(n, oc).build(&kinds, rng, fallbacks);
     let types = parametrize(recipe, n, oc, &solution, &kind_of, rng, fallbacks);
+    assert_required_satisfied(recipe, &types, n);
 
     Skeleton { types, solution, n }
 }
@@ -323,6 +324,7 @@ pub fn regenerate_skeleton(
     let kinds = select_kinds(recipe, n, rng);
     let kind_of = assign_kinds_to_solution(n, &kinds, rng);
     let types = parametrize(recipe, n, oc, solution, &kind_of, rng, fallbacks);
+    assert_required_satisfied(recipe, &types, n);
 
     Skeleton {
         types,
@@ -1079,6 +1081,21 @@ fn parametrize(
     // that the whole type map is known.
     wire_answer_of_targets(&mut types, n, rng);
     types
+}
+
+/// Post-condition on `parametrize`: `required` is enforced at selection, but a
+/// required kind that can't parametrize against the answer key would be silently
+/// swapped for a reserve/backstop like any other. Panic instead — a required kind
+/// the recipe can't realize is a misconfiguration, not a runtime condition.
+fn assert_required_satisfied(recipe: &LevelRecipe, types: &[QuestionType; MAX_N], n: usize) {
+    for &(kind, count) in recipe.required {
+        let got = types[..n].iter().filter(|qt| qt.kind() == kind).count();
+        assert!(
+            got >= count,
+            "level recipe requires {count}× {kind:?} but parametrize produced {got} \
+             (a required kind was swapped out — recipe is infeasible for this key)"
+        );
+    }
 }
 
 /// Probability that consecutive `AnswerOf`s link into the same chain (vs. starting
