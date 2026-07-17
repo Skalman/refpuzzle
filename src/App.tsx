@@ -22,6 +22,7 @@ import { useToday } from "./lib/today.ts";
 import { decodePlaygroundHash } from "./lib/playground.ts";
 import { hasState } from "./lib/store.ts";
 import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
+import { pointerKind } from "./lib/pointer.ts";
 import { t } from "./i18n/index.ts";
 import { replayLogoAnimation } from "./components/Logo.tsx";
 import { BackupDialog } from "./components/BackupDialog.tsx";
@@ -61,8 +62,9 @@ function InlineHelp({ highlight }: { highlight?: boolean }) {
     <div class="inline-help">
       <div class={`how-to-play${show ? " how-to-play--first-visit" : ""}`}>
         <h4>{s.help.title}</h4>
+        <p class="how-to-goal">{s.help.goal}</p>
         <ol>
-          {s.help.howToPlaySteps.map((step, i) => (
+          {s.help.howToPlaySteps(pointerKind()).map((step, i) => (
             <li key={step}>
               {step}
               {i === 0 && (

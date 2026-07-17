@@ -6,7 +6,13 @@ import type { DeduceAction, ExplainStep, SolveStep } from "../engine/hint-types.
 import type { ArrowReferent, ArrowSpec, CoachMessage } from "../engine/coach-types.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
+import { pointerKind } from "../lib/pointer.ts";
 import { t } from "../i18n/index.ts";
+
+/** The marking-gesture reminder in the wording that matches the pointer. */
+function markingGesture(): string {
+  return t().coach.markingGesture(pointerKind());
+}
 
 // Timings (ms). Every idle/mistake timer resets on any interaction; starting
 // values from the plan — tune in situ.
@@ -140,7 +146,7 @@ function explainLine(steps: ExplainStep[]): string {
  * so the reserved space never sits empty.
  */
 function buildResting(): CoachMessage {
-  return { text: t().coach.markingGesture, arrow: null, tone: "calm" };
+  return { text: markingGesture(), arrow: null, tone: "calm" };
 }
 
 /**
@@ -181,7 +187,7 @@ export function useL1Coach(
   function buildIntro(idx: number): CoachMessage {
     const s = t().coach;
     if (idx === 0) return { text: s.mentalModel, arrow: null, tone: "calm" };
-    if (idx === 1) return { text: s.markingGesture, arrow: null, tone: "calm" };
+    if (idx === 1) return { text: markingGesture(), arrow: null, tone: "calm" };
     // Where to start: the blank board's first move — the same step the Hint
     // button surfaces first, pointed at the question it leads with. Never says why.
     const bs = blankState(puzzle);

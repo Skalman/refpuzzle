@@ -1,5 +1,12 @@
+import type { PointerKind } from "../lib/pointer.ts";
+
 function plural(n: number, one: string, other: string): string {
   return n === 1 ? `${n} ${one}` : `${n} ${other}`;
+}
+
+/** Marking verb for the primary pointer: touch → "Tap", mouse → "Click". */
+function tapVerb(p: PointerKind): string {
+  return p === "coarse" ? "Tap" : "Click";
 }
 
 export default {
@@ -46,7 +53,8 @@ export default {
   coach: {
     mentalModel:
       "Every question is about this grid's own answers — fill it so every statement comes out true.",
-    markingGesture: "Tap once to eliminate, tap again to mark correct.",
+    markingGesture: (p: PointerKind) =>
+      `${tapVerb(p)} once to eliminate, ${tapVerb(p).toLowerCase()} again to mark correct.`,
     // `qs` is a pre-formatted question list, e.g. "#1 and #3".
     lookForce: (qs: string) => `You can already pin down an answer — take a look at ${qs}.`,
     lookEliminate: (qs: string) => `You can already eliminate an option — take a look at ${qs}.`,
@@ -106,10 +114,11 @@ export default {
   },
   help: {
     title: "How to play",
-    howToPlaySteps: [
-      "Click an option to mark it incorrect",
-      "Click it again to select it as your answer",
-      "Click once more to clear it",
+    goal: "Every question is about this grid's own answers — fill it so every statement comes out true.",
+    howToPlaySteps: (p: PointerKind) => [
+      `${tapVerb(p)} an option to eliminate it`,
+      `${tapVerb(p)} again to mark it your answer`,
+      `${tapVerb(p)} once more to clear it`,
       "The bar beside each question shows the answer's validity",
     ],
     whatIs: "What is a self-referential puzzle?",

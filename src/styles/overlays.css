@@ -133,6 +133,11 @@
   border-color: var(--accent);
 }
 
+.how-to-goal {
+  color: var(--text);
+  font-weight: 500;
+}
+
 /* ── Import preview ── */
 .import-preview {
   max-width: 550px;
