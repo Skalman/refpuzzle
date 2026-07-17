@@ -564,12 +564,12 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     return Validity::Invalid;
                 }
                 if let Some(pa) = answers[ov]
-                    && eliminated[ov + 1] & (1 << pa.idx()) != 0
+                    && is_eliminated(eliminated, ov + 1, pa.idx())
                 {
                     return Validity::Invalid;
                 }
                 if let Some(pb) = answers[ov + 1]
-                    && eliminated[ov] & (1 << pb.idx()) != 0
+                    && is_eliminated(eliminated, ov, pb.idx())
                 {
                     return Validity::Invalid;
                 }

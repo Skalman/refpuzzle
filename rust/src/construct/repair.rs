@@ -175,7 +175,7 @@ fn repair_one_question(
 
     // Live distractors (not the correct option, not already eliminated), random order.
     let mut distractors: ArrayVec<usize, 5> = (0..oc)
-        .filter(|&oi| oi != correct_oi && (state.eliminated[qi] >> oi) & 1 == 0)
+        .filter(|&oi| oi != correct_oi && state.is_live(qi, oi))
         .collect();
     rng.shuffle(&mut distractors);
 

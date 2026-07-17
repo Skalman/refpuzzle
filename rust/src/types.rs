@@ -420,6 +420,22 @@ impl State {
             eliminated: [initial_eliminated_mask; MAX_N],
         }
     }
+
+    #[inline]
+    pub fn is_eliminated(&self, qi: usize, oi: usize) -> bool {
+        is_eliminated(&self.eliminated, qi, oi)
+    }
+
+    #[inline]
+    pub fn is_live(&self, qi: usize, oi: usize) -> bool {
+        !self.is_eliminated(qi, oi)
+    }
+}
+
+/// Whether option `oi` is eliminated for question `qi` in an `eliminated` mask.
+#[inline(always)]
+pub fn is_eliminated(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
+    (eliminated[qi] >> oi) & 1 == 1
 }
 
 #[derive(Clone, Copy)]

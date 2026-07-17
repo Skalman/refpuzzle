@@ -28,7 +28,7 @@ pub fn playground_link(origin: &str, fp: &FlatPuzzle, state: &State) -> String {
             let letter = (b'A' + oi as u8) as char;
             if state.answers[qi] == Some(Answer::from(oi as u8)) {
                 steps.push(format!("{}{letter}", qi + 1));
-            } else if (state.eliminated[qi] >> oi) & 1 == 1 {
+            } else if state.is_eliminated(qi, oi) {
                 steps.push(format!("{}{}", qi + 1, letter.to_ascii_lowercase()));
             }
         }

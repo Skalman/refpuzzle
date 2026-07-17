@@ -36,7 +36,7 @@ pub fn lookahead(
             continue;
         }
         for oi in 0..5usize {
-            if (state.eliminated[qi] >> oi) & 1 == 1 {
+            if state.is_eliminated(qi, oi) {
                 continue;
             }
             if let Some(r) = probe_candidate(
@@ -69,7 +69,7 @@ pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadRes
             continue;
         }
         for oi in 0..5usize {
-            if (state.eliminated[qi] >> oi) & 1 == 1 {
+            if state.is_eliminated(qi, oi) {
                 continue;
             }
             if let Some(r) = probe_candidate(fp, state, qi, oi, usize::MAX, true, &mut 0)

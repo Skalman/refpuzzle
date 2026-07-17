@@ -375,10 +375,6 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
     Some(ElimDetail { text, other_qi })
 }
 
-fn is_elim(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
-    (eliminated[qi] >> oi) & 1 == 1
-}
-
 /// The option value `answer` selects at question `qi`, if numeric.
 fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
     let ov = fp.options[qi][answer.idx()];
@@ -468,7 +464,7 @@ fn forward_positional_elim_detail(
                         Some(target),
                     );
                 }
-                None if is_elim(eliminated, target, answer.idx()) => {
+                None if is_eliminated(eliminated, target, answer.idx()) => {
                     return detail(
                         format!(
                             "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
@@ -564,7 +560,7 @@ fn backward_positional_elim_detail(
                         Some(target),
                     );
                 }
-                None if is_elim(eliminated, target, answer.idx()) => {
+                None if is_eliminated(eliminated, target, answer.idx()) => {
                     return detail(
                         format!(
                             "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
@@ -665,7 +661,7 @@ fn parity_elim_detail(
                             Some(target),
                         );
                     }
-                    None if is_elim(eliminated, target, answer.idx()) => {
+                    None if is_eliminated(eliminated, target, answer.idx()) => {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has answer {answer}, but {answer} is ruled out for {}.",
@@ -753,7 +749,7 @@ pub fn explain_elim_detail(
                     for i in 0..n {
                         match answers[i] {
                             Some(a) if a == l => c += 1,
-                            None if !is_elim(eliminated, i, l.idx()) => r += 1,
+                            None if !is_eliminated(eliminated, i, l.idx()) => r += 1,
                             _ => {}
                         }
                     }
@@ -817,7 +813,7 @@ pub fn explain_elim_detail(
         QuestionType::AnswerOf { question_index } => {
             if let Some(v) = ov
                 && v < 5
-                && is_elim(eliminated, *question_index as usize, v as usize)
+                && is_eliminated(eliminated, *question_index as usize, v as usize)
             {
                 let k = *question_index as usize;
                 return detail(
@@ -855,7 +851,7 @@ pub fn explain_elim_detail(
                             Some(target),
                         );
                     }
-                    None if is_elim(eliminated, target, ref_ans.idx()) => {
+                    None if is_eliminated(eliminated, target, ref_ans.idx()) => {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
@@ -906,7 +902,7 @@ pub fn explain_elim_detail(
                 None => {
                     if let Some(v) = ov {
                         let any_possible = (0..5).any(|ti| {
-                            !is_elim(eliminated, k, ti)
+                            !is_eliminated(eliminated, k, ti)
                                 && (oi as i32 - ti as i32).unsigned_abs() as u8 == v
                         });
                         if !any_possible {
@@ -942,7 +938,7 @@ pub fn explain_elim_detail(
                     }
                     if start == qi || start + 1 == qi {
                         let partner = if start == qi { start + 1 } else { start };
-                        if is_elim(eliminated, partner, oi) {
+                        if is_eliminated(eliminated, partner, oi) {
                             return detail(
                                 format!(
                                     "{} option {letter} claims {} and {} are the consecutive pair, but {letter} is ruled out for {} so they can't match.",
@@ -1020,7 +1016,7 @@ pub fn explain_elim_detail(
                             None,
                         );
                     }
-                    if is_elim(eliminated, target, oi) {
+                    if is_eliminated(eliminated, target, oi) {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -1079,7 +1075,7 @@ pub fn explain_elim_detail(
                             None,
                         );
                     }
-                    if is_elim(eliminated, target, oi) {
+                    if is_eliminated(eliminated, target, oi) {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -1136,7 +1132,7 @@ pub fn explain_elim_detail(
                             None,
                         );
                     }
-                    if target < n && is_elim(eliminated, target, oi) {
+                    if target < n && is_eliminated(eliminated, target, oi) {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -1180,7 +1176,7 @@ pub fn explain_elim_detail(
                         None,
                     );
                 }
-                if target < n && is_elim(eliminated, target, oi) {
+                if target < n && is_eliminated(eliminated, target, oi) {
                     return detail(
                         format!(
                             "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -1847,7 +1843,7 @@ fn find_count_floor_source(
         let lo = match state.answers[src] {
             Some(ans) => option_value_at(fp, src, ans),
             None => (0..fp.option_count)
-                .filter(|&oi| !is_elim(&state.eliminated, src, oi) && fp.options[src][oi].is_num())
+                .filter(|&oi| !state.is_eliminated(src, oi) && fp.options[src][oi].is_num())
                 .map(|oi| fp.options[src][oi].value())
                 .min(),
         };
@@ -1878,7 +1874,7 @@ fn find_count_ceil_source(
         let hi = match state.answers[src] {
             Some(ans) => option_value_at(fp, src, ans),
             None => (0..fp.option_count)
-                .filter(|&oi| !is_elim(&state.eliminated, src, oi) && fp.options[src][oi].is_num())
+                .filter(|&oi| !state.is_eliminated(src, oi) && fp.options[src][oi].is_num())
                 .map(|oi| fp.options[src][oi].value())
                 .max(),
         };
@@ -1934,7 +1930,7 @@ fn find_positional_range_source(
                 None => {
                     let mut min_pos = n;
                     for si in 0..5 {
-                        if is_elim(&state.eliminated, src, si) {
+                        if state.is_eliminated(src, si) {
                             continue;
                         }
                         let ov = fp.options[src][si];
@@ -1980,7 +1976,7 @@ fn find_positional_range_source(
                 None => {
                     let mut max_pos: i32 = -1;
                     for si in 0..5 {
-                        if is_elim(&state.eliminated, src, si) {
+                        if state.is_eliminated(src, si) {
                             continue;
                         }
                         let ov = fp.options[src][si];
