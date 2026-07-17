@@ -131,7 +131,7 @@ fn check_claim_form(
         return None;
     }
     let ov = usize::from(ov.value());
-    let oor = || (format!("value {ov} out of range"), Severity::Warning);
+    let oor = || (format!("value {ov} out of range"), Severity::Error);
 
     match qt {
         QuestionType::CountAnswer { .. }
@@ -167,7 +167,7 @@ fn check_claim_form(
         }
         QuestionType::OnlySame => {
             if ov == qi {
-                warning(format!("OnlySame option {} references itself", opt.oi))
+                error(format!("OnlySame option {} references itself", opt.oi))
             } else if ov >= n {
                 Some(oor())
             } else {
@@ -332,7 +332,7 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                                 "Option {oi} is null but {:?} requires a value",
                                 qt.kind()
                             ),
-                            severity: Severity::Warning,
+                            severity: Severity::Error,
                         });
                     }
                 }
