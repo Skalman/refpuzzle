@@ -5,8 +5,7 @@
 
 use std::collections::BTreeSet;
 
-use serde::ser::SerializeMap;
-use serde::{Serialize, Serializer};
+use serde::Serialize;
 
 use crate::check_answer::{count_matching, count_pred, count_range};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
@@ -14,11 +13,13 @@ use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};
 use crate::types::*;
 
-/// One rendered hint step: a single line, a headed block, or a "look at these
-/// questions" pointer. All serialize to the wire shape the UI's `HintStep`
-/// renders — `{ type: "simple", text }` or `{ type: "complex", header, lines }`
-/// (a `Look` serializes as `simple` with its rendered text).
-#[derive(Debug, PartialEq)]
+/// One hint step, serialized (via derive) to the wire shape the UI's `HintStep`
+/// renders: `{ type: "simple", text }`, `{ type: "complex", header, lines }`, or
+/// `{ type: "look", qis }`. For `Look`, only the 0-based question indices cross
+/// the wire — the frontend builds the "Try looking at …" sentence (i18n
+/// `hint.tryLooking`), keeping only navigation prose off the Rust side.
+#[derive(Debug, PartialEq, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum ExplainStep {
     Simple {
         text: String,
@@ -27,33 +28,11 @@ pub enum ExplainStep {
         header: String,
         lines: Vec<String>,
     },
-    /// "Try looking at #a, #b." — keeps the referenced questions (0-based) so
-    /// consumers read them structurally instead of re-parsing the rendered text.
+    /// A "look at these questions" pointer (0-based). The frontend renders the
+    /// prose; `leading_questions` reads these for the coach's focus/arrows.
     Look {
         qis: Vec<usize>,
     },
-}
-
-impl Serialize for ExplainStep {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let mut map = serializer.serialize_map(None)?;
-        match self {
-            ExplainStep::Simple { text } => {
-                map.serialize_entry("type", "simple")?;
-                map.serialize_entry("text", text)?;
-            }
-            ExplainStep::Complex { header, lines } => {
-                map.serialize_entry("type", "complex")?;
-                map.serialize_entry("header", header)?;
-                map.serialize_entry("lines", lines)?;
-            }
-            ExplainStep::Look { qis } => {
-                map.serialize_entry("type", "simple")?;
-                map.serialize_entry("text", &render_look(qis))?;
-            }
-        }
-        map.end()
-    }
 }
 
 fn simple(text: String) -> ExplainStep {
@@ -80,17 +59,6 @@ pub fn leading_questions(steps: &[ExplainStep]) -> Vec<usize> {
     refs.sort_unstable();
     refs.dedup();
     refs
-}
-
-/// A `Look` step's rendered prose: "Try looking at #a, #b and #c.".
-fn render_look(qis: &[usize]) -> String {
-    let labels: Vec<String> = qis.iter().map(|&i| q(i)).collect();
-    let list = match labels.as_slice() {
-        [] => String::new(),
-        [only] => only.clone(),
-        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
-    };
-    format!("Try looking at {list}.")
 }
 
 /// A `Look` step over `qis`, duplicates dropped (first-occurrence order kept).
@@ -1481,7 +1449,7 @@ pub fn explain_force(
     let answers = &state.answers;
     let n = fp.n;
     let qt = fp.question_types[qi];
-    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+    let mut steps = vec![try_looking(&[qi])];
 
     if (!state.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 1 {
         steps.push(simple(format!(
@@ -1753,7 +1721,7 @@ pub fn explain_force(
 
     if matches!(rule, DeduceRule::TrueStatementClaimValid) {
         return vec![
-            simple(format!("Try looking at {}.", q(qi))),
+            try_looking(&[qi]),
             simple(format!(
                 "Only one of {}'s claims is still possible, so it must be the answer.",
                 q(qi)
@@ -1763,7 +1731,7 @@ pub fn explain_force(
 
     if matches!(rule, DeduceRule::TrueStatementClaimKnownTrue) {
         return vec![
-            simple(format!("Try looking at {}.", q(qi))),
+            try_looking(&[qi]),
             simple(format!(
                 "Option {letter}'s claim is already known to be true, so it must be the answer."
             )),
@@ -1775,7 +1743,7 @@ pub fn explain_force(
             // `qi` is the TrueStmt: a matching question settled its statement true.
             let k = find_claim_match_question(fp, qi, &self_claim);
             return vec![
-                simple(format!("Try looking at {}.", k.map_or_else(|| q(qi), q))),
+                try_looking(&[k.unwrap_or(qi)]),
                 simple(match k {
                     Some(k) => format!(
                         "{} settles \"{}\", making that statement true — so {} must be {letter}.",
@@ -1793,10 +1761,7 @@ pub fn explain_force(
         // `qi` is a plain question that a chosen true statement points at.
         let matched = find_true_stmt_claim_matching(fp, state, qi);
         return vec![
-            simple(format!(
-                "Try looking at {}.",
-                matched.as_ref().map_or_else(|| q(qi), |(t, _)| q(*t))
-            )),
+            try_looking(&[matched.as_ref().map_or(qi, |(t, _)| *t)]),
             simple(match &matched {
                 Some((t, claim)) => format!(
                     "{}'s true statement is \"{}\", so {} must be {letter}.",
@@ -2096,7 +2061,7 @@ pub fn explain_elimination(
     let ov = fp.options[qi][oi];
     let n = fp.n;
     let answers = &state.answers;
-    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+    let mut steps = vec![try_looking(&[qi])];
     let what_if = || simple(format!("What if {} is {letter}?", q(qi)));
 
     if matches!(
@@ -2662,14 +2627,9 @@ pub fn explain_lookahead(
     lines.push(format!("But {detail}. Contradiction."));
     lines.push(format!("So {} can't be {letter}.", q(qi)));
 
-    let mut steps = vec![simple(format!("Try looking at {}.", q(qi)))];
+    let mut steps = vec![try_looking(&[qi])];
     if involved.len() > 1 {
-        let q_list = involved
-            .iter()
-            .map(|&i| q(i))
-            .collect::<Vec<_>>()
-            .join(", ");
-        steps.push(simple(format!("Try looking at {q_list}.")));
+        steps.push(try_looking(&involved.iter().copied().collect::<Vec<_>>()));
     }
     steps.push(simple(format!("What if {} is {letter}?", q(qi))));
     steps.push(complex(format!("What if {} is {letter}?", q(qi)), lines));
@@ -2820,7 +2780,7 @@ mod tests {
         assert_eq!(
             steps,
             vec![
-                simple("Try looking at #1.".into()),
+                try_looking(&[0]),
                 simple("#1 has only one option left — it must be A.".into()),
             ]
         );
@@ -2839,7 +2799,7 @@ mod tests {
         assert_eq!(
             steps,
             vec![
-                simple("Try looking at #1.".into()),
+                try_looking(&[0]),
                 try_looking(&[0, 1]),
                 simple("#1 asks for #2's answer. #2 is B, so #1 must be B.".into()),
             ]
@@ -2858,7 +2818,7 @@ mod tests {
         assert_eq!(
             steps,
             vec![
-                simple("Try looking at #1.".into()),
+                try_looking(&[0]),
                 simple("What if #1 is B?".into()),
                 simple(
                     "#1 option B: no compatible option exists on the other counting rule.".into()
@@ -2883,7 +2843,7 @@ mod tests {
         assert_eq!(
             steps,
             vec![
-                simple("Try looking at #1.".into()),
+                try_looking(&[0]),
                 try_looking(&[0, 1]),
                 simple("What if #1 is C?".into()),
                 simple(
@@ -2917,7 +2877,7 @@ mod tests {
         assert_eq!(
             steps,
             vec![
-                simple("Try looking at #1.".into()),
+                try_looking(&[0]),
                 simple("What if #1 is A?".into()),
                 complex(
                     "What if #1 is A?".into(),

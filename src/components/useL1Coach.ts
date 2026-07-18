@@ -7,7 +7,7 @@ import type { ArrowReferent, ArrowSpec, CoachMessage } from "../engine/coach-typ
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
 import { pointerKind } from "../lib/pointer.ts";
-import { t } from "../i18n/index.ts";
+import { t, qList } from "../i18n/index.ts";
 
 /** The marking-gesture reminder in the wording that matches the pointer. */
 function markingGesture(): string {
@@ -71,14 +71,6 @@ function stepFocus(step: SolveStep): number[] {
   return step.focusQis.length > 0 ? step.focusQis : [actionTarget(step.action).qi];
 }
 
-/** A natural question list: "#1", "#1 and #3", "#1, #2 and #3". */
-function qList(qis: number[]): string {
-  const labels = qis.map((qi) => `#${qi + 1}`);
-  if (labels.length <= 1) return labels[0] ?? "";
-  if (labels.length === 2) return `${labels[0]} and ${labels[1]}`;
-  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
-}
-
 /**
  * The gentle "start here" pointer for a step — names and points at every
  * question it reads, wording the available move as pin-down (force) vs.
@@ -138,7 +130,9 @@ function deriveMarks(questions: QuestionState[], optionCount: number): EngineSta
 function explainLine(steps: ExplainStep[]): string {
   if (steps.length === 0) return "";
   const last = steps[steps.length - 1];
-  return last.type === "simple" ? last.text : last.header;
+  if (last.type === "complex") return last.header;
+  if (last.type === "look") return t().hint.tryLooking(last.qis);
+  return last.text;
 }
 
 /**

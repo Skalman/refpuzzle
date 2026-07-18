@@ -9,6 +9,13 @@ function tapVerb(p: PointerKind): string {
   return p === "coarse" ? "Tap" : "Click";
 }
 
+/** A natural question list: "#1", "#1 and #3", "#1, #2 and #3". */
+export function qList(qis: number[]): string {
+  const labels = qis.map((qi) => `#${qi + 1}`);
+  if (labels.length <= 1) return labels[0] ?? "";
+  return `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}`;
+}
+
 export default {
   app: {
     title: "Refpuzzle",
@@ -62,6 +69,11 @@ export default {
     guidedLead: "Here's one you can get:",
     mistakeAnswer: (q: number) => `Your answer to #${q} looks off.`,
     mistakeElim: (q: number) => `Your elimination on #${q} looks off.`,
+  },
+  // Hint panel: the navigation pointer the frontend owns — deduce-rule, question,
+  // and option prose all come from Rust. `qis` are 0-based question indices.
+  hint: {
+    tryLooking: (qis: number[]) => `Try looking at ${qList(qis)}.`,
   },
   daily: {
     dayNumber: (num: number) => `Day #${num}`,

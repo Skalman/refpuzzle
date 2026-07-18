@@ -19,9 +19,11 @@
 - `pnpm test` runs the Rust test suite (`cargo test --release`); TS code is
   covered by `pnpm lint` (type-checking) and the wasm boundary itself.
 - All cargo commands run in the root dir, not in rust/
-- Rust owns all question types, logic, and prose. The frontend never models
-  a `QuestionType`; it holds the compact blob plus rendered board text
-  (`PuzzleHandle.renderBoard` → question prompt + option labels) and marks.
+- Rust owns all question types, logic, and reasoning prose (deduce-rule,
+  question, and option text). The frontend never models a `QuestionType`; it
+  holds the compact blob plus rendered board text (`PuzzleHandle.renderBoard` →
+  question prompt + option labels) and marks. UI/navigation framing may render
+  frontend-side from structured wire data (e.g. hint `Look` → `hint.tryLooking`).
 - TS engine survivors in `src/engine/`: `state.ts` (mark derivation),
   `types.ts` (Puzzle/marks types + letter helpers), `hint-types.ts` (hint wire
   types), `coach-types.ts` (L1 in-play coach arrow/message types).

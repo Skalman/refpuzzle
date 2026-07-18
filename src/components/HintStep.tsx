@@ -1,4 +1,5 @@
 import type { ExplainStep } from "../engine/hint-types.ts";
+import { t } from "../i18n/index.ts";
 
 export function HintStep({ step }: { step: ExplainStep }) {
   if (step.type === "complex") {
@@ -14,5 +15,6 @@ export function HintStep({ step }: { step: ExplainStep }) {
       </div>
     );
   }
+  if (step.type === "look") return <>{t().hint.tryLooking(step.qis)}</>;
   return <>{step.text}</>;
 }
