@@ -1,8 +1,9 @@
-import { defineConfig } from "vite";
+import { defineConfig, minifySync } from "vite";
 import { preact } from "@preact/preset-vite";
 import wasm from "vite-plugin-wasm";
 import { minify as minifyHtml } from "html-minifier-terser";
 import { brotliCompressSync, constants } from "node:zlib";
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
@@ -83,6 +84,32 @@ function brotliPlugin(): Plugin {
   };
 }
 
+/**
+ * Injects the precache manifest (hashed /assets + shell files) into the built SW
+ * and minifies it. SHELL_CACHE derives from the asset hashes, so each build
+ * rotates the shell cache; the puzzle-data cache (sw.js) is left untouched.
+ */
+function swPrecachePlugin(): Plugin {
+  return {
+    name: "sw-precache",
+    apply: "build",
+    closeBundle() {
+      const dist = join(__dirname, "dist");
+      const swPath = join(dist, "sw.js");
+      const assets = readdirSync(join(dist, "assets")).map((file) => `/assets/${file}`);
+      const precache = ["/", "/logo.svg", "/manifest.json", ...assets].sort();
+      const hash = createHash("sha256").update(precache.join(",")).digest("hex").slice(0, 8);
+
+      const sw = readFileSync(swPath, "utf8")
+        .replace(/const SHELL_CACHE = "[^"]*";/, `const SHELL_CACHE = "refpuzzle-${hash}";`)
+        .replace(/const PRECACHE = \[[^\]]*\];/, `const PRECACHE = ${JSON.stringify(precache)};`);
+      // Inject before minifying — the regex needs the readable source.
+      const { code } = minifySync(swPath, sw);
+      writeFileSync(swPath, code);
+    },
+  };
+}
+
 // Vite leaves index.html and its inline <script>/<style> unminified. Runs last,
 // after every tag has been injected.
 function htmlMinifyPlugin(): Plugin {
@@ -110,6 +137,7 @@ export default defineConfig({
     versionPlugin(),
     wasmPreloadPlugin(),
     brotliPlugin(),
+    swPrecachePlugin(),
     htmlMinifyPlugin(),
   ],
   build: {
