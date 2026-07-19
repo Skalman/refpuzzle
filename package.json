@@ -9,8 +9,8 @@
     "build": "pnpm wasm && pnpm lint && vite build",
     "preview": "vite preview",
     "lint": "oxlint --type-aware --type-check src/",
-    "fmt": "oxfmt --write src/ tests/",
-    "fmt:check": "oxfmt --check src/ tests/",
+    "fmt": "oxfmt --write src/ tests/ public/sw.js *.ts *.json",
+    "fmt:check": "oxfmt --check src/ tests/ public/sw.js *.ts *.json",
     "gen": "cargo run --release -- gen",
     "check": "cargo run --release -- check",
     "test": "cargo test --release"
