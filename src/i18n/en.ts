@@ -29,10 +29,10 @@ export default {
   },
   difficulty: {
     1: "Intro",
-    2: "Beginner",
-    3: "Easy",
-    4: "Medium",
-    5: "Hard",
+    2: "Easy",
+    3: "Medium",
+    4: "Hard",
+    5: "Harder",
     6: "Expert",
   } as Record<number, string>,
   puzzle: {
