@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::check_form;
 use crate::check_well_posed;
+use crate::construct;
 use crate::deduce;
 use crate::format;
 use crate::serialize;
@@ -97,6 +98,13 @@ pub struct PuzzleCheckResult {
     /// Shareable link opened on the solver's resolved cells. A date route for the
     /// served corpus; a self-contained `/playground` link (blob embedded) otherwise.
     pub solve_link: String,
+    /// Solve from the start under the puzzle's own generation accept-gate engine
+    /// (`generation(recipe_depth)`). `None` for keyless (playground) puzzles.
+    /// `Some(false)` means it no longer solves under that engine — a corpus-drift /
+    /// stale-bake signal, since generation only admits puzzles this engine solves.
+    pub recipe_depth: Option<usize>,
+    pub recipe_solve_ok: Option<bool>,
+    pub recipe_solve_answered: Option<usize>,
     pub brute_count: usize,
     pub brute_solutions: Vec<String>,
     /// One link per `brute_solutions` entry, same shape as `solve_link`.
@@ -197,6 +205,30 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
         .collect()
 }
 
+/// Re-solve from the start under the puzzle's own generation recipe depth — the
+/// exact accept-gate engine (`EngineConfig::generation(depth)`, `n*15` iters). The
+/// level is parsed from the `MMDD-L` key; `None` for keyless (playground) puzzles.
+/// Returns `(depth, solved, answered)`.
+fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)> {
+    let level: usize = key.rsplit_once('-')?.1.parse().ok()?;
+    if !(1..=6).contains(&level) {
+        return None;
+    }
+    let depth = construct::RECIPES[level - 1].lookahead_deduce_until;
+    let out = solve_deduce::run_engine(
+        fp,
+        fp.initial_state,
+        solve_deduce::EngineConfig::generation(depth),
+        fp.n * 15,
+        &mut solve_deduce::NoSteps,
+    );
+    let answered = out.state.answers[..fp.n]
+        .iter()
+        .filter(|a| a.is_some())
+        .count();
+    Some((depth, out.solved, answered))
+}
+
 /// `year = Some(y)` (always non-empty) renders date-route links (served corpus,
 /// key is MMDD-L); `year = None` renders self-contained `/playground` links with
 /// the puzzle blob embedded (single puzzles, stdin, files outside the corpus).
@@ -232,6 +264,9 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
             solve_answered: 0,
             solve_steps: Vec::new(),
             solve_link: String::new(),
+            recipe_depth: None,
+            recipe_solve_ok: None,
+            recipe_solve_answered: None,
             brute_count: 1,
             brute_solutions: Vec::new(),
             brute_links: Vec::new(),
@@ -255,6 +290,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
 
     let cr = run_check(fp, key);
     let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
+    let recipe = recipe_depth_solve(fp, key);
 
     let solutions = solve_brute::solve(fp, 10);
 
@@ -323,6 +359,9 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
         solve_answered: answered,
         solve_steps: cr.steps,
         solve_link,
+        recipe_depth: recipe.map(|(d, _, _)| d),
+        recipe_solve_ok: recipe.map(|(_, ok, _)| ok),
+        recipe_solve_answered: recipe.map(|(_, _, a)| a),
         brute_count,
         brute_solutions,
         brute_links,
@@ -526,8 +565,21 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     } else {
         red(&format!("stuck {}/{n}", r.solve_answered))
     };
-    writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead").unwrap();
+    writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead (full)").unwrap();
     writeln!(w, "    {}", dim(&r.solve_link)).unwrap();
+
+    // Same engine at this level's accept-gate (recipe) depth — a drift signal if it
+    // no longer solves.
+    if let Some(ok) = r.recipe_solve_ok {
+        let d = r.recipe_depth.unwrap_or(0);
+        let ans = r.recipe_solve_answered.unwrap_or(0);
+        let label = if ok {
+            green(&format!("solved {ans}/{n} (d={d})"))
+        } else {
+            yellow(&format!("stuck {ans}/{n} (d={d})"))
+        };
+        writeln!(w, "  {:<28} {label}", "Deduce+lookahead (recipe)").unwrap();
+    }
 
     // Brute
     if r.brute_count == 1 {
@@ -579,6 +631,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
     let mut ambiguous: Vec<&str> = Vec::new();
     let mut mismatches: Vec<&str> = Vec::new();
     let mut not_answerable: Vec<&str> = Vec::new();
+    let mut recipe_stuck: Vec<&str> = Vec::new();
 
     for r in results {
         if !r.form_warnings.is_empty() {
@@ -600,6 +653,9 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         }
         if !r.ambiguous.is_empty() {
             not_answerable.push(&r.key);
+        }
+        if r.recipe_solve_ok == Some(false) {
+            recipe_stuck.push(&r.key);
         }
     }
 
@@ -656,15 +712,32 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
     writeln!(w, "  {}", bold("Solve methods")).unwrap();
     writeln!(
         w,
-        "    deduce+lookahead    {}, {}, {}",
+        "    {:<28}{}, {}, {}",
+        "deduce+lookahead (full)",
         ok_n(n_solve_ok),
         bad_n(stuck.len(), "stuck"),
         bad_n(contradictions.len(), "contradiction")
     )
     .unwrap();
+    // Same deduce+lookahead engine at each level's accept-gate (recipe) depth —
+    // informational (the full run + brute are the pass/fail gates). "stuck" flags
+    // corpus drift: admitted puzzles that no longer solve at their recipe depth.
+    let n_recipe_graded = results
+        .iter()
+        .filter(|r| r.recipe_solve_ok.is_some())
+        .count();
     writeln!(
         w,
-        "    brute               {}, {}",
+        "    {:<28}{}, {}",
+        "deduce+lookahead (recipe)",
+        ok_n(n_recipe_graded - recipe_stuck.len()),
+        warn_n(recipe_stuck.len(), "stuck")
+    )
+    .unwrap();
+    writeln!(
+        w,
+        "    {:<28}{}, {}",
+        "brute",
         ok_n(total - ambiguous.len()),
         bad_n(ambiguous.len(), "ambiguous")
     )
@@ -692,6 +765,16 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
             "  Form ({}): {}",
             form_warnings.len(),
             form_warnings.join(" ")
+        )
+        .unwrap();
+    }
+
+    if !recipe_stuck.is_empty() {
+        writeln!(
+            w,
+            "\nStuck at recipe depth ({}): {}",
+            recipe_stuck.len(),
+            recipe_stuck.join(" ")
         )
         .unwrap();
     }
