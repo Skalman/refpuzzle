@@ -482,21 +482,6 @@ fn apply_count(
         }
         let ov = ov.value();
 
-        // The committed count must be achievable; otherwise qi's answer is
-        // impossible. Mirrors the unanswered CountExceeded/CountImpossible (which
-        // stop running once qi is answered) and reuses the `cr` already computed.
-        if cr.min() > ov {
-            push(
-                DeduceRule::CountExceeded,
-                DeduceAction::Eliminate { qi, oi: a.idx() },
-            );
-        } else if cr.max() < ov {
-            push(
-                DeduceRule::CountImpossible,
-                DeduceAction::Eliminate { qi, oi: a.idx() },
-            );
-        }
-
         if cr.min() == ov && cr.possible > 0 {
             for j in from..to {
                 if answers[j].is_none() {
