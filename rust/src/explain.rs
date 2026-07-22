@@ -7,8 +7,11 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-use crate::check_answer::{count_matching, count_pred, count_range};
-use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
+use crate::check_answer::{Pred, count_matching, count_pred, count_range};
+use crate::deduce::{
+    DeduceAction, DeduceResult, DeduceRule, apply_action, compute_count_bounds,
+    compute_letter_cells, contradiction_question, deduce,
+};
 use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};
 use crate::types::*;
@@ -670,6 +673,7 @@ fn parity_elim_detail(
 /// eliminated, so a new variant must supply a reason (or join the explicit
 /// no-reason arm). Mirrors the exhaustive `render::question_text`.
 pub fn explain_elim_detail(
+    fp: &FlatPuzzle,
     qt: &QuestionType,
     qi: usize,
     oi: usize,
@@ -693,35 +697,26 @@ pub fn explain_elim_detail(
 
         QuestionType::MostCommonCount => {
             if let Some(ov) = ov {
-                let mut counts = [0u8; 5];
-                for i in 0..n {
-                    if let Some(a) = answers[i] {
-                        counts[a.idx()] += 1;
-                    }
+                // Mirror `MostCommonCountElim`: a letter's known floor is its
+                // min (answered + forced-unanswered), its ceiling is its max.
+                let mut max_known = 0u8;
+                let mut max_possible = 0u8;
+                for l in LETTERS {
+                    let (count, guaranteed, possible) = count_tally(state, Pred::IsAnswer(l), 0, n);
+                    max_known = max_known.max(count + guaranteed);
+                    max_possible = max_possible.max(count + guaranteed + possible);
                 }
-                let max_known = counts.iter().copied().max().unwrap();
+                let plural = |k: u8| if k == 1 { "" } else { "s" };
                 if ov < max_known {
-                    let s = if ov == 1 { "" } else { "s" };
                     return detail(
                         format!(
-                            "{} option {letter} claims the most common answer appears {ov} time{s}, but one already appears {max_known} times.",
-                            q(qi)
+                            "{} option {letter} claims the most common answer appears {ov} time{}, but one already appears {max_known} time{}.",
+                            q(qi),
+                            plural(ov),
+                            plural(max_known)
                         ),
                         None,
                     );
-                }
-                let mut max_possible = 0u8;
-                for l in LETTERS {
-                    let mut c = 0u8;
-                    let mut r = 0u8;
-                    for i in 0..n {
-                        match answers[i] {
-                            Some(a) if a == l => c += 1,
-                            None if !is_eliminated(eliminated, i, l.idx()) => r += 1,
-                            _ => {}
-                        }
-                    }
-                    max_possible = max_possible.max(c + r);
                 }
                 if ov > max_possible {
                     return detail(
@@ -1132,28 +1127,46 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::SameAs => {
-            if let Some(v) = ov {
-                let target = v as usize;
-                if target == qi {
-                    return detail(
-                        format!(
-                            "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
-                            q(qi),
-                            q(qi)
-                        ),
-                        None,
-                    );
+            match ov {
+                // A "none" answer claims no other question shares this letter
+                // (OnlySameNoneMatch fires for SameAs too, via the shared arm).
+                None => {
+                    for j in 0..n {
+                        if j != qi && answers[j] == Some(letter) {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims no other question has answer {letter}, but {} does.",
+                                    q(qi),
+                                    q(j)
+                                ),
+                                Some(j),
+                            );
+                        }
+                    }
                 }
-                if target < n && is_eliminated(eliminated, target, oi) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
+                Some(v) => {
+                    let target = v as usize;
+                    if target == qi {
+                        return detail(
+                            format!(
+                                "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
+                                q(qi),
+                                q(qi)
+                            ),
+                            None,
+                        );
+                    }
+                    if target < n && is_eliminated(eliminated, target, oi) {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
+                                q(qi),
+                                q(target),
+                                q(target)
+                            ),
+                            Some(target),
+                        );
+                    }
                 }
             }
             None
@@ -1189,45 +1202,31 @@ pub fn explain_elim_detail(
                 }
                 if v < 5 {
                     let claimed = LETTERS[v as usize];
-                    let (mut rc, mut rr, mut sc, mut sr) = (0u8, 0u8, 0u8, 0u8);
-                    let ref_mask = 1u8 << answer.idx();
-                    let claimed_mask = 1u8 << v;
-                    for j in 0..n {
-                        match answers[j] {
-                            Some(aj) => {
-                                if aj == *answer {
-                                    rc += 1;
-                                }
-                                if aj == claimed {
-                                    sc += 1;
-                                }
-                            }
-                            None => {
-                                if eliminated[j] & ref_mask == 0 {
-                                    rr += 1;
-                                }
-                                if eliminated[j] & claimed_mask == 0 {
-                                    sr += 1;
-                                }
-                            }
-                        }
-                    }
-                    if rc + rr < sc {
+                    // Mirror `EqualCountRangeElim`: both bounds fold sibling Count
+                    // questions in (via `CountBounds`), so a floor/ceiling from a
+                    // CountAnswer elsewhere can force the contradiction — not just
+                    // placed and eliminated cells.
+                    let cells = compute_letter_cells(answers, eliminated, n);
+                    let bounds = compute_count_bounds(fp, answers, eliminated, n);
+                    let (ai, ci) = (answer.idx(), v as usize);
+                    if bounds.upper(&cells, ai) < bounds.lower(&cells, ci) {
                         return detail(
                             format!(
-                                "{} option {letter} claims {claimed} has the same count as {answer}, but {answer} can have at most {} while {claimed} already has {sc}.",
+                                "{} option {letter} claims {claimed} has the same count as {answer}, but {answer} can appear at most {} times while {claimed} must appear at least {}.",
                                 q(qi),
-                                rc + rr
+                                bounds.upper(&cells, ai),
+                                bounds.lower(&cells, ci)
                             ),
                             None,
                         );
                     }
-                    if sc + sr < rc {
+                    if bounds.upper(&cells, ci) < bounds.lower(&cells, ai) {
                         return detail(
                             format!(
-                                "{} option {letter} claims {claimed} has the same count as {answer}, but {claimed} can have at most {} while {answer} already has {rc}.",
+                                "{} option {letter} claims {claimed} has the same count as {answer}, but {claimed} can appear at most {} times while {answer} must appear at least {}.",
                                 q(qi),
-                                sc + sr
+                                bounds.upper(&cells, ci),
+                                bounds.lower(&cells, ai)
                             ),
                             None,
                         );
@@ -1593,15 +1592,17 @@ pub fn explain_force(
         }
     }
 
-    // Counting: everything in range is answered, so the count is fixed.
+    // Counting (CountAllAnswered): every cell in range is now decided one way or the
+    // other (no open possibilities), so the count is pinned to a single value. Uses
+    // the deduce-side tally — a cell forced-but-not-yet-answered still counts.
     if let Some(pred) = count_pred(&qt) {
         let (from, to) = count_range(&qt, n);
-        let cr = count_matching(answers, &state.eliminated, pred, from, to);
-        if cr.remaining == 0 {
+        let (count, guaranteed, possible) = count_tally(state, pred, from, to);
+        if possible == 0 {
+            let total = count + guaranteed;
             steps.push(simple(format!(
-                "There are {} {}, so {} must be {letter}.",
-                cr.count,
-                count_rule_label(&qt, cr.count),
+                "There are {total} {}, so {} must be {letter}.",
+                count_rule_label(&qt, total),
                 q(qi)
             )));
             return steps;
@@ -1774,14 +1775,12 @@ pub fn explain_force(
         ];
     }
 
-    // No branch matched — a rule-wiring bug. Loud in debug, graceful in release.
-    debug_assert!(
-        false,
+    // No branch matched — a rule-wiring bug. Crash (with analytics) rather than
+    // show a reason-less "must be {letter}."
+    panic!(
         "explain_force: no explanation for {} = {letter:?} (rule {rule:?})",
         qi + 1
-    );
-    steps.push(simple(format!("{} must be {letter}.", q(qi))));
-    steps
+    )
 }
 
 /// Highest lower bound on the count of `letter_index` implied by a sibling
@@ -1996,6 +1995,38 @@ fn find_positional_range_source(
     None
 }
 
+/// The deduce-side count tally over `[from, to)`: `(count, guaranteed, possible)`
+/// — answered matches, unanswered cells *locked* to a match, and unanswered cells
+/// that could go either way. Mirrors `count_matching_mask` in deduce so explain's
+/// count triggers match `apply_count`'s `min` (`count + guaranteed`) and `max`
+/// (`+ possible`) exactly. (The pred-only `count_matching` folds guaranteed into
+/// `remaining`, understating the fixed count whenever a cell is already forced.)
+fn count_tally(state: &State, pred: Pred, from: usize, to: usize) -> (u8, u8, u8) {
+    let mask: u8 = (0..5)
+        .filter(|&b| pred.matches(LETTERS[b]))
+        .fold(0u8, |m, b| m | 1 << b);
+    let non_mask = !mask & ALL_OPTIONS_MASK;
+    let (mut count, mut guaranteed, mut possible) = (0u8, 0u8, 0u8);
+    for i in from..to {
+        if let Some(a) = state.answers[i] {
+            if (mask >> a.idx()) & 1 == 1 {
+                count += 1;
+            }
+        } else {
+            let remaining_bits = !state.eliminated[i] & ALL_OPTIONS_MASK;
+            if remaining_bits & mask == 0 {
+                continue;
+            }
+            if remaining_bits & non_mask == 0 {
+                guaranteed += 1;
+            } else {
+                possible += 1;
+            }
+        }
+    }
+    (count, guaranteed, possible)
+}
+
 /// A sibling count question already at its stated count (so `qi` can't add
 /// another match), or one short (so `qi` must match) — `(src_qi, prose)`.
 /// Mirrors `explainCountSaturation`.
@@ -2019,26 +2050,31 @@ fn explain_count_saturation(
             continue;
         };
         let (from, to) = count_range(&src_qt, n);
-        let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
-        if cr.count == value && pred.matches(letter) {
+        let (count, guaranteed, possible) = count_tally(state, pred, from, to);
+        let min = count + guaranteed;
+        let max = count + guaranteed + possible;
+        // CountSaturated: `value` matches are already locked in (answered or forced),
+        // so no other question can take a matching option.
+        if pred.matches(letter) && min == value && possible > 0 {
             return Some((
                 src,
                 format!(
-                    "{} says there are {value} {}. There are already {value}, so {} can't also be {letter}.",
+                    "{} says there are {value} {}, and {value} are already fixed — so {} can't also be {letter}.",
                     q(src),
                     count_rule_label(&src_qt, value),
                     q(qi)
                 ),
             ));
         }
-        if cr.count + cr.remaining == value && cr.remaining > 0 && !pred.matches(letter) {
+        // CountMustMatchElim: the count can only reach `value` if every remaining
+        // unknown matches, so a non-matching option is impossible.
+        if !pred.matches(letter) && max == value && possible > 0 {
             return Some((
                 src,
                 format!(
-                    "{} says there are {value} {}. Only {} found so far, and all remaining unknowns must match — so {} can't be {letter}.",
+                    "{} says there are {value} {}. Only {min} are fixed so far and every remaining unknown must match — so {} can't be {letter}.",
                     q(src),
                     count_rule_label(&src_qt, value),
-                    cr.count,
                     q(qi)
                 ),
             ));
@@ -2172,7 +2208,11 @@ pub fn explain_elimination(
 
     if matches!(rule, DeduceRule::OnlySameNoneForward) {
         for src in 0..n {
-            if !matches!(fp.question_types[src], QuestionType::OnlySame) {
+            // Fires for both OnlySame and SameAs (the shared "none = unique" arm).
+            if !matches!(
+                fp.question_types[src],
+                QuestionType::OnlySame | QuestionType::SameAs
+            ) {
                 continue;
             }
             let Some(src_ans) = answers[src] else {
@@ -2312,21 +2352,19 @@ pub fn explain_elimination(
     }
 
     // Generic fallback: the per-type elimination reason.
-    let detail = explain_elim_detail(&qt, qi, oi, ov, state, n);
+    let detail = explain_elim_detail(fp, &qt, qi, oi, ov, state, n);
     if let Some(other) = detail.as_ref().and_then(|d| d.other_qi) {
         steps.push(try_looking(&[qi, other]));
     }
     steps.push(what_if());
     match detail {
         Some(d) => steps.push(simple(d.text)),
-        None => {
-            debug_assert!(
-                false,
-                "no explain_elim_detail for {} option {letter:?} (rule {rule:?})",
-                qi + 1
-            );
-            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
-        }
+        // No per-type reason and no rule-specific branch above — crash (with
+        // analytics) rather than show a reason-less "can't be {letter}."
+        None => panic!(
+            "no explain_elim_detail for {} option {letter:?} (rule {rule:?})",
+            qi + 1
+        ),
     }
     steps
 }
@@ -2456,12 +2494,10 @@ fn explain_multi_elim(
         }
     }
 
-    debug_assert!(
-        false,
-        "no explain_multi_elim handler for {rule:?} at {}",
-        qi + 1
-    );
-    (format!("{} can't be those options.", q(qi)), None)
+    // No handler for this multi-elim rule, or its saturating source couldn't be
+    // reconstructed — a hint we can't justify. Crash (with analytics) rather than
+    // show a reason-less "can't be those options."
+    panic!("no explain_multi_elim handler for {rule:?} at {}", qi + 1)
 }
 
 /// Turn one `DeduceResult` into narrated hint steps. Mirrors `explainDeduce`.
@@ -2526,6 +2562,30 @@ fn sorted_qs(extra: usize, qis: &[usize]) -> Vec<usize> {
     all
 }
 
+/// One elimination step of a lookahead chain, rendered through the full
+/// `explain_elimination` logic and flattened to a single reason line, plus the
+/// questions it highlights. The redundant "What if …?" step is dropped — the whole
+/// chain already sits under one.
+fn elim_chain_line(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    oi: usize,
+    rule: DeduceRule,
+) -> (String, Vec<usize>) {
+    let steps = explain_elimination(fp, state, qi, oi, rule);
+    let skip = format!("What if {} is {}?", q(qi), LETTERS[oi]);
+    let reason = steps
+        .iter()
+        .filter_map(|s| match s {
+            ExplainStep::Simple { text } if *text != skip => Some(text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    (reason, leading_questions(&steps))
+}
+
 /// Narrate a refuted lookahead assumption: replay the chain, then the surfaced
 /// contradiction. Mirrors the TS `explainLookahead`.
 pub fn explain_lookahead(
@@ -2544,76 +2604,69 @@ pub fn explain_lookahead(
     let mut involved: BTreeSet<usize> = BTreeSet::from([qi]);
     let mut lines: Vec<String> = Vec::new();
 
-    for dr in &result.chain {
-        match dr.action {
-            DeduceAction::Force { qi: fqi, answer } => {
-                involved.insert(fqi);
-                let reason = brief_force_reason(fp, &hyp, fqi, answer);
-                lines.push(if reason.is_empty() {
-                    format!("{} must be {answer}.", q(fqi))
-                } else {
-                    format!("{} must be {answer} ({reason}).", q(fqi))
-                });
-                hyp.eliminated[fqi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
-                hyp.answers[fqi] = Some(answer);
+    // Re-derive the chain exactly as `probe_candidate` built it — round by round,
+    // full `deduce`, sorted by rule — and render each step's reason against that
+    // round's *pre-state*. The recorded chain is flat, but its deductions came in
+    // batches all derived from one pre-round state; replaying them one at a time
+    // would show a later step a state that earlier same-round steps have further
+    // mutated, collapsing (say) a count bound the reason relies on. `deduce` is
+    // deterministic, so this reproduces `result.chain` verbatim.
+    let mut rendered = 0;
+    'rounds: while rendered < result.chain.len() {
+        let mut drs = deduce(fp, &hyp);
+        if drs.is_empty() {
+            break;
+        }
+        drs.sort_by_key(|dr| dr.rule as u8);
+        let round_pre = hyp;
+        for dr in &drs {
+            // The refuting deduction isn't in the chain — probe_candidate stops here.
+            if contradiction_question(&dr.action, &hyp).is_some() {
+                break 'rounds;
             }
-            DeduceAction::EliminateMulti {
-                question_mask,
-                option_mask,
-            } => {
-                let qis: Vec<usize> = (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
-                involved.extend(qis.iter().copied());
-                let opt_str = (0..5)
-                    .filter(|&b| (option_mask >> b) & 1 == 1)
-                    .map(|b| LETTERS[b].to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
-                lines.push(format!("Eliminate {opt_str} from {q_list}."));
-                for &i in &qis {
-                    hyp.eliminated[i] |= option_mask;
+            match dr.action {
+                DeduceAction::Force { qi: fqi, answer } => {
+                    involved.insert(fqi);
+                    let reason = brief_force_reason(fp, &round_pre, fqi, answer);
+                    lines.push(if reason.is_empty() {
+                        format!("{} must be {answer}.", q(fqi))
+                    } else {
+                        format!("{} must be {answer} ({reason}).", q(fqi))
+                    });
                 }
-            }
-            DeduceAction::Eliminate { qi: eqi, oi } => {
-                involved.insert(eqi);
-                let mut handled = false;
-                if matches!(
-                    dr.rule,
-                    DeduceRule::CountSaturated | DeduceRule::CountMustMatchElim
-                ) && let Some((src_qi, text)) = explain_count_saturation(fp, &hyp, eqi, oi)
-                {
-                    involved.insert(src_qi);
+                DeduceAction::EliminateMulti {
+                    question_mask,
+                    option_mask,
+                } => {
+                    let qis: Vec<usize> =
+                        (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
+                    involved.extend(qis.iter().copied());
+                    let opt_str = (0..5)
+                        .filter(|&b| (option_mask >> b) & 1 == 1)
+                        .map(|b| LETTERS[b].to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+                    lines.push(format!("Eliminate {opt_str} from {q_list}."));
+                }
+                DeduceAction::Eliminate { qi: eqi, oi } => {
+                    involved.insert(eqi);
+                    // Reuse the single-elimination explainer so every per-rule reason
+                    // (ConsecIdent, count, positional, true-statement, …) reads the same
+                    // inside a chain as on its own — no thinner second path to drift.
+                    let (reason, extra) = elim_chain_line(fp, &round_pre, eqi, oi, dr.rule);
+                    involved.extend(extra);
                     lines.push(format!(
-                        "Eliminate {} option {}: {text}",
+                        "Eliminate {} option {}: {reason}",
                         q(eqi),
                         LETTERS[oi]
                     ));
-                    handled = true;
                 }
-                if !handled {
-                    let ov = fp.options[eqi][oi];
-                    match explain_elim_detail(&fp.question_types[eqi], eqi, oi, ov, &hyp, n) {
-                        Some(d) => {
-                            lines.push(format!(
-                                "Eliminate {} option {}: {}",
-                                q(eqi),
-                                LETTERS[oi],
-                                d.text
-                            ));
-                        }
-                        None => {
-                            debug_assert!(
-                                false,
-                                "no explain for ELIM {} option {} (rule {:?})",
-                                eqi + 1,
-                                LETTERS[oi],
-                                dr.rule
-                            );
-                            lines.push(format!("Eliminate {} option {}.", q(eqi), LETTERS[oi]));
-                        }
-                    }
-                }
-                hyp.eliminated[eqi] |= 1 << oi;
+            }
+            apply_action(&dr.action, &mut hyp);
+            rendered += 1;
+            if rendered >= result.chain.len() {
+                break 'rounds;
             }
         }
     }
@@ -2736,8 +2789,16 @@ mod tests {
         .unwrap();
         // Option C claims first A is #3, but #2 already has A and comes before it.
         let state = state_with(&fp, &[None, Some(Answer::A), None]);
-        let d = explain_elim_detail(&fp.question_types[0], 0, 2, OptionValue::num(2), &state, 3)
-            .unwrap();
+        let d = explain_elim_detail(
+            &fp,
+            &fp.question_types[0],
+            0,
+            2,
+            OptionValue::num(2),
+            &state,
+            3,
+        )
+        .unwrap();
         assert_eq!(
             d.text,
             "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."
@@ -2754,8 +2815,16 @@ mod tests {
         .unwrap();
         // Q2 and Q3 answered A ⇒ A appears twice; option A can't be least common.
         let state = state_with(&fp, &[None, Some(Answer::A), Some(Answer::A)]);
-        let d = explain_elim_detail(&fp.question_types[0], 0, 0, OptionValue::num(0), &state, 3)
-            .unwrap();
+        let d = explain_elim_detail(
+            &fp,
+            &fp.question_types[0],
+            0,
+            0,
+            OptionValue::num(0),
+            &state,
+            3,
+        )
+        .unwrap();
         assert_eq!(
             d.text,
             "#1 option A claims A is the least common, but A appears 2 time(s) while B appears only 0."
