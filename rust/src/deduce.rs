@@ -599,9 +599,8 @@ fn apply_count(
 }
 
 /// Per-qi OnlyOdd/OnlyEven dispatch. `parity` is 1 for OnlyOdd (1-indexed odd =
-/// 0-indexed even positions), 0 for OnlyEven. The per-option loop runs for whatever
-/// options are live — including a committed answer, whose elimination surfaces a
-/// contradiction — so the check still fires once qi is answered.
+/// 0-indexed even positions), 0 for OnlyEven. Prunes qi's own dead options while
+/// unanswered; `OnlyOddEvenRangeElim` propagates to the other parity questions.
 fn apply_only_odd_even(
     fp: &FlatPuzzle,
     state: &State,
@@ -615,36 +614,40 @@ fn apply_only_odd_even(
     let answers = &state.answers;
     let eliminated = &state.eliminated;
 
-    for oi in 0..5usize {
-        if is_eliminated(eliminated, qi, oi) {
-            continue;
-        }
-        let ov = fp.options[qi][oi];
-        if ov.is_num() {
-            let pos = usize::from(ov.value());
-            if (pos + 1) % 2 == parity && pos < n {
-                if let Some(pa) = answers[pos]
-                    && pa != answer
-                {
-                    push(
-                        DeduceRule::OnlyOddEvenWrongAnswer,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
-                    push(
-                        DeduceRule::OnlyOddEvenRuledOut,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
+    // Prune qi's own dead options; only while unanswered — striking the committed
+    // option would just manufacture a contradiction (check_answer's job).
+    if answers[qi].is_none() {
+        for oi in 0..5usize {
+            if is_eliminated(eliminated, qi, oi) {
+                continue;
             }
-        } else if ov.is_none()
-            && (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
-        {
-            push(
-                DeduceRule::OnlyOddEvenNoneMatch,
-                DeduceAction::Eliminate { qi, oi },
-            );
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let pos = usize::from(ov.value());
+                if (pos + 1) % 2 == parity && pos < n {
+                    if let Some(pa) = answers[pos]
+                        && pa != answer
+                    {
+                        push(
+                            DeduceRule::OnlyOddEvenWrongAnswer,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
+                        push(
+                            DeduceRule::OnlyOddEvenRuledOut,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                }
+            } else if ov.is_none()
+                && (0..n).any(|i| (i + 1) % 2 == parity && answers[i] == Some(answer))
+            {
+                push(
+                    DeduceRule::OnlyOddEvenNoneMatch,
+                    DeduceAction::Eliminate { qi, oi },
+                );
+            }
         }
     }
 
