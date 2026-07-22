@@ -38,14 +38,16 @@ mod wasm_api {
     use crate::check_answer::{Validity, check_answer};
     use crate::check_form::{Severity, check_form};
     use crate::construct;
-    use crate::deduce::{DeduceAction, deduce_assuming_unique};
+    use crate::deduce::{DeduceAction, apply_action, deduce_assuming_unique};
     use crate::difficulty::PROFILES;
     use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
     use crate::lookahead::lookahead_shortest;
     use crate::render;
     use crate::rng::Rng;
     use crate::serialize::{parse_puzzle, puzzle_to_compact_value};
-    use crate::solve_deduce::solve;
+    use crate::solve_deduce::{
+        EngineConfig, SolveStep, StepLog, VERIFY_ITERS_PER_QUESTION, run_engine, solve,
+    };
     use crate::types::{Answer, Claim, FlatPuzzle, MAX_N, QuestionType, State};
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
@@ -149,6 +151,91 @@ mod wasm_api {
         }
     }
 
+    /// Is `a`'s effect already on the board (applying it would be a no-op)?
+    fn action_done(s: &State, a: &DeduceAction) -> bool {
+        match *a {
+            DeduceAction::Force { qi, answer } => s.answers[qi] == Some(answer),
+            DeduceAction::Eliminate { qi, oi } => s.is_eliminated(qi, oi),
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => (0..MAX_N).all(|qi| {
+                question_mask & (1 << qi) == 0
+                    || (0..5).all(|oi| option_mask & (1 << oi) == 0 || s.is_eliminated(qi, oi))
+            }),
+        }
+    }
+
+    /// Replay the from-start solve under `config` and return the first step the
+    /// player hasn't applied yet, explained against its pre-step state — a subset of
+    /// the player's board (every earlier step is already done), so every cited fact
+    /// is visible to them. `None` if the config's solve reaches no undone step.
+    fn fallback_at(fp: &FlatPuzzle, s: &State, config: EngineConfig) -> Option<StepApi> {
+        let mut log = StepLog::default();
+        run_engine(
+            fp,
+            fp.initial_state,
+            config,
+            fp.n * VERIFY_ITERS_PER_QUESTION,
+            &mut log,
+        );
+        let mut replay = fp.initial_state;
+        for step in &log.0 {
+            let action = match step {
+                SolveStep::Deduce(dr) => dr.action,
+                SolveStep::Lookahead(lr) => DeduceAction::Eliminate {
+                    qi: lr.eliminate_qi,
+                    oi: lr.eliminate_oi,
+                },
+            };
+            if !action_done(s, &action) {
+                let explain = match step {
+                    SolveStep::Deduce(dr) => explain_deduce(fp, &replay, dr),
+                    SolveStep::Lookahead(lr) => explain_lookahead(fp, &replay, lr),
+                };
+                return Some(StepApi {
+                    action: action_to_api(action),
+                    focus_qis: leading_questions(&explain),
+                    explain,
+                });
+            }
+            apply_action(&action, &mut replay);
+        }
+        None
+    }
+
+    /// From-start fallback when the current-state engine (deduce + shortest
+    /// lookahead) is stuck. Tries each distinct recipe depth — generation certifies
+    /// the puzzle solves at its own level's depth, and that depth is in this set, so
+    /// one attempt always yields a step (guaranteed hint, without relying on the
+    /// current-state engine reaching that depth) — plus unbounded lookahead as a
+    /// bonus, and returns the shortest-to-explain step. Level-agnostic (no need to
+    /// plumb the level through), and generation is left untouched — its recipe-depth
+    /// accept-gate is the guarantee.
+    fn fallback_step(fp: &FlatPuzzle, s: &State) -> Option<StepApi> {
+        let mut depths: Vec<usize> = construct::RECIPES
+            .iter()
+            .map(|r| r.lookahead_deduce_until)
+            .collect();
+        depths.sort_unstable();
+        depths.dedup();
+        let configs = depths
+            .iter()
+            .map(|&d| EngineConfig::generation(d))
+            .chain(std::iter::once(EngineConfig::verify()));
+        let mut best: Option<StepApi> = None;
+        for config in configs {
+            if let Some(c) = fallback_at(fp, s, config)
+                && best
+                    .as_ref()
+                    .is_none_or(|b| c.explain.len() < b.explain.len())
+            {
+                best = Some(c);
+            }
+        }
+        best
+    }
+
     #[wasm_bindgen]
     pub struct Puzzle {
         fp: FlatPuzzle,
@@ -233,6 +320,11 @@ mod wasm_api {
                     focus_qis: leading_questions(&explain),
                     explain,
                 }
+            } else if let Some(step) = fallback_step(&self.fp, &s) {
+                // Current-state engine stuck: fall back to the from-start solve, which
+                // always has a next step for a solvable puzzle (unlike lookahead from
+                // the player's — possibly off-path — state).
+                step
             } else {
                 return Ok(JsValue::NULL);
             };
