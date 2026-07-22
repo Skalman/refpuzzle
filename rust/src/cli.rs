@@ -4,4 +4,5 @@
 
 pub mod check;
 pub mod diagnose;
+pub mod reference;
 pub mod type_stats;

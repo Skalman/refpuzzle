@@ -276,6 +276,10 @@ fn main() {
             cli::check::format_check_stdin();
             return;
         }
+        "reference" => {
+            cli::reference::reference();
+            return;
+        }
         "type-stats" => {
             let mut attempts: u32 = 10000;
             let mut seed: u32 = 1;
@@ -337,7 +341,7 @@ fn main() {
         }
         _ => {
             eprintln!(
-                "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', 'type-stats', or 'gen-stats'.",
+                "Unknown subcommand: {}. Use 'gen', 'check', 'format-check', 'reference', 'type-stats', or 'gen-stats'.",
                 args[1]
             );
             std::process::exit(1);
@@ -644,8 +648,8 @@ fn dates_in_year(
 }
 
 /// Every shipped daily puzzle as `(label, FlatPuzzle)`, read from the daily dir
-/// (one file per year). Shared by the generator fuzz tests and the symmetry sweep.
-#[cfg(test)]
+/// (one file per year). Shared by the generator fuzz tests, the symmetry sweep,
+/// and the `reference` subcommand.
 pub(crate) fn daily_puzzles() -> Vec<(String, FlatPuzzle)> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../public/puzzles/daily");
     let mut files: Vec<std::path::PathBuf> = std::fs::read_dir(&dir)
