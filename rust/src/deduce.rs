@@ -714,50 +714,51 @@ fn apply_positional_forward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
-    // Per-option elim — runs for every live option, the committed answer included.
-    // Eliminating an answered option surfaces a contradiction; keeping this out of
-    // the unanswered-only branch means answering qi early doesn't lose that
-    // contradiction. Sound either way — a satisfiable answer is never eliminated.
-    for oi in 0..5usize {
-        if is_eliminated(eliminated, qi, oi) {
-            continue;
-        }
-        let ov = fp.options[qi][oi];
-        if ov.is_num() {
-            let pos = usize::from(ov.value());
-            if pos >= scan_start && pos < n {
-                if let Some(pa) = answers[pos]
-                    && pa != answer
-                {
-                    push(
-                        DeduceRule::FirstClosestAfterWrongAnswer,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
-                    push(
-                        DeduceRule::FirstClosestAfterRuledOut,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if (scan_start..pos).any(|j| answers[j] == Some(answer)) {
-                    push(
-                        DeduceRule::FirstClosestAfterEarlierMatch,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if oi == answer.idx() && qi >= scan_start && qi < pos {
-                    push(
-                        DeduceRule::FirstClosestAfterSelfRef,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
+    // Prune qi's own dead options; only while unanswered — striking the committed
+    // option would just manufacture a contradiction (check_answer's job). The
+    // cross-question PositionalRangeAnswered below still fires once qi is answered.
+    if ans.is_none() {
+        for oi in 0..5usize {
+            if is_eliminated(eliminated, qi, oi) {
+                continue;
             }
-        } else if ov.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
-            push(
-                DeduceRule::FirstClosestAfterNoneMatch,
-                DeduceAction::Eliminate { qi, oi },
-            );
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let pos = usize::from(ov.value());
+                if pos >= scan_start && pos < n {
+                    if let Some(pa) = answers[pos]
+                        && pa != answer
+                    {
+                        push(
+                            DeduceRule::FirstClosestAfterWrongAnswer,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
+                        push(
+                            DeduceRule::FirstClosestAfterRuledOut,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if (scan_start..pos).any(|j| answers[j] == Some(answer)) {
+                        push(
+                            DeduceRule::FirstClosestAfterEarlierMatch,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if oi == answer.idx() && qi >= scan_start && qi < pos {
+                        push(
+                            DeduceRule::FirstClosestAfterSelfRef,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                }
+            } else if ov.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+                push(
+                    DeduceRule::FirstClosestAfterNoneMatch,
+                    DeduceAction::Eliminate { qi, oi },
+                );
+            }
         }
     }
 
@@ -1188,50 +1189,51 @@ fn apply_positional_backward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
-    // Per-option elim — runs for every live option, the committed answer included.
-    // Eliminating an answered option surfaces a contradiction; keeping this out of
-    // the unanswered-only branch means answering qi early doesn't lose that
-    // contradiction. Sound either way — a satisfiable answer is never eliminated.
-    for oi in 0..5usize {
-        if is_eliminated(eliminated, qi, oi) {
-            continue;
-        }
-        let ov = fp.options[qi][oi];
-        if ov.is_num() {
-            let pos = usize::from(ov.value());
-            if pos < scan_end {
-                if let Some(pa) = answers[pos]
-                    && pa != answer
-                {
-                    push(
-                        DeduceRule::LastClosestBeforeWrongAnswer,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
-                    push(
-                        DeduceRule::LastClosestBeforeRuledOut,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if ((pos + 1)..scan_end).any(|j| answers[j] == Some(answer)) {
-                    push(
-                        DeduceRule::LastClosestBeforeLaterMatch,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if oi == answer.idx() && qi > pos && qi < scan_end {
-                    push(
-                        DeduceRule::LastClosestBeforeSelfRef,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
+    // Prune qi's own dead options; only while unanswered — striking the committed
+    // option would just manufacture a contradiction (check_answer's job). The
+    // cross-question PositionalRangeAnswered below still fires once qi is answered.
+    if ans.is_none() {
+        for oi in 0..5usize {
+            if is_eliminated(eliminated, qi, oi) {
+                continue;
             }
-        } else if ov.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
-            push(
-                DeduceRule::LastClosestBeforeNoneMatch,
-                DeduceAction::Eliminate { qi, oi },
-            );
+            let ov = fp.options[qi][oi];
+            if ov.is_num() {
+                let pos = usize::from(ov.value());
+                if pos < scan_end {
+                    if let Some(pa) = answers[pos]
+                        && pa != answer
+                    {
+                        push(
+                            DeduceRule::LastClosestBeforeWrongAnswer,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
+                        push(
+                            DeduceRule::LastClosestBeforeRuledOut,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if ((pos + 1)..scan_end).any(|j| answers[j] == Some(answer)) {
+                        push(
+                            DeduceRule::LastClosestBeforeLaterMatch,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                    if oi == answer.idx() && qi > pos && qi < scan_end {
+                        push(
+                            DeduceRule::LastClosestBeforeSelfRef,
+                            DeduceAction::Eliminate { qi, oi },
+                        );
+                    }
+                }
+            } else if ov.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
+                push(
+                    DeduceRule::LastClosestBeforeNoneMatch,
+                    DeduceAction::Eliminate { qi, oi },
+                );
+            }
         }
     }
 
