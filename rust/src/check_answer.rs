@@ -1,6 +1,18 @@
 //! Play-time validity: is an answer to question `qi` valid / pending / invalid on
 //! the current (possibly partial) board? `check_claim` is the single authority the
 //! solver, generator, and UI all share.
+//!
+//! Design goal — *completeness*. This is the single source of truth for
+//! per-question validity, and unlike `deduce` (deliberately incomplete — see its
+//! module doc) it should aim to be complete: its scope is bounded (one question's
+//! constraint against the whole board's marks), so a definite verdict is always
+//! reachable. Judging that question's type + options against the board's answers +
+//! eliminations, return the strongest verdict the marks already force — `Invalid`
+//! once no completion of the open cells can satisfy the question,
+//! `Valid`/`Consistent` once none can break it — and settle for `Pending`/`Neutral`
+//! only while the outcome is genuinely open. Deduce prunes and propagates but must
+//! not re-derive validity; its self-elimination of a question's own options must
+//! never outrun this verdict.
 
 use crate::types::*;
 

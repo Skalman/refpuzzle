@@ -644,36 +644,6 @@
       "expect": "1a"
     },
     {
-      "name": "ClosestAfter: position out of range → eliminate",
-      "rule": "FirstClosestAfterOutOfRange",
-      "puzzle": {
-        "o": [
-          [null, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "ClosestAfter",
-            "a": 0,
-            "q": 1
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1b"
-    },
-    {
       "name": "ClosestBefore: position has wrong answer → eliminate",
       "rule": "LastClosestBeforeWrongAnswer",
       "puzzle": {
@@ -705,35 +675,6 @@
     },
     {
       "section": "=== Eliminations: structural ==="
-    },
-    {
-      "name": "OnlyOdd: position is even (1-indexed) → eliminate",
-      "rule": "OnlyOddEvenWrongParity",
-      "puzzle": {
-        "o": [
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "OnlyOdd",
-            "a": 0
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1b"
     },
     {
       "name": "OnlyOdd: position has wrong answer → eliminate",
@@ -794,35 +735,6 @@
       "expect": "2a"
     },
     {
-      "name": "OnlyEven: position is odd (1-indexed) → eliminate",
-      "rule": "OnlyOddEvenWrongParity",
-      "puzzle": {
-        "o": [
-          [1, 3, 2, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "OnlyEven",
-            "a": 0
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1c"
-    },
-    {
       "name": "OnlyEven: position has wrong answer → eliminate",
       "rule": "OnlyOddEvenWrongAnswer",
       "puzzle": {
@@ -878,35 +790,6 @@
         ]
       },
       "state": ["", "a", "", ""],
-      "expect": "1a"
-    },
-    {
-      "name": "EqualCount: option is reference letter → eliminate",
-      "rule": "EqualCountSelfRef",
-      "puzzle": {
-        "o": [
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "EqualCount",
-            "a": 0
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
       "expect": "1a"
     },
     {
@@ -1061,34 +944,6 @@
       "expect": "1a"
     },
     {
-      "name": "PrevSame: target >= self → eliminate",
-      "rule": "PrevSameNotBefore",
-      "puzzle": {
-        "o": [
-          [null, null, null, null, null],
-          [null, null, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "PrevSame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "2c"
-    },
-    {
       "name": "PrevSame: closer match exists → eliminate",
       "rule": "PrevSameCloser",
       "puzzle": {
@@ -1115,62 +970,6 @@
       },
       "state": ["A", "A", "B", ""],
       "expect": "4a"
-    },
-    {
-      "name": "NextSame: target <= self → eliminate",
-      "rule": "NextSameNotAfter",
-      "puzzle": {
-        "o": [
-          [null, null, null, null, null],
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "NextSame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "2a"
-    },
-    {
-      "name": "OnlySame: self-reference → eliminate",
-      "rule": "OnlySameSelfRef",
-      "puzzle": {
-        "o": [
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "OnlySame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1a"
     },
     {
       "section": "=== Eliminations: additional coverage ==="
@@ -1289,36 +1088,6 @@
       },
       "state": ["a", "", "", ""],
       "expect": "4a"
-    },
-    {
-      "name": "ClosestBefore: position out of range → eliminate",
-      "rule": "LastClosestBeforeOutOfRange",
-      "puzzle": {
-        "o": [
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [0, 1, 2, null, null]
-        ],
-        "q": [
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "ClosestBefore",
-            "a": 0,
-            "q": 2
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "4c"
     },
     {
       "name": "LastWith: claims None but answer exists → eliminate",
@@ -1496,34 +1265,6 @@
       "expect": null
     },
     {
-      "name": "NextSame: target >= n → eliminate",
-      "rule": "NextSameNotAfter",
-      "puzzle": {
-        "o": [
-          [null, null, null, 4, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "NextSame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1d"
-    },
-    {
       "name": "NextSame: closer match exists → eliminate",
       "rule": "NextSameCloser",
       "puzzle": {
@@ -1550,34 +1291,6 @@
       },
       "state": ["", "D", "", ""],
       "expect": "1d"
-    },
-    {
-      "name": "SameAs: self-reference → eliminate",
-      "rule": "OnlySameSelfRef",
-      "puzzle": {
-        "o": [
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "SameAs"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", "", ""],
-      "expect": "1a"
     },
     {
       "section": "=== Eliminations: propagation through eliminated options ==="
@@ -2406,12 +2119,12 @@
       "expect": null
     },
     {
-      "name": "Vowel/consonant: one answered → skip (only unanswered pairs)",
+      "name": "Vowel/consonant: answered consonant leaves a vowel count no partner → eliminate",
       "rule": "VowelCrossElim",
       "puzzle": {
         "o": [
-          [0, 1, 2, 3, 4],
-          [0, 1, 2, 3, 3],
+          [0, 1, 1, 1, 1],
+          [0, 4, 1, 2, 3],
           [null, null, null, null, null],
           [null, null, null, null, null]
         ],
@@ -2430,8 +2143,8 @@
           }
         ]
       },
-      "state": ["A", "", "B", "C"],
-      "expect": null
+      "state": ["", "B", "B", "C"],
+      "expect": "1b"
     },
     {
       "section": "=== Eliminations: counting edge cases ==="
@@ -2940,62 +2653,6 @@
       "expect": "1b"
     },
     {
-      "name": "PrevSame: None value doesn't trigger elimination",
-      "rule": "PrevSameNotBefore",
-      "puzzle": {
-        "o": [
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [0, 1, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "PrevSame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["B", "C", "abde", ""],
-      "expect": null
-    },
-    {
-      "name": "NextSame: None value doesn't trigger elimination",
-      "rule": "NextSameNotAfter",
-      "puzzle": {
-        "o": [
-          [null, null, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "NextSame"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["abde", "", "", ""],
-      "expect": null
-    },
-    {
       "name": "NextSame: answer eliminated from target → eliminate",
       "rule": "NextSameRuledOut",
       "puzzle": {
@@ -3457,30 +3114,6 @@
       },
       "state": ["C", "ae", ""],
       "expect": "qm10o01110"
-    },
-    {
-      "name": "ConsecIdentOutOfRange: claimed pair position at last index → eliminate",
-      "rule": "ConsecIdentOutOfRange",
-      "puzzle": {
-        "o": [
-          [null, null, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "ConsecIdent"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["", "", ""],
-      "expect": "1c"
     },
     {
       "section": "=== LeastCommon ==="

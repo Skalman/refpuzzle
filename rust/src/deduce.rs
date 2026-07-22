@@ -1,3 +1,18 @@
+//! Deduction engine — sound rules that prune options and force answers to
+//! advance a solve.
+//!
+//! Two design rules:
+//! - A rule's job is *progress*, not validity. A rule may incidentally surface a
+//!   contradiction (an elimination that empties a cell or strikes its committed
+//!   answer — `contradiction_question` flags that), but none should exist *only*
+//!   to manufacture one. Deciding whether a committed answer is already impossible
+//!   is `check_answer`'s job, not a deduce rule's.
+//! - Deduce is deliberately *incomplete*: a finite set of cheap, explainable
+//!   rules, not a decision procedure. Full completeness would be exhaustive search
+//!   — lookahead (itself bounded) closes some of the gap, and generation only ships
+//!   puzzles this engine actually solves. So completeness is a goal for
+//!   `check_answer`, never for deduce.
+
 use arrayvec::ArrayVec;
 
 use crate::types::*;
@@ -60,34 +75,26 @@ deduce_rules! {
     LetterDistImpossible,
     LetterDistWrong,
     LetterDistNoMatch,
-    FirstClosestAfterOutOfRange,
     FirstClosestAfterWrongAnswer,
     FirstClosestAfterRuledOut,
     FirstClosestAfterEarlierMatch,
     FirstClosestAfterSelfRef,
     FirstClosestAfterNoneMatch,
-    LastClosestBeforeOutOfRange,
     LastClosestBeforeWrongAnswer,
     LastClosestBeforeRuledOut,
     LastClosestBeforeLaterMatch,
     LastClosestBeforeSelfRef,
     LastClosestBeforeNoneMatch,
-    OnlyOddEvenWrongParity,
     OnlyOddEvenWrongAnswer,
     OnlyOddEvenRuledOut,
     OnlyOddEvenNoneMatch,
-    ConsecIdentOutOfRange,
     ConsecIdentSelfRef,
     ConsecIdentNoCommon,
     ConsecIdentNonePair,
-    EqualCountSelfRef,
-    PrevSameNotBefore,
     PrevSameRuledOut,
     PrevSameCloser,
-    NextSameNotAfter,
     NextSameRuledOut,
     NextSameCloser,
-    OnlySameSelfRef,
     OnlySameRuledOut,
     LeastCommonElim,
     LeastCommonForce,
@@ -270,7 +277,7 @@ impl<T: Copy, F: Fn() -> T> Lazy<T, F> {
 /// these, never the abstract `CountBounds`: an external bound may already
 /// account for the very cell being adjusted, so adding to it would double-count.
 #[derive(Clone, Copy)]
-struct LetterCells {
+pub(crate) struct LetterCells {
     filled: [u8; 5],
     fillable: [u8; 5],
 }
@@ -283,7 +290,7 @@ impl LetterCells {
     }
 }
 
-fn compute_letter_cells(
+pub(crate) fn compute_letter_cells(
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
     n: usize,
@@ -315,7 +322,7 @@ fn compute_letter_cells(
 /// of the puzzle. Consumers combine these with `LetterCells` via `lower`/`upper`
 /// — never feed them into a per-cell `±1`, which would double-count.
 #[derive(Clone, Copy)]
-struct CountBounds {
+pub(crate) struct CountBounds {
     floor: [u8; 5],
     ceil: [u8; 5],
 }
@@ -324,19 +331,19 @@ impl CountBounds {
     /// Combined lower bound on count(i): the tighter of placed cells and the
     /// Count-question floor.
     #[inline(always)]
-    fn lower(&self, cells: &LetterCells, i: usize) -> u8 {
+    pub(crate) fn lower(&self, cells: &LetterCells, i: usize) -> u8 {
         cells.filled[i].max(self.floor[i])
     }
 
     /// Combined upper bound on count(i): the tighter of the cell ceiling and
     /// the Count-question ceiling.
     #[inline(always)]
-    fn upper(&self, cells: &LetterCells, i: usize) -> u8 {
+    pub(crate) fn upper(&self, cells: &LetterCells, i: usize) -> u8 {
         cells.cell_max(i).min(self.ceil[i])
     }
 }
 
-fn compute_count_bounds(
+pub(crate) fn compute_count_bounds(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
     eliminated: &[u8; MAX_N],
@@ -475,6 +482,21 @@ fn apply_count(
         }
         let ov = ov.value();
 
+        // The committed count must be achievable; otherwise qi's answer is
+        // impossible. Mirrors the unanswered CountExceeded/CountImpossible (which
+        // stop running once qi is answered) and reuses the `cr` already computed.
+        if cr.min() > ov {
+            push(
+                DeduceRule::CountExceeded,
+                DeduceAction::Eliminate { qi, oi: a.idx() },
+            );
+        } else if cr.max() < ov {
+            push(
+                DeduceRule::CountImpossible,
+                DeduceAction::Eliminate { qi, oi: a.idx() },
+            );
+        }
+
         if cr.min() == ov && cr.possible > 0 {
             for j in from..to {
                 if answers[j].is_none() {
@@ -591,8 +613,10 @@ fn apply_count(
     }
 }
 
-/// Per-qi OnlyOdd/OnlyEven dispatch (qi must be unanswered). `parity` is
-/// 1 for OnlyOdd (1-indexed odd = 0-indexed even positions), 0 for OnlyEven.
+/// Per-qi OnlyOdd/OnlyEven dispatch. `parity` is 1 for OnlyOdd (1-indexed odd =
+/// 0-indexed even positions), 0 for OnlyEven. The per-option loop runs for whatever
+/// options are live — including a committed answer, whose elimination surfaces a
+/// contradiction — so the check still fires once qi is answered.
 fn apply_only_odd_even(
     fp: &FlatPuzzle,
     state: &State,
@@ -613,12 +637,6 @@ fn apply_only_odd_even(
         let ov = fp.options[qi][oi];
         if ov.is_num() {
             let pos = usize::from(ov.value());
-            if (pos + 1) % 2 != parity {
-                push(
-                    DeduceRule::OnlyOddEvenWrongParity,
-                    DeduceAction::Eliminate { qi, oi },
-                );
-            }
             if (pos + 1) % 2 == parity && pos < n {
                 if let Some(pa) = answers[pos]
                     && pa != answer
@@ -708,6 +726,53 @@ fn apply_positional_forward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
+    // Per-option elim — runs for every live option, the committed answer included.
+    // Eliminating an answered option surfaces a contradiction; keeping this out of
+    // the unanswered-only branch means answering qi early doesn't lose that
+    // contradiction. Sound either way — a satisfiable answer is never eliminated.
+    for oi in 0..5usize {
+        if is_eliminated(eliminated, qi, oi) {
+            continue;
+        }
+        let ov = fp.options[qi][oi];
+        if ov.is_num() {
+            let pos = usize::from(ov.value());
+            if pos >= scan_start && pos < n {
+                if let Some(pa) = answers[pos]
+                    && pa != answer
+                {
+                    push(
+                        DeduceRule::FirstClosestAfterWrongAnswer,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
+                    push(
+                        DeduceRule::FirstClosestAfterRuledOut,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if (scan_start..pos).any(|j| answers[j] == Some(answer)) {
+                    push(
+                        DeduceRule::FirstClosestAfterEarlierMatch,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if oi == answer.idx() && qi >= scan_start && qi < pos {
+                    push(
+                        DeduceRule::FirstClosestAfterSelfRef,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+            }
+        } else if ov.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+            push(
+                DeduceRule::FirstClosestAfterNoneMatch,
+                DeduceAction::Eliminate { qi, oi },
+            );
+        }
+    }
+
     if let Some(a) = ans {
         // PositionalRangeAnswered: positions before the claimed target can't have `answer`.
         let ov = fp.options[qi][a.idx()];
@@ -732,57 +797,32 @@ fn apply_positional_forward(
                     },
                 );
             }
-        }
-    } else {
-        // Per-option elim.
-        for oi in 0..5usize {
-            if is_eliminated(eliminated, qi, oi) {
-                continue;
+        } else if ov.is_none() {
+            // FirstWith/ClosestAfter = none: no cell in range has `answer`, so strike
+            // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
+            // `none` is the sole remaining claim (min_pos = n), which stops once qi
+            // is answered.
+            let letter_oi = answer.idx();
+            let mut q_mask = 0u16;
+            for j in scan_start..n {
+                if answers[j].is_some() {
+                    continue;
+                }
+                if !is_eliminated(eliminated, j, letter_oi) {
+                    q_mask |= 1 << j;
+                }
             }
-            let ov = fp.options[qi][oi];
-            if ov.is_num() {
-                let pos = usize::from(ov.value());
-                if pos < scan_start || pos >= n {
-                    push(
-                        DeduceRule::FirstClosestAfterOutOfRange,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if pos >= scan_start && pos < n {
-                    if let Some(pa) = answers[pos]
-                        && pa != answer
-                    {
-                        push(
-                            DeduceRule::FirstClosestAfterWrongAnswer,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
-                        push(
-                            DeduceRule::FirstClosestAfterRuledOut,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if (scan_start..pos).any(|j| answers[j] == Some(answer)) {
-                        push(
-                            DeduceRule::FirstClosestAfterEarlierMatch,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if oi == answer.idx() && qi >= scan_start && qi < pos {
-                        push(
-                            DeduceRule::FirstClosestAfterSelfRef,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                }
-            } else if ov.is_none() && (scan_start..n).any(|j| answers[j] == Some(answer)) {
+            if q_mask != 0 {
                 push(
-                    DeduceRule::FirstClosestAfterNoneMatch,
-                    DeduceAction::Eliminate { qi, oi },
+                    DeduceRule::PositionalRangeAnswered,
+                    DeduceAction::EliminateMulti {
+                        question_mask: q_mask,
+                        option_mask: 1 << letter_oi,
+                    },
                 );
             }
         }
+    } else {
         // PositionalRangeUnanswered: positions before the minimum remaining claim can't have `answer`.
         let mut min_pos = n;
         for oi in 0..5usize {
@@ -1160,6 +1200,53 @@ fn apply_positional_backward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
+    // Per-option elim — runs for every live option, the committed answer included.
+    // Eliminating an answered option surfaces a contradiction; keeping this out of
+    // the unanswered-only branch means answering qi early doesn't lose that
+    // contradiction. Sound either way — a satisfiable answer is never eliminated.
+    for oi in 0..5usize {
+        if is_eliminated(eliminated, qi, oi) {
+            continue;
+        }
+        let ov = fp.options[qi][oi];
+        if ov.is_num() {
+            let pos = usize::from(ov.value());
+            if pos < scan_end {
+                if let Some(pa) = answers[pos]
+                    && pa != answer
+                {
+                    push(
+                        DeduceRule::LastClosestBeforeWrongAnswer,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
+                    push(
+                        DeduceRule::LastClosestBeforeRuledOut,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if ((pos + 1)..scan_end).any(|j| answers[j] == Some(answer)) {
+                    push(
+                        DeduceRule::LastClosestBeforeLaterMatch,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+                if oi == answer.idx() && qi > pos && qi < scan_end {
+                    push(
+                        DeduceRule::LastClosestBeforeSelfRef,
+                        DeduceAction::Eliminate { qi, oi },
+                    );
+                }
+            }
+        } else if ov.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
+            push(
+                DeduceRule::LastClosestBeforeNoneMatch,
+                DeduceAction::Eliminate { qi, oi },
+            );
+        }
+    }
+
     if let Some(a) = ans {
         // PositionalRangeAnswered: positions after the claimed target can't have `answer`.
         let ov = fp.options[qi][a.idx()];
@@ -1184,57 +1271,32 @@ fn apply_positional_backward(
                     },
                 );
             }
-        }
-    } else {
-        // Per-option elim.
-        for oi in 0..5usize {
-            if is_eliminated(eliminated, qi, oi) {
-                continue;
+        } else if ov.is_none() {
+            // LastWith/ClosestBefore = none: no cell in range has `answer`, so strike
+            // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
+            // `none` is the sole remaining claim (max_pos = None), which stops once
+            // qi is answered.
+            let letter_oi = answer.idx();
+            let mut q_mask = 0u16;
+            for j in 0..scan_end {
+                if answers[j].is_some() {
+                    continue;
+                }
+                if !is_eliminated(eliminated, j, letter_oi) {
+                    q_mask |= 1 << j;
+                }
             }
-            let ov = fp.options[qi][oi];
-            if ov.is_num() {
-                let pos = usize::from(ov.value());
-                if pos >= scan_end {
-                    push(
-                        DeduceRule::LastClosestBeforeOutOfRange,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
-                if pos < scan_end {
-                    if let Some(pa) = answers[pos]
-                        && pa != answer
-                    {
-                        push(
-                            DeduceRule::LastClosestBeforeWrongAnswer,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if answers[pos].is_none() && is_eliminated(eliminated, pos, answer.idx()) {
-                        push(
-                            DeduceRule::LastClosestBeforeRuledOut,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if ((pos + 1)..scan_end).any(|j| answers[j] == Some(answer)) {
-                        push(
-                            DeduceRule::LastClosestBeforeLaterMatch,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    if oi == answer.idx() && qi > pos && qi < scan_end {
-                        push(
-                            DeduceRule::LastClosestBeforeSelfRef,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                }
-            } else if ov.is_none() && (0..scan_end).any(|j| answers[j] == Some(answer)) {
+            if q_mask != 0 {
                 push(
-                    DeduceRule::LastClosestBeforeNoneMatch,
-                    DeduceAction::Eliminate { qi, oi },
+                    DeduceRule::PositionalRangeAnswered,
+                    DeduceAction::EliminateMulti {
+                        question_mask: q_mask,
+                        option_mask: 1 << letter_oi,
+                    },
                 );
             }
         }
+    } else {
         // PositionalRangeUnanswered: positions after the maximum remaining claim can't have `answer`.
         let mut max_pos: Option<usize> = None;
         for oi in 0..5usize {
@@ -1340,12 +1402,6 @@ fn apply_same_shared(
                 }
             } else if ov.is_num() {
                 let pos = usize::from(ov.value());
-                if pos == qi {
-                    push(
-                        DeduceRule::OnlySameSelfRef,
-                        DeduceAction::Eliminate { qi, oi },
-                    );
-                }
                 if pos < n && is_eliminated(eliminated, pos, oi) {
                     push(
                         DeduceRule::OnlySameRuledOut,
@@ -1372,12 +1428,12 @@ fn apply_prev_or_next_same(
     qi: usize,
     range: std::ops::Range<usize>,
     between: impl Fn(usize) -> std::ops::Range<usize>,
-    rules: (DeduceRule, DeduceRule, DeduceRule, DeduceRule),
+    rules: (DeduceRule, DeduceRule, DeduceRule),
 ) {
     let n = fp.n;
     let answers = &state.answers;
     let eliminated = &state.eliminated;
-    let (none_rule, out_rule, ruled_out_rule, closer_rule) = rules;
+    let (none_rule, ruled_out_rule, closer_rule) = rules;
 
     if let Some(a) = answers[qi] {
         let ov = fp.options[qi][a.idx()];
@@ -1430,9 +1486,6 @@ fn apply_prev_or_next_same(
                 }
             } else if ov.is_num() {
                 let pos = usize::from(ov.value());
-                if !range.contains(&pos) {
-                    push(out_rule, DeduceAction::Eliminate { qi, oi });
-                }
                 if range.contains(&pos) {
                     if is_eliminated(eliminated, pos, oi) {
                         push(ruled_out_rule, DeduceAction::Eliminate { qi, oi });
@@ -1444,6 +1497,36 @@ fn apply_prev_or_next_same(
             }
         }
     }
+}
+
+/// Answered-case mirror of [`apply_extremum_count`]: is the committed extremum
+/// letter `claimed` already impossible? qi is fixed (its vote is in `cells`), so
+/// unlike the unanswered path there's no "if qi were oi" hypothesis — just check
+/// whether `claimed` can still be the (weak) extremum. Pairwise part mirrors the
+/// per-option elim (another letter's certain count beats claimed's possible one);
+/// pigeonhole part mirrors the whole-puzzle sum bound. Reuses the cached cells /
+/// bounds, so it adds no scan.
+fn extremum_answered_impossible<const IS_LEAST: bool>(
+    cells: &LetterCells,
+    bounds: &CountBounds,
+    claimed: usize,
+    oc: usize,
+    n: usize,
+) -> bool {
+    let pairwise = (0..oc).any(|li| {
+        li != claimed
+            && if IS_LEAST {
+                cells.filled[claimed] > cells.cell_max(li)
+            } else {
+                cells.filled[li] > cells.cell_max(claimed)
+            }
+    });
+    let pigeonhole = if IS_LEAST {
+        oc >= 2 && n + 1 >= oc && bounds.lower(cells, claimed) > ((n + 1 - oc) / oc) as u8
+    } else {
+        oc >= 2 && bounds.upper(cells, claimed) < ((n + 2 * oc - 2) / oc) as u8
+    };
+    pairwise || pigeonhole
 }
 
 /// LeastCommon / MostCommon dispatch. Per-option, check whether `oi`'s claimed
@@ -1551,8 +1634,8 @@ fn apply_extremum_count<const IS_LEAST: bool>(
 }
 
 /// Vowel + Consonant = n cross-elim. Fires once per deduce call from the
-/// canonical CountVowel arm. The two CountVowel/CountConsonant sides are
-/// structurally symmetric; the local closures capture that.
+/// CountVowel arm. The two CountVowel/CountConsonant sides are structurally
+/// symmetric; the local closures capture that.
 fn apply_vowel_consonant_cross_elim(
     fp: &FlatPuzzle,
     state: &State,
@@ -1562,6 +1645,18 @@ fn apply_vowel_consonant_cross_elim(
     n: usize,
 ) {
     let eliminated = &state.eliminated;
+    let answers = &state.answers;
+
+    // Fast path early out when both counts answered and sum is correct.
+    if let (Some(va), Some(ca)) = (answers[vq], answers[cq]) {
+        let v = fp.options[vq][va.idx()];
+        let c = fp.options[cq][ca.idx()];
+        // Valid only if they sum to n.
+        let ok = v.is_num() && c.is_num() && v.value() + c.value() == n as u8;
+        if ok {
+            return;
+        }
+    }
 
     // NONE counts as "valid" (still a candidate option) but can't partner —
     // leaving it in `valid` without a partner is what triggers the cross-elim.
@@ -1710,19 +1805,10 @@ fn deduce_impl(
         }
     };
 
-    // Canonical CountVowel/CountConsonant pair (last unanswered of each type).
-    // Used by the CountVowel arm below for vowel+consonant = n cross-elim, which
-    // fires exactly once per deduce call regardless of how many of each type
-    // exist in the puzzle.
-    let mut vowel_qi: Option<usize> = None;
-    let mut consonant_qi: Option<usize> = None;
-    for qi in 0..n {
-        match fp.question_types[qi] {
-            QuestionType::CountVowel if answers[qi].is_none() => vowel_qi = Some(qi),
-            QuestionType::CountConsonant if answers[qi].is_none() => consonant_qi = Some(qi),
-            _ => {}
-        }
-    }
+    // The single consonant-count question (capped at one), if present — paired with
+    // the vowel count in the CountVowel arm for the vowel + consonant = n cross-elim.
+    let consonant_qi =
+        (0..n).find(|&qi| matches!(fp.question_types[qi], QuestionType::CountConsonant));
 
     let mut letter_cells = Lazy::new(|| compute_letter_cells(answers, eliminated, n));
     let mut count_bounds = Lazy::new(|| compute_count_bounds(fp, answers, eliminated, n));
@@ -1784,7 +1870,12 @@ fn deduce_impl(
             QuestionType::CountConsonant => {
                 apply_count(fp, state, &mut push, qi, CONSONANT_MASK, 0, n, include_slow);
             }
-            QuestionType::MostCommonCount if ans.is_none() => {
+            // Runs for the committed answer too (the loop below processes whatever
+            // options are live): a committed count outside [max_known, max_possible]
+            // is a contradiction. Handling the answered case keeps the deduction
+            // available regardless of when the question is answered, so the solve
+            // result doesn't depend on order.
+            QuestionType::MostCommonCount => {
                 let mut max_known: u8 = 0;
                 let mut max_possible: u8 = 0;
                 for li in 0..fp.option_count {
@@ -1815,10 +1906,7 @@ fn deduce_impl(
             }
             QuestionType::CountVowel => {
                 apply_count(fp, state, &mut push, qi, VOWEL_MASK, 0, n, include_slow);
-                if include_slow
-                    && Some(qi) == vowel_qi
-                    && let Some(cq) = consonant_qi
-                {
+                if include_slow && let Some(cq) = consonant_qi {
                     apply_vowel_consonant_cross_elim(fp, state, &mut push, qi, cq, n);
                 }
             }
@@ -2052,10 +2140,10 @@ fn deduce_impl(
             } => {
                 apply_positional_backward(fp, state, &mut push, qi, answer, before_index as usize);
             }
-            QuestionType::OnlyOdd { answer } if ans.is_none() => {
+            QuestionType::OnlyOdd { answer } => {
                 apply_only_odd_even(fp, state, &mut push, qi, answer, 1, include_slow);
             }
-            QuestionType::OnlyEven { answer } if ans.is_none() => {
+            QuestionType::OnlyEven { answer } => {
                 apply_only_odd_even(fp, state, &mut push, qi, answer, 0, include_slow);
             }
             QuestionType::ConsecIdent => {
@@ -2202,12 +2290,7 @@ fn deduce_impl(
                         let ov = fp.options[qi][oi];
                         if ov.is_num() {
                             let pos = usize::from(ov.value());
-                            if pos + 1 >= n {
-                                push(
-                                    DeduceRule::ConsecIdentOutOfRange,
-                                    DeduceAction::Eliminate { qi, oi },
-                                );
-                            } else {
+                            if pos + 1 < n {
                                 let common = (!eliminated[pos] & ALL_OPTIONS_MASK)
                                     & (!eliminated[pos + 1] & ALL_OPTIONS_MASK);
                                 if common == 0 {
@@ -2241,7 +2324,10 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::EqualCount { answer } if ans.is_none() => {
+            QuestionType::EqualCount { answer } => {
+                // Runs for whatever options are live, the committed answer included —
+                // its elimination surfaces a contradiction, so the check still fires
+                // once qi is answered. Pure per-option checks, no other-cell propagation.
                 for oi in 0..5usize {
                     if is_eliminated(eliminated, qi, oi) {
                         continue;
@@ -2250,14 +2336,7 @@ fn deduce_impl(
                     if !ov.is_num() {
                         continue;
                     }
-                    let ov = usize::from(ov.value());
-                    if ov == answer.idx() {
-                        push(
-                            DeduceRule::EqualCountSelfRef,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
-                    }
-                    let claimed = Answer::from(ov as u8);
+                    let claimed = Answer::from(ov.value());
                     if claimed != answer {
                         // Impossible iff the upper bound on one letter's count
                         // is below the lower bound on the other's. Both bounds
@@ -2288,7 +2367,6 @@ fn deduce_impl(
                     |x| (x + 1)..qi,
                     (
                         DeduceRule::PrevSameNoneMatch,
-                        DeduceRule::PrevSameNotBefore,
                         DeduceRule::PrevSameRuledOut,
                         DeduceRule::PrevSameCloser,
                     ),
@@ -2304,7 +2382,6 @@ fn deduce_impl(
                     |x| (qi + 1)..x,
                     (
                         DeduceRule::NextSameNoneMatch,
-                        DeduceRule::NextSameNotAfter,
                         DeduceRule::NextSameRuledOut,
                         DeduceRule::NextSameCloser,
                     ),
@@ -2463,90 +2540,153 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::LeastCommon if include_slow && ans.is_none() => {
-                let cells = letter_cells.get();
-                apply_extremum_count::<true>(
-                    fp,
-                    state,
-                    &mut push,
-                    qi,
-                    &cells,
-                    DeduceRule::LeastCommonElim,
-                    DeduceRule::LeastCommonForce,
-                );
+            QuestionType::LeastCommon => {
+                if include_slow {
+                    if let Some(a) = ans {
+                        // Answered: the committed least-common letter must still be able
+                        // to be the (weak) minimum; else qi's answer is impossible.
+                        let ov = fp.options[qi][a.idx()];
+                        if ov.is_num() {
+                            let claimed = ov.value() as usize;
+                            let cells = letter_cells.get();
+                            let bounds = count_bounds.get();
+                            if claimed < fp.option_count
+                                && extremum_answered_impossible::<true>(
+                                    &cells,
+                                    &bounds,
+                                    claimed,
+                                    fp.option_count,
+                                    n,
+                                )
+                            {
+                                push(
+                                    DeduceRule::LeastCommonElim,
+                                    DeduceAction::Eliminate { qi, oi: a.idx() },
+                                );
+                            }
+                        }
+                    } else {
+                        let cells = letter_cells.get();
+                        apply_extremum_count::<true>(
+                            fp,
+                            state,
+                            &mut push,
+                            qi,
+                            &cells,
+                            DeduceRule::LeastCommonElim,
+                            DeduceRule::LeastCommonForce,
+                        );
 
-                // Global pigeonhole: letter D can be the unique least-common
-                // letter only if count(D) <= floor((n - oc + 1) / oc); beyond
-                // that the other oc-1 letters can't all be strictly larger
-                // within n answers. A proven lower bound above the threshold
-                // rules D out — a whole-puzzle sum argument the pairwise
-                // extremum check above structurally can't make.
-                let oc = fp.option_count;
-                if oc >= 2 && n + 1 >= oc {
-                    let bounds = count_bounds.get();
-                    let max_least = ((n + 1 - oc) / oc) as u8;
-                    for oi in 0..oc {
-                        if is_eliminated(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let ov = fp.options[qi][oi];
-                        if !ov.is_num() {
-                            continue;
-                        }
-                        let ov = ov.value() as usize;
-                        if ov < oc && bounds.lower(&cells, ov) > max_least {
-                            push(
-                                DeduceRule::LeastCommonCountFloor,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
+                        // Global pigeonhole: letter D can be the unique least-common
+                        // letter only if count(D) <= floor((n - oc + 1) / oc); beyond
+                        // that the other oc-1 letters can't all be strictly larger
+                        // within n answers. A proven lower bound above the threshold
+                        // rules D out — a whole-puzzle sum argument the pairwise
+                        // extremum check above structurally can't make.
+                        let oc = fp.option_count;
+                        if oc >= 2 && n + 1 >= oc {
+                            let bounds = count_bounds.get();
+                            let max_least = ((n + 1 - oc) / oc) as u8;
+                            for oi in 0..oc {
+                                if is_eliminated(eliminated, qi, oi) {
+                                    continue;
+                                }
+                                let ov = fp.options[qi][oi];
+                                if !ov.is_num() {
+                                    continue;
+                                }
+                                let ov = ov.value() as usize;
+                                if ov < oc && bounds.lower(&cells, ov) > max_least {
+                                    push(
+                                        DeduceRule::LeastCommonCountFloor,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                            }
                         }
                     }
                 }
             }
-            QuestionType::MostCommon if include_slow && ans.is_none() => {
-                let cells = letter_cells.get();
-                apply_extremum_count::<false>(
-                    fp,
-                    state,
-                    &mut push,
-                    qi,
-                    &cells,
-                    DeduceRule::MostCommonElim,
-                    DeduceRule::MostCommonForce,
-                );
+            QuestionType::MostCommon => {
+                if include_slow {
+                    if let Some(a) = ans {
+                        // Answered: the committed most-common letter must still be able
+                        // to be the (weak) maximum; else qi's answer is impossible.
+                        let ov = fp.options[qi][a.idx()];
+                        if ov.is_num() {
+                            let claimed = ov.value() as usize;
+                            let cells = letter_cells.get();
+                            let bounds = count_bounds.get();
+                            if claimed < fp.option_count
+                                && extremum_answered_impossible::<false>(
+                                    &cells,
+                                    &bounds,
+                                    claimed,
+                                    fp.option_count,
+                                    n,
+                                )
+                            {
+                                push(
+                                    DeduceRule::MostCommonElim,
+                                    DeduceAction::Eliminate { qi, oi: a.idx() },
+                                );
+                            }
+                        }
+                    } else {
+                        let cells = letter_cells.get();
+                        apply_extremum_count::<false>(
+                            fp,
+                            state,
+                            &mut push,
+                            qi,
+                            &cells,
+                            DeduceRule::MostCommonElim,
+                            DeduceRule::MostCommonForce,
+                        );
 
-                // Global pigeonhole (mirror of LeastCommonCountFloor): letter D
-                // can be the unique most-common letter only if count(D) >=
-                // ceil((n + oc - 1) / oc); below that the other oc-1 letters
-                // can't all stay strictly smaller while summing to n. A proven
-                // upper bound under the threshold rules D out.
-                let oc = fp.option_count;
-                if oc >= 2 {
-                    let bounds = count_bounds.get();
-                    let min_most = ((n + 2 * oc - 2) / oc) as u8;
-                    for oi in 0..oc {
-                        if is_eliminated(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let ov = fp.options[qi][oi];
-                        if !ov.is_num() {
-                            continue;
-                        }
-                        let ov = ov.value() as usize;
-                        if ov < oc && bounds.upper(&cells, ov) < min_most {
-                            push(
-                                DeduceRule::MostCommonCountCeil,
-                                DeduceAction::Eliminate { qi, oi },
-                            );
+                        // Global pigeonhole (mirror of LeastCommonCountFloor): letter D
+                        // can be the unique most-common letter only if count(D) >=
+                        // ceil((n + oc - 1) / oc); below that the other oc-1 letters
+                        // can't all stay strictly smaller while summing to n. A proven
+                        // upper bound under the threshold rules D out.
+                        let oc = fp.option_count;
+                        if oc >= 2 {
+                            let bounds = count_bounds.get();
+                            let min_most = ((n + 2 * oc - 2) / oc) as u8;
+                            for oi in 0..oc {
+                                if is_eliminated(eliminated, qi, oi) {
+                                    continue;
+                                }
+                                let ov = fp.options[qi][oi];
+                                if !ov.is_num() {
+                                    continue;
+                                }
+                                let ov = ov.value() as usize;
+                                if ov < oc && bounds.upper(&cells, ov) < min_most {
+                                    push(
+                                        DeduceRule::MostCommonCountCeil,
+                                        DeduceAction::Eliminate { qi, oi },
+                                    );
+                                }
+                            }
                         }
                     }
                 }
             }
-            QuestionType::TrueStmt if include_slow => {
-                apply_true_stmt(fp, state, &mut push, qi, n, assume_unique);
+
+            QuestionType::TrueStmt => {
+                if include_slow {
+                    apply_true_stmt(fp, state, &mut push, qi, n, assume_unique);
+                }
             }
 
-            _ => {}
+            QuestionType::NoOtherHasAnswer => {
+                // TODO
+            }
+
+            QuestionType::AnswerIsSelf => {
+                // Can never deduce anything about this.
+            }
         }
 
         // OnlyOptionLeft is type-agnostic — fires when only one option remains.
