@@ -20,7 +20,7 @@
 //! and its self-elimination of a question's own options must never outrun this
 //! verdict.
 
-use crate::counts::count_matching_mask;
+use crate::counts::{MaskTally, count_matching_mask};
 use crate::types::*;
 
 /// Play-time verdict for a single question. This is a **wasm wire contract**: the
@@ -100,16 +100,18 @@ pub(crate) fn count_matching(
     CountResult { count, remaining }
 }
 
-fn count_validity(cr: CountResult, ov: OptionValue) -> Validity {
+fn count_validity(cr: MaskTally, ov: OptionValue) -> Validity {
     // NONE/UNUSED on a count: malformed but check_answer routes them here for
     // semantic evaluation. Treat as Invalid (the count can never be null).
     if !ov.is_num() {
         return Validity::Invalid;
     }
     let ov = ov.value();
-    if cr.count > ov || cr.count + cr.remaining < ov {
+    // `min` counts forced-unanswered cells too, so ov below it is already exceeded
+    // (not just by answered cells); `max` is the ceiling. Valid once pinned.
+    if cr.min() > ov || cr.max() < ov {
         Validity::Invalid
-    } else if cr.count == ov && cr.remaining == 0 {
+    } else if cr.min() == cr.max() {
         Validity::Valid
     } else {
         Validity::Pending
@@ -307,17 +309,18 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
         | QuestionType::CountAnswerBefore { answer, .. }
         | QuestionType::CountAnswerAfter { answer, .. } => {
             let (from, to) = count_range(qt, n);
-            let cr = count_matching(answers, eliminated, Pred::IsAnswer(answer), from, to);
+            let cr =
+                count_matching_mask(answers, eliminated, Pred::IsAnswer(answer).mask(), from, to);
             count_validity(cr, ov)
         }
 
         QuestionType::CountVowel => {
-            let cr = count_matching(answers, eliminated, Pred::IsVowel, 0, n);
+            let cr = count_matching_mask(answers, eliminated, Pred::IsVowel.mask(), 0, n);
             count_validity(cr, ov)
         }
 
         QuestionType::CountConsonant => {
-            let cr = count_matching(answers, eliminated, Pred::IsConsonant, 0, n);
+            let cr = count_matching_mask(answers, eliminated, Pred::IsConsonant.mask(), 0, n);
             count_validity(cr, ov)
         }
 
