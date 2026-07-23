@@ -8,9 +8,9 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 
 use crate::check_answer::{Pred, count_matching, count_pred, count_range};
+use crate::counts::{compute_count_bounds, compute_letter_cells};
 use crate::deduce::{
-    DeduceAction, DeduceResult, DeduceRule, apply_action, compute_count_bounds,
-    compute_letter_cells, contradiction_question, deduce,
+    DeduceAction, DeduceResult, DeduceRule, apply_action, contradiction_question, deduce,
 };
 use crate::lookahead::LookaheadResult;
 use crate::render::{claim_label, q};

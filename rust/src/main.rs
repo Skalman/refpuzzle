@@ -5,6 +5,7 @@ mod check_form;
 mod check_well_posed;
 mod cli;
 mod construct;
+mod counts;
 mod deduce;
 mod difficulty;
 mod fill;

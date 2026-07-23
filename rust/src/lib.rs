@@ -9,6 +9,7 @@ pub mod check_answer;
 pub mod check_form;
 pub mod check_well_posed;
 pub mod construct;
+pub mod counts;
 pub mod deduce;
 pub mod difficulty;
 pub mod explain;
