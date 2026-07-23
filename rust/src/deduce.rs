@@ -15,7 +15,10 @@
 
 use arrayvec::ArrayVec;
 
-use crate::counts::*;
+use crate::counts::{
+    CountBounds, LetterCells, compute_count_bounds, compute_letter_cells, count_matching_mask,
+    mask_contains,
+};
 use crate::types::*;
 
 macro_rules! deduce_rules {
