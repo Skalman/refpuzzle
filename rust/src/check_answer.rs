@@ -401,7 +401,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
 
         QuestionType::SameAs => {
             if ov.is_none() {
-                // "none": valid iff no other question shares qi's (candidate) answer.
+                // Claim-level "none": a bare claim knows only qi's letter, not the
+                // question's candidate list, so it reads as globally unique.
+                // check_answer refines this to the *listed* candidates.
                 let amask = 1u8 << self_letter.idx();
                 let mut could_exist = false;
                 for j in 0..n {
@@ -860,6 +862,38 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
             }
         }
         return Validity::Valid;
+    }
+
+    // SameAs "none" is scoped to the question's *listed* candidates (its numeric
+    // options), not the whole puzzle. A bare claim carries only qi's letter, so
+    // check_claim_core reads "none" as globally unique; check_answer is the
+    // authority that refines it against fp.options[qi].
+    if matches!(qt, QuestionType::SameAs) && fp.options[qi][ai].is_none() {
+        let letter_mask = 1u8 << ai;
+        let mut candidate_could_share = false;
+        for oi in 0..fp.option_count {
+            let candidate = fp.options[qi][oi];
+            if !candidate.is_num() {
+                continue;
+            }
+            let j = candidate.value() as usize;
+            if j >= fp.n || j == qi {
+                continue;
+            }
+            match state.answers[j] {
+                Some(other) if other == a => return Validity::Invalid,
+                None if state.eliminated[j] & letter_mask == 0 => {
+                    candidate_could_share = true;
+                }
+                _ => {}
+            }
+        }
+        let verdict = if candidate_could_share {
+            Validity::Pending
+        } else {
+            Validity::Valid
+        };
+        return maybe_consistent(verdict, qt, qi);
     }
 
     let ov = fp.options[qi][ai];

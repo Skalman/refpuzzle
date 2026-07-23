@@ -4055,6 +4055,121 @@
       "expect": "1b"
     },
     {
+      "section": "=== SameAs None (scoped to listed candidates) ==="
+    },
+    {
+      "name": "SameAs None: Q1=None(C), listed Q2 open → eliminate C from Q2",
+      "rule": "OnlySameNoneForward",
+      "puzzle": {
+        "o": [
+          [1, 2, null, 0, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "", "A", ""],
+      "expect": "2c"
+    },
+    {
+      "name": "SameAs None: Q1=None(C), only non-listed Q4 open → no deduction (global would strike it)",
+      "rule": "OnlySameNoneForward",
+      "puzzle": {
+        "o": [
+          [1, 2, null, 0, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "A", ""],
+      "expect": null
+    },
+    {
+      "name": "SameAs None: listed Q3=C → eliminate the None option",
+      "rule": "OnlySameNoneMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, null, 0, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "A", "C", ""],
+      "expect": "1c"
+    },
+    {
+      "name": "SameAs None: only non-listed Q4=C → keep the None option (global would strike it)",
+      "rule": "OnlySameNoneMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, null, 0, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "A", "A", "C"],
+      "expect": null
+    },
+    {
       "section": "=== ConsecIdentForward ==="
     },
     {

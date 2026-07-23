@@ -1165,12 +1165,18 @@ fn apply_positional_backward(
 /// their `OnlySame*` names for both arms (so a SameAs trace shows e.g.
 /// `OnlySameNoneForward`). Renaming them would also touch the explain prose
 /// keyed on those names and the deduce test fixtures.
+///
+/// `scoped_none` controls what "none" denies. OnlySame ("the only *other*
+/// question") is globally unique, so "none" ranges over every question.
+/// SameAs ("which of *these* questions") is scoped: "none" only denies qi's
+/// letter to the listed candidates (its numeric options).
 fn apply_same_shared(
     fp: &FlatPuzzle,
     state: &State,
     mut push: impl FnMut(DeduceRule, DeduceAction),
     qi: usize,
     reverse_rule: DeduceRule,
+    scoped_none: bool,
     include_slow: bool,
 ) {
     let n = fp.n;
@@ -1194,19 +1200,44 @@ fn apply_same_shared(
             }
         }
 
-        // OnlySameNoneForward: an answered None means qi's answer is unique,
-        // so no other question can have that letter. Sound; not gated on
+        // OnlySameNoneForward: an answered None denies qi's letter to the
+        // questions "none" rules out — every other question for OnlySame,
+        // only the listed candidates for SameAs. Sound; not gated on
         // assume_unique.
         if include_slow && ov.is_none() {
-            for j in 0..n {
-                if j == qi {
-                    continue;
+            let letter_oi = a.idx();
+            if scoped_none {
+                for oi in 0..fp.option_count {
+                    let candidate = fp.options[qi][oi];
+                    if !candidate.is_num() {
+                        continue;
+                    }
+                    let j = usize::from(candidate.value());
+                    if j < n
+                        && j != qi
+                        && answers[j].is_none()
+                        && !is_eliminated(eliminated, j, letter_oi)
+                    {
+                        push(
+                            DeduceRule::OnlySameNoneForward,
+                            DeduceAction::Eliminate {
+                                qi: j,
+                                oi: letter_oi,
+                            },
+                        );
+                    }
                 }
-                if answers[j].is_none() && !is_eliminated(eliminated, j, a.idx()) {
-                    push(
-                        DeduceRule::OnlySameNoneForward,
-                        DeduceAction::Eliminate { qi: j, oi: a.idx() },
-                    );
+            } else {
+                for j in 0..n {
+                    if j != qi && answers[j].is_none() && !is_eliminated(eliminated, j, letter_oi) {
+                        push(
+                            DeduceRule::OnlySameNoneForward,
+                            DeduceAction::Eliminate {
+                                qi: j,
+                                oi: letter_oi,
+                            },
+                        );
+                    }
                 }
             }
         }
@@ -1218,7 +1249,19 @@ fn apply_same_shared(
             }
             let ov = fp.options[qi][oi];
             if ov.is_none() {
-                if (0..n).any(|j| j != qi && answers[j] == Some(Answer::from(oi as u8))) {
+                let letter = Answer::from(oi as u8);
+                let shared = if scoped_none {
+                    (0..fp.option_count).any(|ci| {
+                        let candidate = fp.options[qi][ci];
+                        candidate.is_num() && {
+                            let j = usize::from(candidate.value());
+                            j < n && j != qi && answers[j] == Some(letter)
+                        }
+                    })
+                } else {
+                    (0..n).any(|j| j != qi && answers[j] == Some(letter))
+                };
+                if shared {
                     push(
                         DeduceRule::OnlySameNoneMatch,
                         DeduceAction::Eliminate { qi, oi },
@@ -2279,6 +2322,7 @@ fn deduce_impl(
                     &mut push,
                     qi,
                     DeduceRule::SameAsReverse,
+                    true,
                     include_slow,
                 );
 
@@ -2331,6 +2375,7 @@ fn deduce_impl(
                     &mut push,
                     qi,
                     DeduceRule::PrevNextOnlySameReverse,
+                    false,
                     include_slow,
                 );
 

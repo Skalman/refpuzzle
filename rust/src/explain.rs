@@ -1128,14 +1128,20 @@ pub fn explain_elim_detail(
 
         QuestionType::SameAs => {
             match ov {
-                // A "none" answer claims no other question shares this letter
+                // A "none" answer claims none of the listed candidate questions
+                // shares this letter — scoped, so only a candidate can refute it
                 // (OnlySameNoneMatch fires for SameAs too, via the shared arm).
                 None => {
-                    for j in 0..n {
-                        if j != qi && answers[j] == Some(letter) {
+                    for ci in 0..fp.option_count {
+                        let candidate = fp.options[qi][ci];
+                        if !candidate.is_num() {
+                            continue;
+                        }
+                        let j = candidate.value() as usize;
+                        if j < n && j != qi && answers[j] == Some(letter) {
                             return detail(
                                 format!(
-                                    "{} option {letter} claims no other question has answer {letter}, but {} does.",
+                                    "{} option {letter} claims none of these questions has answer {letter}, but {} does.",
                                     q(qi),
                                     q(j)
                                 ),
@@ -2225,10 +2231,17 @@ pub fn explain_elimination(
             if src_ans == letter {
                 steps.push(try_looking(&[qi, src]));
                 steps.push(what_if());
-                steps.push(simple(format!(
-                    "{} is {letter} and claims no other question shares that answer, so {} can't be {letter}.",
-                    q(src), q(qi)
-                )));
+                steps.push(simple(if matches!(fp.question_types[src], QuestionType::SameAs) {
+                    format!(
+                        "{} is {letter} and claims none of its listed questions shares that answer, so {} can't be {letter}.",
+                        q(src), q(qi)
+                    )
+                } else {
+                    format!(
+                        "{} is {letter} and claims no other question shares that answer, so {} can't be {letter}.",
+                        q(src), q(qi)
+                    )
+                }));
                 return steps;
             }
         }

@@ -769,6 +769,134 @@
       "expect": "invalid"
     },
     {
+      "name": "same_answer_as none (scoped): only a listed candidate is in scope → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, null, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "A", "A", "C"],
+      "expect": "consistent"
+    },
+    {
+      "name": "same_answer_as none (scoped): a listed candidate shares the letter → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, null, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "C", "A", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_as none (scoped): a listed candidate could still share → pending",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, null, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "", "A", "A"],
+      "expect": "pending"
+    },
+    {
+      "name": "same_answer_as none (scoped): open non-listed question doesn't keep it pending → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, null, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "A", "A", "A", ""],
+      "expect": "consistent"
+    },
+    {
       "section": "=== unique_answer ==="
     },
     {
