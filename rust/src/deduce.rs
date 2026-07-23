@@ -796,8 +796,11 @@ fn apply_true_stmt(
         let open = !is_eliminated(eliminated, qi, oi);
         let v = claim.value;
 
-        // Cell-semantic falsity — uniform across all claim types.
+        // Cell-semantic falsity — uniform across all claim types. Unanswered only:
+        // an answered committed claim's falsity is check_answer's to report
+        // (single-question, and check_answer's TrueStmt already evaluates the claim).
         if open
+            && ans.is_none()
             && crate::check_answer::check_claim(fp, *state, OptionPos { qi, oi }, claim)
                 == crate::check_answer::Validity::Invalid
         {
@@ -812,6 +815,7 @@ fn apply_true_stmt(
         match claim.question_type {
             QuestionType::FirstWith { answer } | QuestionType::LastWith { answer } => {
                 if open
+                    && ans.is_none()
                     && v.is_num()
                     && usize::from(v.value()) == qi
                     && answer != Answer::from(oi as u8)
@@ -835,6 +839,7 @@ fn apply_true_stmt(
             }
             QuestionType::AnswerOf { question_index } => {
                 if open
+                    && ans.is_none()
                     && question_index as usize == qi
                     && v.is_num()
                     && v.value() <= 4
