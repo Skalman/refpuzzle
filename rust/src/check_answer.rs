@@ -10,10 +10,12 @@
 //! eliminations, return the strongest verdict the marks already force — `Invalid`
 //! once no completion of the open cells can satisfy the question,
 //! `Valid`/`Consistent` once none can break it — and settle for `Pending`/`Neutral`
-//! only while the outcome is genuinely open. Deduce prunes and propagates but must
-//! not re-derive validity; its self-elimination of a question's own options must
-//! never outrun this verdict.
+//! only while the outcome is genuinely open. Deduce prunes and propagates; it does
+//! not own validity — a deduce rule's validity-style check is *applying* this
+//! authority, and its self-elimination of a question's own options must never
+//! outrun this verdict.
 
+use crate::counts::count_matching_mask;
 use crate::types::*;
 
 /// Play-time verdict for a single question. This is a **wasm wire contract**: the
@@ -319,20 +321,23 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 return Validity::Invalid;
             }
             let ov = ov.value();
-            let c = fill_counts(answers, n);
-            for i in 0..5 {
-                if c[i] > ov {
-                    return Validity::Invalid;
-                }
+            // The most-common count is `ov` iff some letter can reach it
+            // (ov <= max_possible) and none is already forced above it
+            // (ov >= max_known). Valid only once the maximum is pinned to a single
+            // value (max_known == max_possible).
+            let mut max_known = 0u8;
+            let mut max_possible = 0u8;
+            for li in 0..oc {
+                let cr = count_matching_mask(answers, eliminated, 1 << li, 0, n);
+                max_known = max_known.max(cr.min());
+                max_possible = max_possible.max(cr.max());
             }
-            if !all_answered(answers, n) {
-                return Validity::Pending;
-            }
-            let max = c.iter().copied().max().unwrap_or(0);
-            if max == ov {
+            if ov < max_known || ov > max_possible {
+                Validity::Invalid
+            } else if max_known == max_possible {
                 Validity::Valid
             } else {
-                Validity::Invalid
+                Validity::Pending
             }
         }
 
