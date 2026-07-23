@@ -1689,37 +1689,37 @@ fn deduce_impl(
             QuestionType::CountConsonant => {
                 apply_count(fp, state, &mut push, qi, CONSONANT_MASK, 0, n, include_slow);
             }
-            // Runs for the committed answer too (the loop below processes whatever
-            // options are live): a committed count outside [max_known, max_possible]
-            // is a contradiction. Handling the answered case keeps the deduction
-            // available regardless of when the question is answered, so the solve
-            // result doesn't depend on order.
+            // Prune qi's own options outside [max_known, max_possible]; only while
+            // unanswered — an answered committed count outside that range is a
+            // contradiction, which is check_answer's to report (single-question).
             QuestionType::MostCommonCount => {
-                let mut max_known: u8 = 0;
-                let mut max_possible: u8 = 0;
-                for li in 0..fp.option_count {
-                    let cr = count_matching_mask(answers, eliminated, 1 << li, 0, n);
-                    if cr.min() > max_known {
-                        max_known = cr.min();
+                if ans.is_none() {
+                    let mut max_known: u8 = 0;
+                    let mut max_possible: u8 = 0;
+                    for li in 0..fp.option_count {
+                        let cr = count_matching_mask(answers, eliminated, 1 << li, 0, n);
+                        if cr.min() > max_known {
+                            max_known = cr.min();
+                        }
+                        if cr.max() > max_possible {
+                            max_possible = cr.max();
+                        }
                     }
-                    if cr.max() > max_possible {
-                        max_possible = cr.max();
-                    }
-                }
-                for oi in 0..5usize {
-                    if is_eliminated(eliminated, qi, oi) {
-                        continue;
-                    }
-                    let ov = fp.options[qi][oi];
-                    if !ov.is_num() {
-                        continue;
-                    }
-                    let ov = ov.value();
-                    if ov < max_known || ov > max_possible {
-                        push(
-                            DeduceRule::MostCommonCountElim,
-                            DeduceAction::Eliminate { qi, oi },
-                        );
+                    for oi in 0..5usize {
+                        if is_eliminated(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
+                            continue;
+                        }
+                        let ov = ov.value();
+                        if ov < max_known || ov > max_possible {
+                            push(
+                                DeduceRule::MostCommonCountElim,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                        }
                     }
                 }
             }
