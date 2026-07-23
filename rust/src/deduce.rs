@@ -12,6 +12,10 @@
 //!   — lookahead (itself bounded) closes some of the gap, and generation only ships
 //!   puzzles this engine actually solves. So completeness is a goal for
 //!   `check_answer`, never for deduce.
+//! - Cross-question reasoning is deduce's alone: propagate one question's meaning
+//!   into the marks, and combine questions (e.g. a sibling count bounding a letter)
+//!   — things `check_answer`, which judges one question against the marks, can't do.
+//!   Single-question validity, by contrast, is check_answer's (see its module doc).
 
 use arrayvec::ArrayVec;
 

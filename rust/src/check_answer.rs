@@ -2,18 +2,23 @@
 //! the current (possibly partial) board? `check_claim` is the single authority the
 //! solver, generator, and UI all share.
 //!
-//! Design goal — *completeness*. This is the single source of truth for
-//! per-question validity, and unlike `deduce` (deliberately incomplete — see its
-//! module doc) it should aim to be complete: its scope is bounded (one question's
-//! constraint against the whole board's marks), so a definite verdict is always
-//! reachable. Judging that question's type + options against the board's answers +
-//! eliminations, return the strongest verdict the marks already force — `Invalid`
+//! Scope — *one question against the raw marks*. This judges a single question's
+//! own constraint against the board's answers + eliminations. It reads every cell's
+//! mark (CountVowel tallies the whole board), but it never interprets another
+//! *question's* meaning: combining two questions — e.g. bounding a letter from a
+//! sibling `CountAnswer` — is cross-question reasoning, which is deduce's job.
+//! check_answer sees such a consequence only once deduce has propagated it into the
+//! marks (forced/eliminated cells), never by reading the other question's type.
+//!
+//! Within that scope it aims to be *complete* — unlike `deduce` (deliberately
+//! incomplete, see its module doc). The scope is bounded, so a definite verdict is
+//! always reachable: return the strongest one the marks already force — `Invalid`
 //! once no completion of the open cells can satisfy the question,
-//! `Valid`/`Consistent` once none can break it — and settle for `Pending`/`Neutral`
-//! only while the outcome is genuinely open. Deduce prunes and propagates; it does
-//! not own validity — a deduce rule's validity-style check is *applying* this
-//! authority, and its self-elimination of a question's own options must never
-//! outrun this verdict.
+//! `Valid`/`Consistent` once none can break it, `Pending`/`Neutral` only while the
+//! outcome is genuinely open. Deduce prunes and propagates; it does not own
+//! validity — a deduce rule's validity-style check is *applying* this authority,
+//! and its self-elimination of a question's own options must never outrun this
+//! verdict.
 
 use crate::counts::count_matching_mask;
 use crate::types::*;
