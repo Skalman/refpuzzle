@@ -1,4 +1,4 @@
-use crate::check_answer::{check_answer, check_answers};
+use crate::check_answer::{Validity, check_answer, check_answers};
 use crate::types::*;
 use arrayvec::ArrayVec;
 
@@ -10,8 +10,6 @@ pub fn solve(fp: &FlatPuzzle, max_solutions: usize) -> Vec<[Answer; MAX_N]> {
     let all_bits: u16 = (1u16 << n) - 1;
     let mut assigned_bits: u16 = 0;
 
-    let range_masks = compute_range_masks(fp);
-
     search(
         fp,
         &mut solutions,
@@ -19,7 +17,6 @@ pub fn solve(fp: &FlatPuzzle, max_solutions: usize) -> Vec<[Answer; MAX_N]> {
         &order,
         all_bits,
         &mut assigned_bits,
-        &range_masks,
         0,
         max_solutions,
     );
@@ -60,47 +57,6 @@ fn compute_search_order(fp: &FlatPuzzle) -> [u8; MAX_N] {
     });
 
     indices
-}
-
-fn compute_range_masks(fp: &FlatPuzzle) -> [u16; MAX_N] {
-    let n = fp.n;
-    let mut masks = [0u16; MAX_N];
-    for i in 0..n {
-        masks[i] = match fp.question_types[i] {
-            QuestionType::NextSame => {
-                let mut m = 0u16;
-                for j in (i + 1)..n {
-                    m |= 1 << j;
-                }
-                m
-            }
-            QuestionType::PrevSame => {
-                let mut m = 0u16;
-                for j in 0..i {
-                    m |= 1 << j;
-                }
-                m
-            }
-            QuestionType::ClosestAfter { after_index, .. }
-            | QuestionType::CountAnswerAfter { after_index, .. } => {
-                let mut m = 0u16;
-                for j in (after_index as usize + 1)..n {
-                    m |= 1 << j;
-                }
-                m
-            }
-            QuestionType::ClosestBefore { before_index, .. }
-            | QuestionType::CountAnswerBefore { before_index, .. } => {
-                let mut m = 0u16;
-                for j in 0..before_index as usize {
-                    m |= 1 << j;
-                }
-                m
-            }
-            _ => 0,
-        };
-    }
-    masks
 }
 
 /// If question qi is answered, does it force a specific answer at another position?
@@ -242,7 +198,6 @@ fn search(
     order: &[u8; MAX_N],
     all_bits: u16,
     assigned_bits: &mut u16,
-    range_masks: &[u16; MAX_N],
     depth: usize,
     max_solutions: usize,
 ) {
@@ -274,7 +229,6 @@ fn search(
             order,
             all_bits,
             assigned_bits,
-            range_masks,
             depth + 1,
             max_solutions,
         );
@@ -286,7 +240,7 @@ fn search(
         *assigned_bits |= bit;
         let mut forced = ArrayVec::<usize, MAX_N>::new();
         let ok = propagate_forces(fp, current, assigned_bits, qi, &mut forced);
-        if ok && !has_contradiction(fp, current, n, qi, *assigned_bits, all_bits, range_masks) {
+        if ok && !has_contradiction(fp, current, qi, *assigned_bits, all_bits) {
             search(
                 fp,
                 solutions,
@@ -294,7 +248,6 @@ fn search(
                 order,
                 all_bits,
                 assigned_bits,
-                range_masks,
                 depth + 1,
                 max_solutions,
             );
@@ -311,26 +264,31 @@ fn search(
     *assigned_bits &= !bit;
 }
 
+/// Prune this branch when any already-answered question — the ones affected by
+/// `just_assigned`, plus every global — is unsatisfiable under the current partial
+/// assignment. Delegates to `check_answer`, whose contract is `Invalid` iff no
+/// completion of the open cells can satisfy the constraint, so pruning on it never
+/// discards a branch that still had a valid completion. The full-board leaf
+/// `check_answers` in `search` remains the final authority; this only decides which
+/// branches are worth descending.
 fn has_contradiction(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
-    n: usize,
     just_assigned: usize,
     assigned: u16,
     all_bits: u16,
-    range_masks: &[u16; MAX_N],
 ) -> bool {
-    let all_answered = assigned == all_bits;
-
-    if all_answered {
+    if assigned == all_bits {
         return !check_answers(fp, answers);
     }
 
+    let state = State {
+        answers: *answers,
+        eliminated: [fp.initial_eliminated_mask(); MAX_N],
+    };
+
     for i in fp.affected_by[just_assigned].iter() {
-        if answers[i].is_none() {
-            continue;
-        }
-        if rule_violated(fp, answers, n, i, all_answered, assigned, range_masks) {
+        if answers[i].is_some() && check_answer(fp, state, i) == Validity::Invalid {
             return true;
         }
     }
@@ -338,128 +296,13 @@ fn has_contradiction(
     for i in fp.global_indices.iter() {
         // `just_assigned` is always in its own `affected_by` list, so a global
         // `just_assigned` was already checked in the loop above; skip the re-run.
-        if i == just_assigned || answers[i].is_none() {
+        if i == just_assigned {
             continue;
         }
-        if rule_violated(fp, answers, n, i, all_answered, assigned, range_masks) {
+        if answers[i].is_some() && check_answer(fp, state, i) == Validity::Invalid {
             return true;
         }
     }
 
     false
-}
-
-/// Returns true when question `i`'s rule is *violated* by the current partial
-/// assignment — i.e. this branch can be pruned.
-fn rule_violated(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    n: usize,
-    i: usize,
-    all_answered: bool,
-    assigned: u16,
-    range_masks: &[u16; MAX_N],
-) -> bool {
-    let qt = &fp.question_types[i];
-    let answer_i = answers[i].unwrap();
-
-    if (all_answered || can_fully_evaluate_local(qt, assigned, range_masks, i))
-        && !check_answer(
-            fp,
-            State {
-                answers: *answers,
-                eliminated: [fp.initial_eliminated_mask(); MAX_N],
-            },
-            i,
-        )
-        .is_valid()
-    {
-        return true;
-    }
-
-    // Forward checking for counting types
-    match *qt {
-        QuestionType::CountAnswer { answer }
-        | QuestionType::CountAnswerBefore { answer, .. }
-        | QuestionType::CountAnswerAfter { answer, .. } => {
-            let ov = fp.options[i][answer_i.idx()];
-            if !ov.is_num() {
-                return false;
-            }
-            let ov = ov.value();
-
-            let (range_start, range_end) = match *qt {
-                QuestionType::CountAnswer { .. } => (0, n),
-                QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
-                QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
-                _ => unreachable!(),
-            };
-
-            let mut count: u8 = 0;
-            let mut remaining: u8 = 0;
-            for j in range_start..range_end {
-                if answers[j] == Some(answer) {
-                    count += 1;
-                } else if answers[j].is_none() {
-                    remaining += 1;
-                }
-            }
-            if count > ov || count + remaining < ov {
-                return true;
-            }
-        }
-        QuestionType::CountVowel | QuestionType::CountConsonant => {
-            let ov = fp.options[i][answer_i.idx()];
-            if !ov.is_num() {
-                return false;
-            }
-            let ov = ov.value();
-            let is_vowel = matches!(*qt, QuestionType::CountVowel);
-            let mut count: u8 = 0;
-            let mut remaining: u8 = 0;
-            for j in 0..n {
-                if answers[j].is_none() {
-                    remaining += 1;
-                } else if let Some(a) = answers[j]
-                    && is_vowel == a.is_vowel()
-                {
-                    count += 1;
-                }
-            }
-            if count > ov || count + remaining < ov {
-                return true;
-            }
-        }
-        _ => {}
-    }
-
-    false
-}
-
-/// Soundness linchpin: true only when `qt`'s verdict at `qi` is already *final* —
-/// no future assignment can change it — so `rule_violated` may treat a current
-/// Invalid as a real contradiction and prune. Returning true too early prunes
-/// valid branches (unsound, dropped solutions); a conservative `false` is always
-/// safe, only slower. Add new arms only after confirming the verdict can't flip.
-fn can_fully_evaluate_local(
-    qt: &QuestionType,
-    assigned: u16,
-    range_masks: &[u16; MAX_N],
-    qi: usize,
-) -> bool {
-    match *qt {
-        QuestionType::AnswerIsSelf => true,
-        QuestionType::AnswerOf { question_index } => (assigned & (1 << question_index)) != 0,
-        QuestionType::LetterDist { question_index } => (assigned & (1 << question_index)) != 0,
-        QuestionType::PrevSame
-        | QuestionType::NextSame
-        | QuestionType::ClosestAfter { .. }
-        | QuestionType::ClosestBefore { .. }
-        | QuestionType::CountAnswerBefore { .. }
-        | QuestionType::CountAnswerAfter { .. } => {
-            let mask = range_masks[qi];
-            (assigned & mask) == mask
-        }
-        _ => false,
-    }
 }
