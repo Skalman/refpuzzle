@@ -1,7 +1,15 @@
+//! Lookahead: refute a candidate answer by assuming it and deducing to a
+//! contradiction. Probes use `deduce` — sound-only, since `assume_unique` is false
+//! (a false hypothesis would make uniqueness-assuming rules unsound). The two entry
+//! points differ only in how they pick a chain: `lookahead` takes the first
+//! refutable candidate; `lookahead_shortest` scans all and returns the shortest
+//! chain (drives the browser hint engine). Callers vary only the chain-length
+//! bound — generation caps it at the recipe depth; verify and hints run unbounded.
+
 use arrayvec::ArrayVec;
 
 use crate::check_answer::{Validity, check_answer};
-use crate::deduce::{DeduceResult, apply_action, contradiction_question, deduce, deduce_fast};
+use crate::deduce::{DeduceResult, apply_action, contradiction_question, deduce};
 use crate::types::*;
 
 #[derive(Clone, Debug)]
@@ -28,7 +36,6 @@ pub fn lookahead(
     fp: &FlatPuzzle,
     state: &State,
     lookahead_deduce_until: usize,
-    full: bool,
     deduce_calls: &mut u32,
 ) -> Option<LookaheadResult> {
     for qi in 0..fp.n {
@@ -39,15 +46,9 @@ pub fn lookahead(
             if state.is_eliminated(qi, oi) {
                 continue;
             }
-            if let Some(r) = probe_candidate(
-                fp,
-                state,
-                qi,
-                oi,
-                lookahead_deduce_until,
-                full,
-                deduce_calls,
-            ) {
+            if let Some(r) =
+                probe_candidate(fp, state, qi, oi, lookahead_deduce_until, deduce_calls)
+            {
                 return Some(r);
             }
         }
@@ -55,11 +56,17 @@ pub fn lookahead(
     None
 }
 
-/// Probe *every* candidate to a full fixpoint (unbounded, full `deduce`) and
-/// return the elimination whose contradiction chain has the fewest deductions —
-/// the shortest, most explainable hint. Ties break toward the first candidate in
-/// (question, option) order. Drives the browser hint engine; unbounded depth also
-/// makes it as strong as any puzzle generation accepts.
+/// Probe *every* candidate to an unbounded fixpoint and return the elimination
+/// whose contradiction chain has the fewest deductions — the shortest, most
+/// explainable hint. Ties break toward the first candidate in (question, option)
+/// order. Drives the browser hint engine. Differs from `lookahead` only in
+/// scanning all candidates for the shortest chain rather than taking the first
+/// hit (same `deduce` strength — see the module doc).
+///
+/// Unbounded, so it refutes every candidate a generated puzzle needs eliminated on
+/// its solve path (generation certifies solvability at a *bounded* depth ≤ this);
+/// off-path player states it can't refute fall through to `next_step`'s from-start
+/// fallback.
 // Only caller is the wasm `lookaheadShortest` export, so it's dead in native builds.
 #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadResult> {
@@ -72,7 +79,7 @@ pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadRes
             if state.is_eliminated(qi, oi) {
                 continue;
             }
-            if let Some(r) = probe_candidate(fp, state, qi, oi, usize::MAX, true, &mut 0)
+            if let Some(r) = probe_candidate(fp, state, qi, oi, usize::MAX, &mut 0)
                 && best.as_ref().is_none_or(|b| r.chain.len() < b.chain.len())
             {
                 best = Some(r);
@@ -93,7 +100,6 @@ fn probe_candidate(
     qi: usize,
     oi: usize,
     lookahead_deduce_until: usize,
-    full: bool,
     deduce_calls: &mut u32,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
@@ -105,11 +111,7 @@ fn probe_candidate(
     let mut contradiction_qi = None;
     while chain.len() < lookahead_deduce_until {
         *deduce_calls += 1;
-        let mut drs = if full {
-            deduce(fp, &hyp)
-        } else {
-            deduce_fast(fp, &hyp)
-        };
+        let mut drs = deduce(fp, &hyp);
         if drs.is_empty() {
             break;
         }
@@ -227,7 +229,6 @@ mod tests {
                     eliminated,
                 },
                 usize::MAX,
-                true,
                 &mut 0,
             );
             let got = match result {

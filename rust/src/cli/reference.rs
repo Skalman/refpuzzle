@@ -117,13 +117,7 @@ pub fn reference() {
             // to every rule in the chain so answered-case rules that only fire inside
             // lookahead still get a real, player-accurate example.
             let mut deduce_calls = 0;
-            if let Some(lr) = lookahead(
-                fp,
-                &state,
-                cfg.lookahead_deduce_until,
-                cfg.lookahead_full,
-                &mut deduce_calls,
-            ) {
+            if let Some(lr) = lookahead(fp, &state, cfg.lookahead_deduce_until, &mut deduce_calls) {
                 let hint = render_hint(&explain_lookahead(fp, &state, &lr));
                 for cd in &lr.chain {
                     consider(&mut rules, cd.rule.to_str(), hint.clone());

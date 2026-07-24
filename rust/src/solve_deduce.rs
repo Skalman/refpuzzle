@@ -12,12 +12,16 @@ use crate::types::*;
 /// - [`generation`](EngineConfig::generation): sound `deduce` (no
 ///   uniqueness-assuming rules — it runs *before* uniqueness is brute-confirmed)
 ///   plus lookahead bounded to the recipe depth. The accept-gate.
-/// - [`verify`](EngineConfig::verify): maximum power (uniqueness rules + unbounded,
-///   full lookahead). Offline `check` / `solve`.
+/// - [`verify`](EngineConfig::verify): maximum power (uniqueness rules + unbounded
+///   lookahead). Offline `check` / `solve`.
 ///
-/// A `player` preset (`assuming_unique: true`, `lookahead_deduce_until: 1`,
-/// `full: false`) mirrors the browser hint engine; add it when generation is
-/// switched to certify against it.
+/// A `player` preset (`assuming_unique: true`, `lookahead_deduce_until: 1`)
+/// mirrors the browser hint engine; add it when generation is switched to certify
+/// against it.
+///
+/// Configs vary lookahead only by chain-length bound (`lookahead_deduce_until`);
+/// lookahead always deduces with `deduce` (see the `lookahead` module doc) — there
+/// is no per-config strength knob.
 #[derive(Clone, Copy)]
 pub struct EngineConfig {
     /// `deduce_assuming_unique` (true) vs sound `deduce` (false).
@@ -27,8 +31,6 @@ pub struct EngineConfig {
     /// deduction). Not a hard cap: the batch that crosses the threshold is applied
     /// in full, so the chain can end slightly longer.
     pub lookahead_deduce_until: usize,
-    /// full `deduce` (true) vs `deduce_fast` (false) inside lookahead hypotheses.
-    pub lookahead_full: bool,
 }
 
 impl EngineConfig {
@@ -36,14 +38,12 @@ impl EngineConfig {
         Self {
             assuming_unique: false,
             lookahead_deduce_until,
-            lookahead_full: false,
         }
     }
     pub fn verify() -> Self {
         Self {
             assuming_unique: true,
             lookahead_deduce_until: usize::MAX,
-            lookahead_full: true,
         }
     }
 }
@@ -167,7 +167,6 @@ pub fn run_engine<S: StepSink>(
             fp,
             &state,
             cfg.lookahead_deduce_until,
-            cfg.lookahead_full,
             &mut telemetry.deduce_calls_in_lookahead,
         );
         telemetry.lookahead_us += us(t);
