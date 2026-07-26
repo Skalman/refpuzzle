@@ -1596,7 +1596,8 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 }
 
 /// Single-question probe: the new deductions `qi`'s own rules produce against
-/// the current state, in one pass (same rule set as [`deduce`], scoped to qi).
+/// the current state, in one pass. Sound — the same no-uniqueness-assuming rule
+/// set as [`deduce`], scoped to `qi` (so, like `deduce`, safe during generation).
 ///
 /// Intended as a cheap repair gate — `O(qi's rules)` instead of `O(all rules)`.
 /// It can miss an edit whose payoff lands on a *different* question (a global
@@ -1604,7 +1605,7 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// repair, never soundness: the accepting path still runs the full engine +
 /// brute-force uniqueness check. Used as repair's per-question gate (see
 /// `construct::repair`).
-pub fn deduce_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
+pub fn deduce_single_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
     deduce_impl(fp, state, RuleFilter::All, false, Some(qi))
 }
 

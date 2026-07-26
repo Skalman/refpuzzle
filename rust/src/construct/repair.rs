@@ -8,7 +8,7 @@ use arrayvec::ArrayVec;
 
 use super::{LevelRecipe, run_hint_sound, run_hint_standard};
 use crate::check_well_posed::check_well_posed_given_options;
-use crate::deduce::deduce_question;
+use crate::deduce::deduce_single_question;
 use crate::fill::{assert_accepted, valid_values};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
@@ -139,11 +139,11 @@ fn repair_pass(
 /// it kept an edit, `false` if nothing worked (the row is left unchanged).
 ///
 /// A kept edit is guaranteed **well-formed** — distinct option values, via
-/// `row_has_duplicate` — and to give `qi`'s own rules a move (the `deduce_question`
-/// gate). It is **not** guaranteed to keep the puzzle uniquely solvable: the new
-/// value can invalidate an elimination a global rule made on the old one, so the
-/// puzzle may gain extra solutions. The caller confirms uniqueness with a brute
-/// `solve`.
+/// `row_has_duplicate` — and to give `qi`'s own rules a move (the
+/// `deduce_single_question` gate). It is **not** guaranteed to keep the puzzle
+/// uniquely solvable: the new value can invalidate an elimination a global rule
+/// made on the old one, so the puzzle may gain extra solutions. The caller
+/// confirms uniqueness with a brute `solve`.
 fn repair_one_question(
     fp: &mut FlatPuzzle,
     qi: usize,
@@ -183,7 +183,7 @@ fn repair_one_question(
             // ambiguous match) and gives qi's rules a move.
             if !row_has_duplicate(fp, qi)
                 && check_well_posed_given_options(fp, solution, qi).is_none()
-                && !deduce_question(fp, state, qi).is_empty()
+                && !deduce_single_question(fp, state, qi).is_empty()
             {
                 return true;
             }
