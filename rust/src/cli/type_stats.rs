@@ -3,7 +3,7 @@ use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::solve_deduce::{NoSteps, run_engine};
 use crate::stats::Stats;
-use crate::types::{FlatPuzzle, OptionValue, QuestionTypeKind};
+use crate::types::{Answer, FlatPuzzle, MAX_N, OptionValue, QuestionType, QuestionTypeKind};
 use std::collections::{BTreeMap, BTreeSet};
 
 const LETTER_LABELS: [&str; 5] = ["A", "B", "C", "D", "E"];
@@ -16,6 +16,28 @@ fn is_letter_valued(kind: QuestionTypeKind) -> bool {
     )
 }
 
+/// Candidate-list-vs-key metrics for the types that scope "same answer" to their
+/// listed options (`SameAs`, `SameAsWhich`): how many questions holding the
+/// matched letter are *listed* as candidates and how many sit outside the list.
+/// Nothing else here relates a question's option row to the answer key.
+#[derive(Default)]
+struct SharerStats {
+    /// listed-sharer count → rows with that count
+    listed: BTreeMap<usize, u32>,
+    /// rows whose answer is a numeric option, and their summed unlisted sharers
+    numeric_rows: u32,
+    numeric_unlisted: u32,
+    /// rows whose answer is the "none" option, and their summed unlisted sharers
+    none_rows: u32,
+    none_unlisted: u32,
+}
+
+impl SharerStats {
+    fn rows(&self) -> u32 {
+        self.numeric_rows + self.none_rows
+    }
+}
+
 #[derive(Default)]
 struct TypeStats {
     /// instances_per_puzzle[k] = # puzzles where this type appeared exactly k times
@@ -26,6 +48,8 @@ struct TypeStats {
     distractor_values: BTreeMap<OptionValue, u32>,
     /// values per option position (A=0..E=4)
     position_values: [BTreeMap<OptionValue, u32>; 5],
+    /// Populated only for the scoped-sameness kinds; `rows() == 0` elsewhere.
+    sharers: SharerStats,
 }
 
 struct LevelData {
@@ -56,6 +80,7 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
     write_overview(&mut md, &levels);
     write_fallbacks(&mut md, &levels);
     write_multiplicity(&mut md, &levels);
+    write_sharers(&mut md, &levels);
     write_answer_freq(&mut md, &levels);
 
     if output == "-" {
@@ -204,6 +229,18 @@ fn tally_puzzle(
                 *entry.distractor_values.entry(v).or_insert(0) += 1;
             }
         }
+
+        if let Some((matched, excluded)) = scoped_sameness(result, qi, &solution) {
+            tally_sharers(
+                &mut entry.sharers,
+                result,
+                qi,
+                matched,
+                excluded,
+                correct_oi,
+                &solution,
+            );
+        }
     }
 
     for (&kind, &count) in &counts_this_puzzle {
@@ -213,6 +250,69 @@ fn tally_puzzle(
             .instances_per_puzzle
             .entry(count)
             .or_insert(0) += 1;
+    }
+}
+
+/// For a question that scopes "same answer" to its listed options: the matched
+/// letter M, plus the question index excluded from its candidate pool (the
+/// reference, for `SameAsWhich`). `None` for every other kind.
+fn scoped_sameness(
+    fp: &FlatPuzzle,
+    qi: usize,
+    solution: &[Option<Answer>; MAX_N],
+) -> Option<(Answer, Option<usize>)> {
+    match fp.question_types[qi] {
+        QuestionType::SameAs => Some((solution[qi]?, None)),
+        QuestionType::SameAsWhich { question_index } => {
+            let ref_qi = usize::from(question_index);
+            Some((solution[ref_qi]?, Some(ref_qi)))
+        }
+        _ => None,
+    }
+}
+
+/// Count how many questions holding `matched` this row lists as candidates and
+/// how many it leaves out, and record which half of the option set answered it.
+fn tally_sharers(
+    stats: &mut SharerStats,
+    fp: &FlatPuzzle,
+    qi: usize,
+    matched: Answer,
+    excluded: Option<usize>,
+    correct_oi: usize,
+    solution: &[Option<Answer>; MAX_N],
+) {
+    let mut listed_mask = 0u16;
+    for oi in 0..fp.option_count {
+        let ov = fp.options[qi][oi];
+        if ov.is_num() {
+            let j = usize::from(ov.value());
+            if j < fp.n {
+                listed_mask |= 1 << j;
+            }
+        }
+    }
+
+    let mut listed = 0usize;
+    let mut unlisted = 0u32;
+    for j in 0..fp.n {
+        if j == qi || Some(j) == excluded || solution[j] != Some(matched) {
+            continue;
+        }
+        if (listed_mask >> j) & 1 == 1 {
+            listed += 1;
+        } else {
+            unlisted += 1;
+        }
+    }
+
+    *stats.listed.entry(listed).or_insert(0) += 1;
+    if fp.options[qi][correct_oi].is_none() {
+        stats.none_rows += 1;
+        stats.none_unlisted += unlisted;
+    } else {
+        stats.numeric_rows += 1;
+        stats.numeric_unlisted += unlisted;
     }
 }
 
@@ -390,6 +490,79 @@ fn write_multiplicity(md: &mut String, levels: &[LevelData]) {
         render_table(md, &header, &rows);
         md.push_str("\n</details>\n\n");
     }
+}
+
+/// Candidate sharers: for each level and each scoped-sameness type, how many of
+/// the questions holding the matched letter the row actually lists. `listed N` is
+/// a row count; `unlisted` columns are the mean per row of that answer shape.
+///
+/// The two readings this exists for: `listed` must be exactly 1 for a
+/// numeric-answered row and 0 for a none-answered one (anything else is a key the
+/// "only one" reading can't grade), and a non-zero `unlisted/none` is what says
+/// the correct value was picked from the candidate list rather than the key.
+fn write_sharers(md: &mut String, levels: &[LevelData]) {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut max_listed = 1usize;
+    for ld in levels {
+        for entry in ld.per_type.values() {
+            if entry.sharers.rows() == 0 {
+                continue;
+            }
+            max_listed = max_listed.max(entry.sharers.listed.keys().copied().max().unwrap_or(0));
+        }
+    }
+    for ld in levels {
+        for (&kind, entry) in &ld.per_type {
+            let s = &entry.sharers;
+            if s.rows() == 0 {
+                continue;
+            }
+            let mean = |total: u32, count: u32| match count {
+                0 => String::new(),
+                c => format!("{:.3}", total as f64 / c as f64),
+            };
+            rows.push(
+                [
+                    format!("L{} {kind:?}", ld.level),
+                    s.rows().to_string(),
+                    s.numeric_rows.to_string(),
+                    s.none_rows.to_string(),
+                ]
+                .into_iter()
+                .chain(
+                    (0..=max_listed).map(|k| match s.listed.get(&k).copied().unwrap_or(0) {
+                        0 => String::new(),
+                        c => c.to_string(),
+                    }),
+                )
+                .chain([
+                    mean(s.numeric_unlisted, s.numeric_rows),
+                    mean(s.none_unlisted, s.none_rows),
+                ])
+                .collect(),
+            );
+        }
+    }
+    if rows.is_empty() {
+        return;
+    }
+
+    md.push_str(
+        "## Candidate sharers\n\nFor the types that scope \"same answer\" to their \
+         listed options. `rows` is question instances; `num-ans` / `none-ans` split \
+         them by which half of the option set is the answer. `listed N` counts rows \
+         where exactly N *listed* candidates hold the matched letter. The last two \
+         columns are the mean number of questions holding it that the row does *not* \
+         list.\n\n",
+    );
+    let header: Vec<String> = ["", "rows", "num-ans", "none-ans"]
+        .iter()
+        .map(|s| s.to_string())
+        .chain((0..=max_listed).map(|k| format!("listed {k}")))
+        .chain(["unlisted/num".to_string(), "unlisted/none".to_string()])
+        .collect();
+    render_table(md, &header, &rows);
+    md.push('\n');
 }
 
 /// Per-type answer/distractor/position tables, grouped per level. Each cell is
