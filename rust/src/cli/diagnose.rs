@@ -72,7 +72,7 @@ pub fn gen_stats(
                 &mut fp,
                 &skeleton.solution,
                 skeleton.n,
-                RECIPES[level_index].lookahead_deduce_until,
+                &RECIPES[level_index],
                 &mut rng,
                 &mut stats,
                 "gen-stats",

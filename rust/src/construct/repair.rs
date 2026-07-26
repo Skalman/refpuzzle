@@ -6,7 +6,7 @@
 
 use arrayvec::ArrayVec;
 
-use super::run_hint_engine_from;
+use super::{LevelRecipe, run_hint_sound, run_hint_standard};
 use crate::check_well_posed::check_well_posed_given_options;
 use crate::deduce::deduce_question;
 use crate::fill::{assert_accepted, valid_values};
@@ -24,23 +24,14 @@ pub(super) fn repair_distractors(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_deduce_until: usize,
+    recipe: &LevelRecipe,
     rng: &mut Rng,
     stats: &mut Stats,
     state: &mut State,
     label: &str,
 ) -> bool {
     loop {
-        match repair_pass(
-            fp,
-            solution,
-            n,
-            lookahead_deduce_until,
-            rng,
-            stats,
-            state,
-            label,
-        ) {
+        match repair_pass(fp, solution, n, recipe, rng, stats, state, label) {
             PassOutcome::Solved => return true,
             PassOutcome::Changed => {} // advanced — run another pass from the new position
             PassOutcome::NoChange | PassOutcome::FailedRecheck => return false,
@@ -67,7 +58,7 @@ fn repair_pass(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_deduce_until: usize,
+    recipe: &LevelRecipe,
     rng: &mut Rng,
     stats: &mut Stats,
     state: &mut State,
@@ -97,16 +88,17 @@ fn repair_pass(
         if !repair_one_question(fp, qi, solution, state, rng) {
             continue;
         }
-        // Resume from `state` rather than re-solve from scratch (cheaper) to decide
-        // whether this edit finishes the puzzle. NOTE: a distractor edit can
+        // Resume from the carried `state` (cheaper than re-solving from scratch) to
+        // decide whether this edit finishes the puzzle. A distractor edit can
         // invalidate an elimination a global rule made on the edited option, which
-        // `state` still carries — so a "solved" result here is neither guaranteed
-        // unique nor guaranteed reproducible from scratch. Two independent backstops
-        // below re-check the emitted puzzle before accepting: brute for uniqueness,
-        // and a fresh hint solve for from-scratch solvability. A rejected edit is
-        // left in place (the puzzle is discarded on regenerate) rather than restored.
-        let (solved, advanced_state) =
-            run_hint_engine_from(fp, *state, stats, lookahead_deduce_until);
+        // `state` still carries — so the resume runs on a possibly-stale premise. Two
+        // consequences: `run_hint_sound` must NOT panic on a contradiction here
+        // (a stale premise, not an unsound rule — like a false lookahead hypothesis),
+        // and a "solved" result is neither guaranteed unique nor reproducible from
+        // scratch. The brute + from-scratch re-check backstops below gate acceptance
+        // regardless; a rejected edit is left in place (discarded on regenerate).
+        let out = run_hint_sound(fp, *state, stats, recipe);
+        let (solved, advanced_state) = (out.solved, out.state);
         if solved {
             let solutions = solve(fp, 2);
             if solutions.len() != 1 {
@@ -115,12 +107,11 @@ fn repair_pass(
                 return PassOutcome::FailedRecheck;
             }
             // The resume finished from `state`, whose carried eliminations this edit
-            // may have invalidated — so re-solve from scratch. Accept only if the
-            // hint engine solves the emitted puzzle from `initial_state`; otherwise
-            // it's uniquely solvable but not hint-solvable from a fresh start.
-            let (fresh_solved, _) =
-                run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until);
-            if !fresh_solved {
+            // may have invalidated — so re-solve from scratch, with the player engine
+            // (`standard`, sound here because brute just confirmed uniqueness). Accept
+            // only if it solves from `initial_state`; else it's unique but not
+            // player-solvable from a fresh start.
+            if !run_hint_standard(fp, fp.initial_state, stats, recipe).solved {
                 stats.repair_unsolvable += 1;
                 return PassOutcome::FailedRecheck;
             }

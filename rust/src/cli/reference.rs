@@ -92,7 +92,7 @@ pub fn reference() {
         // from. A naive one-by-one replay would show later same-round steps a state
         // already mutated by earlier ones, and a count/positional reason then can't
         // reconstruct its source (e.g. the count already reads as saturated).
-        let cfg = EngineConfig::verify();
+        let cfg = EngineConfig::fallback();
         let mut state = fp.initial_state;
         for _ in 0..fp.n * VERIFY_ITERS_PER_QUESTION {
             if (0..fp.n).all(|i| state.answers[i].is_some()) {

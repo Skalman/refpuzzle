@@ -206,13 +206,13 @@ mod wasm_api {
     }
 
     /// From-start fallback when the current-state engine (deduce + shortest
-    /// lookahead) is stuck. Tries each distinct recipe depth — generation certifies
-    /// the puzzle solves at its own level's depth, and that depth is in this set, so
-    /// one attempt always yields a step (guaranteed hint, without relying on the
-    /// current-state engine reaching that depth) — plus unbounded lookahead as a
-    /// bonus, and returns the shortest-to-explain step. Level-agnostic (no need to
-    /// plumb the level through), and generation is left untouched — its recipe-depth
-    /// accept-gate is the guarantee.
+    /// lookahead) is stuck. Tries the `standard` (player) engine at each distinct
+    /// recipe depth — the accept-gate certifies every shipped puzzle solves under
+    /// `standard` at its own level's depth, and that depth is in this set, so one
+    /// attempt always yields a step (a guaranteed hint, without relying on the
+    /// current-state engine reaching that depth) — plus the unbounded `fallback`
+    /// engine as a bonus, and returns the shortest-to-explain step. Level-agnostic
+    /// (no need to plumb the level through).
     fn fallback_step(fp: &FlatPuzzle, s: &State) -> Option<StepApi> {
         let mut depths: Vec<usize> = construct::RECIPES
             .iter()
@@ -222,8 +222,8 @@ mod wasm_api {
         depths.dedup();
         let configs = depths
             .iter()
-            .map(|&d| EngineConfig::generation(d))
-            .chain(std::iter::once(EngineConfig::verify()));
+            .map(|&d| EngineConfig::standard(d))
+            .chain(std::iter::once(EngineConfig::fallback()));
         let mut best: Option<StepApi> = None;
         for config in configs {
             if let Some(c) = fallback_at(fp, s, config)

@@ -7,21 +7,12 @@ use crate::lookahead::{LookaheadResult, lookahead};
 use crate::time::{us, wasm_now};
 use crate::types::*;
 
-/// Which variant of the shared solve engine to run. The presets are the engines
-/// that used to be separate hand-rolled loops, now unified behind [`run_engine`]:
-/// - [`generation`](EngineConfig::generation): sound `deduce` (no
-///   uniqueness-assuming rules — it runs *before* uniqueness is brute-confirmed)
-///   plus lookahead bounded to the recipe depth. The accept-gate.
-/// - [`verify`](EngineConfig::verify): maximum power (uniqueness rules + unbounded
-///   lookahead). Offline `check` / `solve`.
-///
-/// A `player` preset (`assuming_unique: true`, `lookahead_deduce_until: 1`)
-/// mirrors the browser hint engine; add it when generation is switched to certify
-/// against it.
-///
-/// Configs vary lookahead only by chain-length bound (`lookahead_deduce_until`);
-/// lookahead always deduces with `deduce` (see the `lookahead` module doc) — there
-/// is no per-config strength knob.
+/// Which variant of the shared solve engine [`run_engine`] runs — see each preset
+/// for what it is and where it's used. They differ on two axes only: whether the
+/// outer `deduce` may assume the puzzle is unique, and how deep lookahead may search.
+/// (Lookahead itself always deduces with sound `deduce` regardless of preset — see
+/// the `lookahead` module doc — so `standard` and `fallback` differ purely in the
+/// depth cap.)
 #[derive(Clone, Copy)]
 pub struct EngineConfig {
     /// `deduce_assuming_unique` (true) vs sound `deduce` (false).
@@ -34,13 +25,36 @@ pub struct EngineConfig {
 }
 
 impl EngineConfig {
+    /// Used for generation's pre-uniqueness work: repair's distractor-proposal solves
+    /// and the stuck state repair advances from. Sound `deduce` (no uniqueness-
+    /// assuming rules), lookahead bounded to the recipe depth. Assumes nothing about
+    /// the number of solutions, so it may run before brute has confirmed the puzzle
+    /// unique.
     pub fn generation(lookahead_deduce_until: usize) -> Self {
         Self {
             assuming_unique: false,
             lookahead_deduce_until,
         }
     }
-    pub fn verify() -> Self {
+    /// Used for the ship bar and the player-facing default: generation's acceptance
+    /// gate, `type_stats`' tally solve, `check`'s recipe-depth tier, and the wasm
+    /// `solve` / hints. Uniqueness-assuming `deduce`, lookahead bounded to the recipe
+    /// depth — the engine a player faces at the intended difficulty. Its rules assume
+    /// a unique solution, so it is sound only once brute has confirmed uniqueness;
+    /// every generation caller runs brute first.
+    pub fn standard(lookahead_deduce_until: usize) -> Self {
+        Self {
+            assuming_unique: true,
+            lookahead_deduce_until,
+        }
+    }
+    /// Used as the break-glass fallback: `check`'s full-depth tier and un-vetted
+    /// (playground) puzzles `standard` can't finish. Uniqueness-assuming `deduce`,
+    /// unbounded lookahead — searches to any depth. Because `deduce` isn't confluent,
+    /// the extra depth can strand a rule and leave it stuck on a puzzle `standard`
+    /// solves at recipe depth, so it is not reliably stronger — a `check` warning, not
+    /// a failure.
+    pub fn fallback() -> Self {
         Self {
             assuming_unique: true,
             lookahead_deduce_until: usize::MAX,
@@ -117,9 +131,9 @@ pub struct EngineOutcome {
 pub const VERIFY_ITERS_PER_QUESTION: usize = 30;
 
 /// The single deduce→lookahead solve loop shared by generation
-/// (`run_hint_engine`), the offline `check` / `solve`, and (via wasm) the browser.
-/// Every behavioral difference between those callers is captured by `cfg`;
-/// `max_iters` bounds the outer loop.
+/// (`run_hint_sound` / `run_hint_standard`), the offline `check` / `solve`, and (via
+/// wasm) the browser. Every behavioral difference between those callers is captured
+/// by `cfg`; `max_iters` bounds the outer loop.
 pub fn run_engine<S: StepSink>(
     fp: &FlatPuzzle,
     mut state: State,
@@ -187,18 +201,32 @@ pub fn run_engine<S: StepSink>(
     }
 }
 
-/// Solve with the offline `verify` engine (uniqueness rules + full, unbounded
-/// lookahead), reporting only the final answers.
+/// The player-facing auto-solve. Tries the `standard` (player) engine at the best-
+/// guess recipe depth first; only if that doesn't finish does it fall back to the
+/// unbounded `fallback` engine (an un-vetted / playground puzzle beyond any recipe's
+/// depth — a shipped puzzle always solves under `standard` by construction). Reports
+/// only the final answers; skips step recording (`NoSteps`).
 pub fn solve(fp: &FlatPuzzle) -> SolveResult {
-    // `solve` only reports the final answers; skip step recording (`NoSteps`) so
-    // there's no throwaway `Vec` on the wasm solve path.
+    let recipe = crate::construct::guess_recipe(fp.n);
+    let max_iters = fp.n * VERIFY_ITERS_PER_QUESTION;
     let out = run_engine(
         fp,
         fp.initial_state,
-        EngineConfig::verify(),
-        fp.n * VERIFY_ITERS_PER_QUESTION,
+        recipe.standard_config(),
+        max_iters,
         &mut NoSteps,
     );
+    let out = if out.solved {
+        out
+    } else {
+        run_engine(
+            fp,
+            fp.initial_state,
+            EngineConfig::fallback(),
+            max_iters,
+            &mut NoSteps,
+        )
+    };
     SolveResult {
         solved: out.solved,
         answers: out.state.answers,

@@ -98,10 +98,10 @@ pub struct PuzzleCheckResult {
     /// Shareable link opened on the solver's resolved cells. A date route for the
     /// served corpus; a self-contained `/playground` link (blob embedded) otherwise.
     pub solve_link: String,
-    /// Solve from the start under the puzzle's own generation accept-gate engine
-    /// (`generation(recipe_depth)`). `None` for keyless (playground) puzzles.
-    /// `Some(false)` means it no longer solves under that engine — a corpus-drift /
-    /// stale-bake signal, since generation only admits puzzles this engine solves.
+    /// Solve from the start under the accept-gate engine — `standard` at the level's
+    /// recipe depth (the ship bar). `None` for keyless (playground) puzzles.
+    /// `Some(false)` = it no longer clears the ship bar: a hard error / stale-bake
+    /// signal, since the gate only admits puzzles this engine solves.
     pub recipe_depth: Option<usize>,
     pub recipe_solve_ok: Option<bool>,
     pub recipe_solve_answered: Option<usize>,
@@ -205,20 +205,22 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
         .collect()
 }
 
-/// Re-solve from the start under the puzzle's own generation recipe depth — the
-/// exact accept-gate engine (`EngineConfig::generation(depth)`, `n*15` iters). The
-/// level is parsed from the `MMDD-L` key; `None` for keyless (playground) puzzles.
-/// Returns `(depth, solved, answered)`.
+/// Re-solve from the start under the puzzle's own accept-gate engine — `standard`
+/// (uniqueness-assuming) at the level's recipe depth (`n*15` iters). The level is
+/// parsed from the `MMDD-L` key; `None` for keyless (playground) puzzles. Returns
+/// `(depth, solved, answered)`; `solved == false` means it no longer clears the ship
+/// bar — a hard `check` error / stale-bake signal, since the gate only admits
+/// puzzles this engine solves.
 fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)> {
     let level: usize = key.rsplit_once('-')?.1.parse().ok()?;
     if !(1..=6).contains(&level) {
         return None;
     }
-    let depth = construct::RECIPES[level - 1].lookahead_deduce_until;
+    let recipe = &construct::RECIPES[level - 1];
     let out = solve_deduce::run_engine(
         fp,
         fp.initial_state,
-        solve_deduce::EngineConfig::generation(depth),
+        recipe.standard_config(),
         fp.n * 15,
         &mut solve_deduce::NoSteps,
     );
@@ -226,7 +228,7 @@ fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)
         .iter()
         .filter(|a| a.is_some())
         .count();
-    Some((depth, out.solved, answered))
+    Some((recipe.lookahead_deduce_until, out.solved, answered))
 }
 
 /// `year = Some(y)` (always non-empty) renders date-route links (served corpus,
@@ -447,8 +449,15 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
 fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     let n = r.n;
 
-    let has_form_warns = !r.form_warnings.is_empty();
-    let has_errors = !r.solve_ok
+    // Ship bar: `standard` at recipe depth (`recipe_solve_ok`). A full-depth
+    // (`solve_ok`) stall with the ship bar solved is the known non-confluence — a
+    // warning, not an error. Keyless (playground) puzzles have no recipe, so their
+    // bar is the full solve.
+    let ship_ok = r.recipe_solve_ok.unwrap_or(r.solve_ok);
+    let ship_answered = r.recipe_solve_answered.unwrap_or(r.solve_answered);
+    let full_only_warn = r.recipe_solve_ok == Some(true) && !r.solve_ok;
+    let has_warns = !r.form_warnings.is_empty() || full_only_warn;
+    let has_errors = !ship_ok
         || r.brute_count != 1
         || !r.hint_brute_match
         || !r.ambiguous.is_empty()
@@ -456,9 +465,9 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
 
     let verdict = if !r.hint_brute_match {
         red("MISMATCH")
-    } else if !r.solve_ok && r.solve_answered == n {
+    } else if !ship_ok && ship_answered == n {
         red("CONTRADICTION")
-    } else if !r.solve_ok {
+    } else if !ship_ok {
         red("STUCK")
     } else if r.brute_count == 0 {
         red("UNSOLVABLE")
@@ -466,7 +475,7 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
         red("AMBIGUOUS")
     } else if !r.form_errors.is_empty() {
         red("FORM ERRORS")
-    } else if has_form_warns {
+    } else if has_warns {
         yellow("ok (with warnings)")
     } else {
         green("ok")
@@ -559,27 +568,27 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
         writeln!(w, "    {}", dim(msg)).unwrap();
     }
 
-    // Solve
-    let solve_label = if r.solve_ok {
-        green(&format!("solved {}/{n}", r.solve_answered))
-    } else {
-        red(&format!("stuck {}/{n}", r.solve_answered))
-    };
-    writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead (full)").unwrap();
-    writeln!(w, "    {}", dim(&r.solve_link)).unwrap();
-
-    // Same engine at this level's accept-gate (recipe) depth — a drift signal if it
-    // no longer solves.
+    // Ship bar: `standard` at the recipe depth — red if it stalls (a hard error).
     if let Some(ok) = r.recipe_solve_ok {
         let d = r.recipe_depth.unwrap_or(0);
         let ans = r.recipe_solve_answered.unwrap_or(0);
         let label = if ok {
             green(&format!("solved {ans}/{n} (d={d})"))
         } else {
-            yellow(&format!("stuck {ans}/{n} (d={d})"))
+            red(&format!("stuck {ans}/{n} (d={d})"))
         };
         writeln!(w, "  {:<28} {label}", "Deduce+lookahead (recipe)").unwrap();
     }
+
+    // Full (unbounded) depth — informational: a stall here with the recipe tier
+    // solved is the known non-confluence, a warning not a failure.
+    let solve_label = if r.solve_ok {
+        green(&format!("solved {}/{n}", r.solve_answered))
+    } else {
+        yellow(&format!("stuck {}/{n}", r.solve_answered))
+    };
+    writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead (full)").unwrap();
+    writeln!(w, "    {}", dim(&r.solve_link)).unwrap();
 
     // Brute
     if r.brute_count == 1 {
@@ -659,10 +668,12 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         }
     }
 
+    // Error tier = the ship bar (`standard` at recipe depth, `recipe_stuck`). A
+    // full-depth (`stuck`/`contradictions`) stall is only a warning — the known
+    // non-confluence, since nothing player-facing runs the unbounded engine.
     let mut failed_set: std::collections::HashSet<&str> = std::collections::HashSet::new();
     for v in [
-        &stuck,
-        &contradictions,
+        &recipe_stuck,
         &ambiguous,
         &mismatches,
         &not_answerable,
@@ -673,10 +684,9 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         }
     }
     let passed = total - failed_set.len();
-    let has_warnings = !form_warnings.is_empty();
+    let has_warnings = !form_warnings.is_empty() || !stuck.is_empty() || !contradictions.is_empty();
     let has_errors = !form_errors.is_empty()
-        || !stuck.is_empty()
-        || !contradictions.is_empty()
+        || !recipe_stuck.is_empty()
         || !ambiguous.is_empty()
         || !mismatches.is_empty()
         || !not_answerable.is_empty();
@@ -708,20 +718,9 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         bad_n(form_errors.len(), "errors")
     )
     .unwrap();
-    let n_solve_ok = total - stuck.len() - contradictions.len();
     writeln!(w, "  {}", bold("Solve methods")).unwrap();
-    writeln!(
-        w,
-        "    {:<28}{}, {}, {}",
-        "deduce+lookahead (full)",
-        ok_n(n_solve_ok),
-        bad_n(stuck.len(), "stuck"),
-        bad_n(contradictions.len(), "contradiction")
-    )
-    .unwrap();
-    // Same deduce+lookahead engine at each level's accept-gate (recipe) depth —
-    // informational (the full run + brute are the pass/fail gates). "stuck" flags
-    // corpus drift: admitted puzzles that no longer solve at their recipe depth.
+    // Ship bar: `standard` at each level's recipe depth. A "stuck" here is a hard
+    // error — corpus drift: an admitted puzzle no longer clears the gate.
     let n_recipe_graded = results
         .iter()
         .filter(|r| r.recipe_solve_ok.is_some())
@@ -731,7 +730,19 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         "    {:<28}{}, {}",
         "deduce+lookahead (recipe)",
         ok_n(n_recipe_graded - recipe_stuck.len()),
-        warn_n(recipe_stuck.len(), "stuck")
+        bad_n(recipe_stuck.len(), "stuck")
+    )
+    .unwrap();
+    // Full (unbounded) depth — informational. A stall here with the recipe tier
+    // solved is the known non-confluence: a warning, not a failure.
+    let n_solve_ok = total - stuck.len() - contradictions.len();
+    writeln!(
+        w,
+        "    {:<28}{}, {}, {}",
+        "deduce+lookahead (full)",
+        ok_n(n_solve_ok),
+        warn_n(stuck.len(), "stuck"),
+        warn_n(contradictions.len(), "contradiction")
     )
     .unwrap();
     writeln!(
@@ -758,25 +769,36 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
     )
     .unwrap();
 
-    if !form_warnings.is_empty() {
+    if has_warnings {
         writeln!(w, "\nWarnings:").unwrap();
-        writeln!(
-            w,
-            "  Form ({}): {}",
-            form_warnings.len(),
-            form_warnings.join(" ")
-        )
-        .unwrap();
-    }
-
-    if !recipe_stuck.is_empty() {
-        writeln!(
-            w,
-            "\nStuck at recipe depth ({}): {}",
-            recipe_stuck.len(),
-            recipe_stuck.join(" ")
-        )
-        .unwrap();
+        if !form_warnings.is_empty() {
+            writeln!(
+                w,
+                "  Form ({}): {}",
+                form_warnings.len(),
+                form_warnings.join(" ")
+            )
+            .unwrap();
+        }
+        // Full-depth stalls with the recipe tier solved — the known non-confluence.
+        if !stuck.is_empty() {
+            writeln!(
+                w,
+                "  Stuck at full depth ({}): {}",
+                stuck.len(),
+                stuck.join(" ")
+            )
+            .unwrap();
+        }
+        if !contradictions.is_empty() {
+            writeln!(
+                w,
+                "  Contradiction at full depth ({}): {}",
+                contradictions.len(),
+                contradictions.join(" ")
+            )
+            .unwrap();
+        }
     }
 
     if has_errors {
@@ -790,15 +812,12 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
             )
             .unwrap();
         }
-        if !stuck.is_empty() {
-            writeln!(w, "  Stuck ({}): {}", stuck.len(), stuck.join(" ")).unwrap();
-        }
-        if !contradictions.is_empty() {
+        if !recipe_stuck.is_empty() {
             writeln!(
                 w,
-                "  Contradiction ({}): {}",
-                contradictions.len(),
-                contradictions.join(" ")
+                "  Stuck at recipe depth ({}): {}",
+                recipe_stuck.len(),
+                recipe_stuck.join(" ")
             )
             .unwrap();
         }
@@ -1019,7 +1038,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let out = solve_deduce::run_engine(
         fp,
         fp.initial_state,
-        solve_deduce::EngineConfig::verify(),
+        solve_deduce::EngineConfig::fallback(),
         fp.n * solve_deduce::VERIFY_ITERS_PER_QUESTION,
         &mut log,
     );

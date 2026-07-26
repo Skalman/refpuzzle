@@ -1,7 +1,7 @@
 use crate::construct;
 use crate::difficulty::PROFILES;
 use crate::rng::Rng;
-use crate::solve_deduce::solve;
+use crate::solve_deduce::{NoSteps, run_engine};
 use crate::stats::Stats;
 use crate::types::{FlatPuzzle, OptionValue, QuestionTypeKind};
 use std::collections::{BTreeMap, BTreeSet};
@@ -72,6 +72,7 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
 /// Capped at 100× calls as a backstop against an infeasible profile.
 fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
     let profile = &PROFILES[(level - 1) as usize];
+    let recipe = &construct::RECIPES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
     let mut total_calls = 0u32;
@@ -100,7 +101,7 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
             continue;
         };
         successes += 1;
-        tally_puzzle(&result, &mut per_type);
+        tally_puzzle(&result, &mut per_type, recipe);
     }
 
     // Account for puzzles with 0 instances of each known type.
@@ -165,8 +166,23 @@ fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
 }
 
 /// Fold one generated puzzle into the running per-type tallies.
-fn tally_puzzle(result: &FlatPuzzle, per_type: &mut BTreeMap<QuestionTypeKind, TypeStats>) {
-    let solution = solve(result).answers;
+fn tally_puzzle(
+    result: &FlatPuzzle,
+    per_type: &mut BTreeMap<QuestionTypeKind, TypeStats>,
+    recipe: &construct::LevelRecipe,
+) {
+    // Read the answer key with the engine the gate accepts on: `standard` at the
+    // recipe depth. An accepted puzzle solves under it, so the `unreachable!` below
+    // can't fire — a fired one is a gate/engine bug, so fail loud (release too).
+    let solution = run_engine(
+        result,
+        result.initial_state,
+        recipe.standard_config(),
+        result.n * 15,
+        &mut NoSteps,
+    )
+    .state
+    .answers;
     let mut counts_this_puzzle: BTreeMap<QuestionTypeKind, usize> = BTreeMap::new();
 
     for qi in 0..result.n {
@@ -174,8 +190,6 @@ fn tally_puzzle(result: &FlatPuzzle, per_type: &mut BTreeMap<QuestionTypeKind, T
         *counts_this_puzzle.entry(kind).or_insert(0) += 1;
 
         let entry = per_type.entry(kind).or_default();
-        // An accepted puzzle is fully deduce-solvable, so this is unreachable; fail
-        // loud (in release too) if that invariant ever breaks.
         let Some(correct) = solution[qi] else {
             unreachable!("accepted puzzle has unsolved Q{qi}");
         };

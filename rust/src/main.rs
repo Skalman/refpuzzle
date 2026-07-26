@@ -700,9 +700,11 @@ mod tests {
             if std::time::Instant::now() > deadline {
                 break;
             }
-            let cr = cli::check::run_check(fp, key);
-            let ok = cr.ok;
-            if !ok {
+            // "Hint-solvable" = the player's auto-solve completes: the `standard`
+            // (player) engine, or the unbounded `fallback` if standard stalls. `solve`
+            // runs standard-first then fallback, so this asserts at least one of the
+            // two lands — the real player guarantee, not just that fallback alone does.
+            if !solve_deduce::solve(fp).solved {
                 failures.push(key.clone());
             }
         }

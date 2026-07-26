@@ -16,7 +16,7 @@ use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given
 use crate::fill::{assert_accepted, count_letter, fill_options};
 use crate::rng::Rng;
 use crate::solve_brute::solve;
-use crate::solve_deduce::{EngineConfig, NoSteps, run_engine};
+use crate::solve_deduce::{EngineConfig, EngineOutcome, NoSteps, run_engine};
 use crate::stats::{FallbackCounts, SkeletonStats, Stats};
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
@@ -44,6 +44,34 @@ pub struct LevelRecipe {
     /// stops probing. 0 = pure deduction only (no lookahead); larger admits harder
     /// puzzles. Ramps from intro (shallow) to late (deep).
     pub lookahead_deduce_until: usize,
+}
+
+impl LevelRecipe {
+    /// [`EngineConfig::generation`] at this recipe's depth — the sound pre-uniqueness
+    /// engine (repair proposals, the working state repair advances).
+    pub fn generation_config(&self) -> EngineConfig {
+        EngineConfig::generation(self.lookahead_deduce_until)
+    }
+    /// [`EngineConfig::standard`] at this recipe's depth — the player engine / ship bar.
+    pub fn standard_config(&self) -> EngineConfig {
+        EngineConfig::standard(self.lookahead_deduce_until)
+    }
+}
+
+/// Best-effort recipe for a puzzle with `n` questions, for callers without a recipe
+/// in hand (the wasm `solve`, the playground). Maps question count to the nearest
+/// level and always returns something. Shipped puzzles hit their level exactly
+/// (counts 3/4/5/8/10/12); an odd `n` falls to a neighbor, with `fallback` as the net.
+pub fn guess_recipe(n: usize) -> &'static LevelRecipe {
+    let level_index = match n {
+        0..=3 => 0,
+        4 => 1,
+        5..=7 => 2,
+        8..=9 => 3,
+        10..=11 => 4,
+        _ => 5,
+    };
+    &RECIPES[level_index]
 }
 
 const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; QUESTION_KIND_COUNT] {
@@ -346,42 +374,48 @@ fn to_optional(sol: &[Answer; MAX_N], n: usize) -> [Option<Answer>; MAX_N] {
     arr
 }
 
-fn run_hint_engine(
-    fp: &FlatPuzzle,
-    stats: &mut Stats,
-    lookahead_deduce_until: usize,
-) -> (bool, State) {
-    run_hint_engine_from(fp, fp.initial_state, stats, lookahead_deduce_until)
-}
-
-/// Generation's accept-gate solve: the shared [`run_engine`] under the `generation`
-/// config (sound `deduce`, lookahead bounded to the recipe depth), with the outer
-/// loop capped at `n * 15`. Steps aren't recorded — `NoSteps` inlines away, so this
-/// hot path carries no tracing overhead — and the loop telemetry is folded into
-/// `stats` for the `--stats` report.
-fn run_hint_engine_from(
+/// Run the deduce+lookahead hint engine in SOUND mode (`generation` config: no
+/// uniqueness-assuming rules) from `state`, outer loop capped at `n * 15`; telemetry
+/// folded into `stats`, steps not recorded (`NoSteps` inlines away). Returns the raw
+/// outcome and never panics — the caller decides what a contradiction means. From
+/// `initial_state` (a sound state) a contradiction is an unsound deduce rule (fail
+/// loud). But repair's resume-solve starts from a carried state a distractor edit may
+/// have made stale — invalidating an elimination the state still holds — and sound
+/// `deduce` on that false premise can contradict with no rule being unsound, the way
+/// a false lookahead hypothesis does, so repair tolerates it (brute + from-scratch
+/// re-check still gate acceptance).
+fn run_hint_sound(
     fp: &FlatPuzzle,
     state: State,
     stats: &mut Stats,
-    lookahead_deduce_until: usize,
-) -> (bool, State) {
+    recipe: &LevelRecipe,
+) -> EngineOutcome {
     let out = run_engine(
         fp,
         state,
-        EngineConfig::generation(lookahead_deduce_until),
+        recipe.generation_config(),
         fp.n * 15,
         &mut NoSteps,
     );
-    // A sound engine never forces a cell two ways; if it does, an unsound deduce
-    // rule slipped through — fail loud rather than emit a corrupt puzzle.
-    if let Some(qi) = out.contradiction {
-        panic!(
-            "run_hint_engine: engine self-contradicted at Q{} — an unsound deduce rule",
-            qi + 1
-        );
-    }
     stats.merge_engine(&out.telemetry);
-    (out.solved, out.state)
+    out
+}
+
+/// Run the deduce+lookahead hint engine in STANDARD mode (`standard` config:
+/// uniqueness-assuming, the player's engine) at the recipe depth from `state`, same
+/// loop cap and telemetry as [`run_hint_sound`]. Sound only once brute has confirmed
+/// uniqueness — every caller runs brute first. Never panics: a stall or contradiction
+/// just means the player engine can't cleanly solve this puzzle, so the caller
+/// rejects it.
+fn run_hint_standard(
+    fp: &FlatPuzzle,
+    state: State,
+    stats: &mut Stats,
+    recipe: &LevelRecipe,
+) -> EngineOutcome {
+    let out = run_engine(fp, state, recipe.standard_config(), fp.n * 15, &mut NoSteps);
+    stats.merge_engine(&out.telemetry);
+    out
 }
 
 /// Full generation: decide the answer key once, then search for questions that
@@ -442,7 +476,7 @@ pub fn generate(
             &mut fp,
             &skeleton.solution,
             skeleton.n,
-            recipe.lookahead_deduce_until,
+            recipe,
             rng,
             stats,
             label,
@@ -478,20 +512,18 @@ pub enum Verdict {
 /// The answer key is held fixed throughout — repair only edits distractors, so the
 /// caller never has to re-author the key.
 ///
-/// Engine-only first: assert the key is self-consistent, run deduce+lookahead, and
-/// on a full solve confirm uniqueness. If the engine stalls, distractor repair runs
+/// Gate: assert the key is self-consistent, then accept iff brute confirms a unique
+/// solution *and* the player engine ([`EngineConfig::standard`], recipe depth) solves
+/// it — the bar the player must clear. If the gate fails, distractor repair runs
 /// ([`repair::repair_distractors`]): it mutates a stuck question's distractors to
-/// values its own rules can refute, gated by a cheap single-question `deduce` probe
-/// so the full engine run is only paid when an edit looks promising. Brute `solve`
-/// fires once on a completed puzzle and confirms uniqueness — rejecting (so the
-/// caller regenerates) if a resume-from-state shortcut produced a non-unique result.
-/// The key stays valid by construction (the correct option is never touched). A
-/// puzzle repair can't crack is reported `Stuck`.
+/// values its own rules can refute (gated by a cheap single-question `deduce` probe),
+/// then re-applies the same brute+standard gate. The key stays valid by construction
+/// (the correct option is never touched). A puzzle repair can't crack is `Stuck`.
 pub(crate) fn validate_and_repair(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,
-    lookahead_deduce_until: usize,
+    recipe: &LevelRecipe,
     rng: &mut Rng,
     stats: &mut Stats,
     label: &str,
@@ -514,26 +546,28 @@ pub(crate) fn validate_and_repair(
         );
     }
 
-    let (did_solve, state) = run_hint_engine(fp, stats, lookahead_deduce_until);
-    if did_solve {
-        let solutions = solve(fp, 2);
+    // Gate: brute confirms a unique solution, then the player engine solves it. Brute
+    // runs first — cheap, it short-circuits the standard solve on the non-unique
+    // majority, and it's what makes `standard`'s uniqueness-assuming rules sound here.
+    let solutions = solve(fp, 2);
+    if solutions.len() == 1 && run_hint_standard(fp, fp.initial_state, stats, recipe).solved {
         assert_accepted(fp, solutions.len(), label);
         return Verdict::Accepted;
     }
 
-    // Distractor repair, advancing `state` (the working stuck position) and accepting
-    // the moment the puzzle completes.
-    let mut state = state;
-    if repair::repair_distractors(
-        fp,
-        solution,
-        n,
-        lookahead_deduce_until,
-        rng,
-        stats,
-        &mut state,
-        label,
-    ) {
+    // Gate failed → distractor repair, which proposes edits with the sound engine and
+    // advances from its stuck state. Solve that here from `initial_state`: a sound
+    // state, so a self-contradiction is an unsound deduce rule — fail loud rather than
+    // emit a corrupt puzzle (contrast repair's resume from a possibly-stale state).
+    let out = run_hint_sound(fp, fp.initial_state, stats, recipe);
+    if let Some(qi) = out.contradiction {
+        panic!(
+            "self-contradicted at Q{} from initial_state — an unsound deduce rule",
+            qi + 1
+        );
+    }
+    let mut state = out.state;
+    if repair::repair_distractors(fp, solution, n, recipe, rng, stats, &mut state, label) {
         return Verdict::Accepted;
     }
 
