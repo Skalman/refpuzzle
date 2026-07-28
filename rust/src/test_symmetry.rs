@@ -20,7 +20,7 @@ use crate::daily_puzzles;
 use crate::deduce::{apply_action, deduce};
 use crate::serialize::parse_puzzle;
 use crate::solve_brute::solve;
-use crate::test_util::fast_tests;
+use crate::test_util::{fast_tests, form_invalid};
 use crate::types::*;
 
 /// Test-corpus files whose `tests[].puzzle` entries are well-formed puzzles.
@@ -414,6 +414,13 @@ fn push_corpus(out: &mut Vec<(String, FlatPuzzle)>) {
             let Some(fp) = parse_puzzle(puzzle) else {
                 continue;
             };
+            // Many fixtures are deliberately malformed — a `SameAs` option naming its
+            // own question, say, to exercise the self-reference elimination. The engine
+            // asserts rather than grading those (see the `check_answer` module doc), and
+            // symmetry says nothing about a board that can't be graded.
+            if form_invalid(&fp) {
+                continue;
+            }
             let name = test.get("name").and_then(|v| v.as_str()).unwrap_or("");
             out.push((format!("{path}#{i} {name}"), fp));
         }

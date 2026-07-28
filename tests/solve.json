@@ -496,12 +496,12 @@
       "section": "=== Solve: TS/Rust divergence ==="
     },
     {
-      "name": "2026-0825-6: TS stuck, Rust solves",
+      "name": "2026-0825-6: TS stuck, Rust solves (pre-rebake snapshot; opt1's claim substituted — the original EqualCount(E) = E is a form error)",
       "puzzle": {
         "o": [
           [0, 4, 1, 3, 2],
           [9, 11, 3, 1, 5],
-          [2, 4, 2, null, 4],
+          [2, 3, 2, null, 4],
           [0, 3, 1, 4, 2],
           [8, 9, 7, null, 10],
           [1, 10, 6, 7, 8],
@@ -567,8 +567,8 @@
             "t": "CountAnswerBefore"
           },
           {
-            "a": 4,
-            "t": "EqualCount"
+            "a": 0,
+            "t": "CountAnswer"
           },
           {
             "a": 1,

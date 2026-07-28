@@ -131,6 +131,11 @@ deduce_rules! {
     SameAsNegative,
     SameAsWhichForward,
     SameAsWhichReverse,
+    SameAsOtherMatch,
+    SameAsWhichNegative,
+    SameAsWhichNoneForward,
+    SameAsWhichNoneMatch,
+    SameAsWhichOtherMatch,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -236,7 +241,7 @@ fn exactly_one(
 }
 
 /// Compute-once, read-many cache. The closure is called on the first `get()`
-/// and the result memoised for subsequent calls. Useful when a value is
+/// and the result memoized for subsequent calls. Useful when a value is
 /// derived from the input state and would otherwise be recomputed redundantly
 /// across match arms — but cheap to skip entirely when no arm needs it.
 struct Lazy<T, F> {
@@ -1263,8 +1268,18 @@ fn apply_same_shared(
                     );
                 }
             } else if ov.is_num() {
+                // OnlySameRuledOut: the option's target can't hold qi's letter —
+                // either it's answered otherwise, or the letter is struck out
+                // there. Both cases, one rule, following `SameAsWhichForward`'s
+                // precedent (answering a question doesn't set the other options'
+                // eliminated bits, so the two conditions are independent).
                 let pos = usize::from(ov.value());
-                if pos < n && is_eliminated(eliminated, pos, oi) {
+                let ruled_out = pos < n
+                    && match answers[pos] {
+                        Some(pos_ans) => pos_ans != Answer::from(oi as u8),
+                        None => is_eliminated(eliminated, pos, oi),
+                    };
+                if ruled_out {
                     push(
                         DeduceRule::OnlySameRuledOut,
                         DeduceAction::Eliminate { qi, oi },
@@ -2232,11 +2247,24 @@ fn deduce_impl(
             QuestionType::SameAsWhich { question_index } => {
                 let qi_ref = question_index as usize;
                 let ref_ans = answers[qi_ref];
+                // The matched letter comes from the reference, not from qi's own
+                // slot — so `SameAsWhich` can't reuse the `OnlySame*` none-rules
+                // in `apply_same_shared`, and every rule below that reasons about
+                // the letter is gated on the reference being answered.
+                //
+                // A listed candidate: an in-range numeric option other than the
+                // reference, which holds the matched letter by definition. `qi` is
+                // *not* excluded — unlike `SameAs`, matching the reference is an
+                // ordinary proposition for it (see `check_scoped_sameness`).
+                let listed = |slot: OptionValue| -> Option<usize> {
+                    let j = slot.is_num().then(|| usize::from(slot.value()))?;
+                    (j < n && j != qi_ref).then_some(j)
+                };
                 if let Some(a) = ans {
-                    // Reverse.
-                    let ov = fp.options[qi][a.idx()];
-                    if ov.is_num() {
-                        let ov = usize::from(ov.value());
+                    let selected = fp.options[qi][a.idx()];
+                    if selected.is_num() {
+                        // Reverse.
+                        let ov = usize::from(selected.value());
                         if ov < n {
                             let j_ans = answers[ov];
                             if let Some(ra) = ref_ans
@@ -2261,29 +2289,105 @@ fn deduce_impl(
                                 );
                             }
                         }
+                        // SameAsWhichNegative: the selected target is the *only*
+                        // listed sharer, so every other listed candidate differs
+                        // from the matched letter.
+                        if let Some(ra) = ref_ans {
+                            let mut q_mask = 0u16;
+                            for oi in 0..fp.option_count {
+                                let Some(target) = listed(fp.options[qi][oi]) else {
+                                    continue;
+                                };
+                                if target != ov
+                                    && answers[target].is_none()
+                                    && !is_eliminated(eliminated, target, ra.idx())
+                                {
+                                    q_mask |= 1 << target;
+                                }
+                            }
+                            if q_mask != 0 {
+                                push(
+                                    DeduceRule::SameAsWhichNegative,
+                                    DeduceAction::EliminateMulti {
+                                        question_mask: q_mask,
+                                        option_mask: 1 << ra.idx(),
+                                    },
+                                );
+                            }
+                        }
+                    } else if selected.is_none()
+                        && let Some(ra) = ref_ans
+                    {
+                        // SameAsWhichNoneForward: an answered "none" denies the
+                        // matched letter to every listed candidate.
+                        for oi in 0..fp.option_count {
+                            let Some(j) = listed(fp.options[qi][oi]) else {
+                                continue;
+                            };
+                            if answers[j].is_none() && !is_eliminated(eliminated, j, ra.idx()) {
+                                push(
+                                    DeduceRule::SameAsWhichNoneForward,
+                                    DeduceAction::Eliminate {
+                                        qi: j,
+                                        oi: ra.idx(),
+                                    },
+                                );
+                            }
+                        }
                     }
                 } else if let Some(ra) = ref_ans {
-                    // Forward per-option elim (qi unanswered, target known).
+                    // Per-option elim (qi unanswered, matched letter known).
                     for oi in 0..5usize {
                         if is_eliminated(eliminated, qi, oi) {
                             continue;
                         }
                         let ov = fp.options[qi][oi];
-                        if !ov.is_num() {
-                            continue;
-                        }
-                        let ov = usize::from(ov.value());
-                        if ov < n && ov != qi && ov != qi_ref {
-                            let wrong = match answers[ov] {
-                                Some(ja) => ja != ra,
-                                None => is_eliminated(eliminated, ov, ra.idx()),
-                            };
-                            if wrong {
+                        if ov.is_none() {
+                            // SameAsWhichNoneMatch: a listed candidate already
+                            // holds the matched letter, so "none of these" is false.
+                            let shared = (0..fp.option_count).any(|ci| {
+                                listed(fp.options[qi][ci]).is_some_and(|j| answers[j] == Some(ra))
+                            });
+                            if shared {
                                 push(
-                                    DeduceRule::SameAsWhichForward,
+                                    DeduceRule::SameAsWhichNoneMatch,
                                     DeduceAction::Eliminate { qi, oi },
                                 );
                             }
+                            continue;
+                        }
+                        let Some(pos) = listed(ov) else {
+                            continue;
+                        };
+                        // SameAsWhichForward: this option's own target can't match.
+                        let wrong = match answers[pos] {
+                            Some(ja) => ja != ra,
+                            None => is_eliminated(eliminated, pos, ra.idx()),
+                        };
+                        if wrong {
+                            push(
+                                DeduceRule::SameAsWhichForward,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
+                            continue;
+                        }
+                        // SameAsWhichOtherMatch: some *other* listed candidate
+                        // matches, so this target isn't the only one. Unusually
+                        // strong — the test doesn't depend on `oi` except through
+                        // `pos`, so one known candidate answer sweeps the whole row:
+                        // exactly one matching candidate leaves a single live option
+                        // (OnlyOptionLeft turns it into the answer), two or more
+                        // empty the row outright, which is a genuine contradiction
+                        // no valid key can produce.
+                        let other_match = (0..fp.option_count).any(|ci| {
+                            listed(fp.options[qi][ci])
+                                .is_some_and(|j| j != pos && answers[j] == Some(ra))
+                        });
+                        if other_match {
+                            push(
+                                DeduceRule::SameAsWhichOtherMatch,
+                                DeduceAction::Eliminate { qi, oi },
+                            );
                         }
                     }
                 }
@@ -2291,9 +2395,11 @@ fn deduce_impl(
             QuestionType::SameAs => {
                 apply_same_shared(fp, state, &mut push, qi, DeduceRule::SameAsReverse, true);
 
-                // SameAs negative: non-selected option targets cannot share qi's
-                // answer. Uniqueness-assuming, answered-qi only.
-                if assume_unique && let Some(a) = ans {
+                // SameAsNegative: the selected option asserts its target is the
+                // *only* listed candidate sharing qi's answer, so every other
+                // listed candidate must differ. Plain "the selected claim must be
+                // true" — no uniqueness assumption, hence sound during generation.
+                if let Some(a) = ans {
                     let ai = a.idx();
                     let selected_s = fp.options[qi][ai];
                     // The "none" answer's sound inference is handled in
@@ -2328,6 +2434,40 @@ fn deduce_impl(
                                     question_mask: q_mask,
                                     option_mask: 1 << ai,
                                 },
+                            );
+                        }
+                    }
+                } else {
+                    // SameAsOtherMatch: option `oi` claims its target is the only
+                    // listed candidate answered `oi`'s letter, so another listed
+                    // candidate already holding that letter refutes it. Scoped
+                    // counterpart of `OnlySameOtherMatch`, which reads the
+                    // whole-board tally instead of walking the option row.
+                    for oi in 0..5usize {
+                        if is_eliminated(eliminated, qi, oi) {
+                            continue;
+                        }
+                        let ov = fp.options[qi][oi];
+                        if !ov.is_num() {
+                            continue;
+                        }
+                        let pos = usize::from(ov.value());
+                        if pos >= n || pos == qi {
+                            continue;
+                        }
+                        let letter = Answer::from(oi as u8);
+                        let other_match = (0..fp.option_count).any(|ci| {
+                            let candidate = fp.options[qi][ci];
+                            candidate.is_num() && {
+                                let j = usize::from(candidate.value());
+                                // qi is the letter's source here, so never a candidate.
+                                j < n && j != qi && j != pos && answers[j] == Some(letter)
+                            }
+                        });
+                        if other_match {
+                            push(
+                                DeduceRule::SameAsOtherMatch,
+                                DeduceAction::Eliminate { qi, oi },
                             );
                         }
                     }
@@ -2535,6 +2675,102 @@ mod tests {
     use super::*;
     use crate::test_util::slow_test_duration;
     use serde_json::Value;
+
+    /// A 6-question board whose Q1 is `SameAsWhich` referencing Q6, listing
+    /// Q2/Q3/Q4/Q5 plus a "none" option. `answers` is one letter (or `.`) per
+    /// question. The other five rows are `AnswerIsSelf` fillers.
+    fn same_as_which_board(answers: &str) -> (FlatPuzzle, State) {
+        use serde_json::json;
+        let puzzle = json!({
+            "o": [[1, 2, 3, 4, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null]],
+            "q": [
+                { "t": "SameAsWhich", "q": 5 },
+                { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
+                { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
+            ],
+        });
+        let fp = crate::serialize::parse_puzzle(&puzzle).expect("parse board");
+        let mut state = fp.initial_state;
+        for (qi, ch) in answers.chars().enumerate() {
+            if ch != '.' {
+                let oi = ch as u8 - b'A';
+                state.answers[qi] = Some(Answer::from(oi));
+                state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
+            }
+        }
+        (fp, state)
+    }
+
+    /// The options of `qi` that `deduce` eliminates, as letters.
+    fn eliminated_options(fp: &FlatPuzzle, state: &State, qi: usize) -> Vec<char> {
+        let mut out: Vec<char> = deduce_assuming_unique(fp, state)
+            .iter()
+            .filter_map(|dr| match dr.action {
+                DeduceAction::Eliminate { qi: q, oi } if q == qi => Some((b'A' + oi as u8) as char),
+                _ => None,
+            })
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// `SameAsWhichOtherMatch`'s test doesn't depend on the option except through
+    /// its target, so one known candidate answer sweeps the whole row: with exactly
+    /// one listed candidate holding the matched letter, every option but the one
+    /// pointing at it goes — including "none", via `SameAsWhichNoneMatch`.
+    #[test]
+    fn one_matching_candidate_leaves_a_single_option() {
+        // Q6 = C is the matched letter; only listed Q2 holds it.
+        let (fp, state) = same_as_which_board(".C....");
+        let mut state = state;
+        state.answers[5] = Some(Answer::C);
+        state.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << 2);
+        // Options: A→Q2 (the sharer), B→Q3, C→Q4, D→Q5, E→none.
+        assert_eq!(eliminated_options(&fp, &state, 0), vec!['B', 'C', 'D', 'E']);
+    }
+
+    /// Two listed candidates holding the matched letter empties the row outright —
+    /// no option's only-clause can hold. A genuine contradiction, which no valid key
+    /// can produce, so during generation it only prunes wrong branches.
+    #[test]
+    fn two_matching_candidates_empty_the_option_row() {
+        let (fp, state) = same_as_which_board(".CC..C");
+        assert_eq!(
+            eliminated_options(&fp, &state, 0),
+            vec!['A', 'B', 'C', 'D', 'E']
+        );
+    }
+
+    /// §3.6: an option whose target is *answered with another letter* is ruled out,
+    /// not just one whose target has the letter struck out. `eliminated` is an
+    /// independent bitset, so answering a question doesn't set the other options'
+    /// bits — the two conditions have to be tested separately.
+    #[test]
+    fn only_same_ruled_out_covers_an_answered_target() {
+        use serde_json::json;
+        // Q1 = SameAs listing Q2/Q3/Q4; Q2 is answered B, so option A (which claims
+        // Q2 shares Q1's A) is impossible.
+        let puzzle = json!({
+            "o": [[1, 2, 3, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null]],
+            "q": [
+                { "t": "SameAs" },
+                { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
+            ],
+        });
+        let fp = crate::serialize::parse_puzzle(&puzzle).expect("parse board");
+        let mut state = fp.initial_state;
+        state.answers[1] = Some(Answer::B);
+        state.eliminated[1] = ALL_OPTIONS_MASK ^ (1 << 1);
+        let ruled_out: Vec<char> = deduce_with_rule(&fp, &state, DeduceRule::OnlySameRuledOut)
+            .iter()
+            .filter_map(|dr| match dr.action {
+                DeduceAction::Eliminate { qi: 0, oi } => Some((b'A' + oi as u8) as char),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ruled_out, vec!['A']);
+    }
 
     /// Mirrors src/lib/playground.ts encoding for cross-runner-compatible links.
     fn playground_link(puzzle: &Value, states: &[Value], n: usize) -> String {
@@ -2826,6 +3062,12 @@ mod tests {
                 fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed), false)
             }));
             let Ok(fp) = fp else { continue };
+            // These types skip `random_type_params`' pool-size gating, so a row can
+            // come out with an UNUSED slot inside `option_count`. That's a fatal form
+            // error, and `check_answer` asserts rather than grading one.
+            if crate::test_util::form_invalid(&fp) {
+                continue;
+            }
 
             let solutions = solve(&fp, 2);
             if solutions.len() != 1 {

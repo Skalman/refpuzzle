@@ -233,7 +233,7 @@
       "expectedCorrect": [3, null, null, 0, null]
     },
     {
-      "name": "n=7 SameAs + SameAsWhich (need n>oc for SameAs)",
+      "name": "n=7 SameAs + SameAsWhich (need n>oc for SameAs; correct value is rng-dependent, pinned by the scoped-sameness invariant instead)",
       "n": 7,
       "oc": 5,
       "types": [
@@ -261,7 +261,7 @@
         }
       ],
       "solution": "ABCABDE",
-      "expectedCorrect": [1, null, null, 0, null, null, null]
+      "expectedCorrect": [null, null, null, null, null, null, null]
     },
     {
       "section": "=== structural (Odd/Even/Consec) ==="

@@ -818,7 +818,7 @@ mod tests {
             let is_past = puzzle_is_past(key, today);
             let errors = check_form::check_form(fp);
             for e in &errors {
-                let is_warning = matches!(e.severity, check_form::Severity::Warning);
+                let is_warning = e.severity == check_form::Severity::Warning;
                 if is_warning && is_past {
                     continue;
                 }

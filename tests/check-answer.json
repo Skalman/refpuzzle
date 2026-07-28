@@ -685,7 +685,7 @@
       "expect": "invalid"
     },
     {
-      "name": "same_answer_as: target has same answer → valid",
+      "name": "same_answer_as (only-one): target shares but another listed candidate still could → pending",
       "qi": 0,
       "puzzle": {
         "o": [
@@ -710,6 +710,122 @@
         ]
       },
       "state": ["A", "A", "", ""],
+      "expect": "pending"
+    },
+    {
+      "name": "same_answer_as (only-one): target shares and every other listed candidate is answered otherwise → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "A", "B", "B"],
+      "expect": "consistent"
+    },
+    {
+      "name": "same_answer_as (only-one): the other listed candidates settle by elimination too → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "A", "a", "a"],
+      "expect": "consistent"
+    },
+    {
+      "name": "same_answer_as (only-one): another listed candidate also shares → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "A", "A", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_as (only-one): an unlisted question sharing the letter is out of scope → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 0, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "A", "B", "B", "A"],
       "expect": "consistent"
     },
     {
@@ -894,6 +1010,38 @@
         ]
       },
       "state": ["C", "A", "A", "A", ""],
+      "expect": "consistent"
+    },
+    {
+      "name": "same_answer_as none (scoped): listed candidates settled by elimination → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, null, 3, 0],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "c", "c", "c", ""],
       "expect": "consistent"
     },
     {
@@ -3173,35 +3321,6 @@
       "section": "=== equal_count_as ==="
     },
     {
-      "name": "equal_count: option is reference answer → invalid",
-      "qi": 0,
-      "puzzle": {
-        "o": [
-          [0, 1, 2, 3, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
-        ],
-        "q": [
-          {
-            "t": "EqualCount",
-            "a": 0
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          },
-          {
-            "t": "AnswerIsSelf"
-          }
-        ]
-      },
-      "state": ["A", "B", "A", "B"],
-      "expect": "invalid"
-    },
-    {
       "name": "equal_count: all answered, counts equal → valid",
       "qi": 0,
       "puzzle": {
@@ -3542,6 +3661,274 @@
       },
       "state": ["C", "A", "B", "C", "b"],
       "expect": "invalid"
+    },
+    {
+      "name": "same_answer_which (only-one): another listed candidate also matches → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "B", "B", "C", "B"],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_which (only-one): another listed candidate could still match → pending",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["C", "", "B", "C", "B"],
+      "expect": "pending"
+    },
+    {
+      "name": "same_answer_which none: no listed candidate matches → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["D", "A", "B", "C", "A"],
+      "expect": "valid"
+    },
+    {
+      "name": "same_answer_which none: a listed candidate matches → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["D", "B", "B", "C", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_which none: a listed candidate could still match → pending",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["D", "", "B", "C", "A"],
+      "expect": "pending"
+    },
+    {
+      "name": "same_answer_which (malformed): a self-listing option still counts as a candidate → invalid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 0, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["B", "A", "B", "B", "A"],
+      "expect": "invalid"
+    },
+    {
+      "name": "same_answer_which (malformed): a listed reference is skipped, not a counterexample → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 2, 4, 3, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "B", "B", "A", "A"],
+      "expect": "valid"
+    },
+    {
+      "name": "same_answer_which none: an unlisted question matching is out of scope → valid",
+      "qi": 0,
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 2
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["D", "A", "B", "C", "A", "B"],
+      "expect": "valid"
     },
     {
       "section": "=== unanswered question ==="

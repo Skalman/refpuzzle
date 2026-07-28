@@ -332,11 +332,13 @@ impl QuestionTypeKind {
         use QuestionTypeKind::*;
         match self {
             ClosestAfter | ClosestBefore | FirstWith | LastWith | PrevSame | NextSame
-            | OnlySame | SameAs | OnlyOdd | OnlyEven | ConsecIdent | EqualCount => true,
+            | OnlySame | SameAs | SameAsWhich | OnlyOdd | OnlyEven | ConsecIdent | EqualCount => {
+                true
+            }
 
             CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
             | MostCommonCount | AnswerOf | LeastCommon | MostCommon | NoOtherHasAnswer
-            | AnswerIsSelf | LetterDist | TrueStmt | SameAsWhich => false,
+            | AnswerIsSelf | LetterDist | TrueStmt => false,
         }
     }
 }

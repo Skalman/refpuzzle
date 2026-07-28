@@ -156,26 +156,18 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
             answer,
         } => backward_invalid_reason(state, qi, "closest", before_index as usize, answer, ov, n),
 
-        SameAs => {
-            let ov = ov.is_num().then(|| ov.value() as usize)?;
-            if ov >= n {
-                return None;
-            }
-            let av = answers[ov]?;
-            (av != a).then(|| {
-                format!(
-                    "{} claims same answer as {}, but {} is {av} and {} is {a}",
-                    q(qi),
-                    q(ov),
-                    q(ov),
-                    q(qi)
-                )
-            })
+        // Scoped sameness: the selected option asserts its target is the *only*
+        // listed candidate holding the matched letter, so either conjunct can be
+        // what broke. The "none" option asserts only the only-clause.
+        SameAs => scoped_sameness_invalid_reason(fp, answers, qi, ov, a, None),
+        SameAsWhich { question_index } => {
+            let k = usize::from(question_index);
+            let matched = answers[k]?;
+            scoped_sameness_invalid_reason(fp, answers, qi, ov, matched, Some(k))
         }
 
         // No own-answer contradiction to phrase for these kinds.
         MostCommonCount
-        | SameAsWhich { .. }
         | OnlySame
         | PrevSame
         | NextSame
@@ -188,6 +180,65 @@ fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<S
         | AnswerIsSelf
         | TrueStmt => None,
     }
+}
+
+/// Why an answered `SameAs`/`SameAsWhich` is already contradicted: the selected
+/// target doesn't hold `matched`, or another listed candidate does. `reference` is
+/// the question `matched` was read off (`None` for `SameAs`, whose matched letter is
+/// its own answer).
+fn scoped_sameness_invalid_reason(
+    fp: &FlatPuzzle,
+    answers: &[Option<Answer>; MAX_N],
+    qi: usize,
+    ov: OptionValue,
+    matched: Answer,
+    reference: Option<usize>,
+) -> Option<String> {
+    let target = if ov.is_num() {
+        let target = usize::from(ov.value());
+        if target >= fp.n {
+            return None;
+        }
+        if let Some(target_ans) = answers[target]
+            && target_ans != matched
+        {
+            return Some(match reference {
+                Some(k) => format!(
+                    "{} claims {} has the same answer as {} ({matched}), but {} is {target_ans}",
+                    q(qi),
+                    q(target),
+                    q(k),
+                    q(target)
+                ),
+                None => format!(
+                    "{} claims same answer as {}, but {} is {target_ans} and {} is {matched}",
+                    q(qi),
+                    q(target),
+                    q(target),
+                    q(qi)
+                ),
+            });
+        }
+        Some(target)
+    } else if ov.is_none() {
+        None
+    } else {
+        return None;
+    };
+    let j = listed_candidate_answered(fp, qi, target, matched, answers)?;
+    Some(match reference {
+        Some(k) => format!(
+            "{} claims only one of these questions matches {} ({matched}), but {} does too",
+            q(qi),
+            q(k),
+            q(j)
+        ),
+        None => format!(
+            "{} claims only one of these questions has answer {matched}, but {} has it too",
+            q(qi),
+            q(j)
+        ),
+    })
 }
 
 /// Count-kind invalidity: the answered count is already out of reach.
@@ -347,6 +398,31 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
 }
 
 /// The option value `answer` selects at question `qi`, if numeric.
+/// A listed candidate of scoped-sameness question `qi`, other than `except` (the
+/// option's own target; `None` for the "none" option, which has none), that is
+/// already answered `letter` — the counterexample to an option's only-clause.
+/// Candidates are the questions the numeric options name minus the one `letter` is
+/// read off, matching `check_scoped_sameness`'s reading — so `qi` counts for
+/// `SameAsWhich` but not for `SameAs`.
+fn listed_candidate_answered(
+    fp: &FlatPuzzle,
+    qi: usize,
+    except: Option<usize>,
+    letter: Answer,
+    answers: &[Option<Answer>; MAX_N],
+) -> Option<usize> {
+    let source = match fp.question_types[qi] {
+        QuestionType::SameAsWhich { question_index } => usize::from(question_index),
+        // `SameAs` reads the matched letter off its own answer.
+        _ => qi,
+    };
+    (0..fp.option_count).find_map(|ci| {
+        let ov = fp.options[qi][ci];
+        let j = ov.is_num().then(|| usize::from(ov.value()))?;
+        (j < fp.n && j != source && Some(j) != except && answers[j] == Some(letter)).then_some(j)
+    })
+}
+
 fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
     let ov = fp.options[qi][answer.idx()];
     ov.is_num().then(|| ov.value())
@@ -795,41 +871,65 @@ pub fn explain_elim_detail(
         }
 
         QuestionType::SameAsWhich { question_index } => {
-            if let Some(ref_ans) = answers[*question_index as usize]
-                && let Some(v) = ov
-                && (v as usize) < n
-            {
-                let k = *question_index as usize;
-                let target = v as usize;
-                match answers[target] {
-                    Some(target_ans) if target_ans != ref_ans => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {} is answered {target_ans}.",
-                                q(qi),
-                                q(target),
-                                q(k),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    None if is_eliminated(eliminated, target, ref_ans.idx()) => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(k),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    _ => {}
-                }
+            let k = *question_index as usize;
+            let ref_ans = answers[k]?;
+            let Some(v) = ov else {
+                // SameAsWhichNoneMatch: the "none" option claims no listed candidate
+                // matches, which any matching candidate refutes.
+                let j = listed_candidate_answered(fp, qi, None, ref_ans, answers)?;
+                return detail(
+                    format!(
+                        "{} option {letter} claims none of these questions has the same answer as {} ({ref_ans}), but {} does.",
+                        q(qi),
+                        q(k),
+                        q(j)
+                    ),
+                    Some(j),
+                );
+            };
+            let target = v as usize;
+            if target >= n {
+                return None;
             }
-            None
+            match answers[target] {
+                Some(target_ans) if target_ans != ref_ans => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {} is answered {target_ans}.",
+                            q(qi),
+                            q(target),
+                            q(k),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                None if is_eliminated(eliminated, target, ref_ans.idx()) => {
+                    return detail(
+                        format!(
+                            "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
+                            q(qi),
+                            q(target),
+                            q(k),
+                            q(target)
+                        ),
+                        Some(target),
+                    );
+                }
+                _ => {}
+            }
+            // SameAsWhichOtherMatch: the target has to be the *only* listed match.
+            let j = listed_candidate_answered(fp, qi, Some(target), ref_ans, answers)?;
+            detail(
+                format!(
+                    "{} option {letter} claims {} is the only one of these questions with the same answer as {} ({ref_ans}), but {} matches too.",
+                    q(qi),
+                    q(target),
+                    q(k),
+                    q(j)
+                ),
+                Some(j),
+            )
         }
 
         QuestionType::LetterDist { question_index } => {
@@ -1162,7 +1262,25 @@ pub fn explain_elim_detail(
                             None,
                         );
                     }
-                    if target < n && is_eliminated(eliminated, target, oi) {
+                    if target >= n {
+                        return None;
+                    }
+                    // OnlySameRuledOut, both branches: the target can't hold this
+                    // letter, either because it's answered otherwise or because the
+                    // letter is struck out there.
+                    if let Some(target_ans) = answers[target] {
+                        if target_ans != letter {
+                            return detail(
+                                format!(
+                                    "{} option {letter} claims {} has the same answer, but {} is answered {target_ans}.",
+                                    q(qi),
+                                    q(target),
+                                    q(target)
+                                ),
+                                Some(target),
+                            );
+                        }
+                    } else if is_eliminated(eliminated, target, oi) {
                         return detail(
                             format!(
                                 "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
@@ -1171,6 +1289,21 @@ pub fn explain_elim_detail(
                                 q(target)
                             ),
                             Some(target),
+                        );
+                    }
+                    // SameAsOtherMatch: the option claims its target is the *only*
+                    // listed question sharing the letter.
+                    if let Some(j) =
+                        listed_candidate_answered(fp, qi, Some(target), letter, answers)
+                    {
+                        return detail(
+                            format!(
+                                "{} option {letter} claims {} is the only one of these questions with answer {letter}, but {} has it too.",
+                                q(qi),
+                                q(target),
+                                q(j)
+                            ),
+                            Some(j),
                         );
                     }
                 }
@@ -2247,6 +2380,33 @@ pub fn explain_elimination(
         }
     }
 
+    if matches!(rule, DeduceRule::SameAsWhichNoneForward) {
+        for src in 0..n {
+            let QuestionType::SameAsWhich { question_index } = fp.question_types[src] else {
+                continue;
+            };
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            // Only the "none" option (no numeric value) claims the whole list differs.
+            if option_value_at(fp, src, src_ans).is_some() {
+                continue;
+            }
+            let k = usize::from(question_index);
+            if answers[k] == Some(letter) {
+                steps.push(try_looking(&[qi, src, k]));
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "{} claims none of its listed questions is answered {letter} like {}, so {} can't be {letter}.",
+                    q(src),
+                    q(k),
+                    q(qi)
+                )));
+                return steps;
+            }
+        }
+    }
+
     if matches!(rule, DeduceRule::ConsecIdentForwardElim) {
         for src in 0..n {
             if !matches!(fp.question_types[src], QuestionType::ConsecIdent) {
@@ -2411,6 +2571,39 @@ fn explain_multi_elim(
                     "{} identifies which question shares its answer, so the other listed questions cannot have the same answer.",
                     q(src)
                 ),
+                Some(src),
+            );
+        }
+    }
+
+    if matches!(rule, DeduceRule::SameAsWhichNegative) {
+        for src in 0..n {
+            let QuestionType::SameAsWhich { question_index } = fp.question_types[src] else {
+                continue;
+            };
+            let Some(src_ans) = answers[src] else {
+                continue;
+            };
+            // Mirror the deduce guard: the "none" answer has its own rule.
+            let Some(target) = option_value_at(fp, src, src_ans) else {
+                continue;
+            };
+            let k = usize::from(question_index);
+            return (
+                match answers[k] {
+                    Some(ref_ans) => format!(
+                        "{} says {} is the only one of its listed questions answered {ref_ans} (the answer to {}), so the others cannot be {ref_ans}.",
+                        q(src),
+                        q(target as usize),
+                        q(k)
+                    ),
+                    None => format!(
+                        "{} says {} is the only one of its listed questions matching {}, so the others cannot match it.",
+                        q(src),
+                        q(target as usize),
+                        q(k)
+                    ),
+                },
                 Some(src),
             );
         }
@@ -2843,6 +3036,164 @@ mod tests {
             "#1 option A claims A is the least common, but A appears 2 time(s) while B appears only 0."
         );
         assert_eq!(d.other_qi, None);
+    }
+
+    /// Q1 = `SameAs` listing Q2/Q3 plus a "none" option, on a 4-question board.
+    fn same_as_board() -> FlatPuzzle {
+        parse_puzzle(&json!({
+            "q": [{"t": "SameAs"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[1, 2, null], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap()
+    }
+
+    /// Q1 = `SameAsWhich` referencing Q4, listing Q2/Q3 plus a "none" option.
+    fn same_as_which_board() -> FlatPuzzle {
+        parse_puzzle(&json!({
+            "q": [{"t": "SameAsWhich", "q": 3}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[1, 2, null], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap()
+    }
+
+    fn elim_text(fp: &FlatPuzzle, state: &State, oi: usize) -> ElimDetail {
+        explain_elim_detail(
+            fp,
+            &fp.question_types[0],
+            0,
+            oi,
+            fp.options[0][oi],
+            state,
+            fp.n,
+        )
+        .expect("every scoped-sameness elimination carries a reason")
+    }
+
+    /// §3.6: the target being *answered otherwise* needs its own wording — "ruled
+    /// out for #2" is wrong for a question that already has an answer.
+    #[test]
+    fn elim_same_as_target_answered_otherwise() {
+        let fp = same_as_board();
+        let state = state_with(&fp, &[None, Some(Answer::B), None, None]);
+        let d = elim_text(&fp, &state, 0);
+        assert_eq!(
+            d.text,
+            "#1 option A claims #2 has the same answer, but #2 is answered B."
+        );
+        assert_eq!(d.other_qi, Some(1));
+    }
+
+    #[test]
+    fn elim_same_as_another_listed_candidate_matches() {
+        let fp = same_as_board();
+        // Option A claims #2 is the only listed question with answer A — but #3 has it.
+        let state = state_with(&fp, &[None, None, Some(Answer::A), None]);
+        let d = elim_text(&fp, &state, 0);
+        assert_eq!(
+            d.text,
+            "#1 option A claims #2 is the only one of these questions with answer A, but #3 has it too."
+        );
+        assert_eq!(d.other_qi, Some(2));
+    }
+
+    #[test]
+    fn elim_same_as_which_another_listed_candidate_matches() {
+        let fp = same_as_which_board();
+        // #4 = C is the letter to match; both listed #2 and #3 hold it.
+        let state = state_with(
+            &fp,
+            &[None, Some(Answer::C), Some(Answer::C), Some(Answer::C)],
+        );
+        let d = elim_text(&fp, &state, 0);
+        assert_eq!(
+            d.text,
+            "#1 option A claims #2 is the only one of these questions with the same answer as #4 (C), but #3 matches too."
+        );
+        assert_eq!(d.other_qi, Some(2));
+    }
+
+    #[test]
+    fn elim_same_as_which_none_option_refuted() {
+        let fp = same_as_which_board();
+        let state = state_with(&fp, &[None, None, Some(Answer::C), Some(Answer::C)]);
+        let d = elim_text(&fp, &state, 2);
+        assert_eq!(
+            d.text,
+            "#1 option C claims none of these questions has the same answer as #4 (C), but #3 does."
+        );
+        assert_eq!(d.other_qi, Some(2));
+    }
+
+    /// The answered-question summary, for the verdict §2 newly grades `Invalid`.
+    #[test]
+    fn invalid_same_as_only_clause_broken() {
+        let fp = same_as_board();
+        // #1 = A points at #2 (also A), but listed #3 is A too.
+        let state = state_with(
+            &fp,
+            &[Some(Answer::A), Some(Answer::A), Some(Answer::A), None],
+        );
+        assert_eq!(
+            explain_invalid(&fp, &state, 0).as_deref(),
+            Some("#1 claims only one of these questions has answer A, but #3 has it too")
+        );
+    }
+
+    #[test]
+    fn invalid_same_as_which_only_clause_broken() {
+        let fp = same_as_which_board();
+        // #1 = A points at #2, matching #4's C; but listed #3 matches too.
+        let state = state_with(
+            &fp,
+            &[
+                Some(Answer::A),
+                Some(Answer::C),
+                Some(Answer::C),
+                Some(Answer::C),
+            ],
+        );
+        assert_eq!(
+            explain_invalid(&fp, &state, 0).as_deref(),
+            Some("#1 claims only one of these questions matches #4 (C), but #3 does too")
+        );
+    }
+
+    /// The two new whole-list rules, whose prose lives in `explain_elimination` /
+    /// `explain_multi_elim` rather than the per-type fallback.
+    #[test]
+    fn same_as_which_none_forward_and_negative_prose() {
+        let fp = same_as_which_board();
+        // #1 answered "none" (option C) while #4 = C: nothing listed may be C.
+        let state = state_with(&fp, &[Some(Answer::C), None, None, Some(Answer::C)]);
+        let steps = explain_elimination(&fp, &state, 1, 2, DeduceRule::SameAsWhichNoneForward);
+        assert!(
+            render_text(&steps).contains(
+                "#1 claims none of its listed questions is answered C like #4, so #2 can't be C."
+            ),
+            "got {:?}",
+            render_text(&steps)
+        );
+
+        // #1 answered A (option A → #2): the other listed questions can't be C.
+        let state = state_with(&fp, &[Some(Answer::A), None, None, Some(Answer::C)]);
+        let (text, src) =
+            explain_multi_elim(&fp, &state, 2, 1 << 2, DeduceRule::SameAsWhichNegative);
+        assert_eq!(
+            text,
+            "#1 says #2 is the only one of its listed questions answered C (the answer to #4), so the others cannot be C."
+        );
+        assert_eq!(src, Some(0));
+    }
+
+    fn render_text(steps: &[ExplainStep]) -> String {
+        steps
+            .iter()
+            .filter_map(|s| match s {
+                ExplainStep::Simple { text } => Some(text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 
     #[test]

@@ -4,7 +4,7 @@
 //! slot (structural kinds seed the answer key they need), then turns each kind into a full
 //! `QuestionType` against that key. `generate()` wraps that with `fill_options`
 //! and `validate_and_repair`. The shared question-type helpers (fit checks,
-//! parametrization, claim JSON) live at the bottom of this file.
+//! parametrization, statement JSON) live at the bottom of this file.
 
 mod repair;
 
@@ -1011,7 +1011,7 @@ impl SolutionAndKindsBuilder {
 
     /// The start index of an adjacent equal pair shared by the pair-sharers: an
     /// existing one if any, else a new one on two open slots (its letter chosen
-    /// so it doesn't extend a neighbour into a triple). None if none exists and
+    /// so it doesn't extend a neighbor into a triple). None if none exists and
     /// `no_pairs` forbids making one (ConsecIdent chose "no pair"). The position
     /// is randomized — a fixed pair slot biases which slot each pair-sharer lands
     /// on, which in turn skews their survival through validation.
@@ -1304,9 +1304,9 @@ fn fresh_fallback_type(qi: usize) -> QuestionType {
     }
 }
 
-// ── Shared question-type helpers (fit checks, parametrization, claim JSON) ──
+// ── Shared question-type helpers (fit checks, parametrization, statement JSON) ──
 
-pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
+pub fn format_stmt_qt(qt: &QuestionType) -> serde_json::Value {
     let type_name = match qt {
         QuestionType::CountAnswer { .. } => "CountAnswer",
         QuestionType::CountConsonant => "CountConsonant",
@@ -1326,12 +1326,12 @@ pub fn format_claim_qt(qt: &QuestionType) -> serde_json::Value {
         QuestionType::EqualCount { .. } => "EqualCount",
         QuestionType::ClosestAfter { .. } => "ClosestAfter",
         QuestionType::ClosestBefore { .. } => "ClosestBefore",
-        QuestionType::SameAsWhich { .. } => "SameAsWhich",
-        // Never claim subjects (`is_claim_type` == false).
+        // Never statement subjects (`check_form::check_stmt_kind` rejects them).
         QuestionType::PrevSame
         | QuestionType::NextSame
         | QuestionType::OnlySame
         | QuestionType::SameAs
+        | QuestionType::SameAsWhich { .. }
         | QuestionType::AnswerIsSelf
         | QuestionType::LetterDist { .. }
         | QuestionType::TrueStmt => "Invalid",
@@ -1564,23 +1564,14 @@ pub(crate) fn random_type_params(
             if solution[ref_qi] == solution[qi] {
                 return None;
             }
-            // Structural: another question must share ref's answer.
+            // No structural match requirement: with a NONE option, "no listed
+            // candidate shares ref's answer" is an ordinary answer, so a key where
+            // only `ref_qi` holds that letter is placeable.
             // Capacity: need at least oc-1 questions whose answer differs from ref (distractors).
-            let mut has_match = false;
-            let mut distractor_count = 0usize;
-            for j in 0..n {
-                if j == qi {
-                    continue;
-                }
-                if solution[j] == solution[ref_qi] {
-                    if j != ref_qi {
-                        has_match = true;
-                    }
-                } else {
-                    distractor_count += 1;
-                }
-            }
-            if !has_match || distractor_count < option_count - 1 {
+            let distractor_count = (0..n)
+                .filter(|&j| j != qi && solution[j] != solution[ref_qi])
+                .count();
+            if distractor_count < option_count - 1 {
                 return None;
             }
             Some(QuestionType::SameAsWhich {

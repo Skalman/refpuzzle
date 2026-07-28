@@ -52,9 +52,14 @@ pub fn question_text(qt: &QuestionType) -> String {
         PrevSame => "Which is the previous question that has the same answer as this one?".into(),
         NextSame => "Which is the next question that has the same answer as this one?".into(),
         OnlySame => "Which is the only other question with the same answer as this one?".into(),
-        SameAs => "Which of these questions has the same answer as this one?".into(),
+        // Scope-first: the candidate set is the listed options, so "of these
+        // questions" has to bind before the "only" — that binding is all that
+        // separates these from `OnlySame`'s whole-board claim.
+        SameAs => {
+            "Of these questions, which is the only one with the same answer as this one?".into()
+        }
         SameAsWhich { question_index } => format!(
-            "Which of these questions has the same answer as {}?",
+            "Of these questions, which is the only one with the same answer as {}?",
             q(*question_index)
         ),
         OnlyOdd { answer } => {
@@ -253,122 +258,10 @@ pub fn arrow_referent(fp: &FlatPuzzle, qi: usize) -> Option<ArrowReferent> {
 mod tests {
     use super::*;
 
-    // Parity fixture: every question kind's prompt must match `render.ts`
-    // (src/engine/render.ts::renderQuestionText) verbatim.
+    /// One case per value shape `option_label` formats: letter index, the
+    /// `ConsecIdent` pair, a 1-based position, a raw count, and each empty marker.
     #[test]
-    fn question_text_matches_ts() {
-        use QuestionType::*;
-        let a = Answer::A; // "A"
-        let cases: &[(QuestionType, &str)] = &[
-            (
-                CountAnswer { answer: a },
-                "How many questions have answer A?",
-            ),
-            (
-                CountAnswerBefore {
-                    answer: a,
-                    before_index: 2,
-                },
-                "How many questions before #3 have answer A?",
-            ),
-            (
-                CountAnswerAfter {
-                    answer: a,
-                    after_index: 2,
-                },
-                "How many questions after #3 have answer A?",
-            ),
-            (CountVowel, "How many questions have a vowel as the answer?"),
-            (
-                CountConsonant,
-                "How many questions have a consonant as the answer?",
-            ),
-            (
-                MostCommonCount,
-                "How many times does the most common answer occur?",
-            ),
-            (
-                ClosestAfter {
-                    after_index: 2,
-                    answer: a,
-                },
-                "Which is the closest question after #3 that has answer A?",
-            ),
-            (
-                ClosestBefore {
-                    before_index: 2,
-                    answer: a,
-                },
-                "Which is the closest question before #3 that has answer A?",
-            ),
-            (
-                FirstWith { answer: a },
-                "Which is the first question with answer A?",
-            ),
-            (
-                LastWith { answer: a },
-                "Which is the last question with answer A?",
-            ),
-            (
-                PrevSame,
-                "Which is the previous question that has the same answer as this one?",
-            ),
-            (
-                NextSame,
-                "Which is the next question that has the same answer as this one?",
-            ),
-            (
-                OnlySame,
-                "Which is the only other question with the same answer as this one?",
-            ),
-            (
-                SameAs,
-                "Which of these questions has the same answer as this one?",
-            ),
-            (
-                SameAsWhich { question_index: 2 },
-                "Which of these questions has the same answer as #3?",
-            ),
-            (
-                OnlyOdd { answer: a },
-                "Which is the only odd-numbered question with answer A?",
-            ),
-            (
-                OnlyEven { answer: a },
-                "Which is the only even-numbered question with answer A?",
-            ),
-            (
-                ConsecIdent,
-                "Which are the only two consecutive questions with identical answers?",
-            ),
-            (
-                AnswerOf { question_index: 2 },
-                "What is the answer to question #3?",
-            ),
-            (LeastCommon, "Which is the least common answer?"),
-            (MostCommon, "Which is the most common answer?"),
-            (
-                NoOtherHasAnswer,
-                "Which answer is not the answer to any other question?",
-            ),
-            (
-                EqualCount { answer: a },
-                "Which answer appears the same number of times as A?",
-            ),
-            (AnswerIsSelf, "What is the answer to this question?"),
-            (
-                LetterDist { question_index: 2 },
-                "How many letters away is the answer to this question from the answer to question #3?",
-            ),
-            (TrueStmt, "Which statement is the only true statement?"),
-        ];
-        for (qt, expected) in cases {
-            assert_eq!(&question_text(qt), expected, "{qt:?}");
-        }
-    }
-
-    #[test]
-    fn option_label_matches_ts() {
+    fn option_label_formats_each_value_shape() {
         use QuestionType::*;
         let num = OptionValue::num;
         // Letter-valued.

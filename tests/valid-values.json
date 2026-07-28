@@ -255,7 +255,7 @@
       "qi": 1,
       "n": 5,
       "oc": 5,
-      "valid": [2, 3, 4]
+      "valid": [2, 3, 4, null]
     },
     {
       "name": "SameAsWhich n=6 non-adjacent self/ref",
@@ -266,7 +266,7 @@
       "qi": 1,
       "n": 6,
       "oc": 5,
-      "valid": [0, 2, 3, 5]
+      "valid": [0, 2, 3, 5, null]
     },
     {
       "section": "=== structural ==="

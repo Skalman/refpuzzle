@@ -1,13 +1,13 @@
 //! Option filling: given a skeleton's question types and answer key, encode each
 //! question's full option row — the correct value plus its distractors — and the
-//! per-option claims for TrueStmt questions.
+//! per-option statements for TrueStmt questions.
 
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
 use crate::check_answer::check_claim_fast;
 use crate::check_form;
-use crate::construct::{format_claim_qt, random_type_params};
+use crate::construct::{format_stmt_qt, random_type_params};
 use crate::format::format_type_tag;
 use crate::rng::Rng;
 use crate::types::*;
@@ -113,16 +113,17 @@ pub(crate) fn valid_values(
         }
         QuestionType::SameAsWhich { question_index } => {
             // Structural domain only: any other real question except self (qi) and
-            // the referenced question. NONE is never valid — a well-formed
-            // SameAsWhich always has a match (fill_one_question guarantees it).
-            // Whether a candidate is *also* a valid answer (target shares the ref's
-            // answer) is key-dependent and enforced downstream by
+            // the referenced question, plus NONE — correct whenever no *listed*
+            // candidate shares the reference's answer, which unlisted sharers don't
+            // affect. Whether a candidate is *also* a valid answer (its target is
+            // the only listed sharer) is key-dependent and enforced downstream by
             // check_well_posed_given_options, not here.
             for v in 0..n {
                 if v != qi && v != question_index as usize {
                     push_num(v);
                 }
             }
+            out.push(OptionValue::NONE);
         }
         QuestionType::FirstWith { .. } | QuestionType::LastWith { .. } => {
             for v in 0..n {
@@ -180,7 +181,7 @@ pub(crate) fn fill_one_question(
     }
 
     if matches!(qt, QuestionType::TrueStmt) {
-        build_claims(
+        build_stmts(
             qi,
             solution,
             n,
@@ -190,6 +191,40 @@ pub(crate) fn fill_one_question(
             option_count,
         );
         return;
+    }
+
+    // The scoped-sameness types read their correct value *off* the sampled
+    // candidate list instead of having it fixed by the key, so they return before
+    // `correct_option_value` — which no longer implements them.
+    match *qt {
+        QuestionType::SameAs => {
+            fill_scoped_sameness(
+                qi,
+                solution[qi],
+                None,
+                solution,
+                n,
+                option_count,
+                rng,
+                slots,
+            );
+            return;
+        }
+        QuestionType::SameAsWhich { question_index } => {
+            let ref_qi = usize::from(question_index);
+            fill_scoped_sameness(
+                qi,
+                solution[ref_qi],
+                Some(ref_qi),
+                solution,
+                n,
+                option_count,
+                rng,
+                slots,
+            );
+            return;
+        }
+        _ => {}
     }
 
     let correct_val = correct_option_value(qt, qi, solution, n, option_count);
@@ -285,64 +320,6 @@ pub(crate) fn fill_one_question(
         _ if is_counting_type(qt) => {
             place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
         }
-        QuestionType::SameAsWhich { question_index } => {
-            if !correct_val.is_num() {
-                panic!(
-                    "fill_one_question: SameAsWhich at qi={qi} ref={question_index} but no other question shares the referenced answer — missing upstream guard"
-                );
-            }
-            let ref_ans = solution[question_index as usize];
-            slots[correct_oi] = correct_val;
-            let mut pool = [OptionValue::UNUSED; MAX_N];
-            let mut plen = 0;
-            for j in 0..n {
-                if j != qi && j != question_index as usize && solution[j] != ref_ans {
-                    pool[plen] = OptionValue::num(j as u8);
-                    plen += 1;
-                }
-            }
-            rng.shuffle(&mut pool[..plen]);
-            let mut distractors = [OptionValue::UNUSED; 4];
-            distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-            place_distractors(&distractors, slots, correct_oi);
-        }
-        QuestionType::SameAs => {
-            let self_ans = solution[qi];
-            let mut pool = [OptionValue::UNUSED; MAX_N];
-            let mut plen = 0;
-            if correct_val.is_none() {
-                // "none" is correct (qi's answer is unique): every other question is a distractor.
-                for j in 0..n {
-                    if j != qi {
-                        pool[plen] = OptionValue::num(j as u8);
-                        plen += 1;
-                    }
-                }
-            } else {
-                // A match exists: distractors are differing-answer questions plus "none".
-                // Same-answer questions are excluded — they'd be alternate correct answers.
-                for j in 0..n {
-                    let jv = OptionValue::num(j as u8);
-                    if j != qi && jv != correct_val && solution[j] != self_ans {
-                        pool[plen] = jv;
-                        plen += 1;
-                    }
-                }
-                pool[plen] = OptionValue::NONE;
-                plen += 1;
-            }
-            if plen < option_count - 1 {
-                panic!(
-                    "fill_one_question: SameAs at qi={qi} pool too small ({plen} < {}) — missing upstream guard",
-                    option_count - 1
-                );
-            }
-            slots[correct_oi] = correct_val;
-            rng.shuffle(&mut pool[..plen]);
-            let mut distractors = [OptionValue::UNUSED; 4];
-            distractors[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
-            place_distractors(&distractors, slots, correct_oi);
-        }
         QuestionType::OnlySame => {
             let self_ans = solution[qi];
             let others = (0..n)
@@ -368,7 +345,7 @@ pub(crate) fn fill_one_question(
 }
 
 /// Emit one question's filled-options trace line (diagnostic `trace` mode only).
-/// `true_stmt_types` must be `Some` for a TrueStmt question (its claim types).
+/// `true_stmt_types` must be `Some` for a TrueStmt question (its statement types).
 fn trace_question(
     qi: usize,
     qt: &QuestionType,
@@ -407,7 +384,7 @@ fn trace_question(
                     } else {
                         json!(ov.value())
                     };
-                    json!({ "questionType": format_claim_qt(&types[oi]), "value": val })
+                    json!({ "questionType": format_stmt_qt(&types[oi]), "value": val })
                 }
             })
             .collect();
@@ -470,6 +447,105 @@ pub fn fill_options(
     }
 }
 
+/// Option row for the scoped-sameness types, built list-first: the key doesn't fix
+/// which option is correct, the sampled candidate list does. Key-first can't produce
+/// the row where "none of these" is right *although* unlisted sharers exist.
+///
+/// Sample `option_count` of the eligible values — every question but `qi` and `exclude`
+/// (the reference, for `SameAsWhich`), plus NONE as an ordinary member — then repair the
+/// sample to hold exactly one candidate answered `matched`:
+///
+/// - **1** → that candidate is the correct value;
+/// - **0** → NONE is correct, swapped in if it wasn't sampled;
+/// - **≥ 2** → keep one, swap the rest for unsampled non-sharers (or NONE).
+///
+/// Repair rather than re-sample: one pass, and it only touches samples that already have
+/// a sharer, so the none-answered rate stays whatever sampling gave it.
+///
+/// Needs `option_count` eligible values with `option_count - 1` non-sharers among them —
+/// `construct::random_type_params`'s capacity gate, rearranged. Without it the ≥ 2 repair
+/// runs out of substitutes and leaves a second sharer as an alternate correct answer.
+fn fill_scoped_sameness(
+    qi: usize,
+    matched: Answer,
+    exclude: Option<usize>,
+    solution: &[Answer; MAX_N],
+    n: usize,
+    option_count: usize,
+    rng: &mut Rng,
+    slots: &mut [OptionValue; 5],
+) {
+    let shares = |v: OptionValue| v.is_num() && solution[usize::from(v.value())] == matched;
+
+    // Eligible values, shuffled: the first `option_count` are the sample, the rest
+    // are the substitutes the repair below draws from.
+    let mut eligible: ArrayVec<OptionValue, { MAX_N + 1 }> = (0..n)
+        .filter(|&j| j != qi && Some(j) != exclude)
+        .map(|j| OptionValue::num(j as u8))
+        .chain(std::iter::once(OptionValue::NONE))
+        .collect();
+    rng.shuffle(&mut eligible);
+    let non_sharers = eligible.iter().filter(|&&v| !shares(v)).count();
+    if eligible.len() < option_count || non_sharers < option_count - 1 {
+        panic!(
+            "fill_one_question: scoped sameness at qi={qi} matching {matched:?} — \
+             {} eligible values ({non_sharers} non-sharing) can't fill {option_count} \
+             options — missing upstream guard",
+            eligible.len()
+        );
+    }
+    // Keep the first sampled sharer; swap every later one out for an unsampled
+    // non-sharer (NONE counts, if it isn't already in the row). A sample with one
+    // sharer falls through unchanged — same loop, nothing to swap.
+    let mut kept = None;
+    let mut next_substitute = option_count;
+    for i in 0..option_count {
+        if !shares(eligible[i]) {
+            continue;
+        }
+        if kept.is_none() {
+            kept = Some(eligible[i]);
+            continue;
+        }
+        // Guaranteed by the capacity check: at least `option_count - 1` non-sharers
+        // are eligible and fewer than that are sampled, so the tail always has one.
+        let substitute = (next_substitute..eligible.len())
+            .find(|&t| !shares(eligible[t]))
+            .expect("capacity check guarantees a substitute");
+        eligible.swap(i, substitute);
+        next_substitute = substitute + 1;
+    }
+
+    let correct_val = match kept {
+        Some(sharer) => sharer,
+        None => {
+            // No listed sharer, so NONE is correct — displacing an arbitrary sampled
+            // value if it wasn't drawn (all of them are non-sharers here).
+            if !eligible[..option_count].iter().any(|v| v.is_none()) {
+                let none_at = eligible
+                    .iter()
+                    .position(|v| v.is_none())
+                    .expect("NONE is always eligible");
+                eligible.swap(0, none_at);
+            }
+            OptionValue::NONE
+        }
+    };
+
+    let correct_oi = solution[qi].idx();
+    slots[correct_oi] = correct_val;
+    let mut distractors = [OptionValue::UNUSED; 4];
+    let mut di = 0;
+    for &v in &eligible[..option_count] {
+        if v != correct_val {
+            distractors[di] = v;
+            di += 1;
+        }
+    }
+    rng.shuffle(&mut distractors[..di]);
+    place_distractors(&distractors, slots, correct_oi);
+}
+
 fn place_distractors(
     distractors: &[OptionValue; 4],
     slots: &mut [OptionValue; 5],
@@ -484,10 +560,15 @@ fn place_distractors(
     }
 }
 
-/// The correct option value for `qt` under solution `sol`. `NONE` is a real answer
-/// for kinds that allow it; `UNUSED` is the "no valid value" sentinel for degenerate
-/// cases.
-pub fn correct_option_value(
+/// The correct option value for `qt` under solution `sol`. `NONE` is a real answer for
+/// the kinds that allow it.
+///
+/// Five kinds have no such value and assert instead: identity options and `TrueStmt`,
+/// whose rows aren't value-encoded, and the scoped-sameness pair, whose correct value
+/// depends on which candidates the row lists rather than on the key (see
+/// `fill_scoped_sameness`). Nothing asks — `fill_one_question` returns before this call
+/// for all five, and `STMT_KINDS` excludes them.
+fn correct_option_value(
     qt: &QuestionType,
     qi: usize,
     sol: &[Answer; MAX_N],
@@ -530,16 +611,7 @@ pub fn correct_option_value(
         QuestionType::LastWith { answer } => pos_or_none((0..n).rev().find(|&i| sol[i] == answer)),
         QuestionType::PrevSame => pos_or_none((0..qi).rev().find(|&i| sol[i] == sol[qi])),
         QuestionType::NextSame => pos_or_none(((qi + 1)..n).find(|&i| sol[i] == sol[qi])),
-        QuestionType::OnlySame | QuestionType::SameAs => {
-            pos_or_none((0..n).find(|&i| i != qi && sol[i] == sol[qi]))
-        }
-        QuestionType::SameAsWhich { question_index } => {
-            // NONE is never valid here; a no-match is degenerate → UNUSED, not NONE.
-            let ref_ans = sol[question_index as usize];
-            (0..n)
-                .find(|&i| i != qi && i != question_index as usize && sol[i] == ref_ans)
-                .map_or(OptionValue::UNUSED, num)
-        }
+        QuestionType::OnlySame => pos_or_none((0..n).find(|&i| i != qi && sol[i] == sol[qi])),
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = match qt {
                 QuestionType::OnlyOdd { .. } => 1,
@@ -572,9 +644,18 @@ pub fn correct_option_value(
             };
             target
                 .and_then(|&t| counts.iter().position(|&c| c == t))
-                .map_or(OptionValue::UNUSED, num)
+                .map(num)
+                .expect("counts is non-empty, so its extremum is one of its elements")
         }
-        _ => OptionValue::UNUSED,
+        // No key-determined value. Listed rather than a catch-all so a new variant is
+        // a compile error here until its correct value is decided.
+        QuestionType::NoOtherHasAnswer
+        | QuestionType::AnswerIsSelf
+        | QuestionType::TrueStmt
+        | QuestionType::SameAs
+        | QuestionType::SameAsWhich { .. } => {
+            unreachable!("{:?} has no correct value fixed by the key", qt.kind())
+        }
     }
 }
 
@@ -674,9 +755,9 @@ pub fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
     c
 }
 
-// ── Claims for only_true_statement ──
+// ── Statements for TrueStmt ──
 
-fn claim_category(claim: &Claim) -> u16 {
+fn stmt_category(claim: &Claim) -> u16 {
     match claim.question_type {
         QuestionType::CountAnswer { answer } => 100 + answer as u16,
         QuestionType::CountConsonant => 200,
@@ -705,12 +786,23 @@ fn claim_category(claim: &Claim) -> u16 {
         QuestionType::ConsecIdent => 1500,
         QuestionType::OnlyOdd { answer } => 1600 + answer as u16,
         QuestionType::OnlyEven { answer } => 1700 + answer as u16,
-        QuestionType::SameAsWhich { question_index } => 1800 + question_index as u16,
-        _ => 9999,
+        // Uncategorized: none of these is a generated statement kind, so
+        // `try_make_stmt` never produces one. Listed rather than a catch-all so a new
+        // variant is a compile error here until it's given a category.
+        QuestionType::PrevSame
+        | QuestionType::NextSame
+        | QuestionType::OnlySame
+        | QuestionType::SameAs
+        | QuestionType::SameAsWhich { .. }
+        | QuestionType::AnswerIsSelf
+        | QuestionType::LetterDist { .. }
+        | QuestionType::TrueStmt => {
+            unreachable!("{:?} has no statement category", claim.question_type.kind())
+        }
     }
 }
 
-fn build_claims(
+fn build_stmts(
     qi: usize,
     solution: &[Answer; MAX_N],
     n: usize,
@@ -722,8 +814,8 @@ fn build_claims(
     let target_oi = solution[qi].idx();
     let mut local: [Option<Claim>; 5] = [None; 5];
 
-    let true_claim = make_true_claim(solution, qi, n, rng, option_count);
-    local[target_oi] = Some(true_claim);
+    let true_stmt = make_true_stmt(solution, qi, n, rng, option_count);
+    local[target_oi] = Some(true_stmt);
 
     for oi in 0..option_count {
         if oi == target_oi {
@@ -731,11 +823,11 @@ fn build_claims(
         }
         let mut found = false;
         for _ in 0..30 {
-            let fc = make_false_claim(solution, qi, n, rng, option_count);
-            let cat = claim_category(&fc);
-            if cat != claim_category(local[target_oi].as_ref().unwrap())
+            let fc = make_false_stmt(solution, qi, n, rng, option_count);
+            let cat = stmt_category(&fc);
+            if cat != stmt_category(local[target_oi].as_ref().unwrap())
                 && (0..oi).all(|j| {
-                    j == target_oi || local[j].as_ref().is_none_or(|c| claim_category(c) != cat)
+                    j == target_oi || local[j].as_ref().is_none_or(|c| stmt_category(c) != cat)
                 })
             {
                 local[oi] = Some(fc);
@@ -744,12 +836,12 @@ fn build_claims(
             }
         }
         if !found {
-            local[oi] = Some(make_false_claim(solution, qi, n, rng, option_count));
+            local[oi] = Some(make_false_stmt(solution, qi, n, rng, option_count));
         }
     }
 
     // Split into SoA: values live in `slots`, types in `true_stmt_question_types`.
-    // Slots with no claim (oi >= option_count) stay UNUSED; the matching type
+    // Slots with no statement (oi >= option_count) stay UNUSED; the matching type
     // entry is a harmless placeholder since `claim_at` gates on slot validity.
     let mut types = [QuestionType::AnswerIsSelf; 5];
     for oi in 0..option_count {
@@ -761,31 +853,16 @@ fn build_claims(
     *true_stmt_question_types = Some(types);
 }
 
-/// Whether a question kind can be a TrueStmt claim.
-const fn is_claim_type(kind: QuestionTypeKind) -> bool {
-    use QuestionTypeKind::*;
-    match kind {
-        CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
-        | MostCommonCount | ClosestAfter | ClosestBefore | FirstWith | LastWith | OnlyOdd
-        | OnlyEven | ConsecIdent | LeastCommon | MostCommon | EqualCount | SameAsWhich => true,
-
-        // Relative to own question's answer is slightly confusing for `TrueStmt` claims.
-        PrevSame | NextSame | OnlySame | SameAs | LetterDist | AnswerOf | NoOtherHasAnswer => false,
-        // Uninteresting.
-        AnswerIsSelf => false,
-        // Recursive claims aren't supported.
-        TrueStmt => false,
-    }
-}
-
-/// The claim kinds, derived once from `is_claim_type` so the pick pool and the
-/// predicate can't drift apart.
-const CLAIM_KIND_COUNT: usize = {
+/// The statement kinds, derived at compile time from `check_form::check_stmt_kind`
+/// so the pick pool and the form check can't drift apart. Only kinds it passes
+/// silently are generated — a warning there exists to tolerate what older corpora
+/// already shipped, not to license new ones.
+const STMT_KIND_COUNT: usize = {
     let all = QuestionTypeKind::all();
     let mut count = 0;
     let mut i = 0;
     while i < all.len() {
-        if is_claim_type(all[i]) {
+        if check_form::check_stmt_kind(all[i]).is_none() {
             count += 1;
         }
         i += 1;
@@ -793,13 +870,13 @@ const CLAIM_KIND_COUNT: usize = {
     count
 };
 
-const CLAIM_KINDS: [QuestionTypeKind; CLAIM_KIND_COUNT] = {
+const STMT_KINDS: [QuestionTypeKind; STMT_KIND_COUNT] = {
     let all = QuestionTypeKind::all();
-    let mut out = [QuestionTypeKind::CountAnswer; CLAIM_KIND_COUNT];
+    let mut out = [QuestionTypeKind::CountAnswer; STMT_KIND_COUNT];
     let mut i = 0;
     let mut j = 0;
     while i < all.len() {
-        if is_claim_type(all[i]) {
+        if check_form::check_stmt_kind(all[i]).is_none() {
             out[j] = all[i];
             j += 1;
         }
@@ -808,18 +885,18 @@ const CLAIM_KINDS: [QuestionTypeKind; CLAIM_KIND_COUNT] = {
     out
 };
 
-fn try_make_claim(
+fn try_make_stmt(
     sol: &[Answer; MAX_N],
     qi: usize,
     n: usize,
     rng: &mut Rng,
     option_count: usize,
 ) -> Option<Claim> {
-    // Generate a claim type exactly as question types are generated, then take its
-    // true value for this solution. `is_num` drops null values (TrueStmt claims never
+    // Generate a statement type exactly as question types are generated, then take its
+    // true value for this solution. `is_num` drops null values (TrueStmt statements never
     // assert null); `check_claim_fast` drops types whose true value isn't a valid
-    // unique claim here (non-unique OnlyOdd/ConsecIdent, MostCommon/LeastCommon tie).
-    let kind = rng.pick(&CLAIM_KINDS);
+    // unique statement here (non-unique OnlyOdd/ConsecIdent, MostCommon/LeastCommon tie).
+    let kind = rng.pick(&STMT_KINDS);
     let question_type = random_type_params(kind, qi, n, option_count, sol, rng)?;
     let value = correct_option_value(&question_type, qi, sol, n, option_count);
     if !value.is_num() {
@@ -832,7 +909,7 @@ fn try_make_claim(
     check_claim_fast(option_count, &sol[..n], qi, &claim).then_some(claim)
 }
 
-fn make_true_claim(
+fn make_true_stmt(
     sol: &[Answer; MAX_N],
     qi: usize,
     n: usize,
@@ -840,7 +917,7 @@ fn make_true_claim(
     option_count: usize,
 ) -> Claim {
     for _ in 0..20 {
-        if let Some(claim) = try_make_claim(sol, qi, n, rng, option_count) {
+        if let Some(claim) = try_make_stmt(sol, qi, n, rng, option_count) {
             return claim;
         }
     }
@@ -851,12 +928,12 @@ fn make_true_claim(
     }
 }
 
-/// A plausible wrong value for a claim of type `qt` given its correct value: prefer
+/// A plausible wrong value for a statement of type `qt` given its correct value: prefer
 /// a near-miss (correct ±1/±2) that's a real option, else any other option value.
-/// Never NONE — TrueStmt claims don't assert null. `check_claim_fast` at the call
+/// Never NONE — TrueStmt statements don't assert null. `check_claim_fast` at the call
 /// site is the final arbiter of falseness (an EqualCount near-miss, say, can land on
 /// a second true answer).
-fn false_claim_value(
+fn false_stmt_value(
     qt: &QuestionType,
     correct: OptionValue,
     qi: usize,
@@ -883,7 +960,7 @@ fn false_claim_value(
     (!rest.is_empty()).then(|| rng.pick(&rest))
 }
 
-fn make_false_claim(
+fn make_false_stmt(
     sol: &[Answer; MAX_N],
     qi: usize,
     n: usize,
@@ -891,9 +968,9 @@ fn make_false_claim(
     option_count: usize,
 ) -> Claim {
     for _ in 0..30 {
-        let base = make_true_claim(sol, qi, n, rng, option_count);
+        let base = make_true_stmt(sol, qi, n, rng, option_count);
         if let Some(value) =
-            false_claim_value(&base.question_type, base.value, qi, n, option_count, rng)
+            false_stmt_value(&base.question_type, base.value, qi, n, option_count, rng)
         {
             let fc = Claim {
                 question_type: base.question_type,
@@ -904,7 +981,7 @@ fn make_false_claim(
             }
         }
     }
-    // Give up: emit a guaranteed-false but in-range CountAnswer(A) claim. The
+    // Give up: emit a guaranteed-false but in-range CountAnswer(A) statement. The
     // true count of A is `count_a`; any other value in 0..=n is false, so use
     // count+1 (or count-1 when the count is already at the ceiling n).
     let count_a = count_letter(sol, Answer::A, n);
@@ -947,8 +1024,8 @@ mod tests {
                 assert_eq!(sols.len(), 1, "2027 puzzle is not uniquely solvable");
                 for qi in 0..fp.n {
                     let kind = fp.question_types[qi].kind();
-                    // TrueStmt's answer selects a claim (an index), never a NONE value;
-                    // its stored option values are claim values, a different layer.
+                    // TrueStmt's answer selects a statement (an index), never a NONE value;
+                    // its stored option values are statement values, a different layer.
                     if kind == QuestionTypeKind::TrueStmt {
                         continue;
                     }
@@ -1073,6 +1150,49 @@ mod tests {
                     break;
                 }
 
+                // Scoped-sameness invariant (what `expectedCorrect` can no longer
+                // pin, since list-first sampling makes the correct value
+                // rng-dependent): the correct slot holds the *only* listed
+                // candidate sharing the matched letter, or NONE exactly when no
+                // listed candidate shares it. Unlisted sharers are irrelevant.
+                for qi in 0..n {
+                    let (matched, excluded) = match fp.question_types[qi] {
+                        QuestionType::SameAs => (solution[qi], None),
+                        QuestionType::SameAsWhich { question_index } => {
+                            let r = usize::from(question_index);
+                            (solution[r], Some(r))
+                        }
+                        _ => continue,
+                    };
+                    let correct_oi = solution[qi].idx();
+                    let listed_sharers: Vec<u8> = (0..oc)
+                        .filter_map(|oi| {
+                            let ov = fp.options[qi][oi];
+                            let j = ov.is_num().then(|| usize::from(ov.value()))?;
+                            (j < n && j != qi && Some(j) != excluded && solution[j] == matched)
+                                .then_some(j as u8)
+                        })
+                        .collect();
+                    let stored = fp.options[qi][correct_oi];
+                    let ok = match listed_sharers.as_slice() {
+                        [] => stored.is_none(),
+                        [only] => stored.is_num() && stored.value() == *only,
+                        _ => false,
+                    };
+                    if !ok {
+                        eprintln!(
+                            "FAIL: {name} (seed={seed}) Q{}: correct slot {stored:?} vs listed sharers {listed_sharers:?} in {:?}",
+                            qi + 1,
+                            &fp.options[qi][..oc]
+                        );
+                        case_failed = true;
+                        break;
+                    }
+                }
+                if case_failed {
+                    break;
+                }
+
                 // Distinctness: distractor option values must differ from the correct value
                 // and from each other (across the active option count). Identity-option
                 // and TrueStmt types don't store distinct distractor values, so skip them.
@@ -1130,7 +1250,7 @@ mod tests {
         let suite: Value = serde_json::from_str(&json_str).unwrap();
         let tests = suite["tests"].as_array().unwrap();
 
-        // NoOtherHasAnswer / AnswerIsSelf use identity options, TrueStmt uses claims;
+        // NoOtherHasAnswer / AnswerIsSelf use identity options, TrueStmt uses statements;
         // the parser overrides input, so checkForm's range warning is unobservable.
         let exempt = [
             QuestionTypeKind::NoOtherHasAnswer,

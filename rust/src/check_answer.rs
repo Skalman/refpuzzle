@@ -19,6 +19,12 @@
 //! validity — a deduce rule's validity-style check is *applying* this authority,
 //! and its self-elimination of a question's own options must never outrun this
 //! verdict.
+//!
+//! Precondition — the puzzle is **well-formed**. Structural nonsense is
+//! `check_form`'s to reject, e.g. an option naming a question that doesn't
+//! exist or itself, or a NONE where the kind forbids one. Guards in this code
+//! may panic on poorly formed puzzles; those sites are tagged
+//! `Fatal check_form error.`
 
 use crate::counts::{MaskTally, count_matching_mask};
 use crate::types::*;
@@ -399,75 +405,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             None => Validity::Pending,
         },
 
-        QuestionType::SameAs => {
-            if ov.is_none() {
-                // Claim-level "none": a bare claim knows only qi's letter, not the
-                // question's candidate list, so it reads as globally unique.
-                // check_answer refines this to the *listed* candidates.
-                let amask = 1u8 << self_letter.idx();
-                let mut could_exist = false;
-                for j in 0..n {
-                    if j == qi {
-                        continue;
-                    }
-                    if answers[j] == Some(self_letter) {
-                        return Validity::Invalid;
-                    }
-                    if answers[j].is_none() && eliminated[j] & amask == 0 {
-                        could_exist = true;
-                    }
-                }
-                return if could_exist {
-                    Validity::Pending
-                } else {
-                    Validity::Valid
-                };
-            }
-            if !ov.is_num() {
-                return Validity::Invalid;
-            }
-            let ov = ov.value() as usize;
-            if ov >= n || ov == qi {
-                return Validity::Invalid;
-            }
-            match answers[ov] {
-                Some(ta) => {
-                    if ta == self_letter {
-                        Validity::Valid
-                    } else {
-                        Validity::Invalid
-                    }
-                }
-                // Impossible if qi's letter is already struck out at the target.
-                None if eliminated[ov] & (1u8 << self_letter.idx()) != 0 => Validity::Invalid,
-                None => Validity::Pending,
-            }
-        }
-
-        QuestionType::SameAsWhich { question_index } => {
-            if !ov.is_num() {
-                return Validity::Invalid;
-            }
-            let ov = ov.value() as usize;
-            if ov >= n || ov == qi || ov == question_index as usize {
-                return Validity::Invalid;
-            }
-            let ref_ans = match answers[question_index as usize] {
-                Some(a) => a,
-                None => return Validity::Pending,
-            };
-            match answers[ov] {
-                Some(ta) => {
-                    if ta == ref_ans {
-                        Validity::Valid
-                    } else {
-                        Validity::Invalid
-                    }
-                }
-                // Impossible if the ref's letter is already struck out at the target.
-                None if eliminated[ov] & (1u8 << ref_ans.idx()) != 0 => Validity::Invalid,
-                None => Validity::Pending,
-            }
+        // Scoped sameness — never a claim. Fatal `check_form` error.
+        QuestionType::SameAs | QuestionType::SameAsWhich { .. } => {
+            unreachable!("scoped sameness is graded as a question, never as a claim")
         }
 
         // ── NoOtherHasAnswer: "not the answer to any OTHER question" ──
@@ -726,9 +666,8 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     return Validity::Invalid;
                 }
                 let claimed = Answer::from(ov.value());
-                if claimed == answer {
-                    return Validity::Invalid;
-                }
+                // Fatal `check_form` error.
+                assert!(claimed != answer, "EqualCount({answer}) points to itself");
                 let CountResult {
                     count: rc,
                     remaining: rr,
@@ -812,6 +751,82 @@ pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) 
     check_claim_core(fp.n, fp.option_count, state, opt, claim)
 }
 
+/// Grade a `SameAs` / `SameAsWhich` answer. Both list a candidate set and ask which
+/// member is the **only** one answered with the matched letter M: a numeric option
+/// asserts that its target holds M *and* that no other listed candidate does; the
+/// "none" option asserts only the latter, over the whole list.
+///
+/// `source` is the question M is read off — `qi` for `SameAs`, the reference for
+/// `SameAsWhich` — so nothing is decided until it's answered. It is also the one value
+/// excluded from the candidate list, holding M by definition. `qi` stays a candidate
+/// for `SameAsWhich`, where matching the reference is an ordinary proposition for it.
+fn check_scoped_sameness(
+    fp: &FlatPuzzle,
+    state: State,
+    qi: usize,
+    answer: Answer,
+    source: usize,
+) -> Validity {
+    let Some(matched) = state.answers[source] else {
+        return Validity::Pending;
+    };
+    let amask = 1u8 << matched.idx();
+    // Two independent cases: `eliminated` doesn't track answers, so a question
+    // differs either by being answered otherwise or by having M struck out.
+    let known_differs = |j: usize| match state.answers[j] {
+        Some(other) => other != matched,
+        None => state.eliminated[j] & amask != 0,
+    };
+
+    let selected = fp.options[qi][answer.idx()];
+    let target = if selected.is_num() {
+        let target = usize::from(selected.value());
+        // Fatal `check_form` error.
+        assert!(
+            target < fp.n && target != qi && target != source,
+            "scoped-sameness option names {target} (qi={qi}, source={source})"
+        );
+        // First requirement: the target must hold M.
+        if known_differs(target) {
+            return Validity::Invalid;
+        }
+        Some(target)
+    } else if selected.is_none() {
+        None
+    } else {
+        // An unfilled option slot is undecided, not wrong.
+        return Validity::Pending;
+    };
+
+    // Second requirement: no *other* listed candidate may hold M.
+    let mut others_settled = true;
+    for oi in 0..fp.option_count {
+        let ov = fp.options[qi][oi];
+        if !ov.is_num() {
+            continue;
+        }
+        let j = usize::from(ov.value());
+        // Out of range names no real question, so there's no candidate to check.
+        if j >= fp.n || j == source || Some(j) == target {
+            continue;
+        }
+        if state.answers[j] == Some(matched) {
+            return Validity::Invalid;
+        }
+        if !known_differs(j) {
+            others_settled = false;
+        }
+    }
+
+    // The "none" option names no target, so the first requirement doesn't apply.
+    let target_shares = target.is_none_or(|t| state.answers[t] == Some(matched));
+    if others_settled && target_shares {
+        Validity::Valid
+    } else {
+        Validity::Pending
+    }
+}
+
 fn affected_by_own_answer(qt: &QuestionType, qi: usize) -> bool {
     match *qt {
         QuestionType::AnswerOf { question_index } => question_index as usize == qi,
@@ -864,55 +879,32 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
         return Validity::Valid;
     }
 
-    // SameAs "none" is scoped to the question's *listed* candidates (its numeric
-    // options), not the whole puzzle. A bare claim carries only qi's letter, so
-    // check_claim_core reads "none" as globally unique; check_answer is the
-    // authority that refines it against fp.options[qi].
-    if matches!(qt, QuestionType::SameAs) && fp.options[qi][ai].is_none() {
-        let letter_mask = 1u8 << ai;
-        let mut candidate_could_share = false;
-        for oi in 0..fp.option_count {
-            let candidate = fp.options[qi][oi];
-            if !candidate.is_num() {
-                continue;
-            }
-            let j = candidate.value() as usize;
-            if j >= fp.n || j == qi {
-                continue;
-            }
-            match state.answers[j] {
-                Some(other) if other == a => return Validity::Invalid,
-                None if state.eliminated[j] & letter_mask == 0 => {
-                    candidate_could_share = true;
-                }
-                _ => {}
-            }
+    // The scoped-sameness types are graded here rather than through
+    // `check_claim`, which can't see the candidate list. `SameAs` grades
+    // `Consistent` (via `maybe_consistent`) because its matched letter *is* qi's
+    // own answer; `SameAsWhich` takes it from another question, so it grades
+    // `Valid`.
+    match *qt {
+        QuestionType::SameAs => {
+            let verdict = check_scoped_sameness(fp, state, qi, a, qi);
+            return maybe_consistent(verdict, qt, qi);
         }
-        let verdict = if candidate_could_share {
-            Validity::Pending
-        } else {
-            Validity::Valid
-        };
-        return maybe_consistent(verdict, qt, qi);
+        QuestionType::SameAsWhich { question_index } => {
+            let verdict = check_scoped_sameness(fp, state, qi, a, usize::from(question_index));
+            return maybe_consistent(verdict, qt, qi);
+        }
+        _ => {}
     }
 
-    let ov = fp.options[qi][ai];
-    // Value routing into check_claim, and how an UNUSED selected slot is handled —
-    // the asymmetry is by design:
-    //  - letter-valued types (AnswerOf, extrema) pass the stored value through, so an
-    //    UNUSED slot reaches check_claim, which rejects it (→ Invalid);
-    //  - identity-option types take the value from the option index (never UNUSED);
-    //  - all other (numeric) types short-circuit an UNUSED slot to Pending, treating
-    //    an unfilled option as undecided rather than wrong.
-    let ov = match *qt {
-        QuestionType::AnswerOf { .. } | QuestionType::LeastCommon | QuestionType::MostCommon => ov,
-        _ if qt.has_identity_options() => OptionValue::num(ai as u8),
-        _ => {
-            if ov.is_unused() {
-                return Validity::Pending;
-            }
-            ov
-        }
+    // Identity-option types read their value off the option index; everyone else takes
+    // the stored one, which is filled for every slot within `option_count`.
+    let ov = if qt.has_identity_options() {
+        OptionValue::num(ai as u8)
+    } else {
+        let ov = fp.options[qi][ai];
+        // Fatal check_form error, or an answer past `option_count`.
+        assert!(!ov.is_unused(), "Q{} has no option {ai}", qi + 1);
+        ov
     };
     maybe_consistent(
         check_claim(
@@ -1121,12 +1113,32 @@ mod tests {
 
     /// Property test: on random fully-answered boards, `check_claim_fast` must
     /// agree with `check_claim(..).is_valid()` for every candidate claim value,
-    /// across every kind it implements (all but `AnswerIsSelf`/`TrueStmt`, which
-    /// are never claim subjects — see `is_claim_type` in fill.rs). Locks the
-    /// equivalence the doc comment on `check_claim_fast` promises.
+    /// across every kind it implements. Excluded: `AnswerIsSelf`/`TrueStmt`, which
+    /// never appear as statements (see `check_form::check_stmt_kind`), and the
+    /// scoped-sameness types, whose arm is `unreachable!` because their verdict
+    /// needs the candidate list. Locks the equivalence the doc comment on
+    /// `check_claim_fast` promises.
     #[test]
     fn check_claim_fast_matches_check_claim() {
         use crate::rng::Rng;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+
+        type Outcome = Result<bool, Box<dyn std::any::Any + Send>>;
+        const OUTCOMES: [&str; 3] = ["valid", "invalid", "panic"];
+        fn index(r: &Outcome) -> usize {
+            match r {
+                Ok(true) => 0,
+                Ok(false) => 1,
+                Err(_) => 2,
+            }
+        }
+
+        // Some values assert, so silence the default hook for the sweep and report
+        // from the collected list instead.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let mut mismatches: Vec<String> = Vec::new();
+        let mut agreed = [0u64; 3]; // indexed by outcome: valid, invalid, panic
 
         // Every value a claim could plausibly carry: all in-range
         // positions/counts, all five letters (including ones beyond `oc`, to
@@ -1194,7 +1206,6 @@ mod tests {
                     QuestionType::PrevSame,
                     QuestionType::NextSame,
                     QuestionType::OnlySame,
-                    QuestionType::SameAs,
                     QuestionType::OnlyOdd { answer },
                     QuestionType::OnlyEven { answer },
                     QuestionType::ConsecIdent,
@@ -1206,9 +1217,6 @@ mod tests {
                     QuestionType::NoOtherHasAnswer,
                     QuestionType::EqualCount { answer },
                     QuestionType::LetterDist {
-                        question_index: other_qi,
-                    },
-                    QuestionType::SameAsWhich {
                         question_index: other_qi,
                     },
                 ];
@@ -1223,20 +1231,60 @@ mod tests {
                             question_type,
                             value,
                         };
-                        let fast = check_claim_fast(oc, &sol[..n], qi, &claim);
-                        let slow = check_claim(&fp, state, opt, claim).is_valid();
-                        assert_eq!(
-                            fast,
-                            slow,
-                            "seed {seed} n={n} oc={oc} qi={qi} sol={:?} claim={:?}",
-                            &sol[..n],
-                            claim
-                        );
+                        // Outcome, not just verdict: a structurally impossible value
+                        // asserts (see the module doc), and the two wrappers must
+                        // agree on *that* too — they share `check_claim_core`, so a
+                        // panic on one path and a verdict on the other would mean the
+                        // wrappers had diverged.
+                        let fast = catch_unwind(AssertUnwindSafe(|| {
+                            check_claim_fast(oc, &sol[..n], qi, &claim)
+                        }));
+                        let slow = catch_unwind(AssertUnwindSafe(|| {
+                            check_claim(&fp, state, opt, claim).is_valid()
+                        }));
+                        let (fi, si) = (index(&fast), index(&slow));
+                        if fi == si {
+                            agreed[fi] += 1;
+                        } else {
+                            mismatches.push(format!(
+                                "seed {seed} n={n} oc={oc} qi={qi} sol={:?} claim={claim:?}: \
+                                 fast={} slow={}",
+                                &sol[..n],
+                                OUTCOMES[fi],
+                                OUTCOMES[si],
+                            ));
+                        }
                         checked += 1;
                     }
                 }
             }
         }
-        eprintln!("check_claim_fast_matches_check_claim: {checked} comparisons");
+        std::panic::set_hook(hook);
+        for m in mismatches.iter().take(10) {
+            eprintln!("MISMATCH: {m}");
+        }
+        assert!(
+            mismatches.is_empty(),
+            "{} fast/slow mismatch(es)",
+            mismatches.len()
+        );
+        // Agreement is worthless if the sweep stopped producing one of the outcomes —
+        // a narrowed value or kind list would still "pass". The floor is deliberately
+        // loose: it catches a count going to zero, not a drift in the mix. A zero on
+        // `panic` means nothing in `check_claim_core` asserts on a malformed value any
+        // more, which is worth knowing either way.
+        for (i, &count) in agreed.iter().enumerate() {
+            assert!(
+                count >= 10,
+                "only {count} agreed `{}` outcome(s) in {checked} comparisons — \
+                 the sweep no longer covers it",
+                OUTCOMES[i]
+            );
+        }
+        eprintln!(
+            "check_claim_fast_matches_check_claim: {checked} comparisons, agreed \
+             {} valid / {} invalid / {} panic",
+            agreed[0], agreed[1], agreed[2]
+        );
     }
 }

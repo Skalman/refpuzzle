@@ -49,7 +49,7 @@ mod wasm_api {
     use crate::solve_deduce::{
         EngineConfig, SolveStep, StepLog, VERIFY_ITERS_PER_QUESTION, run_engine, solve,
     };
-    use crate::types::{Answer, Claim, FlatPuzzle, MAX_N, QuestionType, State};
+    use crate::types::{ALL_OPTIONS_MASK, Answer, Claim, FlatPuzzle, MAX_N, QuestionType, State};
     use serde::{Deserialize, Serialize};
     use wasm_bindgen::prelude::*;
 
@@ -75,17 +75,32 @@ mod wasm_api {
         eliminated: Vec<u32>,
     }
 
-    fn parse_state(state: JsValue, n: usize) -> Result<State, JsError> {
+    /// The state counterpart of `check_form`: the engine assumes a well-formed board,
+    /// so reject or normalize anything the wire could get wrong before it gets in.
+    /// An answer past `option_count` selects an option slot that doesn't exist, and
+    /// the phantom slots must read as eliminated — `State::initial`'s invariant, which
+    /// deduce's `0..5` option loops rely on to stay inside the real options.
+    fn parse_state(state: JsValue, fp: &FlatPuzzle) -> Result<State, JsError> {
         let input: StateInput =
             serde_wasm_bindgen::from_value(state).map_err(|e| err(&e.to_string()))?;
+        let n = fp.n;
         if input.answers.len() < n || input.eliminated.len() < n {
             return Err(err("state too short"));
         }
         let mut answers = [None; MAX_N];
-        let mut eliminated = [0u8; MAX_N];
+        let mut eliminated = [fp.initial_eliminated_mask(); MAX_N];
         for qi in 0..n {
+            if let Some(a) = input.answers[qi]
+                && a.idx() >= fp.option_count
+            {
+                return Err(err(&format!(
+                    "question {} is answered {a}, outside the option count {}",
+                    qi + 1,
+                    fp.option_count
+                )));
+            }
             answers[qi] = input.answers[qi];
-            eliminated[qi] = input.eliminated[qi] as u8;
+            eliminated[qi] |= input.eliminated[qi] as u8 & ALL_OPTIONS_MASK;
         }
         Ok(State {
             answers,
@@ -255,7 +270,7 @@ mod wasm_api {
             // module. Warnings are tolerated; only fatal form errors block.
             let fatal: Vec<String> = check_form(&fp)
                 .into_iter()
-                .filter(|e| matches!(e.severity, Severity::Error))
+                .filter(|e| e.severity == Severity::Error)
                 .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
                 .collect();
             if !fatal.is_empty() {
@@ -268,7 +283,7 @@ mod wasm_api {
         /// `state` must be `{ answers: (Answer|null)[], eliminated: number[] }`.
         #[wasm_bindgen(js_name = checkAllAnswers)]
         pub fn check_all_answers(&self, state: JsValue) -> Result<Vec<u8>, JsError> {
-            let s = parse_state(state, self.fp.n)?;
+            let s = parse_state(state, &self.fp)?;
             let mut out = Vec::with_capacity(self.fp.n);
             for qi in 0..self.fp.n {
                 out.push(validity_to_u8(check_answer(&self.fp, s, qi)));
@@ -301,7 +316,7 @@ mod wasm_api {
         /// crosses the wire.
         #[wasm_bindgen(js_name = nextStep)]
         pub fn next_step(&self, state: JsValue) -> Result<JsValue, JsError> {
-            let s = parse_state(state, self.fp.n)?;
+            let s = parse_state(state, &self.fp)?;
             let mut drs = deduce_assuming_unique(&self.fp, &s);
             drs.sort_by_key(|dr| dr.rule as u8);
             let api = if let Some(dr) = drs.first() {

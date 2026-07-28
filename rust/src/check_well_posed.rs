@@ -134,7 +134,7 @@ pub fn check_well_posed_given_options(
             let mut true_claims = 0;
             for oi in 0..fp.option_count {
                 let Some(claim) = fp.claim_at(qi, oi) else {
-                    return Some(format!("TrueStmt option {oi} has no claim"));
+                    return Some(format!("TrueStmt option {oi} has no statement"));
                 };
                 if check_claim(fp, state, OptionPos { qi, oi }, claim) == Validity::Valid {
                     true_claims += 1;

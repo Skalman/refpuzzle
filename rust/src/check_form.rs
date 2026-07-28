@@ -1,10 +1,17 @@
 //! Structural well-formedness of a parsed puzzle (option counts, index ranges,
-//! claim shape) — is the *shape* legal, independent of any answer key? For the
+//! statement shape) — is the *shape* legal, independent of any answer key? For the
 //! semantic "is this claim true?" check see `check_answer::check_claim`.
+//!
+//! `Error` vs `Warning` — whether an already-published puzzle may keep the thing.
+//! Nothing may keep an `Error`: a served puzzle carrying one gets edited, and the
+//! engine may assume it away (see the `check_answer` module doc). A `Warning` is
+//! grandfathered — still legal to load and grade, only retired from generation.
+//! `generated_puzzles_wellformed` enforces exactly that split: warnings tolerated on
+//! served puzzles, never on later ones.
 
 use crate::types::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
     Warning,
     Error,
@@ -21,23 +28,54 @@ pub struct FormError {
 //
 // Each returns `Option<(message, severity)>`. The caller wraps the message into
 // a `FormError` and supplies the `qi` (the same qi is used whether we're
-// checking a top-level question or one of a TrueStmt's per-option claims —
-// errors attribute to the TrueStmt question in both cases). Both are
-// wellformedness checks — for the **semantic** "is this claim true?" check
-// see `check_answer::check_claim`.
+// checking a top-level question or one of a TrueStmt's per-option statements —
+// errors attribute to the TrueStmt question in both cases).
 
-fn warning(msg: impl Into<String>) -> Option<(String, Severity)> {
-    Some((msg.into(), Severity::Warning))
+// Generic over the message type so that `check_stmt_kind` can use them with a
+// `&'static str`: it has to be a `const fn`, since `fill`'s `STMT_KINDS` derives from
+// it at compile time.
+const fn warning<M>(msg: M) -> Option<(M, Severity)> {
+    Some((msg, Severity::Warning))
 }
 
-fn error(msg: impl Into<String>) -> Option<(String, Severity)> {
-    Some((msg.into(), Severity::Error))
+const fn error<M>(msg: M) -> Option<(M, Severity)> {
+    Some((msg, Severity::Error))
+}
+
+/// Whether a question kind may appear as a TrueStmt statement, and how badly it may
+/// not. The reason is prefixed with the kind at the call site, so phrase it to follow
+/// one. The single authority for this: `fill`'s `STMT_KINDS` pick pool derives from it
+/// at compile time (generating only the `None` kinds), so the pool and this check can't
+/// drift apart.
+///
+/// The `Error` kinds say nothing standing alone — they lean on context a statement has
+/// no room for (a candidate list) or on themselves (nesting, asserting their own truth)
+/// — which is also why `check_claim` can't grade one. The `Warning` kinds grade fine and
+/// are merely retired: they describe the statement's own row rather than their
+/// question, or are excluded on taste.
+pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static str, Severity)> {
+    use QuestionTypeKind::*;
+    match kind {
+        SameAs | SameAsWhich => {
+            error("asks which of a candidate list matches, and a statement carries no list")
+        }
+        TrueStmt => error("cannot nest inside another statement"),
+        AnswerIsSelf => error("holds whatever value it asserts"),
+
+        PrevSame | NextSame | OnlySame | LetterDist | NoOtherHasAnswer | AnswerOf => {
+            warning("is not a generated statement kind")
+        }
+
+        CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
+        | MostCommonCount | ClosestAfter | ClosestBefore | FirstWith | LastWith | OnlyOdd
+        | OnlyEven | ConsecIdent | LeastCommon | MostCommon | EqualCount => None,
+    }
 }
 
 /// Per-qt structural checks (value-independent): question_index references
 /// in range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer
 /// letter within option count for types that carry an `answer` field. `qi` is
-/// the owning question — when checking one of a TrueStmt's per-option claims,
+/// the owning question — when checking one of a TrueStmt's per-option statements,
 /// this is the TrueStmt's qi.
 fn check_question_form(
     fp: &FlatPuzzle,
@@ -175,9 +213,10 @@ fn check_claim_form(
             }
         }
         QuestionType::SameAsWhich { question_index } => {
-            // Self / subject-ref / out-of-range are all structurally invalid targets
-            // (check_answer rejects them unconditionally) and un-eliminable by deduce.
-            // Error, mirroring SameAs — the value can never be a correct answer.
+            // All three read as nonsense, so none can be the intended answer: offering
+            // the subject question as a candidate for matching itself, offering this
+            // question when picking it is what decides its answer, or naming a question
+            // that doesn't exist. Error, mirroring SameAs.
             if ov == qi {
                 error(format!("SameAsWhich option {} references itself", opt.oi))
             } else if ov == usize::from(*question_index) {
@@ -205,10 +244,10 @@ fn check_claim_form(
         }),
         QuestionType::EqualCount { answer } => {
             if ov == answer.idx() {
-                warning(format!(
-                    "EqualCount({}) points to {} (self-referencing)",
-                    answer.as_char(),
-                    answer.as_char()
+                // Vacuous ("the same count as itself"), so it can never be the answer.
+                // `valid_values` doesn't offer it and no shipped puzzle carries one.
+                error(format!(
+                    "EqualCount({answer}) points to {answer} (self-referencing)",
                 ))
             } else if ov >= oc {
                 Some(oor())
@@ -220,8 +259,9 @@ fn check_claim_form(
         QuestionType::OnlyEven { .. } => (ov >= n || ov % 2 != 1).then(oor),
         QuestionType::ConsecIdent => (ov + 1 >= n).then(oor),
         QuestionType::AnswerIsSelf | QuestionType::LetterDist { .. } => (ov >= oc).then(oor),
-        // Claims cannot be TrueStmt — nesting is not allowed.
-        QuestionType::TrueStmt => error("TrueStmt is not a valid claim type".to_string()),
+        // Nesting is rejected by `check_form`'s `check_stmt_kind` check, along with
+        // the other kinds a statement can't express — no value-level check to add here.
+        QuestionType::TrueStmt => None,
     }
 }
 
@@ -240,9 +280,9 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
         return errors;
     }
 
-    // At most one TrueStmt question. The claim array is puzzle-wide,
+    // At most one TrueStmt question. The statement array is puzzle-wide,
     // so a second TrueStmt would silently share it and mis-evaluate. (A TrueStmt with
-    // no claim array at all is caught per-option below.)
+    // no statement array at all is caught per-option below.)
     let true_stmt_count = fp.question_types[..n]
         .iter()
         .filter(|qt| matches!(qt, QuestionType::TrueStmt))
@@ -268,31 +308,38 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
         }
 
         if matches!(qt, QuestionType::TrueStmt) {
-            // TrueStmt: claim types live on the puzzle, claim values in this
-            // row's options. Run the form checks per claim using SoA reads.
+            // TrueStmt: statement types live on the puzzle, their values in this
+            // row's options. Run the form checks per statement using SoA reads.
             for oi in 0..oc {
                 let opt = OptionPos { qi, oi };
                 let Some(claim) = fp.claim_at(qi, oi) else {
-                    // Every option of a TrueStmt within `oc` must carry a claim.
+                    // Every option of a TrueStmt within `oc` must carry a statement.
                     errors.push(FormError {
                         qi,
-                        message: format!("TrueStmt option {oi} has no claim"),
+                        message: format!("TrueStmt option {oi} has no statement"),
                         severity: Severity::Error,
                     });
                     continue;
                 };
                 let cqt = &claim.question_type;
                 let cv = claim.value;
-                // A claim must assert a concrete value. NONE is sometimes technically valid, but
+                if let Some((reason, severity)) = check_stmt_kind(cqt.kind()) {
+                    errors.push(FormError {
+                        qi,
+                        message: format!("TrueStmt option {oi}: {:?} {reason}", cqt.kind()),
+                        severity,
+                    });
+                }
+                // A statement must assert a concrete value. NONE is sometimes technically valid, but
                 // shouldn't ever be emitted (it's considered "ugly").
                 if cv.is_none() {
                     errors.push(FormError {
                         qi,
-                        message: format!("TrueStmt option {oi}: claim asserts none"),
+                        message: format!("TrueStmt option {oi}: statement asserts none"),
                         severity: Severity::Warning,
                     });
                 }
-                // The claim's own QT also needs structural checks.
+                // The statement's own QT also needs structural checks.
                 if let Some((msg, sev)) = check_question_form(fp, qi, cqt) {
                     errors.push(FormError {
                         qi,
@@ -309,7 +356,10 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                 }
             }
         } else {
-            // Per-qi: duplicate option values. Identity-option types are excluded.
+            // Per-qi: duplicate option values — the same choice offered twice, so
+            // two options are equally right. Identity-option types are excluded (their
+            // values are fixed by position), and so is TrueStmt, above: distinct statements
+            // may legitimately assert the same number.
             if !qt.has_identity_options() {
                 let vals: Vec<OptionValue> = (0..oc).map(|oi| fp.options[qi][oi]).collect();
                 let unique: std::collections::HashSet<OptionValue> = vals.iter().copied().collect();
@@ -317,7 +367,7 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                     errors.push(FormError {
                         qi,
                         message: "Duplicate option values".into(),
-                        severity: Severity::Warning,
+                        severity: Severity::Error,
                     });
                 }
             }
@@ -371,7 +421,7 @@ mod tests {
     use super::*;
 
     /// Build a `FlatPuzzle` directly from question types, option rows, and an
-    /// optional claim array — no JSON round-trip, so tests can construct the
+    /// optional statement array — no JSON round-trip, so tests can construct the
     /// malformed shapes `parse_puzzle` would otherwise coerce or reject.
     fn flat(
         question_types: &[QuestionType],
@@ -409,8 +459,7 @@ mod tests {
         let errs = check_form(&fp);
         assert!(
             errs.iter()
-                .any(|e| matches!(e.severity, Severity::Error)
-                    && e.message.contains("option count 2")),
+                .any(|e| e.severity == Severity::Error && e.message.contains("option count 2")),
             "oc=2 should be a fatal form error: {errs:?}"
         );
     }
@@ -426,15 +475,78 @@ mod tests {
         );
         let errs = check_form(&fp);
         assert!(
-            errs.iter().any(|e| matches!(e.severity, Severity::Error)
-                && e.message.contains("TrueStmt questions")),
+            errs.iter()
+                .any(|e| e.severity == Severity::Error && e.message.contains("TrueStmt questions")),
             "two TrueStmt questions should be a fatal form error: {errs:?}"
         );
     }
 
+    /// Shared fixtures: each case is a puzzle plus whether it should raise a *fatal*
+    /// error. Warnings are deliberately not asserted on — they're advisory, and
+    /// `expectError: false` cases carry some.
     #[test]
-    fn none_claim_is_warning() {
-        // A NONE claim value is flagged for any kind — even a may_be_none one like
+    fn test_shared_check_form() {
+        let json_str = std::fs::read_to_string("../tests/check-form.json")
+            .expect("can't read tests/check-form.json");
+        let suite: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        let mut passed = 0;
+        let mut failed = 0;
+        for test in suite["tests"].as_array().unwrap() {
+            if test.get("section").is_some() {
+                continue;
+            }
+            let name = test["name"].as_str().unwrap();
+            let expect_error = test["expectError"].as_bool().unwrap();
+            let Some(fp) = crate::serialize::parse_puzzle(&test["puzzle"]) else {
+                eprintln!("FAIL: {name}: parse failed");
+                failed += 1;
+                continue;
+            };
+            let errors = check_form(&fp);
+            let got = errors.iter().any(|e| e.severity == Severity::Error);
+            if got == expect_error {
+                passed += 1;
+                continue;
+            }
+            failed += 1;
+            eprintln!("FAIL: {name}: expected fatal={expect_error}, got {got}");
+            for e in &errors {
+                eprintln!("    Q{} {:?}: {}", e.qi + 1, e.severity, e.message);
+            }
+        }
+
+        eprintln!("{passed}/{} passed", passed + failed);
+        assert_eq!(failed, 0, "{failed} check-form case(s) failed");
+    }
+
+    /// `check_answer` asserts on this rather than grading it, so the fatal severity is
+    /// what keeps it out — worth pinning directly.
+    #[test]
+    fn equal_count_self_reference_is_error() {
+        let fp = flat(
+            &[QuestionType::EqualCount { answer: Answer::A }],
+            &[[
+                OptionValue::num(0),
+                OptionValue::num(1),
+                OptionValue::num(2),
+                OptionValue::NONE,
+                OptionValue::UNUSED,
+            ]],
+            None,
+            4,
+        );
+        let errs = check_form(&fp);
+        assert!(
+            errs.iter()
+                .any(|e| e.severity == Severity::Error && e.message.contains("self-referencing")),
+            "EqualCount pointing at its own letter should be fatal: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn none_stmt_value_is_warning() {
+        // A NONE statement value is flagged for any kind — even a may_be_none one like
         // ConsecIdent, which the (removed) may_be_none-gated check would have missed.
         let claims = [QuestionType::ConsecIdent; 5];
         let fp = flat(
@@ -445,8 +557,9 @@ mod tests {
         );
         let errs = check_form(&fp);
         assert!(
-            errs.iter().any(|e| matches!(e.severity, Severity::Warning)
-                && e.message.contains("claim asserts none")),
+            errs.iter()
+                .any(|e| e.severity == Severity::Warning
+                    && e.message.contains("statement asserts none")),
             "a NONE claim value should warn: {errs:?}"
         );
     }

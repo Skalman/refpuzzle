@@ -3754,7 +3754,7 @@
           { "t": "CountVowel" },
           { "t": "NextSame" },
           { "t": "OnlySame" },
-          { "t": "SameAs" }
+          { "t": "OnlyOdd", "a": 0 }
         ]
       },
       "state": ["", "A", "", ""],
@@ -3781,7 +3781,7 @@
           { "t": "CountVowel" },
           { "t": "NextSame" },
           { "t": "OnlySame" },
-          { "t": "SameAs" }
+          { "t": "OnlyOdd", "a": 0 }
         ]
       },
       "state": ["B", "", "", ""],
@@ -3808,7 +3808,7 @@
           { "t": "PrevSame" },
           { "t": "NextSame" },
           { "t": "OnlySame" },
-          { "t": "SameAs" }
+          { "t": "OnlyOdd", "a": 0 }
         ]
       },
       "state": ["", "A", "", ""],
@@ -3835,7 +3835,7 @@
           { "t": "PrevSame" },
           { "t": "NextSame" },
           { "t": "OnlySame" },
-          { "t": "SameAs" }
+          { "t": "OnlyOdd", "a": 0 }
         ]
       },
       "state": ["a", "", "", ""],
@@ -3862,7 +3862,7 @@
           { "t": "PrevSame" },
           { "t": "NextSame" },
           { "t": "OnlySame" },
-          { "t": "SameAs" }
+          { "t": "OnlyOdd", "a": 0 }
         ]
       },
       "state": ["", "A", "", ""],
@@ -4427,6 +4427,275 @@
       },
       "state": ["", "", "B", "b", ""],
       "expect": "1b"
+    },
+    {
+      "section": "=== SameAsOtherMatch ==="
+    },
+    {
+      "name": "SameAsOtherMatch: Q3=A, so Q1 option A (pointing at Q2) can't be the only listed sharer",
+      "rule": "SameAsOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "", "A", "", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "SameAsOtherMatch: the sharer is not listed, so nothing follows",
+      "rule": "SameAsOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAs"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "", "", "", "", "A"],
+      "expect": null
+    },
+    {
+      "section": "=== SameAsWhichNegative ==="
+    },
+    {
+      "name": "SameAsWhichNegative: Q1=A picks Q2, so the other listed candidates can't be C either",
+      "rule": "SameAsWhichNegative",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["A", "", "", "", "", "C"],
+      "expect": "qm11100o00100"
+    },
+    {
+      "section": "=== SameAsWhichNoneForward ==="
+    },
+    {
+      "name": "SameAsWhichNoneForward: Q1=None denies C to every listed candidate",
+      "rule": "SameAsWhichNoneForward",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["E", "", "", "", "", "C"],
+      "expect": "2c"
+    },
+    {
+      "section": "=== SameAsWhichNoneMatch / SameAsWhichOtherMatch ==="
+    },
+    {
+      "name": "SameAsWhichNoneMatch: listed Q2 already holds C, so 'none of these' is false",
+      "rule": "SameAsWhichNoneMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "C", "", "", "", "C"],
+      "expect": "1e"
+    },
+    {
+      "name": "SameAsWhichOtherMatch: listed Q2 holds C, so every option pointing elsewhere is out",
+      "rule": "SameAsWhichOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "C", "", "", "", "C"],
+      "expect": "1b"
+    },
+    {
+      "name": "SameAsWhichOtherMatch: two listed candidates hold C, so even option A goes (contradiction)",
+      "rule": "SameAsWhichOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, 4, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          {
+            "t": "SameAsWhich",
+            "q": 5
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          },
+          {
+            "t": "AnswerIsSelf"
+          }
+        ]
+      },
+      "state": ["", "C", "C", "", "", "C"],
+      "expect": "1a"
     },
     {
       "section": "=== SameAsWhichReverse ==="

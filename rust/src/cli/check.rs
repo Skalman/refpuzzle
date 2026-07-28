@@ -241,12 +241,12 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
     let fe = check_form::check_form(fp);
     let form_warnings: Vec<String> = fe
         .iter()
-        .filter(|e| matches!(e.severity, check_form::Severity::Warning))
+        .filter(|e| e.severity == check_form::Severity::Warning)
         .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
         .collect();
     let form_errors: Vec<String> = fe
         .iter()
-        .filter(|e| matches!(e.severity, check_form::Severity::Error))
+        .filter(|e| e.severity == check_form::Severity::Error)
         .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
         .collect();
 
