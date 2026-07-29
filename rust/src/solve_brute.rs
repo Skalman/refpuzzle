@@ -306,3 +306,273 @@ fn has_contradiction(
 
     false
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fill::fill_options;
+    use crate::rng::Rng;
+    use crate::test_util::{fast_tests, form_invalid, slow_test_duration};
+
+    /// Every full assignment that `check_answers` accepts, by exhaustive
+    /// enumeration of `option_count^n` — the pruning-free oracle for `solve`.
+    fn exhaustive(fp: &FlatPuzzle) -> Vec<Vec<u8>> {
+        let n = fp.n;
+        let oc = fp.option_count as u64;
+        let mut out = Vec::new();
+        let mut answers = [None::<Answer>; MAX_N];
+        for code in 0..oc.pow(n as u32) {
+            let mut c = code;
+            for i in 0..n {
+                answers[i] = Some(Answer::from((c % oc) as u8));
+                c /= oc;
+            }
+            if check_answers(fp, &answers) {
+                out.push((0..n).map(|i| answers[i].unwrap() as u8).collect());
+            }
+        }
+        out
+    }
+
+    fn random_question_type(
+        rng: &mut Rng,
+        qi: usize,
+        n: usize,
+        allow_true_stmt: bool,
+    ) -> QuestionType {
+        match rng.int(0, 25) {
+            0 => QuestionType::CountAnswer {
+                answer: rng.pick_letter(5),
+            },
+            1 => QuestionType::CountAnswerBefore {
+                answer: rng.pick_letter(5),
+                before_index: rng.int(2, n as i32 - 1) as u8,
+            },
+            2 => QuestionType::CountAnswerAfter {
+                answer: rng.pick_letter(5),
+                after_index: rng.int(0, n as i32 - 3) as u8,
+            },
+            3 => QuestionType::CountVowel,
+            4 => QuestionType::CountConsonant,
+            5 => QuestionType::MostCommonCount,
+            6 => QuestionType::ClosestAfter {
+                after_index: rng.int(0, n as i32 - 3) as u8,
+                answer: rng.pick_letter(5),
+            },
+            7 => QuestionType::ClosestBefore {
+                before_index: rng.int(2, n as i32 - 1) as u8,
+                answer: rng.pick_letter(5),
+            },
+            8 => QuestionType::FirstWith {
+                answer: rng.pick_letter(5),
+            },
+            9 => QuestionType::LastWith {
+                answer: rng.pick_letter(5),
+            },
+            10 if qi >= 2 => QuestionType::PrevSame,
+            11 if qi + 2 < n => QuestionType::NextSame,
+            12 => QuestionType::OnlySame,
+            13 => QuestionType::SameAs,
+            14 => QuestionType::OnlyOdd {
+                answer: rng.pick_letter(5),
+            },
+            15 => QuestionType::OnlyEven {
+                answer: rng.pick_letter(5),
+            },
+            16 => QuestionType::ConsecIdent,
+            17 => {
+                let q = rng.int(0, n as i32 - 1) as u8;
+                if q as usize == qi {
+                    QuestionType::AnswerIsSelf
+                } else {
+                    QuestionType::AnswerOf { question_index: q }
+                }
+            }
+            18 => QuestionType::LeastCommon,
+            19 => QuestionType::MostCommon,
+            20 => QuestionType::NoOtherHasAnswer,
+            21 => QuestionType::EqualCount {
+                answer: rng.pick_letter(5),
+            },
+            22 => QuestionType::AnswerIsSelf,
+            23 => {
+                let q = rng.int(0, n as i32 - 1) as u8;
+                if q as usize == qi {
+                    QuestionType::AnswerIsSelf
+                } else {
+                    QuestionType::LetterDist { question_index: q }
+                }
+            }
+            24 => {
+                let q = rng.int(0, n as i32 - 1) as u8;
+                if q as usize == qi {
+                    QuestionType::AnswerIsSelf
+                } else {
+                    QuestionType::SameAsWhich { question_index: q }
+                }
+            }
+            25 if allow_true_stmt => QuestionType::TrueStmt,
+            _ => QuestionType::AnswerIsSelf,
+        }
+    }
+
+    /// `has_contradiction` prunes partial branches on `check_answer == Invalid`.
+    /// That is only sound if no pruned branch had a valid completion, so the
+    /// solution set must equal the pruning-free exhaustive enumeration.
+    #[test]
+    fn solve_matches_exhaustive_enumeration() {
+        let deadline = std::time::Instant::now() + slow_test_duration();
+        let mut puzzles_tested = 0;
+        let mut failures = 0;
+        let mut vacuous = 0;
+        let mut attempted = 0;
+        let mut skipped_precondition = 0;
+        let mut skipped_form = 0;
+        let mut kind_tally = [0u32; QUESTION_KIND_COUNT];
+        // A panic that isn't a precondition rejection is a real bug. Carry it out of
+        // the loop rather than asserting in place, so it reports with the hook back.
+        let mut unexpected_panic: Option<String> = None;
+
+        // Most seeds hand `fill_options` a solution that one of its type preconditions
+        // rejects — this builder skips `construct::random_type_params`' gating, and
+        // those asserts are how fill reports the gap. Silence the hook for the loop;
+        // it's restored before the assertions, which would otherwise print no message.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+
+        for seed in 0u32.. {
+            if seed % 50 == 0 && std::time::Instant::now() > deadline {
+                break;
+            }
+            let mut rng = Rng::new(seed.wrapping_mul(2654435761).wrapping_add(17));
+            let n = rng.int(4, 8) as usize;
+            let oc = rng.int(3, 5) as usize;
+
+            let solution: [Answer; MAX_N] = std::array::from_fn(|i| {
+                if i < n {
+                    rng.pick_letter(oc)
+                } else {
+                    Answer::A
+                }
+            });
+
+            let mut question_types = [QuestionType::AnswerIsSelf; MAX_N];
+            let mut true_stmt_used = false;
+            for qi in 0..n {
+                question_types[qi] = random_question_type(&mut rng, qi, n, !true_stmt_used);
+                if matches!(question_types[qi], QuestionType::TrueStmt) {
+                    true_stmt_used = true;
+                }
+            }
+
+            attempted += 1;
+            let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                fill_options(
+                    &question_types,
+                    &solution,
+                    n,
+                    oc,
+                    &mut Rng::new(seed),
+                    false,
+                )
+            }));
+            let fp = match fp {
+                Ok(fp) => fp,
+                Err(payload) => {
+                    let msg = payload
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| payload.downcast_ref::<&str>().copied())
+                        .unwrap_or("<non-string panic payload>");
+                    if !msg.contains("missing upstream guard") {
+                        unexpected_panic = Some(format!("seed={seed}: {msg}"));
+                        break;
+                    }
+                    skipped_precondition += 1;
+                    continue;
+                }
+            };
+            // Ungated random types can leave an UNUSED slot inside `option_count`,
+            // which is a fatal form error — `check_answer` asserts on those.
+            if form_invalid(&fp) {
+                skipped_form += 1;
+                continue;
+            }
+            for qi in 0..n {
+                kind_tally[fp.question_types[qi].kind() as usize] += 1;
+            }
+
+            let mut got: Vec<Vec<u8>> = solve(&fp, usize::MAX)
+                .iter()
+                .map(|s| (0..n).map(|i| s[i] as u8).collect())
+                .collect();
+            let mut want = exhaustive(&fp);
+            got.sort();
+            want.sort();
+
+            if got != want {
+                failures += 1;
+                if failures <= 5 {
+                    let missing: Vec<_> = want.iter().filter(|s| !got.contains(s)).collect();
+                    let extra: Vec<_> = got.iter().filter(|s| !want.contains(s)).collect();
+                    eprintln!("MISMATCH seed={seed} n={n} oc={oc}");
+                    eprintln!("  exhaustive={} solve={}", want.len(), got.len());
+                    eprintln!("  dropped by pruning: {missing:?}");
+                    eprintln!("  spurious:           {extra:?}");
+                    for qi in 0..n {
+                        eprintln!(
+                            "  Q{}: {:?} opts={:?}",
+                            qi + 1,
+                            fp.question_types[qi],
+                            &fp.options[qi]
+                        );
+                    }
+                }
+            }
+            // `fill_options` puts the construction solution's value at each correct
+            // option, so it always grades valid. An empty `want` would mean the
+            // comparison above compared two empty sets and proved nothing.
+            if want.is_empty() {
+                vacuous += 1;
+                eprintln!("VACUOUS seed={seed}: no assignment grades valid");
+            }
+            puzzles_tested += 1;
+        }
+
+        std::panic::set_hook(hook);
+
+        if let Some(msg) = &unexpected_panic {
+            panic!(
+                "fill_options panicked for something other than a precondition rejection — {msg}"
+            );
+        }
+        assert_eq!(
+            failures, 0,
+            "{failures} puzzle(s) where solve != exhaustive"
+        );
+        assert_eq!(vacuous, 0, "{vacuous} puzzle(s) with no valid assignment");
+        // Two thirds of seeds are discarded, and the rejections concentrate in the
+        // kinds with the tightest preconditions (`NoOtherHasAnswer` is rejected ~7x
+        // more often than it survives), so a passing run says little unless every
+        // kind actually reached the comparison. The floor scales with the run and is
+        // deliberately loose — it catches a kind dropping out, not a drift in the mix.
+        // Only in the full run: the fast one compares too few puzzles for the rarest
+        // kinds to show up reliably.
+        if !fast_tests() {
+            let floor = puzzles_tested / 100;
+            for kind in QuestionTypeKind::all() {
+                let count = kind_tally[*kind as usize];
+                assert!(
+                    count >= floor,
+                    "only {count} {kind:?} question(s) among {puzzles_tested} compared \
+                     puzzles (floor {floor}) — the fuzz builder no longer covers it"
+                );
+            }
+        }
+        eprintln!(
+            "solve_matches_exhaustive_enumeration: {puzzles_tested} puzzles compared, \
+             {failures} mismatch(es) ({attempted} seeds, {skipped_precondition} \
+             precondition rejection(s), {skipped_form} form error(s))"
+        );
+    }
+}
