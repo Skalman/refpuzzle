@@ -2673,7 +2673,7 @@ fn deduce_impl(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::slow_test_duration;
+    use crate::test_util::{fast_tests, slow_test_duration};
     use serde_json::Value;
 
     /// A 6-question board whose Q1 is `SameAsWhich` referencing Q6, listing
@@ -3042,6 +3042,24 @@ mod tests {
         let mut failures = 0;
         let mut puzzles_tested = 0;
         let deadline = std::time::Instant::now() + duration;
+        let mut attempted = 0;
+        let mut skipped_precondition = 0;
+        let mut skipped_form = 0;
+        let mut skipped_ambiguous = 0;
+        let mut kind_tally = [0u32; QUESTION_KIND_COUNT];
+        let mut rules_fired: std::collections::BTreeSet<&'static str> = Default::default();
+        // Two failures have to outlive the silenced hook below: a `fill_options` panic
+        // that isn't a precondition rejection, and the construction cross-check. Carry
+        // them out of the loop and report once the hook is back.
+        let mut unexpected_panic: Option<String> = None;
+        let mut construction_failure: Option<String> = None;
+
+        // Most seeds hand `fill_options` a solution that one of its type preconditions
+        // rejects — this builder skips `construct::random_type_params`' gating, and
+        // those asserts are how fill reports the gap. Silence the hook for the loop;
+        // it's restored before the assertions, which would otherwise print no message.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
 
         for seed in 0u32.. {
             if seed % 100 == 0 && std::time::Instant::now() > deadline {
@@ -3058,19 +3076,37 @@ mod tests {
                 question_types[qi] = random_question_type(&mut rng, qi, n);
             }
 
+            attempted += 1;
             let fp = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 fill_options(&question_types, &solution, n, 5, &mut Rng::new(seed), false)
             }));
-            let Ok(fp) = fp else { continue };
+            let fp = match fp {
+                Ok(fp) => fp,
+                Err(payload) => {
+                    let msg = payload
+                        .downcast_ref::<String>()
+                        .map(String::as_str)
+                        .or_else(|| payload.downcast_ref::<&str>().copied())
+                        .unwrap_or("<non-string panic payload>");
+                    if !msg.contains("missing upstream guard") {
+                        unexpected_panic = Some(format!("seed={seed}: {msg}"));
+                        break;
+                    }
+                    skipped_precondition += 1;
+                    continue;
+                }
+            };
             // These types skip `random_type_params`' pool-size gating, so a row can
             // come out with an UNUSED slot inside `option_count`. That's a fatal form
             // error, and `check_answer` asserts rather than grading one.
             if crate::test_util::form_invalid(&fp) {
+                skipped_form += 1;
                 continue;
             }
 
             let solutions = solve(&fp, 2);
             if solutions.len() != 1 {
+                skipped_ambiguous += 1;
                 continue;
             }
             if (0..n).any(|i| solutions[0][i] != solution[i]) {
@@ -3097,10 +3133,14 @@ mod tests {
                         &fp.options[qi]
                     );
                 }
-                panic!("fill_options bug: brute solution != construction solution (seed={seed})");
+                construction_failure = Some(format!("seed={seed}"));
+                break;
             }
 
             puzzles_tested += 1;
+            for qi in 0..n {
+                kind_tally[fp.question_types[qi].kind() as usize] += 1;
+            }
 
             for state_seed in 0..20u32 {
                 let mut rng = Rng::new(seed.wrapping_mul(1000).wrapping_add(state_seed));
@@ -3131,6 +3171,7 @@ mod tests {
                     },
                 );
                 for dr in &drs {
+                    rules_fired.insert(dr.rule.to_str());
                     let bad = match dr.action {
                         DeduceAction::Force { qi, answer } => answer != solution[qi],
                         DeduceAction::Eliminate { qi, oi } => oi == solution[qi].idx(),
@@ -3181,7 +3222,60 @@ mod tests {
             }
         }
 
-        eprintln!("Fuzz: {puzzles_tested} puzzles tested, {failures} soundness failures");
+        std::panic::set_hook(hook);
+
+        eprintln!(
+            "Fuzz: {puzzles_tested} puzzles tested, {failures} soundness failures \
+             ({attempted} seeds, {skipped_precondition} precondition rejection(s), \
+             {skipped_form} form error(s), {skipped_ambiguous} not uniquely solvable)"
+        );
+        // Reported, not asserted: `test_shared_deduce` already requires a fixture per
+        // rule, so this is about which rules the *random-state* sweep reaches. It never
+        // reaches the `TrueStatement*` family (this builder generates no `TrueStmt`) or
+        // `OnlyOptionLeft` (the state generator strikes at most 3 of the 4 wrong
+        // options, so no row is ever down to one). Others fire single-digit times, so a
+        // floor here would flake.
+        let unexercised: Vec<&str> = ALL_DEDUCE_RULES
+            .iter()
+            .map(|r| r.to_str())
+            .filter(|r| !rules_fired.contains(r))
+            .collect();
+        if !unexercised.is_empty() {
+            eprintln!(
+                "  {} rule(s) the sweep never exercised: {unexercised:?}",
+                unexercised.len()
+            );
+        }
+
+        if let Some(msg) = &unexpected_panic {
+            panic!(
+                "fill_options panicked for something other than a precondition rejection — {msg}"
+            );
+        }
+        if let Some(msg) = &construction_failure {
+            panic!("fill_options bug: brute solution != construction solution ({msg})");
+        }
         assert_eq!(failures, 0, "{failures} soundness failure(s)");
+        // Nineteen of every twenty seeds are discarded, and the rejections concentrate
+        // in the kinds with the tightest preconditions, so a passing run says little
+        // unless every kind actually reached the sweep. Deliberately loose — it catches
+        // a kind dropping out, not a drift in the mix. Only in the full run: the fast
+        // one tests too few puzzles for the rarest kinds to show up reliably.
+        if !fast_tests() {
+            let floor = puzzles_tested / 100;
+            for kind in QuestionTypeKind::all() {
+                // The builder has no `TrueStmt` arm — `solve_matches_exhaustive_enumeration`
+                // covers that kind.
+                if *kind == QuestionTypeKind::TrueStmt {
+                    continue;
+                }
+                let count = kind_tally[*kind as usize];
+                assert!(
+                    count >= floor,
+                    "only {count} {kind:?} question(s) among {puzzles_tested} tested \
+                     puzzles (floor {floor}) — the fuzz builder no longer covers it"
+                );
+            }
+        }
     }
 }
