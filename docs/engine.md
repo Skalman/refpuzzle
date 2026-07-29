@@ -66,9 +66,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
   `solve()` — brute-force backtracking solver. Returns all valid solutions up to a max (default 2). Used as a safety net to verify exactly 1 solution exists.
 
-- **difficulty.rs / difficulty.ts**
+- **construct.rs `RECIPES`**
 
-  `DifficultyProfile` definitions — per-level settings: question count, option count, allowed question types.
+  `LevelRecipe` definitions — per-level settings: question count, option count, required/allowed question types, per-type caps, and lookahead depth.
 
 - **rng.rs / rng.ts**
 
@@ -80,7 +80,7 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
 ## Scripts (`scripts/` for TS, `rust/src/` for Rust)
 
-- **main.rs / generate.ts** — `pnpm generate` / `cargo run` — CLI for generating puzzles. Takes date ranges, reads difficulty profiles, runs generation loop, writes compact year JSON files.
+- **main.rs / generate.ts** — `pnpm generate` / `cargo run` — CLI for generating puzzles. Takes date ranges, reads the per-level recipes, runs generation loop, writes compact year JSON files.
 
 - **generate-puzzles.ts** — Older generator script for individual puzzles (by level/seed/count). Writes to `src/puzzles/generated/`.
 

@@ -21,14 +21,20 @@ use crate::stats::{FallbackCounts, SkeletonStats, Stats};
 use crate::types::QuestionTypeKind::*;
 use crate::types::*;
 
-/// Per-level recipe: `required` + `allowed` + `caps` fully describe how a level's
-/// question set is selected.
+/// Per-level recipe: the board size plus everything that decides the question
+/// set (`required` + `allowed` + `caps`) and how hard the level may get.
 pub struct LevelRecipe {
+    /// Questions on the board.
+    pub question_count: usize,
+    /// Options per question, 3..=5.
+    pub option_count: usize,
     /// Types that must appear, with how many of each.
     pub required: &'static [(QuestionTypeKind, usize)],
     /// The pool the remaining slots are filled from.
     pub allowed: &'static [QuestionTypeKind],
     /// Per-type max occurrences (default 3; unit variants 1 — see `DEFAULT_CAPS`).
+    /// Built from `question_count` via `caps_max_answer_of`, which must agree with
+    /// the field above.
     pub caps: [u8; QUESTION_KIND_COUNT],
     /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
     /// indexed by `QuestionGroup as usize`.
@@ -62,6 +68,8 @@ impl LevelRecipe {
 /// in hand (the wasm `solve`, the playground). Maps question count to the nearest
 /// level and always returns something. Shipped puzzles hit their level exactly
 /// (counts 3/4/5/8/10/12); an odd `n` falls to a neighbor, with `fallback` as the net.
+/// Only the returned recipe's difficulty knobs apply to such a puzzle — its
+/// `question_count`/`option_count` describe the level, not the puzzle at hand.
 pub fn guess_recipe(n: usize) -> &'static LevelRecipe {
     let level_index = match n {
         0..=3 => 0,
@@ -148,6 +156,8 @@ const DEFAULT_DAMPING: [f64; QUESTION_GROUP_COUNT] = damping_with(&[
 pub static RECIPES: [LevelRecipe; 6] = [
     // L1
     LevelRecipe {
+        question_count: 3,
+        option_count: 3,
         required: &[],
         allowed: &[
             CountAnswer,
@@ -174,6 +184,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
     },
     // L2
     LevelRecipe {
+        question_count: 4,
+        option_count: 4,
         required: &[],
         allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
         caps: caps_max_answer_of(4),
@@ -183,6 +195,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
     },
     // L3
     LevelRecipe {
+        question_count: 5,
+        option_count: 5,
         required: &[],
         allowed: &[
             CountAnswer,
@@ -205,6 +219,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
     },
     // L4
     LevelRecipe {
+        question_count: 8,
+        option_count: 5,
         required: &[],
         allowed: &[
             CountAnswer,
@@ -233,6 +249,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
     },
     // L5
     LevelRecipe {
+        question_count: 10,
+        option_count: 5,
         required: &[],
         allowed: &[
             CountAnswer,
@@ -268,6 +286,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
     },
     // L6
     LevelRecipe {
+        question_count: 12,
+        option_count: 5,
         required: &[(TrueStmt, 1)],
         allowed: &[
             CountAnswer,
@@ -316,11 +336,10 @@ pub struct Skeleton {
 /// Telemetry (skeleton count + per-phase AnswerOf fallbacks) is tallied into `skeleton_stats`.
 pub fn generate_skeleton(
     recipe: &LevelRecipe,
-    n: usize,
-    oc: usize,
     rng: &mut Rng,
     skeleton_stats: &mut SkeletonStats,
 ) -> Skeleton {
+    let (n, oc) = (recipe.question_count, recipe.option_count);
     skeleton_stats.count += 1;
     let fallbacks = &mut skeleton_stats.fallbacks;
     let kinds = select_kinds(recipe, n, rng);
@@ -341,12 +360,11 @@ pub fn generate_skeleton(
 /// vary the questions while the solution stays fixed.
 pub fn regenerate_skeleton(
     recipe: &LevelRecipe,
-    n: usize,
-    oc: usize,
     solution: &[Answer; MAX_N],
     rng: &mut Rng,
     skeleton_stats: &mut SkeletonStats,
 ) -> Skeleton {
+    let (n, oc) = (recipe.question_count, recipe.option_count);
     skeleton_stats.count += 1;
     let fallbacks = &mut skeleton_stats.fallbacks;
     let kinds = select_kinds(recipe, n, rng);
@@ -435,20 +453,19 @@ fn run_hint_standard(
 /// diagnostics count it).
 pub fn generate(
     recipe: &LevelRecipe,
-    n: usize,
-    oc: usize,
     rng: &mut Rng,
     max_regenerations: usize,
     stats: &mut Stats,
     label: &str,
 ) -> Option<FlatPuzzle> {
+    let oc = recipe.option_count;
     let mut solution: Option<[Answer; MAX_N]> = None;
     // Iterate `1 + max_regenerations` times: the first builds the key-fixing
     // skeleton, each retry regenerates only the questions for that key.
     for _ in 0..=max_regenerations {
         let skeleton = match solution {
-            None => generate_skeleton(recipe, n, oc, rng, &mut stats.skeleton),
-            Some(sol) => regenerate_skeleton(recipe, n, oc, &sol, rng, &mut stats.skeleton),
+            None => generate_skeleton(recipe, rng, &mut stats.skeleton),
+            Some(sol) => regenerate_skeleton(recipe, &sol, rng, &mut stats.skeleton),
         };
         solution = Some(skeleton.solution);
         let mut fp = fill_options(
@@ -1583,30 +1600,49 @@ pub(crate) fn random_type_params(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::difficulty::PROFILES;
+
+    /// A recipe's `caps` is built from its own `question_count`; a mismatch would
+    /// silently cap (or over-cap) AnswerOf.
+    #[test]
+    fn recipes_are_self_consistent() {
+        for (level, recipe) in RECIPES.iter().enumerate() {
+            assert!(
+                (3..=5).contains(&recipe.option_count),
+                "L{}: option_count out of range",
+                level + 1,
+            );
+            assert_eq!(
+                recipe.caps,
+                caps_max_answer_of(recipe.question_count),
+                "L{}: caps disagree with question_count",
+                level + 1,
+            );
+            for &(count, _) in recipe.answer_of_counts {
+                assert!(
+                    usize::from(count) < recipe.question_count,
+                    "L{}: AnswerOf count {count} exceeds n-1",
+                    level + 1,
+                );
+            }
+        }
+    }
 
     #[test]
     fn generate_skeleton_is_internally_consistent() {
         use crate::check_well_posed::check_well_posed_given_key;
         for level in 0..6 {
-            let p = &PROFILES[level];
+            let recipe = &RECIPES[level];
             let mut rng = Rng::new(level as u32 * 7919 + 1);
             for _ in 0..500 {
-                let skeleton = generate_skeleton(
-                    &RECIPES[level],
-                    p.question_count,
-                    p.option_count,
-                    &mut rng,
-                    &mut SkeletonStats::default(),
-                );
-                assert_eq!(skeleton.n, p.question_count);
+                let skeleton = generate_skeleton(recipe, &mut rng, &mut SkeletonStats::default());
+                assert_eq!(skeleton.n, recipe.question_count);
                 // Every placed type must be satisfied by the generated answer
                 // key — otherwise fill_options couldn't build a valid puzzle.
                 for qi in 0..skeleton.n {
                     assert!(
                         check_well_posed_given_key(
                             skeleton.n,
-                            p.option_count,
+                            recipe.option_count,
                             &skeleton.solution,
                             qi,
                             skeleton.types[qi],
@@ -1635,29 +1671,21 @@ mod tests {
     fn regenerate_skeleton_preserves_solution_and_stays_consistent() {
         use crate::check_well_posed::check_well_posed_given_key;
         for level in 0..6 {
-            let p = &PROFILES[level];
+            let recipe = &RECIPES[level];
             let mut rng = Rng::new(level as u32 * 6271 + 3);
             for _ in 0..200 {
                 // Author a solution once, then regenerate the skeleton against it
                 // repeatedly — each regeneration must keep the key and yield a
                 // consistent puzzle.
-                let base = generate_skeleton(
-                    &RECIPES[level],
-                    p.question_count,
-                    p.option_count,
-                    &mut rng,
-                    &mut SkeletonStats::default(),
-                );
+                let base = generate_skeleton(recipe, &mut rng, &mut SkeletonStats::default());
                 for _ in 0..5 {
                     let skeleton = regenerate_skeleton(
-                        &RECIPES[level],
-                        p.question_count,
-                        p.option_count,
+                        recipe,
                         &base.solution,
                         &mut rng,
                         &mut SkeletonStats::default(),
                     );
-                    assert_eq!(skeleton.n, p.question_count);
+                    assert_eq!(skeleton.n, recipe.question_count);
                     assert_eq!(
                         &skeleton.solution[..skeleton.n],
                         &base.solution[..skeleton.n],
@@ -1668,7 +1696,7 @@ mod tests {
                         assert!(
                             check_well_posed_given_key(
                                 skeleton.n,
-                                p.option_count,
+                                recipe.option_count,
                                 &skeleton.solution,
                                 qi,
                                 skeleton.types[qi],
@@ -1701,14 +1729,11 @@ mod tests {
     #[test]
     fn generate_emits_only_well_posed_puzzles() {
         for level in 0..6 {
-            let p = &PROFILES[level];
             let mut rng = Rng::new(level as u32 * 4099 + 11);
             let mut produced = 0;
             for _ in 0..40 {
                 let Some(result) = generate(
                     &RECIPES[level],
-                    p.question_count,
-                    p.option_count,
                     &mut rng,
                     100,
                     &mut Stats::default(),

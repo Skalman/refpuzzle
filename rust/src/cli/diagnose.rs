@@ -7,7 +7,6 @@
 use std::io::IsTerminal;
 
 use crate::construct::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
-use crate::difficulty::PROFILES;
 use crate::fill::fill_options;
 use crate::rng::Rng;
 use crate::serialize::playground_link;
@@ -49,15 +48,14 @@ pub fn gen_stats(
     let mut partial: Vec<Vec<StuckCase>> = levels.iter().map(|_| Vec::new()).collect();
 
     for (i, &level) in levels.iter().enumerate() {
-        let level_index = level - 1; // 0-based index into PROFILES / RECIPES
-        let p = &PROFILES[level_index];
-        let (n, oc) = (p.question_count, p.option_count);
+        let level_index = level - 1; // 0-based index into RECIPES
+        let recipe = &RECIPES[level_index];
+        let (n, oc) = (recipe.question_count, recipe.option_count);
         let real_mask = ((1u16 << oc) - 1) as u8; // option slots that aren't phantom
         let mut dist = vec![0u32; n + 1];
         let mut filled_dist = vec![0u32; n * oc + 1];
         for _ in 0..attempts {
-            let skeleton =
-                generate_skeleton(&RECIPES[level_index], n, oc, &mut rng, &mut stats.skeleton);
+            let skeleton = generate_skeleton(recipe, &mut rng, &mut stats.skeleton);
             let mut fp = fill_options(
                 &skeleton.types,
                 &skeleton.solution,
@@ -72,7 +70,7 @@ pub fn gen_stats(
                 &mut fp,
                 &skeleton.solution,
                 skeleton.n,
-                &RECIPES[level_index],
+                recipe,
                 &mut rng,
                 &mut stats,
                 "gen-stats",

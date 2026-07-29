@@ -7,7 +7,6 @@ mod cli;
 mod construct;
 mod counts;
 mod deduce;
-mod difficulty;
 mod fill;
 // Consumers (wasm exposure, flip of the TS explain.ts) arrive in later increments.
 #[allow(dead_code)]
@@ -30,7 +29,6 @@ mod test_util;
 mod time;
 mod types;
 
-use difficulty::PROFILES;
 use rng::Rng;
 use serde_json::Value;
 use std::time::Instant;
@@ -488,7 +486,6 @@ fn main() {
         .map(|(&(day_idx, level), &seed)| {
             let (mm, dd) = days[day_idx];
             let label = format!("{mm:02}{dd:02}-{level}");
-            let profile = &PROFILES[level as usize - 1];
             let mut stats = stats::Stats::default();
             // The generator fixes the answer key on the first skeleton and only
             // re-rolls the questions, so one seed suffices. A `None` means the key
@@ -497,8 +494,6 @@ fn main() {
             let mut rng = Rng::new(seed);
             let result = construct::generate(
                 &construct::RECIPES[level as usize - 1],
-                profile.question_count,
-                profile.option_count,
                 &mut rng,
                 max_attempts,
                 &mut stats,

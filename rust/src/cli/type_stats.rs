@@ -1,5 +1,4 @@
 use crate::construct;
-use crate::difficulty::PROFILES;
 use crate::rng::Rng;
 use crate::solve_deduce::{NoSteps, run_engine};
 use crate::stats::Stats;
@@ -96,7 +95,6 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
 /// `attempts` is the target *puzzle* count, not the generate()-call count.
 /// Capped at 100× calls as a backstop against an infeasible profile.
 fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
-    let profile = &PROFILES[(level - 1) as usize];
     let recipe = &construct::RECIPES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
@@ -113,15 +111,7 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
             .wrapping_add(total_calls.wrapping_mul(0x9e3779b9));
         total_calls += 1;
         let mut rng = Rng::new(s);
-        let result = construct::generate(
-            &construct::RECIPES[(level - 1) as usize],
-            profile.question_count,
-            profile.option_count,
-            &mut rng,
-            100,
-            &mut bstats,
-            "stats",
-        );
+        let result = construct::generate(recipe, &mut rng, 100, &mut bstats, "stats");
         let Some(result) = result else {
             continue;
         };
@@ -142,8 +132,8 @@ fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
 
     LevelData {
         level,
-        n: profile.question_count,
-        oc: profile.option_count,
+        n: recipe.question_count,
+        oc: recipe.option_count,
         successes,
         total_calls,
         per_type,
