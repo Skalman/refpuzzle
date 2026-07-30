@@ -656,3 +656,333 @@ fn sorted_present_kinds(per_type: &BTreeMap<QuestionTypeKind, TypeStats>) -> Vec
     kinds.sort_by_key(|k| format!("{k:?}"));
     kinds
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test_util::fast_tests;
+    use crate::types::QuestionTypeKind as Kind;
+
+    /// Acceptable band for a value's correct-share ÷ distractor-share. The ratio converts
+    /// straight to the player-facing rate:
+    /// `P(value correct | value on the row) = ratio / (ratio + option_count - 1)`.
+    ///
+    /// So 1.0 is neutral — offered on a row, the value is correct exactly
+    /// `1/option_count` of the time — and this band is 14.9%..=25.9% at `oc = 5` against
+    /// a fair 20%. For scale, the pre-calibration `SameAs` L6 ratio of 6.01 was a 60% hit
+    /// rate for "pick None whenever it's offered".
+    ///
+    /// This is the design target itself, not a loosened version of it: the sample below
+    /// is much smaller than the 10k-attempt run the calibration was measured on, but the
+    /// estimates still land inside, so there's no reason to give the gate extra slack.
+    const BAND: (f64, f64) = (0.7, 1.4);
+
+    /// A `(kind, level)` whose skew is structural rather than a calibration failure, so
+    /// it is held to a ceiling instead of `BAND`. Its NONE-correct rate `p` exceeds
+    /// `1/option_count`, and then even offering NONE on every row where it is *wrong*
+    /// leaves `ratio = p·(oc-1)/(1-p) > 1` — see `fill::none_distractor_rate`. No option
+    /// row can fix these; only a lower `p` can.
+    struct KnownSkew {
+        kind: Kind,
+        level: u8,
+        /// Highest ratio this row may show before the gate fails.
+        ceiling: f64,
+    }
+
+    /// Ceilings are the value measured by `type-stats --attempts 10000 --seed 1` plus
+    /// headroom. They come down only by lowering `p`, which means changing where the type
+    /// is placed or how its row is sampled — not the option row. The other 17 rows with a
+    /// NONE option are inside `BAND` and deliberately absent from this list.
+    const KNOWN_SKEW: &[KnownSkew] = &[
+        KnownSkew {
+            kind: Kind::ClosestAfter,
+            level: 1,
+            ceiling: 4.90,
+        },
+        KnownSkew {
+            kind: Kind::ClosestAfter,
+            level: 3,
+            ceiling: 3.60,
+        },
+        KnownSkew {
+            kind: Kind::ClosestAfter,
+            level: 4,
+            ceiling: 1.90,
+        },
+        KnownSkew {
+            kind: Kind::ClosestBefore,
+            level: 1,
+            ceiling: 5.15,
+        },
+        KnownSkew {
+            kind: Kind::ClosestBefore,
+            level: 3,
+            ceiling: 3.70,
+        },
+        KnownSkew {
+            kind: Kind::ClosestBefore,
+            level: 4,
+            ceiling: 1.90,
+        },
+        KnownSkew {
+            kind: Kind::EqualCount,
+            level: 5,
+            ceiling: 4.90,
+        },
+        KnownSkew {
+            kind: Kind::EqualCount,
+            level: 6,
+            ceiling: 3.85,
+        },
+        KnownSkew {
+            kind: Kind::FirstWith,
+            level: 1,
+            ceiling: 3.10,
+        },
+        KnownSkew {
+            kind: Kind::FirstWith,
+            level: 2,
+            ceiling: 2.15,
+        },
+        KnownSkew {
+            kind: Kind::FirstWith,
+            level: 3,
+            ceiling: 3.00,
+        },
+        KnownSkew {
+            kind: Kind::LastWith,
+            level: 1,
+            ceiling: 3.25,
+        },
+        KnownSkew {
+            kind: Kind::LastWith,
+            level: 2,
+            ceiling: 2.20,
+        },
+        KnownSkew {
+            kind: Kind::LastWith,
+            level: 3,
+            ceiling: 2.90,
+        },
+        KnownSkew {
+            kind: Kind::NextSame,
+            level: 1,
+            ceiling: 2.75,
+        },
+        KnownSkew {
+            kind: Kind::NextSame,
+            level: 3,
+            ceiling: 4.25,
+        },
+        KnownSkew {
+            kind: Kind::NextSame,
+            level: 4,
+            ceiling: 2.65,
+        },
+        KnownSkew {
+            kind: Kind::NextSame,
+            level: 5,
+            ceiling: 1.90,
+        },
+        KnownSkew {
+            kind: Kind::OnlyEven,
+            level: 5,
+            ceiling: 4.45,
+        },
+        KnownSkew {
+            kind: Kind::OnlyEven,
+            level: 6,
+            ceiling: 4.10,
+        },
+        KnownSkew {
+            kind: Kind::OnlyOdd,
+            level: 5,
+            ceiling: 4.55,
+        },
+        KnownSkew {
+            kind: Kind::OnlyOdd,
+            level: 6,
+            ceiling: 4.00,
+        },
+        KnownSkew {
+            kind: Kind::PrevSame,
+            level: 1,
+            ceiling: 2.65,
+        },
+        KnownSkew {
+            kind: Kind::PrevSame,
+            level: 3,
+            ceiling: 3.95,
+        },
+        KnownSkew {
+            kind: Kind::PrevSame,
+            level: 4,
+            ceiling: 2.65,
+        },
+        KnownSkew {
+            kind: Kind::PrevSame,
+            level: 5,
+            ceiling: 2.00,
+        },
+        KnownSkew {
+            kind: Kind::SameAs,
+            level: 1,
+            ceiling: 5.75,
+        },
+        KnownSkew {
+            kind: Kind::SameAs,
+            level: 3,
+            ceiling: 5.55,
+        },
+        KnownSkew {
+            kind: Kind::SameAs,
+            level: 4,
+            ceiling: 4.35,
+        },
+        KnownSkew {
+            kind: Kind::SameAs,
+            level: 5,
+            ceiling: 3.65,
+        },
+        KnownSkew {
+            kind: Kind::SameAs,
+            level: 6,
+            ceiling: 3.30,
+        },
+        KnownSkew {
+            kind: Kind::SameAsWhich,
+            level: 5,
+            ceiling: 3.90,
+        },
+        KnownSkew {
+            kind: Kind::SameAsWhich,
+            level: 6,
+            ceiling: 3.45,
+        },
+    ];
+
+    /// A kind needs this many instances at a level before its ratio is asserted on —
+    /// below it the estimate is too noisy to mean anything. Skips are reported.
+    const MIN_INSTANCES: u32 = 150;
+
+    /// The None option must not be a tell, and must not vanish either. Regenerates a
+    /// sample per level and checks two things per kind: its NONE ratio against `BAND` (or
+    /// `KNOWN_SKEW`'s ceiling where no option row could reach the band), and that NONE
+    /// still turns up on some rows at all.
+    #[test]
+    fn none_ratio_within_band() {
+        // A statistical check can't shrink and keep its meaning: at fast-run sizes most
+        // kinds never reach `MIN_INSTANCES`, so that mode is a smoke pass over the few
+        // rows that do, and only the full run is the gate. Both still assert on every row
+        // they measure — the difference is how many rows that is.
+        let (attempts, min_rows) = if fast_tests() { (300, 3) } else { (1500, 45) };
+        // A ratio inside `BAND` says NONE is weighted fairly on the rows that offer it,
+        // but says nothing about how many rows those are — drive its correct-rate toward
+        // zero and the ratio stays at 1 while NONE disappears from the game. This is the
+        // separate canary for that. Sparsest today is `OnlySame` L6 at 13.7%, so the bar
+        // sits far below anything real; it's here to catch a vanishing, not drift.
+        const MIN_SHOWN: f64 = 0.03;
+        let mut failures: Vec<String> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
+        let mut checked = 0usize;
+        let mut tightest_shown = (f64::MAX, String::new());
+
+        for level in 1..=6u8 {
+            let ld = collect_level(level, attempts, 1);
+            for (&kind, entry) in &ld.per_type {
+                let correct_total: u32 = entry.correct_values.values().sum();
+                let distractor_total: u32 = entry.distractor_values.values().sum();
+                let correct_none = entry
+                    .correct_values
+                    .get(&OptionValue::NONE)
+                    .copied()
+                    .unwrap_or(0);
+                let distractor_none = entry
+                    .distractor_values
+                    .get(&OptionValue::NONE)
+                    .copied()
+                    .unwrap_or(0);
+                if correct_none == 0 && distractor_none == 0 {
+                    continue; // no NONE option at this level
+                }
+                if correct_total < MIN_INSTANCES {
+                    skipped.push(format!("{kind:?} L{level} ({correct_total} instances)"));
+                    continue;
+                }
+                let ceiling = KNOWN_SKEW
+                    .iter()
+                    .find(|p| p.kind == kind && p.level == level)
+                    .map(|p| p.ceiling);
+                checked += 1;
+
+                // Rows offering NONE at all, whether as the answer or a distractor.
+                let shown = (correct_none + distractor_none) as f64 / correct_total as f64;
+                if shown < tightest_shown.0 {
+                    tightest_shown = (shown, format!("{kind:?} L{level}"));
+                }
+                if shown < MIN_SHOWN {
+                    failures.push(format!(
+                        "{kind:?} L{level}: NONE is shown on only {:.1}% of rows, under the \
+                         {:.0}% floor — it has all but left the option pool",
+                        100.0 * shown,
+                        100.0 * MIN_SHOWN,
+                    ));
+                }
+
+                if distractor_none == 0 {
+                    failures.push(format!(
+                        "{kind:?} L{level}: NONE is never a distractor but is correct \
+                         {:.1}% of the time — always a tell",
+                        100.0 * correct_none as f64 / correct_total as f64
+                    ));
+                    continue;
+                }
+                let ratio = (correct_none as f64 / correct_total as f64)
+                    / (distractor_none as f64 / distractor_total as f64);
+                let ok = match ceiling {
+                    Some(c) => ratio <= c,
+                    None => ratio >= BAND.0 && ratio <= BAND.1,
+                };
+                if !ok {
+                    let want = match ceiling {
+                        Some(c) => format!("<= {c:.2} (known-skewed row)"),
+                        None => format!("in {:.2}..={:.2}", BAND.0, BAND.1),
+                    };
+                    failures.push(format!(
+                        "{kind:?} L{level}: ratio {ratio:.2}, want {want} \
+                         (NONE correct {:.1}%, distractor {:.1}%)",
+                        100.0 * correct_none as f64 / correct_total as f64,
+                        100.0 * distractor_none as f64 / distractor_total as f64,
+                    ));
+                }
+            }
+        }
+
+        if !skipped.is_empty() {
+            eprintln!(
+                "none_ratio_within_band: {} rows too small to assert on: {}",
+                skipped.len(),
+                skipped.join(", ")
+            );
+        }
+        eprintln!(
+            "none_ratio_within_band: {checked} rows checked; NONE shown least often on \
+             {} ({:.1}% of rows)",
+            tightest_shown.1,
+            100.0 * tightest_shown.0,
+        );
+        assert!(
+            checked >= min_rows,
+            "only {checked} rows checked at {attempts} attempts, wanted {min_rows} — the \
+             sample got too small to be a gate"
+        );
+        assert!(
+            failures.is_empty(),
+            "NONE option is skewed in {} of {checked} rows:\n  {}\n\
+             Re-measure with `type-stats --attempts 10000 --seed 1`; the calibration \
+             lives in `fill::none_correct_rate`.",
+            failures.len(),
+            failures.join("\n  ")
+        );
+    }
+}

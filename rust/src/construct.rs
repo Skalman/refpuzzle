@@ -24,6 +24,9 @@ use crate::types::*;
 /// Per-level recipe: the board size plus everything that decides the question
 /// set (`required` + `allowed` + `caps`) and how hard the level may get.
 pub struct LevelRecipe {
+    /// Own index in [`RECIPES`], so a recipe in hand knows its level without a search.
+    /// 0-based: level 1 is `level_index` 0.
+    pub level_index: usize,
     /// Questions on the board.
     pub question_count: usize,
     /// Options per question, 3..=5.
@@ -68,8 +71,9 @@ impl LevelRecipe {
 /// in hand (the wasm `solve`, the playground). Maps question count to the nearest
 /// level and always returns something. Shipped puzzles hit their level exactly
 /// (counts 3/4/5/8/10/12); an odd `n` falls to a neighbor, with `fallback` as the net.
-/// Only the returned recipe's difficulty knobs apply to such a puzzle — its
-/// `question_count`/`option_count` describe the level, not the puzzle at hand.
+/// Only the returned recipe's difficulty knobs apply to such a puzzle — every field on it,
+/// `question_count`/`option_count`/`level_index` included, describes the level it landed on
+/// rather than the puzzle at hand.
 pub fn guess_recipe(n: usize) -> &'static LevelRecipe {
     let level_index = match n {
         0..=3 => 0,
@@ -80,6 +84,25 @@ pub fn guess_recipe(n: usize) -> &'static LevelRecipe {
         _ => 5,
     };
     &RECIPES[level_index]
+}
+
+/// The recipe whose board is exactly `n` questions, or `None` if no level uses that count.
+/// The strict counterpart to [`guess_recipe`], for callers that have to tell a real level
+/// from an off-recipe board rather than round to the nearest one.
+///
+/// Well-defined only because the recipes' question counts are distinct (3/4/5/8/10/12);
+/// two levels sharing a count would make the answer arbitrary.
+pub(crate) fn exact_recipe(n: usize) -> Option<&'static LevelRecipe> {
+    let recipe = match n {
+        3 => 0,
+        4 => 1,
+        5 => 2,
+        8 => 3,
+        10 => 4,
+        12 => 5,
+        _ => return None,
+    };
+    Some(&RECIPES[recipe])
 }
 
 const fn caps_with(overrides: &[(QuestionTypeKind, u8)]) -> [u8; QUESTION_KIND_COUNT] {
@@ -154,8 +177,8 @@ const DEFAULT_DAMPING: [f64; QUESTION_GROUP_COUNT] = damping_with(&[
 
 /// Per-level recipes, tuned via type-stats. Indexed by level-1.
 pub static RECIPES: [LevelRecipe; 6] = [
-    // L1
     LevelRecipe {
+        level_index: 0,
         question_count: 3,
         option_count: 3,
         required: &[],
@@ -182,8 +205,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
         // lookahead), so the scripted walk never needs "what if" reasoning.
         lookahead_deduce_until: 0,
     },
-    // L2
     LevelRecipe {
+        level_index: 1,
         question_count: 4,
         option_count: 4,
         required: &[],
@@ -193,8 +216,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
         answer_of_counts: &[(0, 42), (1, 35), (2, 20), (3, 3)],
         lookahead_deduce_until: 1,
     },
-    // L3
     LevelRecipe {
+        level_index: 2,
         question_count: 5,
         option_count: 5,
         required: &[],
@@ -217,8 +240,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
         answer_of_counts: &[(0, 31), (1, 33), (2, 25), (3, 10), (4, 1)],
         lookahead_deduce_until: 6,
     },
-    // L4
     LevelRecipe {
+        level_index: 3,
         question_count: 8,
         option_count: 5,
         required: &[],
@@ -247,8 +270,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
         answer_of_counts: &[(0, 22), (1, 28), (2, 31), (3, 15), (4, 3), (5, 1)],
         lookahead_deduce_until: 6,
     },
-    // L5
     LevelRecipe {
+        level_index: 4,
         question_count: 10,
         option_count: 5,
         required: &[],
@@ -284,8 +307,8 @@ pub static RECIPES: [LevelRecipe; 6] = [
         answer_of_counts: &[(0, 16), (1, 25), (2, 31), (3, 19), (4, 7), (5, 2)],
         lookahead_deduce_until: 6,
     },
-    // L6
     LevelRecipe {
+        level_index: 5,
         question_count: 12,
         option_count: 5,
         required: &[(TrueStmt, 1)],
@@ -1600,6 +1623,29 @@ pub(crate) fn random_type_params(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `exact_recipe` resolves a level by question count, so the counts have to be distinct
+    /// — two levels sharing one would make it return whichever came first. Also pins
+    /// `level_index` to the recipe's actual position, which nothing else enforces.
+    #[test]
+    fn recipe_question_counts_are_distinct() {
+        let counts: Vec<usize> = RECIPES.iter().map(|r| r.question_count).collect();
+        let mut seen = counts.clone();
+        seen.sort_unstable();
+        seen.dedup();
+        assert_eq!(
+            seen.len(),
+            counts.len(),
+            "levels {counts:?} share a question count, so exact_recipe is ambiguous"
+        );
+        for (level, &count) in counts.iter().enumerate() {
+            let recipe = exact_recipe(count).expect("own count resolves");
+            assert!(std::ptr::eq(recipe, &RECIPES[level]), "L{}", level + 1);
+            assert_eq!(recipe.level_index, level, "L{} level_index", level + 1);
+        }
+        assert!(exact_recipe(0).is_none());
+        assert!(exact_recipe(7).is_none(), "7 is between L3 and L4");
+    }
 
     /// A recipe's `caps` is built from its own `question_count`; a mismatch would
     /// silently cap (or over-cap) AnswerOf.

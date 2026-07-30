@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::check_answer::check_claim_fast;
 use crate::check_form;
-use crate::construct::{format_stmt_qt, random_type_params};
+use crate::construct::{exact_recipe, format_stmt_qt, random_type_params};
 use crate::format::format_type_tag;
 use crate::rng::Rng;
 use crate::types::*;
@@ -193,6 +193,8 @@ pub(crate) fn fill_one_question(
         return;
     }
 
+    let none_rate = none_distractor_rate(qt.kind(), n, option_count);
+
     // The scoped-sameness types read their correct value *off* the sampled
     // candidate list instead of having it fixed by the key, so they return before
     // `correct_option_value` — which no longer implements them.
@@ -205,6 +207,7 @@ pub(crate) fn fill_one_question(
                 solution,
                 n,
                 option_count,
+                none_rate,
                 rng,
                 slots,
             );
@@ -219,6 +222,7 @@ pub(crate) fn fill_one_question(
                 solution,
                 n,
                 option_count,
+                none_rate,
                 rng,
                 slots,
             );
@@ -301,7 +305,15 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: {qt:?} at qi={qi} but more than one same-parity question has answer {answer:?} — missing upstream guard"
                 );
             }
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         QuestionType::ConsecIdent => {
             let pairs = (0..n.saturating_sub(1))
@@ -312,13 +324,37 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: ConsecIdent at qi={qi} but more than one consecutive identical pair exists — missing upstream guard"
                 );
             }
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         QuestionType::LetterDist { .. } => {
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         _ if is_counting_type(qt) => {
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         QuestionType::OnlySame => {
             let self_ans = solution[qi];
@@ -330,7 +366,15 @@ pub(crate) fn fill_one_question(
                     "fill_one_question: OnlySame at qi={qi} but {others} other questions share answer {self_ans:?} — missing upstream guard"
                 );
             }
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         QuestionType::ClosestAfter { .. }
         | QuestionType::ClosestBefore { .. }
@@ -338,7 +382,15 @@ pub(crate) fn fill_one_question(
         | QuestionType::LastWith { .. }
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
-            place_numeric_distractors(slots, correct_oi, correct_val, &val_pool, rng);
+            place_numeric_distractors(
+                slots,
+                correct_oi,
+                correct_val,
+                &val_pool,
+                option_count,
+                none_rate,
+                rng,
+            );
         }
         _ => unreachable!(),
     }
@@ -462,6 +514,10 @@ pub fn fill_options(
 /// Repair rather than re-sample: one pass, and it only touches samples that already have
 /// a sharer, so the none-answered rate stays whatever sampling gave it.
 ///
+/// With a sharer kept, NONE is a distractor like any other and its row rate is then held
+/// to `none_rate` ([`none_distractor_rate`]) — the one case where this function moves NONE
+/// for a reason other than correctness.
+///
 /// Needs `option_count` eligible values with `option_count - 1` non-sharers among them —
 /// `construct::random_type_params`'s capacity gate, rearranged. Without it the ≥ 2 repair
 /// runs out of substitutes and leaves a second sharer as an alternate correct answer.
@@ -472,6 +528,7 @@ fn fill_scoped_sameness(
     solution: &[Answer; MAX_N],
     n: usize,
     option_count: usize,
+    none_rate: f64,
     rng: &mut Rng,
     slots: &mut [OptionValue; 5],
 ) {
@@ -531,6 +588,30 @@ fn fill_scoped_sameness(
             OptionValue::NONE
         }
     };
+
+    // NONE is a distractor only when a sharer was kept, so hold its rate there. Both swaps
+    // keep "exactly one listed sharer": moving NONE in displaces a non-sharer (never
+    // `correct_val`, which has to stay listed), and moving it out brings in a non-sharer — a
+    // sharer would become a second valid answer.
+    if kept.is_some() {
+        let show = rng.next_f64() < none_rate;
+        let at = eligible
+            .iter()
+            .position(|v| v.is_none())
+            .expect("NONE is always eligible");
+        if (at < option_count) != show {
+            if show {
+                let displaceable: ArrayVec<usize, 5> = (0..option_count)
+                    .filter(|&i| eligible[i] != correct_val)
+                    .collect();
+                eligible.swap(at, rng.pick(&displaceable));
+            } else if let Some(slot) =
+                (option_count..eligible.len()).find(|&t| !shares(eligible[t]))
+            {
+                eligible.swap(at, slot);
+            }
+        }
+    }
 
     let correct_oi = solution[qi].idx();
     slots[correct_oi] = correct_val;
@@ -671,20 +752,153 @@ fn is_counting_type(qt: &QuestionType) -> bool {
     )
 }
 
+/// Share of `kind`'s instances at `level` (0-based, as `construct::RECIPES` is indexed) whose
+/// answer is NONE, or `None` where the kind isn't used at that level. Measured with
+/// `type-stats --attempts 10000 --seed 1`, to two decimals — a third digit sits below the
+/// measurement's own run-to-run reproducibility.
+///
+/// Only shares up to `1/option_count` (0.2 at oc=5) can be neutralized from the option row;
+/// past that only placement or row sampling can bring one down. `1.0` would be a degenerate
+/// type — NONE always the answer, so never a distractor.
+///
+/// Absence is spelled `0.00`, with two traps. A kind that *is* used but never none-answered
+/// wants NONE withheld rather than offered freely, so it must not be written that way;
+/// nothing is in that position, and such a kind would show up as `may_be_none` with no NONE
+/// answer anywhere in a shipped year. And a true share under 0.005 rounds to `0.00` and reads
+/// as absent — the smallest real value is 0.03.
+///
+/// This measures the generator's own output, so any change to generation stales it.
+fn none_correct_rate(kind: QuestionTypeKind, level: usize) -> Option<f64> {
+    // A row per kind and a column per level: a kind's progression across levels is the
+    // thing worth reading, and a column left stale by a recipe change shows up as an
+    // outlier next to its neighbors. `0.00` = the kind isn't used at that level.
+    const fn by_level(kind: QuestionTypeKind) -> [f64; 6] {
+        use QuestionTypeKind::*;
+        match kind {
+            //               L1    L2    L3    L4    L5    L6
+            ClosestAfter => [0.65, 0.00, 0.41, 0.25, 0.23, 0.18],
+            ClosestBefore => [0.67, 0.00, 0.42, 0.26, 0.22, 0.19],
+            FirstWith => [0.39, 0.31, 0.33, 0.09, 0.07, 0.03],
+            LastWith => [0.40, 0.32, 0.32, 0.10, 0.06, 0.03],
+            PrevSame => [0.50, 0.00, 0.43, 0.32, 0.26, 0.21],
+            NextSame => [0.51, 0.00, 0.45, 0.32, 0.25, 0.21],
+            OnlySame => [0.00, 0.00, 0.00, 0.09, 0.05, 0.03],
+            SameAs => [0.69, 0.00, 0.52, 0.42, 0.38, 0.36],
+            SameAsWhich => [0.00, 0.00, 0.00, 0.00, 0.43, 0.40],
+            OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.45, 0.42],
+            OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.44, 0.42],
+            ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.12, 0.10],
+            EqualCount => [0.00, 0.00, 0.00, 0.00, 0.49, 0.42],
+
+            // No NONE option, so no rate to hold. Listed rather than a catch-all so a
+            // new kind has to decide, the way `may_be_none` does.
+            CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
+            | MostCommonCount | AnswerOf | LeastCommon | MostCommon | NoOtherHasAnswer
+            | AnswerIsSelf | LetterDist | TrueStmt => [0.0; 6],
+        }
+    }
+    let rate = by_level(kind)[level];
+    debug_assert!(
+        (0.0..1.0).contains(&rate),
+        "{kind:?} L{}: NONE-correct rate {rate} is not a share below 1",
+        level + 1
+    );
+    (rate > 0.0).then_some(rate)
+}
+
+/// How often NONE should be offered as a distractor, given that it isn't the answer.
+///
+/// Returns a rate between 0 and 1:
+///
+/// - 0 — never offer NONE as a distractor.
+/// - 1 — offer it whenever it isn't the answer.
+/// - 0.5 — offer it in half the cases where it isn't the answer.
+///
+/// Derived from how often NONE is the *answer* for this kind, as measured by `type-stats`. The
+/// aim is for NONE's presence to tell the player nothing: on a row that offers it, NONE is
+/// correct `1/option_count` of the time, so neither picking it on sight nor eliminating it
+/// beats a guess.
+///
+/// A target, not a guarantee: generation rejects some of the puzzles that showing NONE
+/// produces, so accepted ones under-represent it, and a kind whose value pool is no larger
+/// than `option_count` shows every value anyway. `type-stats` measures what came out.
+fn none_distractor_rate(kind: QuestionTypeKind, n: usize, option_count: usize) -> f64 {
+    // Most questions are of a kind with no NONE in its value pool, which never reads this.
+    // Same answer as the lookup would give, without doing it.
+    if !kind.may_be_none() {
+        return 1.0;
+    }
+    let Some(p) = exact_recipe(n).and_then(|r| none_correct_rate(kind, r.level_index)) else {
+        // Uncalibrated, so don't restrict NONE: a kind the level doesn't list, or a board size
+        // no level uses — which only the property tests produce, fuzzing `n`.
+        return 1.0;
+    };
+
+    // Share of all this kind's questions that should show NONE as a distractor. A question has
+    // one correct slot but `oc-1` distractor slots, so a distractor-share is diluted by that
+    // factor — matching a correct-share of `p` takes `p·(oc-1)`.
+    let d = p * (option_count - 1) as f64;
+
+    // Rescaled over just the `1 - p` where NONE isn't the answer — the only ones a caller gets
+    // to choose for.
+    let rate_when_not_the_answer = d / (1.0 - p);
+
+    // Most calibrated kind/level pairs answer NONE more often than `1/oc`, which asks for it as
+    // a distractor on more questions than it is wrong on. Neutral is then out of reach from the
+    // row, so show NONE whenever it isn't the answer and leave the rest to `p`.
+    if rate_when_not_the_answer > 1.0 {
+        return 1.0;
+    }
+
+    rate_when_not_the_answer
+}
+
+/// Move NONE in or out of the visible prefix of a shuffled distractor pool, to match the rate
+/// [`none_distractor_rate`] asks for. No-op if the pool holds no NONE, or if the move is
+/// impossible: pushing NONE *out* needs a slot past `visible` to park it in, which a `pool` no
+/// longer than `visible` hasn't got.
+fn set_none_shown(pool: &mut [OptionValue], visible: usize, show: bool, rng: &mut Rng) {
+    if visible == 0 {
+        return;
+    }
+    let Some(at) = pool.iter().position(|v| v.is_none()) else {
+        return;
+    };
+    if (at < visible) == show {
+        return;
+    }
+    if show {
+        pool.swap(at, rng.int(0, visible as i32 - 1) as usize);
+    } else if pool.len() > visible {
+        pool.swap(at, rng.int(visible as i32, pool.len() as i32 - 1) as usize);
+    }
+}
+
 fn pick_distractors(
     vals: &ArrayVec<OptionValue, MAX_VALUE_POOL>,
     correct: OptionValue,
+    option_count: usize,
+    none_rate: f64,
     rng: &mut Rng,
 ) -> [OptionValue; 4] {
     let mut pool = [OptionValue::UNUSED; MAX_VALUE_POOL];
     let mut plen = 0;
+    let mut has_none = false;
     for &v in vals {
         if v != correct {
+            has_none |= v.is_none();
             pool[plen] = v;
             plen += 1;
         }
     }
     rng.shuffle(&mut pool[..plen]);
+    // Only the first `option_count - 1` entries reach visible slots (see `place_distractors`),
+    // so NONE is on the row iff it lands in that prefix. Drawn only when a NONE is present,
+    // leaving the rng stream of kinds without one untouched.
+    if has_none {
+        let show = rng.next_f64() < none_rate;
+        set_none_shown(&mut pool[..plen], option_count - 1, show, rng);
+    }
     let mut result = [OptionValue::UNUSED; 4];
     result[..4.min(plen)].copy_from_slice(&pool[..4.min(plen)]);
     result
@@ -694,16 +908,19 @@ fn pick_distractors(
 /// distances, question-indices — everything but the letter-valued AnswerOf /
 /// LeastCommon / MostCommon): correct option at `correct_oi`, the rest drawn
 /// from `val_pool` (shuffled). `val_pool` is numeric, plus a `NONE` option for
-/// the positional/sameness types.
+/// the positional/sameness types, offered at `none_rate` (see
+/// [`none_distractor_rate`]).
 fn place_numeric_distractors(
     slots: &mut [OptionValue; 5],
     correct_oi: usize,
     correct_val: OptionValue,
     val_pool: &ArrayVec<OptionValue, MAX_VALUE_POOL>,
+    option_count: usize,
+    none_rate: f64,
     rng: &mut Rng,
 ) {
     slots[correct_oi] = correct_val;
-    let distractors = pick_distractors(val_pool, correct_val, rng);
+    let distractors = pick_distractors(val_pool, correct_val, option_count, none_rate, rng);
     place_distractors(&distractors, slots, correct_oi);
 }
 
@@ -999,8 +1216,112 @@ fn make_false_stmt(
 #[cfg(test)]
 mod tests {
     use super::*;
+
     use crate::check_answer::check_answer;
+    use crate::construct::RECIPES;
     use serde_json::Value;
+
+    /// `none_correct_rate` stores one column per level, so a recipe added or removed
+    /// leaves its rows the wrong width.
+    #[test]
+    fn none_correct_rate_has_a_column_per_level() {
+        assert_eq!(
+            RECIPES.len(),
+            6,
+            "none_correct_rate's rows are 6 wide but there are {} levels",
+            RECIPES.len()
+        );
+    }
+
+    /// `none_distractor_rate` is actually honored by the row builder: over random keys,
+    /// the share of non-NONE-answered rows that show NONE tracks the requested rate.
+    /// Measured straight out of `fill_one_question`, so the generator's accept gate
+    /// can't mask or flatter the mechanism.
+    #[test]
+    fn none_rate_is_honored_at_fill_level() {
+        // (kind-bearing type, n, oc). Pools here are all bigger than `oc`, so the rate
+        // is reachable in both directions.
+        let cases: [(QuestionType, usize, usize); 4] = [
+            (QuestionType::FirstWith { answer: Answer::A }, 3, 3),
+            (QuestionType::FirstWith { answer: Answer::A }, 12, 5),
+            (QuestionType::OnlySame, 12, 5),
+            (
+                QuestionType::ClosestAfter {
+                    after_index: 0,
+                    answer: Answer::A,
+                },
+                12,
+                5,
+            ),
+        ];
+        for (qt, n, option_count) in cases {
+            for &rate in &[0.0, 0.25, 0.6, 1.0] {
+                let mut shown = 0u32;
+                let mut eligible = 0u32;
+                let mut rng = Rng::new(0xC0FFEE);
+                for _ in 0..4000 {
+                    let mut solution = [Answer::A; MAX_N];
+                    for i in 0..n {
+                        solution[i] = rng.pick_letter(option_count);
+                    }
+                    let mut slots = [OptionValue::UNUSED; 5];
+                    let correct_oi = solution[0].idx();
+                    let val_pool = valid_values(&qt, 0, n, option_count);
+                    let correct_val = correct_option_value(&qt, 0, &solution, n, option_count);
+                    if correct_val.is_none() {
+                        continue; // NONE is the answer, not a distractor
+                    }
+                    eligible += 1;
+                    place_numeric_distractors(
+                        &mut slots,
+                        correct_oi,
+                        correct_val,
+                        &val_pool,
+                        option_count,
+                        rate,
+                        &mut rng,
+                    );
+                    if (0..option_count).any(|oi| oi != correct_oi && slots[oi].is_none()) {
+                        shown += 1;
+                    }
+                }
+                assert!(eligible > 200, "{qt:?} n={n}: only {eligible} usable keys");
+                let got = shown as f64 / eligible as f64;
+                assert!(
+                    (got - rate).abs() < 0.05,
+                    "{qt:?} n={n} oc={option_count}: asked for NONE on {rate:.2} of rows, \
+                     got {got:.2}"
+                );
+            }
+        }
+    }
+
+    /// A NONE-answerable kind needs a rate at every level that actually allows it, or
+    /// generation quietly takes the uncalibrated path there. And no kind lacking a NONE option
+    /// may carry a rate, which would do nothing.
+    #[test]
+    fn none_correct_rate_matches_recipe_pools() {
+        for &kind in QuestionTypeKind::all() {
+            for (level, recipe) in RECIPES.iter().enumerate() {
+                let calibrated = none_correct_rate(kind, level).is_some();
+                assert!(
+                    !calibrated || kind.may_be_none(),
+                    "{kind:?} L{} has a NONE-correct rate but no NONE option",
+                    level + 1
+                );
+                let allowed = recipe.allowed.contains(&kind)
+                    || recipe.required.iter().any(|&(k, _)| k == kind);
+                if allowed && kind.may_be_none() {
+                    assert!(
+                        calibrated,
+                        "{kind:?} is allowed at L{} but uncalibrated there — re-run type-stats \
+                         and fill in the column",
+                        level + 1
+                    );
+                }
+            }
+        }
+    }
 
     /// `may_be_none` must agree with a whole shipped year: a NONE correct answer may
     /// only occur for a `may_be_none` kind, and every `may_be_none` kind must actually
