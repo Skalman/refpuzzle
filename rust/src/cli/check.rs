@@ -105,6 +105,19 @@ pub struct PuzzleCheckResult {
     pub recipe_depth: Option<usize>,
     pub recipe_solve_ok: Option<bool>,
     pub recipe_solve_answered: Option<usize>,
+    /// Solve from the start under the browser hint engine's picker
+    /// ([`solve_deduce::EngineConfig::shortest`]): same strength as the full tier, but
+    /// every lookahead eliminates the candidate with the shortest contradiction chain.
+    /// `shortest_lookaheads` counts the eliminations it needed, `shortest_lookahead_steps`
+    /// totals the deductions in their chains. Informational: a stall isn't an error —
+    /// the browser's hint path falls back to a from-start solve.
+    pub shortest_solve_ok: bool,
+    pub shortest_lookaheads: usize,
+    pub shortest_lookahead_steps: usize,
+    /// Those lookaheads bucketed by chain length (`solve_deduce::CHAIN_HIST_BUCKETS`,
+    /// last bucket is "or longer"), so the per-hint tail is readable and not averaged
+    /// away.
+    pub shortest_chain_hist: Vec<u32>,
     pub brute_count: usize,
     pub brute_solutions: Vec<String>,
     /// One link per `brute_solutions` entry, same shape as `solve_link`.
@@ -212,11 +225,7 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
 /// bar — a hard `check` error / stale-bake signal, since the gate only admits
 /// puzzles this engine solves.
 fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)> {
-    let level: usize = key.rsplit_once('-')?.1.parse().ok()?;
-    if !(1..=6).contains(&level) {
-        return None;
-    }
-    let recipe = &construct::RECIPES[level - 1];
+    let recipe = &construct::RECIPES[key_level(key)? - 1];
     let out = solve_deduce::run_engine(
         fp,
         fp.initial_state,
@@ -229,6 +238,32 @@ fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)
         .filter(|a| a.is_some())
         .count();
     Some((recipe.lookahead_deduce_until, out.solved, answered))
+}
+
+/// Re-solve from the start with the hint engine's shortest-chain lookahead. Returns
+/// `(solved, lookaheads, chain_steps)`: how many eliminations lookahead had to supply
+/// and the total deductions in their contradiction chains — the cost a player who
+/// follows hints pays. Not gated on a level, so playground puzzles get it too.
+fn shortest_lookahead_solve(fp: &FlatPuzzle) -> (bool, usize, usize, Vec<u32>) {
+    let out = solve_deduce::run_engine(
+        fp,
+        fp.initial_state,
+        solve_deduce::EngineConfig::shortest(),
+        fp.n * solve_deduce::VERIFY_ITERS_PER_QUESTION,
+        &mut solve_deduce::NoSteps,
+    );
+    (
+        out.solved,
+        out.telemetry.lookahead_hits as usize,
+        out.telemetry.lookahead_chain_steps as usize,
+        out.telemetry.lookahead_chain_hist.to_vec(),
+    )
+}
+
+/// Difficulty level from an `MMDD-L` key; `None` for keyless (playground) puzzles.
+fn key_level(key: &str) -> Option<usize> {
+    let level = key.rsplit_once('-')?.1.parse().ok()?;
+    (1..=6).contains(&level).then_some(level)
 }
 
 /// `year = Some(y)` (always non-empty) renders date-route links (served corpus,
@@ -269,6 +304,10 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
             recipe_depth: None,
             recipe_solve_ok: None,
             recipe_solve_answered: None,
+            shortest_solve_ok: true,
+            shortest_lookaheads: 0,
+            shortest_lookahead_steps: 0,
+            shortest_chain_hist: Vec::new(),
             brute_count: 1,
             brute_solutions: Vec::new(),
             brute_links: Vec::new(),
@@ -293,6 +332,8 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
     let cr = run_check(fp, key);
     let answered = cr.answers[..n].iter().filter(|a| a.is_some()).count();
     let recipe = recipe_depth_solve(fp, key);
+    let (shortest_ok, shortest_lookaheads, shortest_steps, shortest_chain_hist) =
+        shortest_lookahead_solve(fp);
 
     let solutions = solve_brute::solve(fp, 10);
 
@@ -364,6 +405,10 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
         recipe_depth: recipe.map(|(d, _, _)| d),
         recipe_solve_ok: recipe.map(|(_, ok, _)| ok),
         recipe_solve_answered: recipe.map(|(_, _, a)| a),
+        shortest_solve_ok: shortest_ok,
+        shortest_lookaheads,
+        shortest_lookahead_steps: shortest_steps,
+        shortest_chain_hist,
         brute_count,
         brute_solutions,
         brute_links,
@@ -590,6 +635,29 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     writeln!(w, "  {:<28} {solve_label}", "Deduce+lookahead (full)").unwrap();
     writeln!(w, "    {}", dim(&r.solve_link)).unwrap();
 
+    // Shortest-chain lookahead (the hint engine's picker) — informational, like the
+    // full tier: what a hint-following player pays, in lookaheads and chain steps.
+    let steps_per = if r.shortest_lookaheads > 0 {
+        r.shortest_lookahead_steps as f64 / r.shortest_lookaheads as f64
+    } else {
+        0.0
+    };
+    let detail = format!(
+        "{} lookaheads, {} steps ({steps_per:.1}/lookahead)",
+        r.shortest_lookaheads, r.shortest_lookahead_steps
+    );
+    let shortest_label = if r.shortest_solve_ok {
+        green(&format!("solved — {detail}"))
+    } else {
+        yellow(&format!("stuck — {detail}"))
+    };
+    writeln!(
+        w,
+        "  {:<28} {shortest_label}",
+        "Deduce+lookahead (shortest)"
+    )
+    .unwrap();
+
     // Brute
     if r.brute_count == 1 {
         writeln!(
@@ -623,6 +691,114 @@ fn format_single(w: &mut impl Write, r: &PuzzleCheckResult) -> bool {
     writeln!(w, "  {:<28} {match_label}", "Deduce+lookahead vs brute").unwrap();
 
     has_errors
+}
+
+/// Per-level tally of the shortest-lookahead tier. The averages cover the puzzles the
+/// tier solved; a stall has no solve path, so it only feeds `unsolved`.
+#[derive(Default)]
+struct ShortestTally {
+    solved: usize,
+    unsolved: usize,
+    lookaheads: usize,
+    chain_steps: usize,
+    chain_hist: [u32; solve_deduce::CHAIN_HIST_BUCKETS],
+}
+
+/// Keyed by level; `None` (playground puzzles, unparseable keys) sorts first and
+/// renders as `?` rather than being dropped.
+fn shortest_by_level(
+    results: &[PuzzleCheckResult],
+) -> std::collections::BTreeMap<Option<usize>, ShortestTally> {
+    let mut out: std::collections::BTreeMap<Option<usize>, ShortestTally> = Default::default();
+    for r in results {
+        let tally = out.entry(key_level(&r.key)).or_default();
+        if r.shortest_solve_ok {
+            tally.solved += 1;
+            tally.lookaheads += r.shortest_lookaheads;
+            tally.chain_steps += r.shortest_lookahead_steps;
+            for (bucket, count) in tally.chain_hist.iter_mut().zip(&r.shortest_chain_hist) {
+                *bucket += count;
+            }
+        } else {
+            tally.unsolved += 1;
+        }
+    }
+    out
+}
+
+fn format_shortest_by_level(w: &mut impl Write, results: &[PuzzleCheckResult]) {
+    writeln!(
+        w,
+        "  {}",
+        bold("Shortest lookahead (averages over solved puzzles)")
+    )
+    .unwrap();
+    writeln!(
+        w,
+        "    {}",
+        dim("level  puzzles  lookaheads  steps/lookahead  unsolved")
+    )
+    .unwrap();
+    for (level, tally) in shortest_by_level(results) {
+        let label = level.map_or("?".to_string(), |l| format!("L{l}"));
+        let per_puzzle = if tally.solved > 0 {
+            tally.lookaheads as f64 / tally.solved as f64
+        } else {
+            0.0
+        };
+        let per_lookahead = if tally.lookaheads > 0 {
+            tally.chain_steps as f64 / tally.lookaheads as f64
+        } else {
+            0.0
+        };
+        // Color after padding: ANSI escapes count toward a format width.
+        let unsolved = format!("{:>8}", tally.unsolved);
+        let unsolved = if tally.unsolved > 0 {
+            yellow(&unsolved)
+        } else {
+            dim(&unsolved)
+        };
+        writeln!(
+            w,
+            "    {label:<5}  {:>7}  {per_puzzle:>10.2}  {per_lookahead:>15.2}  {unsolved}",
+            tally.solved + tally.unsolved
+        )
+        .unwrap();
+    }
+    format_chain_hist(w, results);
+}
+
+/// Chain lengths as a share of each level's lookaheads. The averages above hide the
+/// shape — one long chain among short ones is the hint that actually reads badly — so
+/// this is the tail, per hint rather than per puzzle.
+fn format_chain_hist(w: &mut impl Write, results: &[PuzzleCheckResult]) {
+    let last = solve_deduce::CHAIN_HIST_BUCKETS - 1;
+    writeln!(w, "  {}", bold("Chain length (share of lookaheads)")).unwrap();
+    let header: String = (0..last)
+        .map(|i| format!("{i:>5}"))
+        .chain(std::iter::once(format!("{:>5}", format!("{last}+"))))
+        .collect();
+    writeln!(w, "    {}", dim(&format!("level{header}"))).unwrap();
+    for (level, tally) in shortest_by_level(results) {
+        if tally.lookaheads == 0 {
+            continue;
+        }
+        let label = level.map_or("?".to_string(), |l| format!("L{l}"));
+        let row: String = tally
+            .chain_hist
+            .iter()
+            .map(|&count| {
+                let share = 100.0 * count as f64 / tally.lookaheads as f64;
+                // Distinguish "none at all" from "rounds to zero": the tail is the point.
+                match share {
+                    0.0 => dim(&format!("{:>5}", "·")),
+                    s if s < 0.5 => format!("{:>5}", "<1%"),
+                    s => format!("{s:>4.0}%"),
+                }
+            })
+            .collect();
+        writeln!(w, "    {label:<5}{row}").unwrap();
+    }
 }
 
 fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) -> bool {
@@ -745,6 +921,18 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         warn_n(contradictions.len(), "contradiction")
     )
     .unwrap();
+    // Shortest-chain lookahead (the hint engine's picker) — informational, like the
+    // full tier: it doesn't gate the verdict, since a hint-path stall falls back to a
+    // from-start solve in the browser. The per-level table below carries the detail.
+    let shortest_stuck = results.iter().filter(|r| !r.shortest_solve_ok).count();
+    writeln!(
+        w,
+        "    {:<28}{}, {}",
+        "deduce+lookahead (shortest)",
+        ok_n(total - shortest_stuck),
+        warn_n(shortest_stuck, "stuck")
+    )
+    .unwrap();
     writeln!(
         w,
         "    {:<28}{}, {}",
@@ -768,6 +956,7 @@ fn format_full(w: &mut impl Write, results: &[PuzzleCheckResult], path: &str) ->
         bad_n(not_answerable.len(), "ambiguous")
     )
     .unwrap();
+    format_shortest_by_level(w, results);
 
     if has_warnings {
         writeln!(w, "\nWarnings:").unwrap();

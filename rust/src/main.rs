@@ -177,6 +177,7 @@ fn print_help() {
     eprintln!("       refpuzzle check <file.json> [MMDD-level] [--json]");
     eprintln!("       refpuzzle check -   (reads a year map or single puzzle from stdin)");
     eprintln!("       refpuzzle format-check  (reads JSON from stdin)");
+    eprintln!("       refpuzzle reference [--details]   (question type + deduce rule examples)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
     eprintln!(
         "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (gen quality: histogram + links)"
@@ -191,6 +192,7 @@ fn print_help() {
     eprintln!("  -t, --threads N  worker threads (default: all cores)");
     eprintln!("  --stats       show generation statistics");
     eprintln!("  --json        output check results as JSON");
+    eprintln!("  --details     reference: add the lookahead hint audit (slow)");
     eprintln!();
     eprintln!("Examples:");
     eprintln!("  refpuzzle gen 2051 -o out.json");
@@ -276,7 +278,7 @@ fn main() {
             return;
         }
         "reference" => {
-            cli::reference::reference();
+            cli::reference::reference(args.iter().any(|a| a == "--details"));
             return;
         }
         "type-stats" => {

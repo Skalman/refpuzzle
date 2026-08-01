@@ -7,9 +7,9 @@
 use std::collections::BTreeMap;
 
 use crate::deduce::{ALL_DEDUCE_RULES, apply_action, deduce_assuming_unique};
-use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
+use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, no_reason_detail};
 use crate::format;
-use crate::lookahead::lookahead;
+use crate::lookahead::{lookahead, lookahead_shortest};
 use crate::render;
 use crate::solve_deduce::{EngineConfig, VERIFY_ITERS_PER_QUESTION};
 use crate::types::{Claim, QuestionType, QuestionTypeKind};
@@ -56,7 +56,74 @@ fn consider(map: &mut BTreeMap<String, String>, rule: &str, text: String) {
     }
 }
 
-pub fn reference() {
+/// Audit the hints a player reads at a lookahead: how often the closing
+/// "But …. Contradiction." line can't say *why* the hypothesis failed, reported per blamed
+/// question type with an example each. Costs most of `reference`'s runtime.
+fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
+    let mut hints = 0usize;
+    let mut lines = 0usize;
+    // Blamed question type → (count, shortest example hint).
+    let mut no_reason: BTreeMap<QuestionTypeKind, (usize, String)> = BTreeMap::new();
+    let mut no_reason_total = 0usize;
+
+    for (_, fp) in puzzles {
+        let mut state = fp.initial_state;
+        for _ in 0..fp.n * VERIFY_ITERS_PER_QUESTION {
+            if (0..fp.n).all(|i| state.answers[i].is_some()) {
+                break;
+            }
+            let mut drs = deduce_assuming_unique(fp, &state);
+            drs.sort_by_key(|dr| dr.rule as u8);
+            if let Some(dr) = drs.first() {
+                apply_action(&dr.action, &mut state);
+                continue;
+            }
+            let Some(lr) = lookahead_shortest(fp, &state, usize::MAX, &mut 0) else {
+                break;
+            };
+            for step in &explain_lookahead(fp, &state, &lr) {
+                let ExplainStep::Complex { header, lines: ls } = step else {
+                    continue;
+                };
+                hints += 1;
+                lines += ls.len();
+                let vague = format!(
+                    "But {}. Contradiction.",
+                    no_reason_detail(lr.contradiction_qi)
+                );
+                if !ls.contains(&vague) {
+                    continue;
+                }
+                no_reason_total += 1;
+                let kind = fp.question_types[lr.contradiction_qi].kind();
+                // The expanded hint only — `render_hint` would also pick up the collapsed
+                // "What if …?" teaser that precedes it and read as a stutter.
+                let text = format!("{header} — {}", ls.join("; "));
+                let entry = no_reason.entry(kind).or_insert((0, text.clone()));
+                entry.0 += 1;
+                if text.len() < entry.1.len() {
+                    entry.1 = text;
+                }
+            }
+            state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
+        }
+    }
+
+    println!(
+        "# Lookahead hints — {hints} on the corpus hint path, {:.1} lines each\n",
+        lines as f64 / hints.max(1) as f64
+    );
+    println!(
+        "{no_reason_total} ({:.1}%) can't say why the hypothesis failed, by blamed question type:\n",
+        100.0 * no_reason_total as f64 / hints.max(1) as f64
+    );
+    for (kind, (count, example)) in &no_reason {
+        println!("## {kind:?} — {count}\n    {example}\n");
+    }
+}
+
+/// `details` adds [`hint_audit`], which costs several times the rest of the command.
+pub fn reference(details: bool) {
     let puzzles = crate::daily_puzzles();
 
     // kind -> (display tag, prompt, option labels); rule name -> one rendered hint.
@@ -166,5 +233,11 @@ pub fn reference() {
             unused_rules.len(),
             unused_rules.join(", ")
         );
+    }
+    println!();
+    if details {
+        hint_audit(&puzzles);
+    } else {
+        println!("Run with --details for the lookahead hint audit (slower).");
     }
 }
