@@ -7,7 +7,9 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-use crate::check_answer::{Pred, count_matching, count_pred, count_range};
+use crate::check_answer::{
+    InvalidReason, Pred, answered_claim, count_matching, count_pred, count_range, judge_answer,
+};
 use crate::counts::{compute_count_bounds, compute_letter_cells};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
 use crate::lookahead::{Contradiction, LookaheadResult, hypothesis, replay_chain};
@@ -74,294 +76,282 @@ fn try_looking(qis: &[usize]) -> ExplainStep {
 }
 
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
-/// unanswered). Mirrors the TS `explainInvalid`.
+/// unanswered). Verdict and reason both come from `check_answer`, so this only renders
+/// a judgment — it never re-decides one, and can't miss a kind that judge can reject.
 pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
-    state.answers[qi]?;
-    explain_invalid_detail(fp, state, qi)
+    let a = state.answers[qi]?;
+    let reason = judge_answer(fp, *state, qi).reason()?;
+    let claim = answered_claim(fp, state, qi)?;
+    invalid_claim_text(state, OptionPos { qi, oi: a.idx() }, &claim, reason)
 }
 
-fn explain_invalid_detail(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
-    use QuestionType::*;
-    let a = state.answers[qi]?;
-    let ai = a.idx();
-    let qt = fp.question_types[qi];
-    // The value the chosen option asserts (a count, a letter index, or a
-    // 1-based-in-prose question index depending on the kind); NONE = "no such".
-    let ov = fp.options[qi][ai];
-    let n = fp.n;
-    let answers = &state.answers;
+/// A rejected claim as one sentence: "#3 claims *what it asserts*, but *what breaks
+/// it*". `None` only for the two reasons with nothing to say — a `Malformed` value
+/// (which `check_form` rejects as an error, so no shipped puzzle carries one) and
+/// `NoOptionsLeft` (which is about the question, not a claim).
+///
+/// `opt` is the option the claim came from — for a `TrueStmt` the statement it picked,
+/// whose subject then reads as the question's own. [`explain_lookahead`] rewrites
+/// " claims " into " would say ", so every sentence must contain it exactly once.
+fn invalid_claim_text(
+    state: &State,
+    opt: OptionPos,
+    claim: &Claim,
+    reason: InvalidReason,
+) -> Option<String> {
+    let assertion = claim_assertion(state, opt, claim)?;
+    let clause = invalid_clause(state, opt, claim, reason)?;
+    Some(format!("{} claims {assertion}, but {clause}", q(opt.qi)))
+}
 
-    match qt {
-        // Count kinds: the asserted number is already unreachable.
+/// What a claim asserts, as the continuation of "#3 claims …". Exhaustive over
+/// `QuestionType` like `render::question_text`, so a new kind has to supply one (or join
+/// the arm for the two that can never be claimed).
+fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<String> {
+    use QuestionType::*;
+    let qt = claim.question_type;
+    // The value the option asserts — a count, a letter index, or a 0-based question
+    // index depending on the kind; `None` is the NONE option's "no such thing". A value
+    // out of its kind's range grades `Malformed` and so is never rendered, which is what
+    // makes `LETTERS[…]` below safe.
+    let value = claim.value.is_num().then(|| claim.value.value());
+    // What this question's own answer is *for the claim*: the option it selected. The
+    // same reading `check_answer` grades a self-referential kind against.
+    let own = LETTERS[opt.oi];
+
+    Some(match qt {
         CountAnswer { .. }
         | CountAnswerBefore { .. }
         | CountAnswerAfter { .. }
         | CountVowel
-        | CountConsonant => count_invalid_reason(fp, state, qi, &qt, ov),
-
-        AnswerOf { question_index } => {
-            let k = question_index as usize;
-            let target = answers[k]?;
-            (ov.is_num() && target.idx() as u8 != ov.value()).then(|| {
-                format!(
-                    "{} claims {}'s answer is {}, but {} is answered {target}",
-                    q(qi),
-                    q(k),
-                    LETTERS[ov.value() as usize],
-                    q(k)
-                )
-            })
+        | CountConsonant => {
+            let v = value?;
+            format!("{v} {}", count_rule_label(&qt, v))
         }
 
-        LetterDist { question_index } => {
-            let other = answers[question_index as usize]?;
-            let ov = ov.is_num().then(|| ov.value())?;
-            let dist = (ai as i32 - other.idx() as i32).unsigned_abs() as u8;
-            (dist != ov).then(|| {
-                format!(
-                    "{} claims letter distance {ov}, but {a} is {dist} letters from {}'s answer {other}",
-                    q(qi),
-                    q(question_index as usize)
-                )
-            })
-        }
+        MostCommonCount => format!("the most common answer appears {}", times(value?)),
 
-        NoOtherHasAnswer => (0..n).find(|&i| i != qi && answers[i] == Some(a)).map(|i| {
-            format!(
-                "{} claims {a} is unique, but {} already has answer {a}",
-                q(qi),
-                q(i)
-            )
-        }),
-
-        FirstWith { answer } => forward_invalid_reason(state, qi, "first", 0, answer, ov, n),
+        FirstWith { answer } => match value {
+            Some(v) => format!("the first {answer} is {}", q(v)),
+            None => format!("no question has answer {answer}"),
+        },
+        LastWith { answer } => match value {
+            Some(v) => format!("the last {answer} is {}", q(v)),
+            None => format!("no question has answer {answer}"),
+        },
         ClosestAfter {
             after_index,
             answer,
-        } => forward_invalid_reason(
-            state,
-            qi,
-            "closest",
-            after_index as usize + 1,
-            answer,
-            ov,
-            n,
-        ),
-
-        LastWith { answer } => backward_invalid_reason(state, qi, "last", n, answer, ov, n),
+        } => match value {
+            Some(v) => format!("the closest {answer} after {} is {}", q(after_index), q(v)),
+            None => format!("no question after {} has answer {answer}", q(after_index)),
+        },
         ClosestBefore {
             before_index,
             answer,
-        } => backward_invalid_reason(state, qi, "closest", before_index as usize, answer, ov, n),
-
-        // Scoped sameness: the selected option asserts its target is the *only*
-        // listed candidate holding the matched letter, so either conjunct can be
-        // what broke. The "none" option asserts only the only-clause.
-        SameAs => scoped_sameness_invalid_reason(fp, answers, qi, ov, a, None),
+        } => match value {
+            Some(v) => format!(
+                "the closest {answer} before {} is {}",
+                q(before_index),
+                q(v)
+            ),
+            None => format!("no question before {} has answer {answer}", q(before_index)),
+        },
+        PrevSame => match value {
+            Some(v) => format!("the previous {own} is {}", q(v)),
+            None => format!("no earlier question has answer {own}"),
+        },
+        NextSame => match value {
+            Some(v) => format!("the next {own} is {}", q(v)),
+            None => format!("no later question has answer {own}"),
+        },
+        OnlySame => match value {
+            Some(v) => format!("{} is the only other question with answer {own}", q(v)),
+            None => format!("no other question has answer {own}"),
+        },
+        SameAs => match value {
+            Some(v) => format!(
+                "{} is the only one of these questions with answer {own}",
+                q(v)
+            ),
+            None => format!("none of these questions has answer {own}"),
+        },
         SameAsWhich { question_index } => {
             let k = usize::from(question_index);
-            let matched = answers[k]?;
-            scoped_sameness_invalid_reason(fp, answers, qi, ov, matched, Some(k))
-        }
-
-        // No own-answer contradiction to phrase for these kinds.
-        MostCommonCount
-        | OnlySame
-        | PrevSame
-        | NextSame
-        | OnlyOdd { .. }
-        | OnlyEven { .. }
-        | ConsecIdent
-        | LeastCommon
-        | MostCommon
-        | EqualCount { .. }
-        | AnswerIsSelf
-        | TrueStmt => None,
-    }
-}
-
-/// Why an answered `SameAs`/`SameAsWhich` is already contradicted: the selected
-/// target doesn't hold `matched`, or another listed candidate does. `reference` is
-/// the question `matched` was read off (`None` for `SameAs`, whose matched letter is
-/// its own answer).
-fn scoped_sameness_invalid_reason(
-    fp: &FlatPuzzle,
-    answers: &[Option<Answer>; MAX_N],
-    qi: usize,
-    ov: OptionValue,
-    matched: Answer,
-    reference: Option<usize>,
-) -> Option<String> {
-    let target = if ov.is_num() {
-        let target = usize::from(ov.value());
-        if target >= fp.n {
-            return None;
-        }
-        if let Some(target_ans) = answers[target]
-            && target_ans != matched
-        {
-            return Some(match reference {
-                Some(k) => format!(
-                    "{} claims {} has the same answer as {} ({matched}), but {} is {target_ans}",
-                    q(qi),
-                    q(target),
-                    q(k),
-                    q(target)
+            // Nothing is decided until the reference is answered, so a rejected claim
+            // always has it.
+            let matched = state.answers[k]?;
+            match value {
+                Some(v) => format!(
+                    "{} is the only one of these questions with the same answer as {} ({matched})",
+                    q(v),
+                    q(k)
                 ),
                 None => format!(
-                    "{} claims same answer as {}, but {} is {target_ans} and {} is {matched}",
-                    q(qi),
-                    q(target),
-                    q(target),
-                    q(qi)
+                    "none of these questions has the same answer as {} ({matched})",
+                    q(k)
                 ),
-            });
+            }
         }
-        Some(target)
-    } else if ov.is_none() {
-        None
-    } else {
-        return None;
-    };
-    let j = listed_candidate_answered(fp, qi, target, matched, answers)?;
-    Some(match reference {
-        Some(k) => format!(
-            "{} claims only one of these questions matches {} ({matched}), but {} does too",
-            q(qi),
-            q(k),
-            q(j)
+        OnlyOdd { answer } => match value {
+            Some(v) => format!(
+                "{} is the only odd-numbered question with answer {answer}",
+                q(v)
+            ),
+            None => format!("no odd-numbered question has answer {answer}"),
+        },
+        OnlyEven { answer } => match value {
+            Some(v) => format!(
+                "{} is the only even-numbered question with answer {answer}",
+                q(v)
+            ),
+            None => format!("no even-numbered question has answer {answer}"),
+        },
+        ConsecIdent => match value {
+            Some(v) => format!(
+                "{} and {} are the only identical consecutive pair",
+                q(v),
+                q(v as usize + 1)
+            ),
+            None => "no two consecutive questions have identical answers".to_string(),
+        },
+
+        AnswerOf { question_index } => format!(
+            "{}'s answer is {}",
+            q(question_index),
+            LETTERS[value? as usize]
         ),
-        None => format!(
-            "{} claims only one of these questions has answer {matched}, but {} has it too",
-            q(qi),
-            q(j)
+        LeastCommon => format!("{} is the least common answer", LETTERS[value? as usize]),
+        MostCommon => format!("{} is the most common answer", LETTERS[value? as usize]),
+        NoOtherHasAnswer => format!("no other question has answer {}", LETTERS[value? as usize]),
+        EqualCount { answer } => match value {
+            Some(v) => format!("{} appears as often as {answer}", LETTERS[v as usize]),
+            None => format!("no answer appears as often as {answer}"),
+        },
+        LetterDist { question_index } => format!(
+            "its answer is {} from {}'s",
+            letters(value?),
+            q(question_index)
         ),
+
+        // Never claimed: `AnswerIsSelf` holds whatever value it asserts, and a statement
+        // can't nest inside another (`check_form::check_stmt_kind`).
+        AnswerIsSelf | TrueStmt => return None,
     })
 }
 
-/// Count-kind invalidity: the answered count is already out of reach.
-fn count_invalid_reason(
-    fp: &FlatPuzzle,
+/// What broke a claim, as the continuation of "…, but …" — see [`InvalidReason`], which
+/// carries the cells and tallies these read.
+fn invalid_clause(
     state: &State,
-    qi: usize,
-    qt: &QuestionType,
-    ov: OptionValue,
+    opt: OptionPos,
+    claim: &Claim,
+    reason: InvalidReason,
 ) -> Option<String> {
-    let pred = count_pred(qt)?;
-    let ov = ov.is_num().then(|| ov.value())?;
-    let (from, to) = count_range(qt, fp.n);
-    let cr = count_matching(&state.answers, &state.eliminated, pred, from, to);
-    if cr.count > ov {
-        return Some(format!(
-            "{} claims {ov} {}, but there are already {}",
-            q(qi),
-            count_rule_label(qt, ov),
-            cr.count
-        ));
-    }
-    if cr.count + cr.remaining < ov {
-        return Some(format!(
-            "{} claims {ov} {}, but at most {} are possible",
-            q(qi),
-            count_rule_label(qt, ov),
-            cr.count + cr.remaining
-        ));
-    }
-    None
+    use InvalidReason::*;
+    let answers = &state.answers;
+    let value = claim.value.is_num().then(|| claim.value.value());
+
+    Some(match reason {
+        Malformed | NoOptionsLeft => return None,
+
+        CountFloor { count, guaranteed } => {
+            if guaranteed == 0 {
+                format!("there are already {count}")
+            } else {
+                format!("{} are already certain", count + guaranteed)
+            }
+        }
+        CountCeiling { max } | PeakCeiling { max } => format!("at most {max} are possible"),
+        PeakFloor { letter, floor } => {
+            format!("{letter} is already certain to appear {}", times(floor))
+        }
+
+        TargetAnswered { at, answer } => format!("{} is answered {answer}", q(at)),
+        TargetCannot { at, letter } => format!("{letter} is ruled out for {}", q(at)),
+        OtherHasLetter { at, letter } => format!("{} has answer {letter} too", q(at)),
+        // Directional reasons only come from a claim that named a position, so `value?`
+        // can't decline here.
+        EarlierHasLetter { at, letter } => format!(
+            "{} has answer {letter} and comes before {}",
+            q(at),
+            q(value?)
+        ),
+        LaterHasLetter { at, letter } => format!(
+            "{} has answer {letter} and comes after {}",
+            q(at),
+            q(value?)
+        ),
+
+        PairDiffers { at, first, second } => {
+            format!(
+                "{} is {first} and {} is {second}",
+                q(at),
+                q(at as usize + 1)
+            )
+        }
+        PairImpossible { at } => format!(
+            "{} and {} have no answer left in common",
+            q(at),
+            q(at as usize + 1)
+        ),
+        // "too" only if the claim named a pair of its own; the NONE option denies there
+        // is any.
+        OtherPairMatches { at } => {
+            let also = if value.is_some() { " too" } else { "" };
+            format!("{} and {} are identical{also}", q(at), q(at as usize + 1))
+        }
+
+        CountsCantMeet {
+            short,
+            short_max,
+            over,
+            over_min,
+        } => format!(
+            "{over} already appears at least {} and {short} can reach at most {short_max}",
+            times(over_min)
+        ),
+        OtherLetterTies { letter } => format!("{letter} does"),
+
+        NotExtremum {
+            rival,
+            rival_count,
+            claimed_count,
+        } => format!(
+            "{rival} appears {} and {} {}",
+            times(rival_count),
+            LETTERS[value? as usize],
+            times(claimed_count)
+        ),
+        ExtremumTied { rival, count } => format!("{rival} appears {} too", times(count)),
+
+        WrongDistance { actual } => {
+            let QuestionType::LetterDist { question_index } = claim.question_type else {
+                return None;
+            };
+            // Undecided until the other question is answered, so it always is here.
+            let other = answers[usize::from(question_index)]?;
+            format!("{} is {} from {other}", LETTERS[opt.oi], letters(actual))
+        }
+    })
 }
 
-/// First/closest-after invalidity: the pointed-at question doesn't hold the
-/// answer, or an earlier one does (or, for a "none" claim, some question does).
-fn forward_invalid_reason(
-    state: &State,
-    qi: usize,
-    label: &str,
-    scan_start: usize,
-    answer: Answer,
-    ov: OptionValue,
-    n: usize,
-) -> Option<String> {
-    let answers = &state.answers;
-    let Some(ov) = ov.is_num().then(|| ov.value() as usize) else {
-        return (scan_start..n)
-            .find(|&j| answers[j] == Some(answer))
-            .map(|j| {
-                format!(
-                    "{} claims no question has answer {answer}, but {} does",
-                    q(qi),
-                    q(j)
-                )
-            });
-    };
-    if ov < n
-        && let Some(av) = answers[ov]
-        && av != answer
-    {
-        return Some(format!(
-            "{} claims {label} {answer} is {}, but {} is answered {av}",
-            q(qi),
-            q(ov),
-            q(ov)
-        ));
+/// A count with the matching plural, e.g. "1 time" / "3 times".
+fn times(n: u8) -> String {
+    if n == 1 {
+        format!("{n} time")
+    } else {
+        format!("{n} times")
     }
-    (scan_start..ov)
-        .find(|&j| answers[j] == Some(answer))
-        .map(|j| {
-            format!(
-                "{} claims {label} {answer} is {}, but {} has answer {answer} and comes before {}",
-                q(qi),
-                q(ov),
-                q(j),
-                q(ov)
-            )
-        })
 }
 
-/// Last/closest-before invalidity: mirror of [`forward_invalid_reason`].
-fn backward_invalid_reason(
-    state: &State,
-    qi: usize,
-    label: &str,
-    before_idx: usize,
-    answer: Answer,
-    ov: OptionValue,
-    n: usize,
-) -> Option<String> {
-    let answers = &state.answers;
-    let Some(ov) = ov.is_num().then(|| ov.value() as usize) else {
-        return (0..before_idx)
-            .find(|&j| answers[j] == Some(answer))
-            .map(|j| {
-                format!(
-                    "{} claims no question has answer {answer}, but {} does",
-                    q(qi),
-                    q(j)
-                )
-            });
-    };
-    if ov < n
-        && let Some(av) = answers[ov]
-        && av != answer
-    {
-        return Some(format!(
-            "{} claims {label} {answer} is {}, but {} is answered {av}",
-            q(qi),
-            q(ov),
-            q(ov)
-        ));
+/// A letter distance with the matching plural, e.g. "1 letter" / "2 letters".
+fn letters(n: u8) -> String {
+    if n == 1 {
+        format!("{n} letter")
+    } else {
+        format!("{n} letters")
     }
-    (ov + 1..before_idx)
-        .rev()
-        .find(|&j| answers[j] == Some(answer))
-        .map(|j| {
-            format!(
-                "{} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}",
-                q(qi),
-                q(ov),
-                q(j),
-                q(ov)
-            )
-        })
 }
 
 /// The pluralized noun phrase for a count claim, e.g. "questions with answer A"
@@ -2904,10 +2894,10 @@ pub fn explain_lookahead(
 
     let contradiction_qi = result.contradiction_qi;
     involved.insert(contradiction_qi);
-    let detail = match explain_invalid_detail(fp, &hyp, contradiction_qi) {
+    let detail = match explain_invalid(fp, &hyp, contradiction_qi) {
         Some(reason) => reason.replace(" claims ", " would say "),
-        // `explain_invalid_detail` only speaks about a committed answer being wrong, so it
-        // has nothing for the routes that leave a question with no legal answer instead.
+        // `explain_invalid` only speaks about a committed answer being wrong, so it has
+        // nothing for the routes that leave a question with no legal answer instead.
         None => refutation_detail(fp, &hyp, contradiction_qi, &result.contradiction),
     };
     lines.push(format!("But {detail}. Contradiction."));
@@ -2948,6 +2938,239 @@ mod tests {
             Vec::<usize>::new()
         );
         assert_eq!(leading_questions(&[]), Vec::<usize>::new());
+    }
+
+    /// A puzzle shell of `n` questions and `oc` options. `judge_claim` reads nothing else
+    /// off a puzzle, and neither does the prose — a claim carries its own value.
+    fn claim_shell(n: usize, oc: usize) -> FlatPuzzle {
+        let question_types = [QuestionType::AnswerIsSelf; MAX_N];
+        let (affected_by, global_indices) = FlatPuzzle::build_deps(&question_types, n);
+        FlatPuzzle {
+            question_types,
+            options: [[OptionValue::UNUSED; 5]; MAX_N],
+            true_stmt_question_types: None,
+            affected_by,
+            global_indices,
+            n,
+            option_count: oc,
+            initial_state: State::initial(oc),
+        }
+    }
+
+    /// The name of an `InvalidReason` variant, for the coverage tally. Exhaustive on
+    /// purpose: a new variant won't compile until it is listed here, which is the
+    /// prompt to give it prose in `invalid_clause`.
+    fn reason_name(reason: InvalidReason) -> &'static str {
+        use InvalidReason::*;
+        match reason {
+            Malformed => "Malformed",
+            NoOptionsLeft => "NoOptionsLeft",
+            CountFloor { .. } => "CountFloor",
+            CountCeiling { .. } => "CountCeiling",
+            PeakFloor { .. } => "PeakFloor",
+            PeakCeiling { .. } => "PeakCeiling",
+            TargetAnswered { .. } => "TargetAnswered",
+            TargetCannot { .. } => "TargetCannot",
+            OtherHasLetter { .. } => "OtherHasLetter",
+            EarlierHasLetter { .. } => "EarlierHasLetter",
+            LaterHasLetter { .. } => "LaterHasLetter",
+            PairDiffers { .. } => "PairDiffers",
+            PairImpossible { .. } => "PairImpossible",
+            OtherPairMatches { .. } => "OtherPairMatches",
+            CountsCantMeet { .. } => "CountsCantMeet",
+            OtherLetterTies { .. } => "OtherLetterTies",
+            NotExtremum { .. } => "NotExtremum",
+            ExtremumTied { .. } => "ExtremumTied",
+            WrongDistance { .. } => "WrongDistance",
+        }
+    }
+
+    /// Anything `check_answer` can invalidate can be explained — the property that
+    /// replaced the per-kind reason arms this file used to carry. Sweeps random partial
+    /// boards against every claimable kind and every value a claim could hold: each
+    /// `Invalid` verdict must render a sentence, unless its reason is one of the two
+    /// with nothing to say (`Malformed`, which `check_form` rejects outright, and
+    /// `NoOptionsLeft`, which `judge_claim` never returns).
+    ///
+    /// The per-reason floor is what keeps this honest: agreement is worthless if the
+    /// sweep stopped producing a reason, since an unrendered one would then pass.
+    #[test]
+    fn every_invalid_reason_renders() {
+        use crate::check_answer::judge_claim;
+        use crate::rng::Rng;
+        use std::collections::BTreeMap;
+
+        // Same value set as `check_claim_fast_matches_check_claim`: every in-range
+        // position/count, every letter, and NONE.
+        let values: Vec<OptionValue> = (0..MAX_N as u8)
+            .map(OptionValue::num)
+            .chain(std::iter::once(OptionValue::NONE))
+            .collect();
+        let mut seen: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let mut unrendered: Vec<String> = Vec::new();
+        let mut malformed = 0usize;
+        // Some values assert (see below), so silence the default hook for the sweep and
+        // report from the collected lists instead. Restored before the assertions, which
+        // would otherwise print no message.
+        let hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+
+        for seed in 0..300u32 {
+            let mut rng = Rng::new(seed.wrapping_mul(2654435761).wrapping_add(17));
+            let n = rng.int(2, MAX_N as i32) as usize;
+            let oc = if rng.int(0, 1) == 0 { 3 } else { 5 };
+            // A per-seed fill rate so the sweep spans barely-started boards (where a
+            // pair can still be made impossible) and fully answered ones (which the
+            // whole-board kinds need before they grade anything).
+            let fill_rate = rng.int(2, 10);
+
+            let mut state = State::initial(oc);
+            for i in 0..n {
+                if rng.int(1, 10) <= fill_rate {
+                    let a = rng.pick_letter(oc);
+                    state.answers[i] = Some(a);
+                    state.eliminated[i] = ALL_OPTIONS_MASK ^ (1 << a.idx());
+                } else {
+                    for oi in 0..oc {
+                        if rng.int(0, 1) == 0 {
+                            state.eliminated[i] |= 1 << oi;
+                        }
+                    }
+                }
+            }
+
+            let fp = claim_shell(n, oc);
+            for qi in 0..n {
+                let other = (qi as u8 + 1) % n as u8;
+                let answer = rng.pick_letter(oc);
+                let before_index = rng.int(0, n as i32) as u8;
+                let after_index = rng.int(0, (n as i32 - 2).max(0)) as u8;
+                // Every kind a claim can carry. `SameAs`/`SameAsWhich` are graded as
+                // questions, not claims (`check_claim_core` says so with an
+                // `unreachable!`), and their reasons are shared with the kinds here.
+                let kinds = [
+                    QuestionType::CountAnswer { answer },
+                    QuestionType::CountAnswerBefore {
+                        answer,
+                        before_index,
+                    },
+                    QuestionType::CountAnswerAfter {
+                        answer,
+                        after_index,
+                    },
+                    QuestionType::CountVowel,
+                    QuestionType::CountConsonant,
+                    QuestionType::MostCommonCount,
+                    QuestionType::ClosestAfter {
+                        after_index,
+                        answer,
+                    },
+                    QuestionType::ClosestBefore {
+                        before_index,
+                        answer,
+                    },
+                    QuestionType::FirstWith { answer },
+                    QuestionType::LastWith { answer },
+                    QuestionType::PrevSame,
+                    QuestionType::NextSame,
+                    QuestionType::OnlySame,
+                    QuestionType::OnlyOdd { answer },
+                    QuestionType::OnlyEven { answer },
+                    QuestionType::ConsecIdent,
+                    QuestionType::AnswerOf {
+                        question_index: other,
+                    },
+                    QuestionType::LeastCommon,
+                    QuestionType::MostCommon,
+                    QuestionType::NoOtherHasAnswer,
+                    QuestionType::EqualCount { answer },
+                    QuestionType::LetterDist {
+                        question_index: other,
+                    },
+                ];
+                for question_type in kinds {
+                    for &value in &values {
+                        let claim = Claim {
+                            question_type,
+                            value,
+                        };
+                        let opt = OptionPos {
+                            qi,
+                            oi: rng.int(0, oc as i32 - 1) as usize,
+                        };
+                        // A structurally impossible value asserts on some kinds (see the
+                        // `check_answer` module doc); those aren't this test's target.
+                        let judged = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            judge_claim(&fp, state, opt, claim)
+                        }));
+                        let Some(reason) = judged.ok().and_then(|j| j.reason()) else {
+                            continue;
+                        };
+                        if matches!(
+                            reason,
+                            InvalidReason::Malformed | InvalidReason::NoOptionsLeft
+                        ) {
+                            malformed += 1;
+                            continue;
+                        }
+                        *seen.entry(reason_name(reason)).or_insert(0) += 1;
+                        match invalid_claim_text(&state, opt, &claim, reason) {
+                            // The lookahead hint rewrites this marker, so there has to be
+                            // exactly one to rewrite.
+                            Some(text) if text.matches(" claims ").count() != 1 => {
+                                unrendered.push(format!("{text:?} — not one ' claims '"))
+                            }
+                            Some(_) => {}
+                            None if unrendered.len() < 10 => unrendered.push(format!(
+                                "seed {seed} qi={qi} {question_type:?} value={value:?} \
+                                 {reason:?}: no prose"
+                            )),
+                            None => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        std::panic::set_hook(hook);
+        assert!(
+            unrendered.is_empty(),
+            "{} unexplained invalid claim(s):\n  {}",
+            unrendered.len(),
+            unrendered.join("\n  ")
+        );
+        let expected = [
+            "CountFloor",
+            "CountCeiling",
+            "PeakFloor",
+            "PeakCeiling",
+            "TargetAnswered",
+            "TargetCannot",
+            "OtherHasLetter",
+            "EarlierHasLetter",
+            "LaterHasLetter",
+            "PairDiffers",
+            "PairImpossible",
+            "OtherPairMatches",
+            "CountsCantMeet",
+            "OtherLetterTies",
+            "NotExtremum",
+            "ExtremumTied",
+            "WrongDistance",
+        ];
+        for name in expected {
+            assert!(
+                seen.contains_key(name),
+                "the sweep never produced {name} — it no longer covers that reason"
+            );
+        }
+        eprintln!(
+            "every_invalid_reason_renders: {malformed} malformed, {}",
+            seen.iter()
+                .map(|(name, count)| format!("{name} {count}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     fn state_with(fp: &FlatPuzzle, answers: &[Option<Answer>]) -> State {
@@ -3162,7 +3385,9 @@ mod tests {
         );
         assert_eq!(
             explain_invalid(&fp, &state, 0).as_deref(),
-            Some("#1 claims only one of these questions has answer A, but #3 has it too")
+            Some(
+                "#1 claims #2 is the only one of these questions with answer A, but #3 has answer A too"
+            )
         );
     }
 
@@ -3181,7 +3406,10 @@ mod tests {
         );
         assert_eq!(
             explain_invalid(&fp, &state, 0).as_deref(),
-            Some("#1 claims only one of these questions matches #4 (C), but #3 does too")
+            Some(
+                "#1 claims #2 is the only one of these questions with the same answer as #4 (C), \
+                 but #3 has answer C too"
+            )
         );
     }
 
