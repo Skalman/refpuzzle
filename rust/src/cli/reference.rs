@@ -6,10 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::deduce::{ALL_DEDUCE_RULES, apply_action, deduce_assuming_unique};
+use crate::deduce::{ALL_DEDUCE_RULES, DeduceAction, apply_action, deduce_assuming_unique};
 use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, no_reason_detail};
 use crate::format;
-use crate::lookahead::{lookahead, lookahead_shortest};
+use crate::lookahead::{Contradiction, lookahead, lookahead_shortest};
 use crate::render;
 use crate::solve_deduce::{EngineConfig, VERIFY_ITERS_PER_QUESTION};
 use crate::types::{Claim, QuestionType, QuestionTypeKind};
@@ -56,15 +56,28 @@ fn consider(map: &mut BTreeMap<String, String>, rule: &str, text: String) {
     }
 }
 
-/// Audit the hints a player reads at a lookahead: how often the closing
-/// "But …. Contradiction." line can't say *why* the hypothesis failed, reported per blamed
-/// question type with an example each. Costs most of `reference`'s runtime.
+/// The routes `explain_lookahead` can phrase a closing "But …. Contradiction." line by,
+/// in the order it tries them: the blamed claim's own reason if `check_answer` supplied
+/// one, else the shape of the refuting deduction, else nothing.
+const ROUTES: [&str; 5] = [
+    "the blamed claim's own reason",
+    "forced onto a ruled-out option",
+    "an elimination striking the answer",
+    "no options left",
+    "nothing to say",
+];
+
+/// Audit the hints a player reads at a lookahead: how each closing "But …. Contradiction."
+/// line got phrased, with a shortest example per route, plus every question type still
+/// blamed by a line that can't say *why* the hypothesis failed. Costs most of
+/// `reference`'s runtime.
 fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
     let mut hints = 0usize;
     let mut lines = 0usize;
-    // Blamed question type → (count, shortest example hint).
-    let mut no_reason: BTreeMap<QuestionTypeKind, (usize, String)> = BTreeMap::new();
-    let mut no_reason_total = 0usize;
+    // Route → (count, shortest example).
+    let mut routes: Vec<(usize, String)> = vec![(0, String::new()); ROUTES.len()];
+    // The work list: blamed question types whose line stayed generic, and how often.
+    let mut generic_kinds: BTreeMap<QuestionTypeKind, usize> = BTreeMap::new();
 
     for (_, fp) in puzzles {
         let mut state = fp.initial_state;
@@ -82,28 +95,50 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
                 break;
             };
             for step in &explain_lookahead(fp, &state, &lr) {
-                let ExplainStep::Complex { header, lines: ls } = step else {
+                let ExplainStep::Complex { lines: ls, .. } = step else {
                     continue;
                 };
                 hints += 1;
                 lines += ls.len();
-                let vague = format!(
-                    "But {}. Contradiction.",
-                    no_reason_detail(lr.contradiction_qi)
-                );
-                if !ls.contains(&vague) {
+                // `explain_lookahead` always closes with the contradiction line followed
+                // by "So #n can't be X.". Matching on ". Contradiction." instead would
+                // also catch chain lines that end that way.
+                let Some(closing) = ls.iter().rev().nth(1) else {
                     continue;
+                };
+                let generic = *closing
+                    == format!(
+                        "But {}. Contradiction.",
+                        no_reason_detail(lr.contradiction_qi)
+                    );
+                // " would say " is the marker `explain_lookahead` stamps on a claim's own
+                // reason when it rewrites " claims ", so it identifies that route exactly.
+                let route = match (generic, closing.contains(" would say ")) {
+                    (true, _) => 4,
+                    (_, true) => 0,
+                    _ => match lr.contradiction {
+                        Contradiction::Optionless => 3,
+                        Contradiction::Conflict {
+                            result:
+                                crate::deduce::DeduceResult {
+                                    action: DeduceAction::Force { .. },
+                                    ..
+                                },
+                            ..
+                        } => 1,
+                        _ => 2,
+                    },
+                };
+                if generic {
+                    *generic_kinds
+                        .entry(fp.question_types[lr.contradiction_qi].kind())
+                        .or_insert(0) += 1;
                 }
-                no_reason_total += 1;
-                let kind = fp.question_types[lr.contradiction_qi].kind();
-                // The expanded hint only — `render_hint` would also pick up the collapsed
-                // "What if …?" teaser that precedes it and read as a stutter.
-                let text = format!("{header} — {}", ls.join("; "));
-                let entry = no_reason.entry(kind).or_insert((0, text.clone()));
+                let entry = &mut routes[route];
+                if entry.0 == 0 || closing.len() < entry.1.len() {
+                    entry.1 = closing.clone();
+                }
                 entry.0 += 1;
-                if text.len() < entry.1.len() {
-                    entry.1 = text;
-                }
             }
             state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
         }
@@ -113,12 +148,23 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
         "# Lookahead hints — {hints} on the corpus hint path, {:.1} lines each\n",
         lines as f64 / hints.max(1) as f64
     );
-    println!(
-        "{no_reason_total} ({:.1}%) can't say why the hypothesis failed, by blamed question type:\n",
-        100.0 * no_reason_total as f64 / hints.max(1) as f64
-    );
-    for (kind, (count, example)) in &no_reason {
-        println!("## {kind:?} — {count}\n    {example}\n");
+    for (route, (count, example)) in ROUTES.iter().zip(&routes) {
+        println!(
+            "## {route} — {count} ({:.1}%)",
+            100.0 * *count as f64 / hints.max(1) as f64
+        );
+        if *count > 0 {
+            println!("    {example}");
+        }
+        println!();
+    }
+    if generic_kinds.is_empty() {
+        println!("Every closing line says why the hypothesis failed.");
+    } else {
+        println!("Generic endings by blamed question type:");
+        for (kind, count) in &generic_kinds {
+            println!("    {kind:?} — {count}");
+        }
     }
 }
 
