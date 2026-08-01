@@ -681,7 +681,105 @@ pub(crate) fn daily_puzzles() -> Vec<(String, FlatPuzzle)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_util::slow_test_duration;
+    use crate::test_util::{fuzz_base_seed, slow_test_duration};
+
+    /// Every chain the hint engine reports has to hold together where the hint renders
+    /// it: each entry derivable at the round it lands in, and the blamed question
+    /// contradictory once the chain has been applied (`lookahead::chain_contradiction`, which is
+    /// also what `minimize_chain` prunes against). Corpus puzzles, but *fuzzed* states —
+    /// wrong answers and arbitrary eliminations, which the solve path never visits and
+    /// where minimization has the most room to overshoot.
+    #[test]
+    fn lookahead_chains_replay_to_their_contradiction() {
+        use crate::lookahead::{chain_contradiction, hypothesis, lookahead_shortest, replay_chain};
+        use crate::rng::Rng;
+
+        let puzzles = daily_puzzles();
+        assert!(!puzzles.is_empty());
+        // After the corpus load, which on a fast run costs more than the whole budget.
+        let deadline = std::time::Instant::now() + slow_test_duration();
+        let base = fuzz_base_seed("REPLAY_BASE");
+        let mut failures: Vec<String> = Vec::new();
+        let mut states = 0u32;
+        let mut hits = 0u32;
+        let mut chain_steps = 0usize;
+
+        for round in 0u32.. {
+            if round % 32 == 0 && std::time::Instant::now() > deadline {
+                break;
+            }
+            let seed = base.wrapping_add(round);
+            let mut rng = Rng::new(seed);
+            let (key, fp) = &puzzles[rng.int(0, puzzles.len() as i32 - 1) as usize];
+            let oc = fp.option_count as i32;
+
+            // Each question: committed to an arbitrary option, partly eliminated, or
+            // untouched. Nothing ties the answers to the solution, so most states are
+            // off the solve path and some are self-contradictory.
+            let mut answers: [Option<Answer>; MAX_N] = [None; MAX_N];
+            let mut eliminated = [fp.initial_eliminated_mask(); MAX_N];
+            for qi in 0..fp.n {
+                match rng.int(0, 3) {
+                    0 => {
+                        let answer = rng.pick_letter(fp.option_count);
+                        answers[qi] = Some(answer);
+                        eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
+                    }
+                    1 | 2 => {
+                        for _ in 0..rng.int(1, oc - 2) {
+                            eliminated[qi] |= 1 << rng.int(0, oc - 1);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            // A row stripped to nothing has no candidate to probe and reads as an
+            // already-lost board, not a state a hint is asked about.
+            if (0..fp.n).any(|qi| (!eliminated[qi] & ALL_OPTIONS_MASK) == 0) {
+                continue;
+            }
+
+            let state = State {
+                answers,
+                eliminated,
+            };
+            states += 1;
+            let Some(lr) = lookahead_shortest(fp, &state, usize::MAX, &mut 0) else {
+                continue;
+            };
+            hits += 1;
+            chain_steps += lr.chain.len();
+            if chain_contradiction(fp, &state, &lr, &mut 0).is_none() {
+                // Which half broke: a chain step no longer derivable where it lands, or
+                // a replay that no longer reaches the contradiction it blames.
+                let mut hyp = hypothesis(&state, lr.assumption_qi, lr.assumption_answer);
+                let replayed = replay_chain(fp, &mut hyp, &lr.chain, &mut 0, |_, _| {});
+                failures.push(format!(
+                    "{key} seed={seed}: chain of {} {} Q{}",
+                    lr.chain.len(),
+                    if replayed {
+                        "replays but leaves no contradiction at"
+                    } else {
+                        "has a step its round can't derive; blames"
+                    },
+                    lr.contradiction_qi + 1
+                ));
+            }
+        }
+
+        eprintln!(
+            "Replay fuzz (REPLAY_BASE={base}): {hits} chain(s) over {states} state(s), \
+             {:.2} steps/chain, {} failure(s)",
+            if hits > 0 {
+                chain_steps as f64 / hits as f64
+            } else {
+                0.0
+            },
+            failures.len()
+        );
+        assert!(hits > 0, "no refutable candidate in {states} state(s)");
+        assert!(failures.is_empty(), "replay failures: {failures:?}");
+    }
 
     #[test]
     fn generated_puzzles_hint_solvable() {

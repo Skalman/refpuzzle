@@ -9,10 +9,8 @@ use serde::Serialize;
 
 use crate::check_answer::{Pred, count_matching, count_pred, count_range};
 use crate::counts::{compute_count_bounds, compute_letter_cells};
-use crate::deduce::{
-    DeduceAction, DeduceResult, DeduceRule, apply_action, contradiction_question, deduce,
-};
-use crate::lookahead::LookaheadResult;
+use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
+use crate::lookahead::{Contradiction, LookaheadResult, hypothesis, replay_chain};
 use crate::render::{claim_label, q};
 use crate::types::*;
 
@@ -2792,6 +2790,56 @@ fn elim_chain_line(
     (reason, leading_questions(&steps))
 }
 
+/// The closing detail when nothing can be said about *why* `qi` broke — a committed answer
+/// `check_answer` rejects for a reason `explain_invalid_detail` has no arm for.
+pub fn no_reason_detail(qi: usize) -> String {
+    format!("{} would be invalid", q(qi))
+}
+
+/// How the hypothesis broke at `qi`, for the hint's closing line when
+/// `explain_invalid_detail` declines — phrased against `hyp`, the state the chain ends in.
+/// `AnswerInvalid` reaches here only when that function has no arm for the kind, leaving
+/// nothing better to say than `no_reason_detail`.
+fn refutation_detail(
+    fp: &FlatPuzzle,
+    hyp: &State,
+    qi: usize,
+    contradiction: &Contradiction,
+) -> String {
+    match contradiction {
+        Contradiction::Optionless => format!("{} would have no options left", q(qi)),
+        Contradiction::AnswerInvalid => no_reason_detail(qi),
+        Contradiction::Conflict {
+            result,
+            derived_from,
+        } => match result.action {
+            DeduceAction::Force { answer, .. } => {
+                let reason = brief_force_reason(fp, derived_from, qi, answer);
+                let forced = if reason.is_empty() {
+                    format!("{} would have to be {answer}", q(qi))
+                } else {
+                    format!("{} would have to be {answer} ({reason})", q(qi))
+                };
+                match hyp.answers[qi] {
+                    Some(a) => format!("{forced}, but it would already be {a}"),
+                    None => format!("{forced}, which is already ruled out for it"),
+                }
+            }
+            // An elimination only conflicts by striking a committed answer, so the answer
+            // is always present and the letter struck is that same answer — already stated
+            // by a preceding line, so this one doesn't repeat it. No reason attached: the
+            // elimination explainers return a whole sentence built to follow a colon,
+            // which doesn't fit this frame.
+            DeduceAction::Eliminate { .. } | DeduceAction::EliminateMulti { .. } => {
+                match hyp.answers[qi] {
+                    Some(a) => format!("{a} would be ruled out for {}", q(qi)),
+                    None => no_reason_detail(qi),
+                }
+            }
+        },
+    }
+}
+
 /// Narrate a refuted lookahead assumption: replay the chain, then the surfaced
 /// contradiction. Mirrors the TS `explainLookahead`.
 pub fn explain_lookahead(
@@ -2803,85 +2851,64 @@ pub fn explain_lookahead(
     let letter = result.assumption_answer;
     let n = fp.n;
 
-    let mut hyp = *state;
-    hyp.answers[qi] = Some(letter);
-    hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << letter.idx());
+    let mut hyp = hypothesis(state, qi, letter);
 
     let mut involved: BTreeSet<usize> = BTreeSet::from([qi]);
     let mut lines: Vec<String> = Vec::new();
 
-    // Re-derive the chain exactly as `probe_candidate` built it — round by round,
-    // full `deduce`, sorted by rule — and render each step's reason against that
-    // round's *pre-state*. The recorded chain is flat, but its deductions came in
-    // batches all derived from one pre-round state; replaying them one at a time
-    // would show a later step a state that earlier same-round steps have further
-    // mutated, collapsing (say) a count bound the reason relies on. `deduce` is
-    // deterministic, so this reproduces `result.chain` verbatim.
-    let mut rendered = 0;
-    'rounds: while rendered < result.chain.len() {
-        let mut drs = deduce(fp, &hyp);
-        if drs.is_empty() {
-            break;
-        }
-        drs.sort_by_key(|dr| dr.rule as u8);
-        let round_pre = hyp;
-        for dr in &drs {
-            // The refuting deduction isn't in the chain — probe_candidate stops here.
-            if contradiction_question(&dr.action, &hyp).is_some() {
-                break 'rounds;
+    // One line per chain entry, its reason rendered against the round pre-state
+    // `replay_chain` hands over — rendering against the running state instead would show a
+    // step a state its same-round siblings have already advanced, collapsing (say) a count
+    // bound the reason relies on.
+    let replayed = replay_chain(fp, &mut hyp, &result.chain, &mut 0, |round_pre, dr| {
+        match dr.action {
+            DeduceAction::Force { qi: fqi, answer } => {
+                involved.insert(fqi);
+                let reason = brief_force_reason(fp, round_pre, fqi, answer);
+                lines.push(if reason.is_empty() {
+                    format!("{} must be {answer}.", q(fqi))
+                } else {
+                    format!("{} must be {answer} ({reason}).", q(fqi))
+                });
             }
-            match dr.action {
-                DeduceAction::Force { qi: fqi, answer } => {
-                    involved.insert(fqi);
-                    let reason = brief_force_reason(fp, &round_pre, fqi, answer);
-                    lines.push(if reason.is_empty() {
-                        format!("{} must be {answer}.", q(fqi))
-                    } else {
-                        format!("{} must be {answer} ({reason}).", q(fqi))
-                    });
-                }
-                DeduceAction::EliminateMulti {
-                    question_mask,
-                    option_mask,
-                } => {
-                    let qis: Vec<usize> =
-                        (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
-                    involved.extend(qis.iter().copied());
-                    let opt_str = (0..5)
-                        .filter(|&b| (option_mask >> b) & 1 == 1)
-                        .map(|b| LETTERS[b].to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ");
-                    let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
-                    lines.push(format!("Eliminate {opt_str} from {q_list}."));
-                }
-                DeduceAction::Eliminate { qi: eqi, oi } => {
-                    involved.insert(eqi);
-                    // Reuse the single-elimination explainer so every per-rule reason
-                    // (ConsecIdent, count, positional, true-statement, …) reads the same
-                    // inside a chain as on its own — no thinner second path to drift.
-                    let (reason, extra) = elim_chain_line(fp, &round_pre, eqi, oi, dr.rule);
-                    involved.extend(extra);
-                    lines.push(format!(
-                        "Eliminate {} option {}: {reason}",
-                        q(eqi),
-                        LETTERS[oi]
-                    ));
-                }
+            DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                let qis: Vec<usize> = (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
+                involved.extend(qis.iter().copied());
+                let opt_str = (0..5)
+                    .filter(|&b| (option_mask >> b) & 1 == 1)
+                    .map(|b| LETTERS[b].to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+                lines.push(format!("Eliminate {opt_str} from {q_list}."));
             }
-            apply_action(&dr.action, &mut hyp);
-            rendered += 1;
-            if rendered >= result.chain.len() {
-                break 'rounds;
+            DeduceAction::Eliminate { qi: eqi, oi } => {
+                involved.insert(eqi);
+                // Reuse the single-elimination explainer so every per-rule reason
+                // (ConsecIdent, count, positional, true-statement, …) reads the same
+                // inside a chain as on its own — no thinner second path to drift.
+                let (reason, extra) = elim_chain_line(fp, round_pre, eqi, oi, dr.rule);
+                involved.extend(extra);
+                lines.push(format!(
+                    "Eliminate {} option {}: {reason}",
+                    q(eqi),
+                    LETTERS[oi]
+                ));
             }
         }
-    }
+    });
+    debug_assert!(replayed, "lookahead chain failed to replay");
 
     let contradiction_qi = result.contradiction_qi;
     involved.insert(contradiction_qi);
     let detail = match explain_invalid_detail(fp, &hyp, contradiction_qi) {
         Some(reason) => reason.replace(" claims ", " would say "),
-        None => format!("{} would be invalid", q(contradiction_qi)),
+        // `explain_invalid_detail` only speaks about a committed answer being wrong, so it
+        // has nothing for the routes that leave a question with no legal answer instead.
+        None => refutation_detail(fp, &hyp, contradiction_qi, &result.contradiction),
     };
     lines.push(format!("But {detail}. Contradiction."));
     lines.push(format!("So {} can't be {letter}.", q(qi)));
@@ -3305,6 +3332,7 @@ mod tests {
             assumption_answer: Answer::A,
             chain: ArrayVec::new(),
             contradiction_qi: 0,
+            contradiction: Contradiction::AnswerInvalid,
         };
         let steps = explain_lookahead(&fp, &state, &result);
         assert_eq!(

@@ -1,10 +1,10 @@
 //! Lookahead: refute a candidate answer by assuming it and deducing to a
 //! contradiction. Probes use `deduce` — sound-only, since `assume_unique` is false
 //! (a false hypothesis would make uniqueness-assuming rules unsound). The two entry
-//! points differ only in how they pick a chain: `lookahead` takes the first
-//! refutable candidate; `lookahead_shortest` scans all and returns the shortest
-//! chain (drives the browser hint engine). Callers vary only the chain-length
-//! bound — generation caps it at the recipe depth; verify and hints run unbounded.
+//! points differ in how they pick a chain: `lookahead` takes the first refutable
+//! candidate; `lookahead_shortest` scans all and returns the shortest chain, minimized
+//! (drives the browser hint engine and `check`'s shortest-lookahead tier). Callers vary only the chain-length bound — generation
+//! caps it at the recipe depth; verify and hints run unbounded.
 
 use arrayvec::ArrayVec;
 
@@ -12,18 +12,43 @@ use crate::check_answer::{Validity, check_answer};
 use crate::deduce::{DeduceResult, apply_action, contradiction_question, deduce};
 use crate::types::*;
 
+/// Deductions recorded on the way to a contradiction; capacity is the largest board's
+/// cell count, which a probe can't exceed.
+pub(crate) type LookaheadChain = ArrayVec<DeduceResult, 80>;
+
+/// How many of the shortest candidates `lookahead_shortest` minimizes before picking.
+/// More than one because the scan ranks by *unpruned* length, which minimization can
+/// reorder — a longer trace sometimes trims further than a shorter one.
+const MINIMIZE_TOP_K: usize = 3;
+
+/// How a hypothesis was refuted at one question — paired with that question's index in
+/// [`LookaheadResult`]. Recorded rather than re-derived, because the hint's closing
+/// "But …. Contradiction." line states it and `Conflict` isn't recoverable from the end
+/// state alone.
+#[derive(Clone, Copy, Debug)]
+pub enum Contradiction {
+    Optionless,
+    /// The committed answer there is one `check_answer` rejects.
+    AnswerInvalid,
+    /// A rule concluded something the state contradicts there. `derived_from` is the state
+    /// the rule fired at, which its reason has to be read against.
+    Conflict {
+        result: DeduceResult,
+        derived_from: State,
+    },
+}
+
+// Everything past the elimination is read only by the explain layer.
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct LookaheadResult {
     pub eliminate_qi: usize,
     pub eliminate_oi: usize,
-    #[allow(dead_code)] // used by explain layer
     pub assumption_qi: usize,
-    #[allow(dead_code)] // used by explain layer
     pub assumption_answer: Answer,
-    #[allow(dead_code)] // used by explain layer
-    pub chain: ArrayVec<DeduceResult, 80>,
-    #[allow(dead_code)] // used by explain layer
+    pub chain: LookaheadChain,
     pub contradiction_qi: usize,
+    pub contradiction: Contradiction,
 }
 
 /// First eliminable option found: walk unanswered questions' live options in
@@ -56,21 +81,17 @@ pub fn lookahead(
     None
 }
 
-/// Probe *every* candidate to an unbounded fixpoint and return the elimination
-/// whose contradiction chain has the fewest deductions — the shortest, most
-/// explainable hint. Ties break toward the first candidate in (question, option)
-/// order. Drives the browser hint engine. Differs from `lookahead` only in
-/// scanning all candidates for the shortest chain rather than taking the first
-/// hit (same `deduce` strength — see the module doc).
-///
-/// Unbounded, so it refutes every candidate a generated puzzle needs eliminated on
-/// its solve path (generation certifies solvability at a *bounded* depth ≤ this);
-/// off-path player states it can't refute fall through to `next_step`'s from-start
-/// fallback.
-// Only caller is the wasm `lookaheadShortest` export, so it's dead in native builds.
-#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
-pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadResult> {
-    let mut best: Option<LookaheadResult> = None;
+/// Probe *every* candidate and return the elimination whose minimized contradiction chain
+/// has the fewest deductions — the [`MINIMIZE_TOP_K`] shortest get minimized, and the best
+/// of those wins.
+pub fn lookahead_shortest(
+    fp: &FlatPuzzle,
+    state: &State,
+    lookahead_deduce_until: usize,
+    deduce_calls: &mut u32,
+) -> Option<LookaheadResult> {
+    // Try assuming each live option in turn, shortlisting the refutations by raw length.
+    let mut leaders: BestN<LookaheadResult, MINIMIZE_TOP_K> = BestN::new();
     for qi in 0..fp.n {
         if state.answers[qi].is_some() {
             continue;
@@ -79,14 +100,194 @@ pub fn lookahead_shortest(fp: &FlatPuzzle, state: &State) -> Option<LookaheadRes
             if state.is_eliminated(qi, oi) {
                 continue;
             }
-            if let Some(r) = probe_candidate(fp, state, qi, oi, usize::MAX, &mut 0)
-                && best.as_ref().is_none_or(|b| r.chain.len() < b.chain.len())
+            if let Some(r) =
+                probe_candidate(fp, state, qi, oi, lookahead_deduce_until, deduce_calls)
             {
-                best = Some(r);
+                leaders.offer(r.chain.len(), r);
             }
         }
     }
+
+    // Then minimize the shortlist and re-rank, since trimming reorders it.
+    let mut best: Option<LookaheadResult> = None;
+    for mut r in leaders.into_items() {
+        minimize_chain(fp, state, &mut r, deduce_calls);
+        if best.as_ref().is_none_or(|b| r.chain.len() < b.chain.len()) {
+            best = Some(r);
+        }
+    }
     best
+}
+
+/// Trim a chain down to what the contradiction needs. `probe_candidate` logs everything a
+/// round derived, in rule order, so entries can precede a conflict that was already
+/// visible or have no bearing on it at all.
+fn minimize_chain(
+    fp: &FlatPuzzle,
+    state: &State,
+    result: &mut LookaheadResult,
+    deduce_calls: &mut u32,
+) {
+    // Lands on a chain no single step can be removed from, not the shortest that exists.
+    let mut shrank = true;
+    while shrank {
+        shrank = false;
+        // Back to front: late steps are the likeliest to be droppable, and each drop makes
+        // every later replay cheaper. Front to back measures worse on both.
+        for idx in (0..result.chain.len()).rev() {
+            shrank |= drop_step_unless_needed(fp, state, result, deduce_calls, idx);
+        }
+    }
+}
+
+/// Drop the step at `idx` unless the contradiction needs it. Returns whether it went,
+/// leaving `result.contradiction` matching whatever chain remains.
+fn drop_step_unless_needed(
+    fp: &FlatPuzzle,
+    state: &State,
+    result: &mut LookaheadResult,
+    deduce_calls: &mut u32,
+    idx: usize,
+) -> bool {
+    let step = result.chain.remove(idx);
+    match chain_contradiction(fp, state, result, deduce_calls) {
+        // Still refutes without the step, though possibly by a different mechanism.
+        Some(contradiction) => {
+            result.contradiction = contradiction;
+            true
+        }
+        // The step was load-bearing, so the chain keeps it.
+        None => {
+            result.chain.insert(idx, step);
+            false
+        }
+    }
+}
+
+/// Does the chain still hold up? Every step has to be derivable at the point it is
+/// applied, and the question it blames has to still be broken at the end. Returns how that
+/// question is broken, or `None` if either check fails.
+///
+/// Every chain this module reports passes this, and [`minimize_chain`] uses it to decide
+/// whether a step can go.
+pub(crate) fn chain_contradiction(
+    fp: &FlatPuzzle,
+    state: &State,
+    result: &LookaheadResult,
+    deduce_calls: &mut u32,
+) -> Option<Contradiction> {
+    let mut hyp = hypothesis(state, result.assumption_qi, result.assumption_answer);
+    // Keep the last round's pre-state: `contradiction_at` needs it to spot a clash the
+    // chain's own steps have since hidden.
+    let mut last_round_pre = None;
+    if !replay_chain(fp, &mut hyp, &result.chain, deduce_calls, |round_pre, _| {
+        last_round_pre = Some(*round_pre);
+    }) {
+        return None;
+    }
+    contradiction_at(
+        fp,
+        &hyp,
+        last_round_pre.as_ref(),
+        result.contradiction_qi,
+        deduce_calls,
+    )
+}
+
+/// Re-apply `chain` to `hyp`, handing every step to `on_step` along with the state its
+/// reason has to be read against. `false` if the chain doesn't hold together.
+pub(crate) fn replay_chain(
+    fp: &FlatPuzzle,
+    hyp: &mut State,
+    chain: &[DeduceResult],
+    deduce_calls: &mut u32,
+    mut on_step: impl FnMut(&State, &DeduceResult),
+) -> bool {
+    let mut applied = 0;
+    while applied < chain.len() {
+        // One round: everything it covers was derived from this one pre-state.
+        let round_pre = *hyp;
+        *deduce_calls += 1;
+        let mut batch = deduce(fp, &round_pre);
+        batch.sort_by_key(|dr| dr.rule as u8);
+
+        let round_start = applied;
+        for dr in &batch {
+            if applied == chain.len() {
+                break;
+            }
+            // Matching in batch order rather than searching keeps the rounds identical to
+            // the ones `probe_candidate` built, so an untrimmed chain replays as recorded.
+            if *dr != chain[applied] {
+                continue;
+            }
+            // Applying this would overwrite the very thing it contradicts, losing it.
+            if contradiction_question(&dr.action, hyp).is_some() {
+                return false;
+            }
+            on_step(&round_pre, dr);
+            apply_action(&dr.action, hyp);
+            applied += 1;
+        }
+
+        // Nothing matched: the next step isn't derivable here, so its reason would be a
+        // non-sequitur. What stops a step being dropped that a later one needed.
+        if applied == round_start {
+            return false;
+        }
+    }
+    true
+}
+
+/// How `qi` is broken in `hyp`, the state a chain replay ends in, or `None` if it isn't.
+/// `last_round_pre` is the pre-state of the round the chain's final step came from, and
+/// `None` for an empty chain.
+fn contradiction_at(
+    fp: &FlatPuzzle,
+    hyp: &State,
+    last_round_pre: Option<&State>,
+    qi: usize,
+    deduce_calls: &mut u32,
+) -> Option<Contradiction> {
+    match hyp.answers[qi] {
+        None if (!hyp.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 0 => {
+            return Some(Contradiction::Optionless);
+        }
+        Some(_) if check_answer(fp, *hyp, qi) == Validity::Invalid => {
+            return Some(Contradiction::AnswerInvalid);
+        }
+        _ => {}
+    }
+
+    // Otherwise the refutation is a rule concluding something `hyp` contradicts at `qi`.
+    let mut conflict_derived_at = |from: &State| {
+        *deduce_calls += 1;
+        deduce(fp, from)
+            .iter()
+            .find(|dr| contradiction_question(&dr.action, hyp) == Some(qi))
+            .map(|dr| Contradiction::Conflict {
+                result: *dr,
+                derived_from: *from,
+            })
+    };
+    // Prefer one derivable here and now: that one a player can reach from the state the
+    // chain leaves them in.
+    if let Some(found) = conflict_derived_at(hyp) {
+        return Some(found);
+    }
+    // Failing that, the batch the last step came from. A round can force an option and
+    // eliminate it at the same time, and once the force is applied the eliminating rule
+    // stops firing, so only the earlier batch still shows the clash. Sound either way: a
+    // conclusion drawn earlier survives the steps applied after it.
+    last_round_pre.and_then(conflict_derived_at)
+}
+
+/// `state` with `answer` committed at `qi`: what a probe and its replays start from.
+pub(crate) fn hypothesis(state: &State, qi: usize, answer: Answer) -> State {
+    let mut hyp = *state;
+    hyp.answers[qi] = Some(answer);
+    hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
+    hyp
 }
 
 /// Assume `oi` is the answer to `qi` and deduce forward, stopping once the chain
@@ -103,12 +304,10 @@ fn probe_candidate(
     deduce_calls: &mut u32,
 ) -> Option<LookaheadResult> {
     let n = fp.n;
-    let mut hyp = *state;
-    hyp.answers[qi] = Some(Answer::from(oi as u8));
-    hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
+    let mut hyp = hypothesis(state, qi, Answer::from(oi as u8));
 
-    let mut chain = ArrayVec::new();
-    let mut contradiction_qi = None;
+    let mut chain = LookaheadChain::new();
+    let mut refutation = None;
     while chain.len() < lookahead_deduce_until {
         *deduce_calls += 1;
         let mut drs = deduce(fp, &hyp);
@@ -120,14 +319,21 @@ fn probe_candidate(
         // `run_engine` applies its batch unsorted — it needs only the fixpoint, not a
         // stable chain — so the asymmetry is deliberate.
         drs.sort_by_key(|dr| dr.rule as u8);
+        let round_pre = hyp;
         for dr in &drs {
-            // A rule whose conclusion conflicts with `hyp` refutes the hypothesis.
-            // Report the question where the conflict surfaces (the action's target),
-            // not the assumption `qi` — the explain layer renders "Q{contradiction_qi}
-            // would be invalid" against the replayed chain state, and naming the
-            // assumption (which is trivially consistent) yields a false generic hint.
+            // A rule whose conclusion conflicts with `hyp` refutes the hypothesis. Blame
+            // the question the conflict surfaces at, not the assumption — the assumption
+            // is trivially consistent, so naming it yields a false hint. The refuting
+            // deduction stays *out* of the chain: the loop bound counts chain entries, so
+            // pushing it would change how deep a bounded probe may go.
             if let Some(cqi) = contradiction_question(&dr.action, &hyp) {
-                contradiction_qi = Some(cqi);
+                refutation = Some((
+                    cqi,
+                    Contradiction::Conflict {
+                        result: *dr,
+                        derived_from: round_pre,
+                    },
+                ));
                 break;
             }
             apply_action(&dr.action, &mut hyp);
@@ -139,37 +345,31 @@ fn probe_candidate(
                 )
             }
         }
-        if contradiction_qi.is_some() {
+        if refutation.is_some() {
             break;
         }
     }
 
-    let result = |contradiction_qi| {
-        Some(LookaheadResult {
-            eliminate_qi: qi,
-            eliminate_oi: oi,
-            assumption_qi: qi,
-            assumption_answer: Answer::from(oi as u8),
-            chain: chain.clone(),
-            contradiction_qi,
+    // No rule conflicted mid-loop, so sweep for a question the fixpoint has broken.
+    let refutation = refutation.or_else(|| {
+        (0..n).find_map(|check_qi| match hyp.answers[check_qi] {
+            None => ((!hyp.eliminated[check_qi] & ALL_OPTIONS_MASK) == 0)
+                .then_some((check_qi, Contradiction::Optionless)),
+            Some(_) => (check_answer(fp, hyp, check_qi) == Validity::Invalid)
+                .then_some((check_qi, Contradiction::AnswerInvalid)),
         })
-    };
+    });
 
-    if let Some(cqi) = contradiction_qi {
-        return result(cqi);
-    }
-    for check_qi in 0..n {
-        if hyp.answers[check_qi].is_none() {
-            if (!hyp.eliminated[check_qi] & ALL_OPTIONS_MASK).count_ones() == 0 {
-                return result(check_qi);
-            }
-            continue;
-        }
-        if check_answer(fp, hyp, check_qi) == Validity::Invalid {
-            return result(check_qi);
-        }
-    }
-    None
+    let (contradiction_qi, contradiction) = refutation?;
+    Some(LookaheadResult {
+        eliminate_qi: qi,
+        eliminate_oi: oi,
+        assumption_qi: qi,
+        assumption_answer: Answer::from(oi as u8),
+        chain,
+        contradiction_qi,
+        contradiction,
+    })
 }
 
 #[cfg(test)]

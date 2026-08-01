@@ -3,16 +3,16 @@ use crate::deduce::{
     DeduceAction, DeduceResult, apply_action, contradiction_question, deduce,
     deduce_assuming_unique,
 };
-use crate::lookahead::{LookaheadResult, lookahead};
+use crate::lookahead::{LookaheadResult, lookahead, lookahead_shortest};
 use crate::time::{us, wasm_now};
 use crate::types::*;
 
 /// Which variant of the shared solve engine [`run_engine`] runs — see each preset
-/// for what it is and where it's used. They differ on two axes only: whether the
-/// outer `deduce` may assume the puzzle is unique, and how deep lookahead may search.
-/// (Lookahead itself always deduces with sound `deduce` regardless of preset — see
-/// the `lookahead` module doc — so `standard` and `fallback` differ purely in the
-/// depth cap.)
+/// for what it is and where it's used. They differ on three axes only: whether the
+/// outer `deduce` may assume the puzzle is unique, how deep lookahead may search, and
+/// which refutable candidate lookahead commits to. (Lookahead itself always deduces
+/// with sound `deduce` regardless of preset — see the `lookahead` module doc — so
+/// `standard` and `fallback` differ purely in the depth cap.)
 #[derive(Clone, Copy)]
 pub struct EngineConfig {
     /// `deduce_assuming_unique` (true) vs sound `deduce` (false).
@@ -22,6 +22,10 @@ pub struct EngineConfig {
     /// deduction). Not a hard cap: the batch that crosses the threshold is applied
     /// in full, so the chain can end slightly longer.
     pub lookahead_deduce_until: usize,
+    /// `lookahead_shortest` (true) vs `lookahead` (false): probe every candidate and
+    /// eliminate the one with the shortest contradiction chain, rather than the first
+    /// candidate that refutes at all.
+    pub pick_shortest: bool,
 }
 
 impl EngineConfig {
@@ -34,6 +38,7 @@ impl EngineConfig {
         Self {
             assuming_unique: false,
             lookahead_deduce_until,
+            pick_shortest: false,
         }
     }
     /// Used for the ship bar and the player-facing default: generation's acceptance
@@ -46,6 +51,7 @@ impl EngineConfig {
         Self {
             assuming_unique: true,
             lookahead_deduce_until,
+            pick_shortest: false,
         }
     }
     /// Used as the break-glass fallback: `check`'s full-depth tier and un-vetted
@@ -58,6 +64,20 @@ impl EngineConfig {
         Self {
             assuming_unique: true,
             lookahead_deduce_until: usize::MAX,
+            pick_shortest: false,
+        }
+    }
+    /// Used by `check`'s shortest-lookahead tier: [`fallback`](Self::fallback) strength
+    /// with the browser hint engine's picker (`lookahead_shortest`, unbounded), so the
+    /// tier measures how a hint-following player's solve path differs from the
+    /// first-hit one — same deduce/depth, different candidate each time lookahead
+    /// fires. Probes every live candidate per call, so it is much slower than the
+    /// first-hit presets; offline use only.
+    pub fn shortest() -> Self {
+        Self {
+            assuming_unique: true,
+            lookahead_deduce_until: usize::MAX,
+            pick_shortest: true,
         }
     }
 }
@@ -72,7 +92,18 @@ pub struct EngineTelemetry {
     pub lookahead_hits: u32,
     pub lookahead_us: u64,
     pub deduce_calls_in_lookahead: u32,
+    /// Deductions in the contradiction chains of the hits — i.e. summed over hits
+    /// only, not over the probes lookahead discarded on the way there.
+    pub lookahead_chain_steps: u32,
+    /// The same chains counted by length rather than summed, so the tail is visible
+    /// and not just the mean. Indexed by chain length; the last bucket is a
+    /// "that long or longer" catch-all.
+    pub lookahead_chain_hist: [u32; CHAIN_HIST_BUCKETS],
 }
+
+/// Buckets in [`EngineTelemetry::lookahead_chain_hist`]: lengths 0..=8 exactly, then
+/// 9-or-more.
+pub const CHAIN_HIST_BUCKETS: usize = 10;
 
 /// Observes each applied step. [`NoSteps`] is zero-sized and its methods inline to
 /// nothing, so callers that don't report steps (generation, `solve`) compile to a
@@ -177,7 +208,12 @@ pub fn run_engine<S: StepSink>(
         }
         telemetry.lookahead_calls += 1;
         let t = wasm_now();
-        let lr = lookahead(
+        let pick = if cfg.pick_shortest {
+            lookahead_shortest
+        } else {
+            lookahead
+        };
+        let lr = pick(
             fp,
             &state,
             cfg.lookahead_deduce_until,
@@ -186,6 +222,8 @@ pub fn run_engine<S: StepSink>(
         telemetry.lookahead_us += us(t);
         if let Some(lr) = lr {
             telemetry.lookahead_hits += 1;
+            telemetry.lookahead_chain_steps += lr.chain.len() as u32;
+            telemetry.lookahead_chain_hist[lr.chain.len().min(CHAIN_HIST_BUCKETS - 1)] += 1;
             sink.on_lookahead(&lr);
             state.eliminated[lr.eliminate_qi] |= 1 << lr.eliminate_oi;
             continue;

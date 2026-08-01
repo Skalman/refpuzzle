@@ -408,7 +408,7 @@ impl QuestionType {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct State {
     pub answers: [Option<Answer>; MAX_N],
     pub eliminated: [u8; MAX_N],
@@ -450,6 +450,41 @@ pub struct OptionPos {
 pub struct Claim {
     pub question_type: QuestionType,
     pub value: OptionValue,
+}
+
+/// The `N` best items offered, ranked by a `usize` key where lower is better, kept in
+/// rank order. For a scan that would otherwise keep only the single best but whose
+/// ranking key is provisional — the cheap key picks the shortlist, an expensive step then
+/// re-ranks it. Ties keep the earlier offer, so a deterministic scan gives a
+/// deterministic list.
+pub struct BestN<T, const N: usize> {
+    items: arrayvec::ArrayVec<(usize, T), N>,
+}
+
+impl<T, const N: usize> BestN<T, N> {
+    pub fn new() -> Self {
+        BestN {
+            items: arrayvec::ArrayVec::new(),
+        }
+    }
+
+    /// Keep `item` if `key` ranks it among the `N` best so far.
+    pub fn offer(&mut self, key: usize, item: T) {
+        let Some(rank) = self.items.iter().position(|(k, _)| key < *k) else {
+            // Beaten by everything held, so it only belongs here while there is room.
+            let _ = self.items.try_push((key, item));
+            return;
+        };
+        if self.items.is_full() {
+            self.items.pop();
+        }
+        self.items.insert(rank, (key, item));
+    }
+
+    /// The kept items, best first.
+    pub fn into_items(self) -> impl Iterator<Item = T> {
+        self.items.into_iter().map(|(_, item)| item)
+    }
 }
 
 #[derive(Clone)]

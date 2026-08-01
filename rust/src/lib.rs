@@ -324,7 +324,7 @@ mod wasm_api {
                     focus_qis: leading_questions(&explain),
                     explain,
                 }
-            } else if let Some(lr) = lookahead_shortest(&self.fp, &s) {
+            } else if let Some(lr) = lookahead_shortest(&self.fp, &s, usize::MAX, &mut 0) {
                 let explain = explain_lookahead(&self.fp, &s, &lr);
                 StepApi {
                     action: DeduceActionApi::Eliminate {

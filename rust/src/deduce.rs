@@ -145,7 +145,7 @@ pub enum DeduceAction {
     EliminateMulti { question_mask: u16, option_mask: u8 },
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeduceResult {
     pub action: DeduceAction,
     #[allow(dead_code)] // used by tests
