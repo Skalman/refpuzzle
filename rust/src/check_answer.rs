@@ -59,11 +59,10 @@ impl Validity {
 /// describe. Carries just what a renderer can't read back off the puzzle and the state:
 /// which cell or letter is at fault, plus any tally this module computed on the way.
 ///
-/// [`explain::rejected_claim_text`](crate::explain) renders these — for an answered
-/// question, for one of its options, and for a refuted hypothesis. Every variant except
-/// [`Malformed`](InvalidReason::Malformed) and
-/// [`NoOptionsLeft`](InvalidReason::NoOptionsLeft) must yield a sentence under all three,
-/// which `explain`'s `every_invalid_reason_renders` pins.
+/// `explain::rejected_claim_text` renders these — for an answered question, for one of its
+/// options, and for a refuted hypothesis. Every variant except `Malformed` and
+/// `NoOptionsLeft` must yield a sentence under all three, which `explain`'s
+/// `every_invalid_reason_renders` pins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidReason {
     /// The option value can't mean anything for this kind: a NONE where a number is
@@ -72,7 +71,8 @@ pub enum InvalidReason {
     /// `Error`, so a shipped puzzle never carries one and there is no prose for it.
     Malformed,
     /// Not about a claim at all — the question has no answer *and* no options left. The
-    /// lookahead hint says this from `Contradiction::Optionless` instead.
+    /// lookahead hint says this from the elimination that emptied the cell instead, via
+    /// `explain::optionless_detail`.
     NoOptionsLeft,
 
     /// More cells already match than the claimed count allows: `count` answered, plus
@@ -92,13 +92,12 @@ pub enum InvalidReason {
     /// Another cell holds a letter the claim reserves for one place — or for nowhere.
     OtherHasLetter { at: u8, letter: Answer },
     /// A cell *before* the one the claim named holds the letter, so the named one isn't
-    /// the first (or closest-after) question with it. Distinct from
-    /// [`OtherHasLetter`](InvalidReason::OtherHasLetter) because the direction is what
-    /// refutes the claim, and only the scan that found the cell knows it — the renderer
-    /// must not re-derive it from the indices.
+    /// the first (or closest-after) question with it. Distinct from `OtherHasLetter`
+    /// because the direction is what refutes the claim, and only the scan that found the
+    /// cell knows it — the renderer must not re-derive it from the indices.
     EarlierHasLetter { at: u8, letter: Answer },
     /// A cell *after* the one the claim named holds the letter — mirror of
-    /// [`EarlierHasLetter`](InvalidReason::EarlierHasLetter).
+    /// `EarlierHasLetter`.
     LaterHasLetter { at: u8, letter: Answer },
 
     /// The `ConsecIdent` pair starting at `at` is answered `first` and `second`.
@@ -198,7 +197,7 @@ impl Pred {
             Pred::IsConsonant => !a.is_vowel(),
         }
     }
-    fn mask(self) -> u8 {
+    pub(crate) fn mask(self) -> u8 {
         match self {
             Pred::IsAnswer(t) => 1u8 << t.idx(),
             Pred::IsVowel => 0b10001,
@@ -555,7 +554,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                         })
                     }
                 }
-                // The target can never take the claimed letter if it's struck out there.
+                // The target can never take the claimed letter if it's eliminated there.
                 None if eliminated[k] & (1u8 << ov.value()) != 0 => {
                     Judgment::Invalid(InvalidReason::TargetCannot {
                         at: k as u8,
@@ -700,7 +699,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 }
 
                 // Three ways the pair can no longer be made to match: no shared option
-                // left, or one side answered a letter the other has struck out.
+                // left, or one side answered a letter the other has eliminated.
                 let poss_a = !eliminated[ov] & ALL_OPTIONS_MASK;
                 let poss_b = !eliminated[ov + 1] & ALL_OPTIONS_MASK;
                 let impossible = poss_a & poss_b == 0
@@ -960,7 +959,7 @@ fn check_scoped_sameness(
     };
     let amask = 1u8 << matched.idx();
     // Two independent cases: `eliminated` doesn't track answers, so a question
-    // differs either by being answered otherwise or by having M struck out.
+    // differs either by being answered otherwise or by having M eliminated.
     let known_differs = |j: usize| match state.answers[j] {
         Some(other) => other != matched,
         None => state.eliminated[j] & amask != 0,

@@ -27,7 +27,6 @@ const MINIMIZE_TOP_K: usize = 3;
 /// state alone.
 #[derive(Clone, Copy, Debug)]
 pub enum Contradiction {
-    Optionless,
     /// The committed answer there is one `check_answer` rejects.
     AnswerInvalid,
     /// A rule concluded something the state contradicts there. `derived_from` is the state
@@ -242,6 +241,11 @@ pub(crate) fn replay_chain(
 /// How `qi` is broken in `hyp`, the state a chain replay ends in, or `None` if it isn't.
 /// `last_round_pre` is the pre-state of the round the chain's final step came from, and
 /// `None` for an empty chain.
+///
+/// The same two mechanisms `probe_candidate` reports, reached the other way round. There
+/// the chain is being built, so a refuting action is in hand at the moment it is applied
+/// and one question after another falls out; here the chain is already applied and the
+/// blamed question already chosen, so a `Conflict` has to be recovered by deducing again.
 fn contradiction_at(
     fp: &FlatPuzzle,
     hyp: &State,
@@ -249,14 +253,11 @@ fn contradiction_at(
     qi: usize,
     deduce_calls: &mut u32,
 ) -> Option<Contradiction> {
-    match hyp.answers[qi] {
-        None if (!hyp.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 0 => {
-            return Some(Contradiction::Optionless);
-        }
-        Some(_) if check_answer(fp, *hyp, qi) == Validity::Invalid => {
-            return Some(Contradiction::AnswerInvalid);
-        }
-        _ => {}
+    // Readable off the end state, so it comes before paying for a deduce. Note this is the
+    // opposite preference to `probe_candidate`, which reports a `Conflict` it met mid-loop
+    // even where the answer is invalid too.
+    if check_answer(fp, *hyp, qi) == Validity::Invalid {
+        return Some(Contradiction::AnswerInvalid);
     }
 
     // Otherwise the refutation is a rule concluding something `hyp` contradicts at `qi`.
@@ -350,13 +351,15 @@ fn probe_candidate(
         }
     }
 
-    // No rule conflicted mid-loop, so sweep for a question the fixpoint has broken.
+    // No rule conflicted mid-loop, so sweep for a question the fixpoint has broken — one
+    // `check_answer` rejects, which covers a cell left with no options (`NoOptionsLeft`).
+    // The fixpoint shouldn't be able to leave one: `contradiction_question` catches the
+    // elimination that would empty a cell before it lands, and a board that arrives that
+    // way is one the player-facing callers reject first.
     let refutation = refutation.or_else(|| {
-        (0..n).find_map(|check_qi| match hyp.answers[check_qi] {
-            None => ((!hyp.eliminated[check_qi] & ALL_OPTIONS_MASK) == 0)
-                .then_some((check_qi, Contradiction::Optionless)),
-            Some(_) => (check_answer(fp, hyp, check_qi) == Validity::Invalid)
-                .then_some((check_qi, Contradiction::AnswerInvalid)),
+        (0..n).find_map(|check_qi| {
+            (check_answer(fp, hyp, check_qi) == Validity::Invalid)
+                .then_some((check_qi, Contradiction::AnswerInvalid))
         })
     });
 
@@ -497,7 +500,7 @@ mod tests {
             ),
             Some(2)
         );
-        // Eliminate striking a cell's current answer → that cell.
+        // Eliminate removing a cell's current answer → that cell.
         assert_eq!(
             contradiction_question(
                 &DeduceAction::Eliminate {

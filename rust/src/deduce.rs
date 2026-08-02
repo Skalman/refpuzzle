@@ -3,7 +3,7 @@
 //!
 //! Two design rules:
 //! - A rule's job is *progress*, not validity. A rule may incidentally surface a
-//!   contradiction (an elimination that empties a cell or strikes its committed
+//!   contradiction (an elimination that empties a cell or removes its committed
 //!   answer — `contradiction_question` flags that), but none should exist *only*
 //!   to manufacture one. Deciding whether a committed answer is already impossible
 //!   is `check_answer`'s job, not a deduce rule's.
@@ -153,13 +153,14 @@ pub struct DeduceResult {
 }
 
 /// The question where `action`'s conclusion conflicts with `state`, or `None` if
-/// consistent: a `Force` onto a cell already answered otherwise *or* whose target
-/// option is eliminated, or an `Eliminate`/`EliminateMulti` striking a cell's
-/// current answer. Shared by `run_engine`'s deduce loop (real state) and
-/// `lookahead`'s hypothesis probe — in the latter, forcing an already-eliminated
-/// option is the primary way a hypothesis gets refuted. A sound engine on a
-/// well-posed puzzle never contradicts the real state; `run_engine` surfaces it so
-/// generation fails loud on an unsound rule and `check` reports the culprit.
+/// consistent: a `Force` onto a question already answered otherwise *or* whose target
+/// option is eliminated, or an `Eliminate`/`EliminateMulti` that `leaves_no_answer` for one
+/// of the questions it touches — that question is the one reported.
+/// Shared by `run_engine`'s deduce loop (real state) and `lookahead`'s hypothesis probe —
+/// in the latter, forcing an already-eliminated option is the primary way a hypothesis
+/// gets refuted. A sound engine on a well-posed puzzle never contradicts the real state;
+/// `run_engine` surfaces it so generation fails loud on an unsound rule and `check`
+/// reports the culprit.
 pub(crate) fn contradiction_question(action: &DeduceAction, state: &State) -> Option<usize> {
     match *action {
         DeduceAction::Force { qi, answer } => {
@@ -167,9 +168,7 @@ pub(crate) fn contradiction_question(action: &DeduceAction, state: &State) -> Op
                 || state.is_eliminated(qi, answer.idx());
             conflicts.then_some(qi)
         }
-        DeduceAction::Eliminate { qi, oi } => {
-            (state.answers[qi] == Some(Answer::from(oi as u8))).then_some(qi)
-        }
+        DeduceAction::Eliminate { qi, oi } => leaves_no_answer(state, qi, 1 << oi).then_some(qi),
         DeduceAction::EliminateMulti {
             question_mask,
             option_mask,
@@ -178,14 +177,28 @@ pub(crate) fn contradiction_question(action: &DeduceAction, state: &State) -> Op
             while qm != 0 {
                 let i = qm.trailing_zeros() as usize;
                 qm &= qm - 1;
-                if let Some(a) = state.answers[i]
-                    && (option_mask >> a.idx()) & 1 == 1
-                {
+                if leaves_no_answer(state, i, option_mask) {
                     return Some(i);
                 }
             }
             None
         }
+    }
+}
+
+/// Whether eliminating `option_mask` from `qi` leaves it no answer it could take: the
+/// module doc's "empties a cell or removes its committed answer", as a test. Both halves
+/// are needed — a wire-supplied board can answer a question without eliminating its
+/// rivals, so removing its answer needn't mean removing its last option.
+///
+/// The second half matters to `lookahead`, whose probe loop deduces again after applying a
+/// batch. Without it the elimination lands silently, the next round reasons from a board
+/// where `qi` has no options left, and whatever fires there gets blamed instead.
+#[inline(always)]
+fn leaves_no_answer(state: &State, qi: usize, option_mask: u8) -> bool {
+    match state.answers[qi] {
+        Some(a) => mask_contains(option_mask, a.idx()),
+        None => (!state.eliminated[qi] & ALL_OPTIONS_MASK) & !option_mask == 0,
     }
 }
 
@@ -446,7 +459,7 @@ fn apply_only_odd_even(
     let answers = &state.answers;
     let eliminated = &state.eliminated;
 
-    // Prune qi's own dead options; only while unanswered — striking the committed
+    // Prune qi's own dead options; only while unanswered — eliminating the committed
     // option would just manufacture a contradiction (check_answer's job).
     if answers[qi].is_none() {
         for oi in 0..5usize {
@@ -544,7 +557,7 @@ fn apply_positional_forward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
-    // Prune qi's own dead options; only while unanswered — striking the committed
+    // Prune qi's own dead options; only while unanswered — eliminating the committed
     // option would just manufacture a contradiction (check_answer's job). The
     // cross-question PositionalRangeAnswered below still fires once qi is answered.
     if ans.is_none() {
@@ -617,7 +630,7 @@ fn apply_positional_forward(
                 );
             }
         } else if ov.is_none() {
-            // FirstWith/ClosestAfter = none: no cell in range has `answer`, so strike
+            // FirstWith/ClosestAfter = none: no cell in range has `answer`, so eliminate
             // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
             // `none` is the sole remaining claim (min_pos = n), which stops once qi
             // is answered.
@@ -1024,7 +1037,7 @@ fn apply_positional_backward(
     let eliminated = &state.eliminated;
     let ans = answers[qi];
 
-    // Prune qi's own dead options; only while unanswered — striking the committed
+    // Prune qi's own dead options; only while unanswered — eliminating the committed
     // option would just manufacture a contradiction (check_answer's job). The
     // cross-question PositionalRangeAnswered below still fires once qi is answered.
     if ans.is_none() {
@@ -1097,7 +1110,7 @@ fn apply_positional_backward(
                 );
             }
         } else if ov.is_none() {
-            // LastWith/ClosestBefore = none: no cell in range has `answer`, so strike
+            // LastWith/ClosestBefore = none: no cell in range has `answer`, so eliminate
             // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
             // `none` is the sole remaining claim (max_pos = None), which stops once
             // qi is answered.
@@ -1269,7 +1282,7 @@ fn apply_same_shared(
                 }
             } else if ov.is_num() {
                 // OnlySameRuledOut: the option's target can't hold qi's letter —
-                // either it's answered otherwise, or the letter is struck out
+                // either it's answered otherwise, or the letter is eliminated
                 // there. Both cases, one rule, following `SameAsWhichForward`'s
                 // precedent (answering a question doesn't set the other options'
                 // eliminated bits, so the two conditions are independent).
@@ -2743,7 +2756,7 @@ mod tests {
     }
 
     /// §3.6: an option whose target is *answered with another letter* is ruled out,
-    /// not just one whose target has the letter struck out. `eliminated` is an
+    /// not just one whose target has the letter eliminated. `eliminated` is an
     /// independent bitset, so answering a question doesn't set the other options'
     /// bits — the two conditions have to be tested separately.
     #[test]
@@ -3232,7 +3245,7 @@ mod tests {
         // Reported, not asserted: `test_shared_deduce` already requires a fixture per
         // rule, so this is about which rules the *random-state* sweep reaches. It never
         // reaches the `TrueStatement*` family (this builder generates no `TrueStmt`) or
-        // `OnlyOptionLeft` (the state generator strikes at most 3 of the 4 wrong
+        // `OnlyOptionLeft` (the state generator eliminates at most 3 of the 4 wrong
         // options, so no row is ever down to one). Others fire single-digit times, so a
         // floor here would flake.
         let unexercised: Vec<&str> = ALL_DEDUCE_RULES

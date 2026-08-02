@@ -8,9 +8,9 @@ use std::collections::BTreeSet;
 use serde::Serialize;
 
 use crate::check_answer::{
-    InvalidReason, Pred, answered_claim, count_matching, count_pred, count_range, judge_answer,
+    InvalidReason, answered_claim, count_matching, count_pred, count_range, judge_answer,
 };
-use crate::counts::{compute_count_bounds, compute_letter_cells};
+use crate::counts::{compute_count_bounds, compute_letter_cells, count_matching_mask};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
 use crate::lookahead::{Contradiction, LookaheadResult, hypothesis, replay_chain};
 use crate::render::{claim_label, q};
@@ -546,11 +546,11 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
 /// Why option `oi` of question `qi` is impossible, as one sentence — "#1 option C claims
 /// the first A is #3, but #2 has answer A and comes before #3." Answering `oi` would commit
 /// `qi` to a claim, so this asks the judge about *that* claim on the state that assumes it,
-/// and renders the verdict through the same [`rejected_claim_text`] the answered case uses,
+/// and renders the verdict through the same `rejected_claim_text` the answered case uses,
 /// under a hypothetical subject.
 ///
 /// `None` when there is nothing to say: the judge doesn't reject the claim and it isn't one
-/// of the kinds [`elim_clause_beyond_check_answer`] covers. That is not the same as "no
+/// of the kinds `elim_clause_beyond_check_answer` covers. That is not the same as "no
 /// phrasing for this kind" — an elimination whose argument is *another* question's is
 /// `explain_elimination`'s to phrase, from the rule, before it reaches here.
 pub fn explain_elim_detail(
@@ -1010,9 +1010,9 @@ pub fn explain_force(
     // the deduce-side tally — a cell forced-but-not-yet-answered still counts.
     if let Some(pred) = count_pred(&qt) {
         let (from, to) = count_range(&qt, n);
-        let (count, guaranteed, possible) = count_tally(state, pred, from, to);
-        if possible == 0 {
-            let total = count + guaranteed;
+        let tally = count_matching_mask(&state.answers, &state.eliminated, pred.mask(), from, to);
+        if tally.possible == 0 {
+            let total = tally.min();
             steps.push(simple(format!(
                 "There are {total} {}, so {} must be {letter}.",
                 count_rule_label(&qt, total),
@@ -1196,74 +1196,6 @@ pub fn explain_force(
     )
 }
 
-/// Highest lower bound on the count of `letter_index` implied by a sibling
-/// CountAnswer/Before/After question — `(src_qi, floor)`. Mirrors
-/// `findCountFloorSource` (and `CountBounds::floor` in deduce.rs).
-fn find_count_floor_source(
-    fp: &FlatPuzzle,
-    state: &State,
-    letter_index: usize,
-) -> Option<(usize, u8)> {
-    let target = LETTERS[letter_index];
-    let mut best: Option<(usize, u8)> = None;
-    for src in 0..fp.n {
-        if !matches!(
-            fp.question_types[src],
-            QuestionType::CountAnswer { answer }
-                | QuestionType::CountAnswerBefore { answer, .. }
-                | QuestionType::CountAnswerAfter { answer, .. }
-            if answer == target
-        ) {
-            continue;
-        }
-        // Smallest still-possible option value = lower bound on this count.
-        let lo = match state.answers[src] {
-            Some(ans) => option_value_at(fp, src, ans),
-            None => (0..fp.option_count)
-                .filter(|&oi| !state.is_eliminated(src, oi) && fp.options[src][oi].is_num())
-                .map(|oi| fp.options[src][oi].value())
-                .min(),
-        };
-        if let Some(lo) = lo
-            && best.is_none_or(|(_, floor)| lo > floor)
-        {
-            best = Some((src, lo));
-        }
-    }
-    best
-}
-
-/// Lowest upper bound on the count of `letter_index` from a sibling full-range
-/// CountAnswer — `(src_qi, ceil)`. Mirrors `findCountCeilSource` (Before/After
-/// bound only a sub-range, so they can't cap the total).
-fn find_count_ceil_source(
-    fp: &FlatPuzzle,
-    state: &State,
-    letter_index: usize,
-) -> Option<(usize, u8)> {
-    let target = LETTERS[letter_index];
-    let mut best: Option<(usize, u8)> = None;
-    for src in 0..fp.n {
-        if !matches!(fp.question_types[src], QuestionType::CountAnswer { answer } if answer == target)
-        {
-            continue;
-        }
-        let hi = match state.answers[src] {
-            Some(ans) => option_value_at(fp, src, ans),
-            None => (0..fp.option_count)
-                .filter(|&oi| !state.is_eliminated(src, oi) && fp.options[src][oi].is_num())
-                .map(|oi| fp.options[src][oi].value())
-                .max(),
-        };
-        if let Some(hi) = hi
-            && best.is_none_or(|(_, ceil)| hi < ceil)
-        {
-            best = Some((src, hi));
-        }
-    }
-    best
-}
-
 /// A positional question (first/last/closest/prev-next-same) whose range rules
 /// `letter` out at `qi` — `(src_qi, prose)`. Mirrors `findPositionalRangeSource`.
 fn find_positional_range_source(
@@ -1408,38 +1340,6 @@ fn find_positional_range_source(
     None
 }
 
-/// The deduce-side count tally over `[from, to)`: `(count, guaranteed, possible)`
-/// — answered matches, unanswered cells *locked* to a match, and unanswered cells
-/// that could go either way. Mirrors `count_matching_mask` in deduce so explain's
-/// count triggers match `apply_count`'s `min` (`count + guaranteed`) and `max`
-/// (`+ possible`) exactly. (The pred-only `count_matching` folds guaranteed into
-/// `remaining`, understating the fixed count whenever a cell is already forced.)
-fn count_tally(state: &State, pred: Pred, from: usize, to: usize) -> (u8, u8, u8) {
-    let mask: u8 = (0..5)
-        .filter(|&b| pred.matches(LETTERS[b]))
-        .fold(0u8, |m, b| m | 1 << b);
-    let non_mask = !mask & ALL_OPTIONS_MASK;
-    let (mut count, mut guaranteed, mut possible) = (0u8, 0u8, 0u8);
-    for i in from..to {
-        if let Some(a) = state.answers[i] {
-            if (mask >> a.idx()) & 1 == 1 {
-                count += 1;
-            }
-        } else {
-            let remaining_bits = !state.eliminated[i] & ALL_OPTIONS_MASK;
-            if remaining_bits & mask == 0 {
-                continue;
-            }
-            if remaining_bits & non_mask == 0 {
-                guaranteed += 1;
-            } else {
-                possible += 1;
-            }
-        }
-    }
-    (count, guaranteed, possible)
-}
-
 /// A sibling count question already at its stated count (so `qi` can't add
 /// another match), or one short (so `qi` must match) — `(src_qi, prose)`.
 /// Mirrors `explainCountSaturation`.
@@ -1463,9 +1363,11 @@ fn explain_count_saturation(
             continue;
         };
         let (from, to) = count_range(&src_qt, n);
-        let (count, guaranteed, possible) = count_tally(state, pred, from, to);
-        let min = count + guaranteed;
-        let max = count + guaranteed + possible;
+        // The same tally `apply_count` fires on, so explain's triggers match its `min`/`max`
+        // exactly. (The pred-only `count_matching` folds locked-in cells into `remaining`,
+        // understating the fixed count whenever one is already forced.)
+        let tally = count_matching_mask(&state.answers, &state.eliminated, pred.mask(), from, to);
+        let (min, possible) = (tally.min(), tally.possible);
         // CountSaturated: `value` matches are already locked in (answered or forced),
         // so no other question can take a matching option.
         if pred.matches(letter) && min == value && possible > 0 {
@@ -1481,7 +1383,7 @@ fn explain_count_saturation(
         }
         // CountMustMatchElim: the count can only reach `value` if every remaining
         // unknown matches, so a non-matching option is impossible.
-        if !pred.matches(letter) && max == value && possible > 0 {
+        if !pred.matches(letter) && tally.max() == value && possible > 0 {
             return Some((
                 src,
                 format!(
@@ -1747,34 +1649,41 @@ pub fn explain_elimination(
         return steps;
     }
 
-    if matches!(rule, DeduceRule::LeastCommonCountFloor) && ov.is_num() && ov.value() < 5 {
-        let claimed = LETTERS[ov.value() as usize];
-        if let Some((src_qi, floor)) = find_count_floor_source(fp, state, ov.value() as usize) {
+    // The bound these two rules argue from, named by the question that set it — read off
+    // `CountBounds`, the same scan deduce bounds letters with, rather than rediscovered here.
+    // A claimed letter the board doesn't offer has no bound to quote.
+    if matches!(
+        rule,
+        DeduceRule::LeastCommonCountFloor | DeduceRule::MostCommonCountCeil
+    ) && ov.is_num()
+        && (ov.value() as usize) < fp.option_count
+    {
+        let claimed_index = ov.value() as usize;
+        let least = matches!(rule, DeduceRule::LeastCommonCountFloor);
+        let bounds = compute_count_bounds(fp, answers, &state.eliminated, n);
+        let source = if least {
+            bounds.floor_source(claimed_index)
+        } else {
+            bounds.ceil_source(claimed_index)
+        };
+        if let Some((src_qi, bound)) = source {
+            let (direction, verdict) = if least {
+                ("at least", "too often to be the least common")
+            } else {
+                ("at most", "too rarely to be the most common")
+            };
             let src_qt = fp.question_types[src_qi];
             steps.push(try_looking(&[qi, src_qi]));
             steps.push(what_if());
             steps.push(simple(format!(
-                "{} means there are at least {floor} {}, so {claimed} appears too often to be the least common.",
-                q(src_qi), count_rule_label(&src_qt, floor)
+                "{} means there are {direction} {bound} {}, so {} appears {verdict}.",
+                q(src_qi),
+                count_rule_label(&src_qt, bound),
+                LETTERS[claimed_index]
             )));
             return steps;
         }
-        // No count-question floor: fall through to the cell-based explanation.
-    }
-
-    if matches!(rule, DeduceRule::MostCommonCountCeil) && ov.is_num() && ov.value() < 5 {
-        let claimed = LETTERS[ov.value() as usize];
-        if let Some((src_qi, ceil)) = find_count_ceil_source(fp, state, ov.value() as usize) {
-            let src_qt = fp.question_types[src_qi];
-            steps.push(try_looking(&[qi, src_qi]));
-            steps.push(what_if());
-            steps.push(simple(format!(
-                "{} means there are at most {ceil} {}, so {claimed} appears too rarely to be the most common.",
-                q(src_qi), count_rule_label(&src_qt, ceil)
-            )));
-            return steps;
-        }
-        // No count-question ceiling: fall through to the cell-based explanation.
+        // No count question bounds the letter: fall through to the cell-based explanation.
     }
 
     if matches!(rule, DeduceRule::TrueStatementMatchElim) {
@@ -2071,6 +1980,13 @@ pub fn no_reason_detail(qi: usize) -> String {
     format!("{} would be invalid", q(qi))
 }
 
+/// The closing detail when an elimination would take `qi`'s last option. Lives here rather
+/// than inline because `reference`'s hint audit identifies that route by this exact
+/// sentence.
+pub fn optionless_detail(qi: usize) -> String {
+    format!("{} would have no options left", q(qi))
+}
+
 /// How the hypothesis broke at `qi`, for the hint's closing line when
 /// `explain_invalid_detail` declines — phrased against `hyp`, the state the chain ends in.
 /// `AnswerInvalid` reaches here only when that function has no arm for the kind, leaving
@@ -2082,7 +1998,6 @@ fn refutation_detail(
     contradiction: &Contradiction,
 ) -> String {
     match contradiction {
-        Contradiction::Optionless => format!("{} would have no options left", q(qi)),
         Contradiction::AnswerInvalid => no_reason_detail(qi),
         Contradiction::Conflict {
             result,
@@ -2100,15 +2015,16 @@ fn refutation_detail(
                     None => format!("{forced}, which is already ruled out for it"),
                 }
             }
-            // An elimination only conflicts by striking a committed answer, so the answer
-            // is always present and the letter struck is that same answer — already stated
-            // by a preceding line, so this one doesn't repeat it. No reason attached: the
-            // elimination explainers return a whole sentence built to follow a colon,
+            // An elimination conflicts either by removing a committed answer — the letter
+            // removed is that same answer, already stated by a preceding line, so this one
+            // doesn't repeat it — or by taking an unanswered question's last option, the
+            // only way a hint now reports one with nowhere left to go. No reason attached:
+            // the elimination explainers return a whole sentence built to follow a colon,
             // which doesn't fit this frame.
             DeduceAction::Eliminate { .. } | DeduceAction::EliminateMulti { .. } => {
                 match hyp.answers[qi] {
                     Some(a) => format!("{a} would be ruled out for {}", q(qi)),
-                    None => no_reason_detail(qi),
+                    None => optionless_detail(qi),
                 }
             }
         },
@@ -2814,7 +2730,7 @@ mod tests {
             "o": [[0, 1, 2]],
         }))
         .unwrap();
-        // Strike B and C, leaving only A. (Rule is irrelevant — this branch is
+        // Eliminate B and C, leaving only A. (Rule is irrelevant — this branch is
         // structural, checked before any rule-specific reasoning.)
         let state = State {
             answers: [None; MAX_N],

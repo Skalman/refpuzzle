@@ -7,7 +7,9 @@
 use std::collections::BTreeMap;
 
 use crate::deduce::{ALL_DEDUCE_RULES, DeduceAction, apply_action, deduce_assuming_unique};
-use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, no_reason_detail};
+use crate::explain::{
+    ExplainStep, explain_deduce, explain_lookahead, no_reason_detail, optionless_detail,
+};
 use crate::format;
 use crate::lookahead::{Contradiction, lookahead, lookahead_shortest};
 use crate::render;
@@ -62,7 +64,7 @@ fn consider(map: &mut BTreeMap<String, String>, rule: &str, text: String) {
 const ROUTES: [&str; 5] = [
     "the blamed claim's own reason",
     "forced onto a ruled-out option",
-    "an elimination striking the answer",
+    "an elimination removing the answer",
     "no options left",
     "nothing to say",
 ];
@@ -106,18 +108,19 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
                 let Some(closing) = ls.iter().rev().nth(1) else {
                     continue;
                 };
-                let generic = *closing
-                    == format!(
-                        "But {}. Contradiction.",
-                        no_reason_detail(lr.contradiction_qi)
-                    );
+                let but = |detail: String| *closing == format!("But {detail}. Contradiction.");
+                let generic = but(no_reason_detail(lr.contradiction_qi));
+                // Routes the sentence identifies better than the variant does: an
+                // out-of-options cell is reported both by the sweep and by the elimination
+                // that emptied it, and a player reads no difference between them.
+                let optionless = but(optionless_detail(lr.contradiction_qi));
                 // " would say " is the opener `ClaimSubject::Hypothesis` gives a claim's
                 // own reason, and nothing else uses it, so it identifies that route exactly.
-                let route = match (generic, closing.contains(" would say ")) {
-                    (true, _) => 4,
-                    (_, true) => 0,
+                let route = match (generic, optionless, closing.contains(" would say ")) {
+                    (true, ..) => 4,
+                    (_, true, _) => 3,
+                    (.., true) => 0,
                     _ => match lr.contradiction {
-                        Contradiction::Optionless => 3,
                         Contradiction::Conflict {
                             result:
                                 crate::deduce::DeduceResult {

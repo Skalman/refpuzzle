@@ -67,7 +67,7 @@ impl EngineConfig {
             pick_shortest: false,
         }
     }
-    /// Used by `check`'s shortest-lookahead tier: [`fallback`](Self::fallback) strength
+    /// Used by `check`'s shortest-lookahead tier: `fallback` strength
     /// with the browser hint engine's picker (`lookahead_shortest`, unbounded), so the
     /// tier measures how a hint-following player's solve path differs from the
     /// first-hit one — same deduce/depth, different candidate each time lookahead

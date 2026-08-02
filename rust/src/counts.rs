@@ -121,10 +121,55 @@ pub(crate) fn compute_letter_cells(
 /// `Before`/`After` ceiling bounds a sub-range and says nothing about the rest
 /// of the puzzle. Consumers combine these with `LetterCells` via `lower`/`upper`
 /// — never feed them into a per-cell `±1`, which would double-count.
+///
+/// Each bound also records the question that set it, so `explain` can name the
+/// source instead of re-deriving it with a second copy of this scan.
 #[derive(Clone, Copy)]
 pub(crate) struct CountBounds {
-    floor: [u8; 5],
-    ceil: [u8; 5],
+    floor: [Bound; 5],
+    ceil: [Bound; 5],
+}
+
+/// One directional bound on a letter's count. `value` is the bound itself, and all
+/// `lower`/`upper` read.
+///
+/// `source` is auxiliary, for `explain` alone: the count question that tightened the
+/// bound to where it stands. Only a question that actually tightens it is credited, so
+/// the named source always still binds, and a bound left unrestricted names nobody —
+/// quoting a vacuous one produces "there are at least 0 questions with answer B, so B
+/// appears too often to be the least common".
+#[derive(Clone, Copy)]
+struct Bound {
+    value: u8,
+    source: Option<u8>,
+}
+
+impl Bound {
+    /// A bound that rules nothing out: 0 for a floor, `n` for a ceiling.
+    fn unrestricted(value: u8) -> Self {
+        Bound {
+            value,
+            source: None,
+        }
+    }
+
+    fn at_least(&mut self, value: u8, question_index: usize) {
+        if value > self.value {
+            self.value = value;
+            self.source = Some(question_index as u8);
+        }
+    }
+
+    fn at_most(&mut self, value: u8, question_index: usize) {
+        if value < self.value {
+            self.value = value;
+            self.source = Some(question_index as u8);
+        }
+    }
+
+    fn attributed(&self) -> Option<(usize, u8)> {
+        self.source.map(|src| (usize::from(src), self.value))
+    }
 }
 
 impl CountBounds {
@@ -132,17 +177,38 @@ impl CountBounds {
     /// Count-question floor.
     #[inline(always)]
     pub(crate) fn lower(&self, cells: &LetterCells, i: usize) -> u8 {
-        cells.filled[i].max(self.floor[i])
+        cells.filled[i].max(self.floor[i].value)
     }
 
     /// Combined upper bound on count(i): the tighter of the cell ceiling and
     /// the Count-question ceiling.
     #[inline(always)]
     pub(crate) fn upper(&self, cells: &LetterCells, i: usize) -> u8 {
-        cells.cell_max(i).min(self.ceil[i])
+        cells.cell_max(i).min(self.ceil[i].value)
+    }
+
+    /// The count question imposing the floor on letter `i`, and that floor —
+    /// `None` when no count question bounds the letter from below.
+    pub(crate) fn floor_source(&self, i: usize) -> Option<(usize, u8)> {
+        self.floor[i].attributed()
+    }
+
+    /// The count question imposing the ceiling on letter `i`, and that ceiling.
+    pub(crate) fn ceil_source(&self, i: usize) -> Option<(usize, u8)> {
+        self.ceil[i].attributed()
     }
 }
 
+// The scan below reads every surviving option of a count question as a number. These
+// kinds declare they can't be answered NONE, which is what makes `check_form` reject a
+// NONE option on them — flip one of these and the scan starts reading NONE as a count.
+const _: () = assert!(!QuestionTypeKind::CountAnswer.may_be_none());
+const _: () = assert!(!QuestionTypeKind::CountAnswerBefore.may_be_none());
+const _: () = assert!(!QuestionTypeKind::CountAnswerAfter.may_be_none());
+
+/// Build the [`CountBounds`] in one pass: each count question's surviving option values
+/// bound the letter it counts, tightest wins. A letter no count question mentions keeps
+/// its unrestricted `0..=n`.
 pub(crate) fn compute_count_bounds(
     fp: &FlatPuzzle,
     answers: &[Option<Answer>; MAX_N],
@@ -150,40 +216,47 @@ pub(crate) fn compute_count_bounds(
     n: usize,
 ) -> CountBounds {
     let oc = fp.option_count;
-    let mut floor = [0u8; 5];
-    let mut ceil = [n as u8; 5];
-    for k in 0..n {
-        let (li, full_range) = match fp.question_types[k] {
-            QuestionType::CountAnswer { answer } => (answer.idx(), true),
-            QuestionType::CountAnswerBefore { answer, .. }
-            | QuestionType::CountAnswerAfter { answer, .. } => (answer.idx(), false),
+    let mut floor = [Bound::unrestricted(0); 5];
+    let mut ceil = [Bound::unrestricted(n as u8); 5];
+    for qi in 0..n {
+        // `hi` starts at the weakest cap the kind can impose, so both bounds can then be
+        // fed in unconditionally: a full-range `CountAnswer` caps the total at its largest
+        // surviving option, while a Before/After question bounds only a sub-range and caps
+        // nothing — its `n` is already the trivial ceiling.
+        let qt = fp.question_types[qi];
+        let (letter_index, extra_possible) = match qt {
+            QuestionType::CountAnswer { answer } => (answer.idx(), 0),
+            QuestionType::CountAnswerBefore {
+                answer,
+                before_index,
+            } => (answer.idx(), (n as u8) - before_index),
+            QuestionType::CountAnswerAfter {
+                answer,
+                after_index,
+            } => (answer.idx(), after_index + 1),
             _ => continue,
         };
-        // Range of surviving option values: if k is answered only that option
-        // survives; else every non-eliminated numeric option.
-        let mut lo = u8::MAX;
-        let mut hi = 0u8;
-        for oi in 0..oc {
-            if let Some(a) = answers[k] {
-                if oi != a.idx() {
-                    continue;
+
+        let (lo, hi) = if let Some(answer) = answers[qi] {
+            let value = fp.options[qi][answer.idx()].value();
+            (value, value)
+        } else {
+            let option_values = (0..oc).filter_map(|oi| {
+                if is_eliminated(eliminated, qi, oi) {
+                    None
+                } else {
+                    Some(fp.options[qi][oi].value())
                 }
-            } else if is_eliminated(eliminated, k, oi) {
-                continue;
-            }
-            let ov = fp.options[k][oi];
-            if ov.is_num() {
-                lo = lo.min(ov.value());
-                hi = hi.max(ov.value());
-            }
-        }
+            });
+            // Get min and max.
+            option_values.fold((u8::MAX, u8::MIN), |acc, x| (acc.0.min(x), acc.1.max(x)))
+        };
+
         if lo == u8::MAX {
-            continue; // no surviving numeric option
+            continue;
         }
-        floor[li] = floor[li].max(lo);
-        if full_range {
-            ceil[li] = ceil[li].min(hi);
-        }
+        floor[letter_index].at_least(lo, qi);
+        ceil[letter_index].at_most(hi + extra_possible, qi);
     }
     CountBounds { floor, ceil }
 }
