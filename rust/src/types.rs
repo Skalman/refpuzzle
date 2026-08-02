@@ -1,3 +1,7 @@
+//! Core puzzle types. The vocabulary they define — question, option, cell, answer,
+//! option value, mark, claim, question type (kind) — is written down in
+//! `docs/glossary.md`.
+
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 pub const MAX_N: usize = 12;

@@ -1,5 +1,12 @@
 # Project conventions
 
+## Vocabulary
+
+- `docs/glossary.md` defines the domain terms — question, option, cell, answer,
+  option value, mark, eliminate, force, claim, question type (kind), board.
+  Use them precisely in code and comments; a *cell* is one question × option
+  square, never a whole question.
+
 ## Code quality
 
 - Run `pnpm lint` before finishing — it covers TS linting and type checking
