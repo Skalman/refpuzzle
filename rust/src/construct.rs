@@ -376,7 +376,7 @@ pub fn generate_skeleton(
 
 /// Like [`generate_skeleton`], but reuses a fixed answer key instead of authoring a new one.
 /// Selects fresh question kinds and assigns them to slots the given solution
-/// already supports ([`assign_kinds_to_solution`]), then parametrizes against it.
+/// already supports (`assign_kinds_to_solution`), then parametrizes against it.
 /// A kind the solution can't host is swapped for another fitting pool kind, or
 /// failing that demoted to a generic `AnswerOf`; the answer key itself is never
 /// touched. `generate` uses this for every attempt after the first, so retries
@@ -541,7 +541,7 @@ pub fn generate(
     None
 }
 
-/// Outcome of [`validate_and_repair`]. `Stuck` carries the engine's partial
+/// Outcome of `validate_and_repair`. `Stuck` carries the engine's partial
 /// state (which questions it answered) — read by the `stuck` diagnostic.
 pub enum Verdict {
     Accepted,

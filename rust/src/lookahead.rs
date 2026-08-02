@@ -81,7 +81,7 @@ pub fn lookahead(
 }
 
 /// Probe *every* candidate and return the elimination whose minimized contradiction chain
-/// has the fewest deductions — the [`MINIMIZE_TOP_K`] shortest get minimized, and the best
+/// has the fewest deductions — the `MINIMIZE_TOP_K` shortest get minimized, and the best
 /// of those wins.
 pub fn lookahead_shortest(
     fp: &FlatPuzzle,

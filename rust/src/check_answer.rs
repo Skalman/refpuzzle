@@ -927,7 +927,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
 
 /// Evaluate the **semantic truth** of a claim against the current puzzle state.
 /// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`. See
-/// [`check_claim_core`] for the implementation and its caveats.
+/// `check_claim_core` for the implementation and its caveats.
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     judge_claim(fp, state, opt, claim).validity()
 }
