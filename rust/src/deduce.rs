@@ -3,8 +3,8 @@
 //!
 //! Two design rules:
 //! - A rule's job is *progress*, not validity. A rule may incidentally surface a
-//!   contradiction (an elimination that empties a cell or removes its committed
-//!   answer — `contradiction_question` flags that), but none should exist *only*
+//!   contradiction (an elimination that leaves a question no options or removes its
+//!   committed answer — `contradiction_question` flags that), but none should exist *only*
 //!   to manufacture one. Deciding whether a committed answer is already impossible
 //!   is `check_answer`'s job, not a deduce rule's.
 //! - Deduce is deliberately *incomplete*: a finite set of cheap, explainable
@@ -187,7 +187,8 @@ pub(crate) fn contradiction_question(action: &DeduceAction, state: &State) -> Op
 }
 
 /// Whether eliminating `option_mask` from `qi` leaves it no answer it could take: the
-/// module doc's "empties a cell or removes its committed answer", as a test. Both halves
+/// module doc's "leaves a question no options or removes its committed answer", as a test.
+/// Both halves
 /// are needed — a wire-supplied board can answer a question without eliminating its
 /// rivals, so removing its answer needn't mean removing its last option.
 ///
@@ -202,7 +203,7 @@ fn leaves_no_answer(state: &State, qi: usize, option_mask: u8) -> bool {
     }
 }
 
-/// Apply a `DeduceAction` to `state`: `Force` collapses the cell to the answer,
+/// Apply a `DeduceAction` to `state`: `Force` collapses the question to the answer,
 /// `Eliminate`/`EliminateMulti` set the eliminated bits. Shared by `run_engine`
 /// and `lookahead`.
 pub(crate) fn apply_action(action: &DeduceAction, state: &mut State) {
@@ -630,8 +631,8 @@ fn apply_positional_forward(
                 );
             }
         } else if ov.is_none() {
-            // FirstWith/ClosestAfter = none: no cell in range has `answer`, so eliminate
-            // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
+            // FirstWith/ClosestAfter = none: no question in range has `answer`, so eliminate
+            // it from every unanswered question. Mirrors PositionalRangeUnanswered when
             // `none` is the sole remaining claim (min_pos = n), which stops once qi
             // is answered.
             let letter_oi = answer.idx();
@@ -1110,8 +1111,8 @@ fn apply_positional_backward(
                 );
             }
         } else if ov.is_none() {
-            // LastWith/ClosestBefore = none: no cell in range has `answer`, so eliminate
-            // it from every unanswered cell. Mirrors PositionalRangeUnanswered when
+            // LastWith/ClosestBefore = none: no question in range has `answer`, so eliminate
+            // it from every unanswered question. Mirrors PositionalRangeUnanswered when
             // `none` is the sole remaining claim (max_pos = None), which stops once
             // qi is answered.
             let letter_oi = answer.idx();
@@ -2197,7 +2198,7 @@ fn deduce_impl(
             QuestionType::EqualCount { answer } => {
                 // Runs for whatever options are live, the committed answer included —
                 // its elimination surfaces a contradiction, so the check still fires
-                // once qi is answered. Pure per-option checks, no other-cell propagation.
+                // once qi is answered. Pure per-option checks, no other-question propagation.
                 for oi in 0..5usize {
                     if is_eliminated(eliminated, qi, oi) {
                         continue;

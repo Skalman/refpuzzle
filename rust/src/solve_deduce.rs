@@ -147,7 +147,7 @@ pub struct EngineOutcome {
     pub solved: bool,
     pub state: State,
     pub telemetry: EngineTelemetry,
-    /// `Some(qi)` if some deduction contradicted an already-decided cell — a rule
+    /// `Some(qi)` if some deduction contradicted an already-decided question — a rule
     /// forcing a second answer for `qi`, or eliminating `qi`'s forced answer. A
     /// sound engine on a well-posed puzzle never does this; it's surfaced so every
     /// caller is guarded against an unsound rule (generation asserts it's `None`,

@@ -13,7 +13,7 @@
 //! Within that scope it aims to be *complete* — unlike `deduce` (deliberately
 //! incomplete, see its module doc). The scope is bounded, so a definite verdict is
 //! always reachable: return the strongest one the marks already force — `Invalid`
-//! once no completion of the open cells can satisfy the question,
+//! once no completion of the open questions can satisfy the question,
 //! `Valid`/`Consistent` once none can break it, `Pending`/`Neutral` only while the
 //! outcome is genuinely open. Deduce prunes and propagates; it does not own
 //! validity — a deduce rule's validity-style check is *applying* this authority,
@@ -57,7 +57,7 @@ impl Validity {
 /// Why a claim is `Invalid`, in the terms prose needs — decided here, by the code that
 /// decided the verdict, so `explain` never re-derives a judgment it only has to
 /// describe. Carries just what a renderer can't read back off the puzzle and the state:
-/// which cell or letter is at fault, plus any tally this module computed on the way.
+/// which question or letter is at fault, plus any tally this module computed on the way.
 ///
 /// `explain::rejected_claim_text` renders these — for an answered question, for one of its
 /// options, and for a refuted hypothesis. Every variant except `Malformed` and
@@ -71,32 +71,32 @@ pub enum InvalidReason {
     /// `Error`, so a shipped puzzle never carries one and there is no prose for it.
     Malformed,
     /// Not about a claim at all — the question has no answer *and* no options left. The
-    /// lookahead hint says this from the elimination that emptied the cell instead, via
-    /// `explain::optionless_detail`.
+    /// lookahead hint says this from the elimination that took the last option instead,
+    /// via `explain::optionless_detail`.
     NoOptionsLeft,
 
-    /// More cells already match than the claimed count allows: `count` answered, plus
+    /// More questions already match than the claimed count allows: `count` answered, plus
     /// `guaranteed` unanswered ones with no non-matching option left.
     CountFloor { count: u8, guaranteed: u8 },
-    /// Too few cells can ever match the claimed count; `max` is the ceiling.
+    /// Too few questions can ever match the claimed count; `max` is the ceiling.
     CountCeiling { max: u8 },
     /// A `MostCommonCount` below what `letter` alone already reaches.
     PeakFloor { letter: Answer, floor: u8 },
     /// A `MostCommonCount` above what any letter can reach.
     PeakCeiling { max: u8 },
 
-    /// The cell the claim points at is answered otherwise.
+    /// The question the claim points at is answered otherwise.
     TargetAnswered { at: u8, answer: Answer },
-    /// The cell the claim points at can no longer take the letter the claim needs there.
+    /// The question the claim points at can no longer take the letter the claim needs there.
     TargetCannot { at: u8, letter: Answer },
-    /// Another cell holds a letter the claim reserves for one place — or for nowhere.
+    /// Another question holds a letter the claim reserves for one place — or for nowhere.
     OtherHasLetter { at: u8, letter: Answer },
-    /// A cell *before* the one the claim named holds the letter, so the named one isn't
+    /// A question *before* the one the claim named holds the letter, so the named one isn't
     /// the first (or closest-after) question with it. Distinct from `OtherHasLetter`
     /// because the direction is what refutes the claim, and only the scan that found the
-    /// cell knows it — the renderer must not re-derive it from the indices.
+    /// question knows it — the renderer must not re-derive it from the indices.
     EarlierHasLetter { at: u8, letter: Answer },
-    /// A cell *after* the one the claim named holds the letter — mirror of
+    /// A question *after* the one the claim named holds the letter — mirror of
     /// `EarlierHasLetter`.
     LaterHasLetter { at: u8, letter: Answer },
 
@@ -233,8 +233,8 @@ fn count_validity(cr: MaskTally, ov: OptionValue) -> Judgment {
         return MALFORMED;
     }
     let ov = ov.value();
-    // `min` counts forced-unanswered cells too, so ov below it is already exceeded
-    // (not just by answered cells); `max` is the ceiling. Valid once pinned.
+    // `min` counts forced-unanswered questions too, so ov below it is already exceeded
+    // (not just by answered questions); `max` is the ceiling. Valid once pinned.
     if cr.min() > ov {
         Judgment::Invalid(InvalidReason::CountFloor {
             count: cr.count,
@@ -272,7 +272,7 @@ pub(crate) fn count_pred(qt: &QuestionType) -> Option<Pred> {
     }
 }
 
-/// The cell a positional claim points at: answered otherwise, or unable to take the
+/// The question a positional claim points at: answered otherwise, or unable to take the
 /// letter. `None` when it holds up so far.
 fn target_broken(
     answers: &[Option<Answer>; MAX_N],

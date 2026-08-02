@@ -6,8 +6,8 @@
 use crate::types::*;
 
 /// Mask-selected tally over a range: `count` answered matches, `guaranteed`
-/// unanswered cells *locked* to a match (only masked options remain), and
-/// `possible` unanswered cells that could go either way. `min` (= count +
+/// unanswered questions *locked* to a match (only masked options remain), and
+/// `possible` unanswered questions that could go either way. `min` (= count +
 /// guaranteed) is the floor on the match count, `max` (+ possible) the ceiling.
 #[derive(Clone, Copy)]
 pub(crate) struct MaskTally {
@@ -72,10 +72,10 @@ pub(crate) fn count_matching_mask(
 /// = unanswered questions where letter i is not yet eliminated. The cell-based
 /// count of letter i therefore lies in `[filled[i], filled[i] + fillable[i]]`.
 ///
-/// These are *cell* facts. Any rule that hypothesises "what if this one cell
-/// were letter X" — the extremum `±1`, OnlySame's per-cell subtract — must read
+/// These are *cell* facts. Any rule that hypothesises "what if this one question
+/// were letter X" — the extremum `±1`, OnlySame's per-question subtract — must read
 /// these, never the abstract `CountBounds`: an external bound may already
-/// account for the very cell being adjusted, so adding to it would double-count.
+/// account for the very question being adjusted, so adding to it would double-count.
 #[derive(Clone, Copy)]
 pub(crate) struct LetterCells {
     pub(crate) filled: [u8; 5],
@@ -113,14 +113,14 @@ pub(crate) fn compute_letter_cells(
 
 /// Whole-puzzle per-letter bounds derived purely from sibling Count questions
 /// (`CountAnswer` / `CountAnswerBefore` / `CountAnswerAfter`), independent of
-/// answered cells. `floor[i]` is a lower bound on the total count of letter i;
+/// answered questions. `floor[i]` is a lower bound on the total count of letter i;
 /// `ceil[i]` an upper bound.
 ///
 /// Floors come from all three count kinds — a sub-range floor still
 /// lower-bounds the total. Ceilings come from full-range `CountAnswer` only: a
 /// `Before`/`After` ceiling bounds a sub-range and says nothing about the rest
 /// of the puzzle. Consumers combine these with `LetterCells` via `lower`/`upper`
-/// — never feed them into a per-cell `±1`, which would double-count.
+/// — never feed them into a per-question `±1`, which would double-count.
 ///
 /// Each bound also records the question that set it, so `explain` can name the
 /// source instead of re-deriving it with a second copy of this scan.

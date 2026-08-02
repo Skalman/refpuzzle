@@ -81,7 +81,7 @@ fn try_looking(qis: &[usize]) -> ExplainStep {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ClaimSubject {
     /// The question's own committed answer is what's being judged — "#3 claims …". Every
-    /// cell and tally the reason names really holds what it says.
+    /// question and tally the reason names really holds what it says.
     Answered,
     /// One of the question's options, judged on a board that *assumes* it — "#3 option B
     /// claims …". #3's answer is that assumption, so anything downstream of it reads in the
@@ -89,7 +89,7 @@ enum ClaimSubject {
     /// assumption.
     Option,
     /// A refuted hypothesis, reported in the conditional — "#3 would say …". The clause
-    /// stays indicative: a lookahead hint's earlier lines have already stated the cells it
+    /// stays indicative: a lookahead hint's earlier lines have already stated the questions it
     /// names ("#2 must be B."), so hedging them again would read as doubting facts the
     /// player was just handed.
     Hypothesis,
@@ -301,14 +301,15 @@ fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<Strin
 }
 
 /// What broke a claim, as the continuation of "…, but …" — see [`InvalidReason`], which
-/// carries the cells and tallies these read.
+/// carries the questions and tallies these read.
 ///
-/// A clause naming a cell reads in the conditional when that cell is `opt.qi` and its answer
-/// is only assumed — "#1 is answered A" is a claim about the board a player can check and
-/// find empty. Tallies hedge on the subject instead: they are counted on the board that
-/// assumes the option, so under `Option` the number can include the assumed cell and may
-/// not be visible on the board ("there would already be 2"). Under `Hypothesis` they stay
-/// indicative — the lookahead's earlier lines have already stated the cells the count reads.
+/// A clause naming a question reads in the conditional when that question is `opt.qi` and
+/// its answer is only assumed — "#1 is answered A" is a claim about the board a player can
+/// check and find empty. Tallies hedge on the subject instead: they are counted on the
+/// board that assumes the option, so under `Option` the number can include the assumed
+/// question and may not be visible on the board ("there would already be 2"). Under
+/// `Hypothesis` they stay indicative — the lookahead's earlier lines have already stated
+/// the questions the count reads.
 fn invalid_clause(
     state: &State,
     opt: OptionPos,
@@ -320,9 +321,9 @@ fn invalid_clause(
     let answers = &state.answers;
     let value = claim.value.is_num().then(|| claim.value.value());
     let indicative = subject.indicative();
-    // Is the board's account of this cell an assumption rather than a fact?
+    // Is the board's account of this question an assumption rather than a fact?
     let assumed = |at: u8| !indicative && usize::from(at) == opt.qi;
-    // "#2 has answer B", or its conditional form when that cell is the assumption itself.
+    // "#2 has answer B", or its conditional form when that question is the assumption itself.
     let has = |at: u8| {
         if assumed(at) {
             "itself would have"
@@ -398,7 +399,7 @@ fn invalid_clause(
             q(at as usize + 1),
             if assumed(at + 1) { "would be" } else { "is" },
         ),
-        // Leans on both cells' remaining options, so the assumption narrowing `opt.qi`'s can
+        // Leans on both questions' remaining options, so the assumption narrowing `opt.qi`'s can
         // be what closed the overlap.
         PairImpossible { at } => {
             let pair = format!("{} and {}", q(at), q(at as usize + 1));
@@ -579,8 +580,8 @@ pub fn explain_elim_detail(
 }
 
 /// The question an [`InvalidReason`] points at, for the elimination's "Try looking at …"
-/// highlight — the cell that refutes the claim, or none when the reason is about tallies
-/// rather than a place, or when that cell is `qi` itself (which the hint already points at,
+/// highlight — the question that refutes the claim, or none when the reason is about tallies
+/// rather than a place, or when that question is `qi` itself (which the hint already points at,
 /// and which would collapse the two-question `Look` to one). Exhaustive so a new reason has
 /// to say which it is.
 fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<usize> {
@@ -591,7 +592,7 @@ fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<us
         | OtherHasLetter { at, .. }
         | EarlierHasLetter { at, .. }
         | LaterHasLetter { at, .. } => Some(usize::from(at)).filter(|&at| at != qi),
-        // A pair reason names two cells; when the first is `qi` itself the partner still
+        // A pair reason names two questions; when the first is `qi` itself the partner still
         // carries the argument, so the highlight moves there instead of vanishing.
         PairDiffers { at, .. } | PairImpossible { at } | OtherPairMatches { at } => {
             let at = usize::from(at);
@@ -650,7 +651,7 @@ fn elim_clause_beyond_check_answer(
     let shared = |reason| invalid_clause(state, opt, claim, reason, ClaimSubject::Option);
 
     match claim.question_type {
-        // Argued from the answered cells, which is weaker than the rule's own bound — a
+        // Argued from the answered questions, which is weaker than the rule's own bound — a
         // letter short of the extreme can still catch up on the open ones. The last arm is
         // where that shows: a bound the counts so far can't display.
         // Only the puzzle's real letters count: a phantom slot past `option_count` sits at 0
@@ -686,7 +687,7 @@ fn elim_clause_beyond_check_answer(
                     count: extreme,
                 })?,
                 // The claimed letter holds the extreme alone, so the counts can't show what
-                // the rule saw — only its bound over the open cells can.
+                // the rule saw — only its bound over the open questions can.
                 None => format!(
                     "{} can't be uniquely {}",
                     LETTERS[ci],
@@ -1005,9 +1006,9 @@ pub fn explain_force(
         }
     }
 
-    // Counting (CountAllAnswered): every cell in range is now decided one way or the
+    // Counting (CountAllAnswered): every question in range is now decided one way or the
     // other (no open possibilities), so the count is pinned to a single value. Uses
-    // the deduce-side tally — a cell forced-but-not-yet-answered still counts.
+    // the deduce-side tally — a question forced-but-not-yet-answered still counts.
     if let Some(pred) = count_pred(&qt) {
         let (from, to) = count_range(&qt, n);
         let tally = count_matching_mask(&state.answers, &state.eliminated, pred.mask(), from, to);
@@ -1364,7 +1365,7 @@ fn explain_count_saturation(
         };
         let (from, to) = count_range(&src_qt, n);
         // The same tally `apply_count` fires on, so explain's triggers match its `min`/`max`
-        // exactly. (The pred-only `count_matching` folds locked-in cells into `remaining`,
+        // exactly. (The pred-only `count_matching` folds locked-in questions into `remaining`,
         // understating the fixed count whenever one is already forced.)
         let tally = count_matching_mask(&state.answers, &state.eliminated, pred.mask(), from, to);
         let (min, possible) = (tally.min(), tally.possible);
@@ -2479,7 +2480,7 @@ mod tests {
 
     /// "too" needs a first holder for the second one to join. A claim that reserves the
     /// letter for one place has one (here the question's own answer); a claim that denies
-    /// the letter anywhere has none, and the cell that has it simply refutes the claim.
+    /// the letter anywhere has none, and the question that has it simply refutes the claim.
     #[test]
     fn a_second_holder_joins_only_a_claim_that_had_a_first() {
         let denies_any = parse_puzzle(&json!({

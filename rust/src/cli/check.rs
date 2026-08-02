@@ -1231,7 +1231,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
         fp.n * solve_deduce::VERIFY_ITERS_PER_QUESTION,
         &mut log,
     );
-    // `run_engine` flags a self-contradiction (an unsound rule forcing a cell two
+    // `run_engine` flags a self-contradiction (an unsound rule forcing a question two
     // ways). It never fires for a sound engine on a well-posed puzzle, but if it
     // does, report the first action that deviated from the brute solution.
     if out.contradiction.is_some() {
@@ -1249,7 +1249,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
 /// removed/contradicted the true answer. Only called when `run_engine`
 /// reported a self-contradiction.
 fn report_conflict(fp: &FlatPuzzle, key: &str, steps: &[solve_deduce::SolveStep]) {
-    eprintln!("CONFLICT [{key}]: hint engine forced a cell two ways — an unsound rule");
+    eprintln!("CONFLICT [{key}]: hint engine forced a question two ways — an unsound rule");
     let solutions = solve_brute::solve(fp, 2);
     match solutions.len() {
         0 => {

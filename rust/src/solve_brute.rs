@@ -267,7 +267,7 @@ fn search(
 /// Prune this branch when any already-answered question — the ones affected by
 /// `just_assigned`, plus every global — is unsatisfiable under the current partial
 /// assignment. Delegates to `check_answer`, whose contract is `Invalid` iff no
-/// completion of the open cells can satisfy the constraint, so pruning on it never
+/// completion of the open questions can satisfy the constraint, so pruning on it never
 /// discards a branch that still had a valid completion. The full-board leaf
 /// `check_answers` in `search` remains the final authority; this only decides which
 /// branches are worth descending.

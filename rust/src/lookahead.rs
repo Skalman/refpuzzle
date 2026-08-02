@@ -352,10 +352,10 @@ fn probe_candidate(
     }
 
     // No rule conflicted mid-loop, so sweep for a question the fixpoint has broken — one
-    // `check_answer` rejects, which covers a cell left with no options (`NoOptionsLeft`).
+    // `check_answer` rejects, which covers a question left with no options (`NoOptionsLeft`).
     // The fixpoint shouldn't be able to leave one: `contradiction_question` catches the
-    // elimination that would empty a cell before it lands, and a board that arrives that
-    // way is one the player-facing callers reject first.
+    // elimination that would take a question's last option before it lands, and a board
+    // arriving that way is one the player-facing callers reject first.
     let refutation = refutation.or_else(|| {
         (0..n).find_map(|check_qi| {
             (check_answer(fp, hyp, check_qi) == Validity::Invalid)
@@ -472,7 +472,7 @@ mod tests {
         st.answers[5] = Some(Answer::C);
         st.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << Answer::C.idx());
 
-        // Force onto a cell answered otherwise → that cell.
+        // Force onto a question answered otherwise → that question.
         assert_eq!(
             contradiction_question(
                 &DeduceAction::Force {
@@ -483,8 +483,8 @@ mod tests {
             ),
             Some(3)
         );
-        // Force onto a cell whose target option is eliminated (cell unanswered) →
-        // that cell (the refutation signal the lookahead probe relies on).
+        // Force onto an unanswered question whose target option is eliminated →
+        // that question (the refutation signal the lookahead probe relies on).
         let mut st_elim = State {
             answers: [None; MAX_N],
             eliminated: [0; MAX_N],
@@ -500,7 +500,7 @@ mod tests {
             ),
             Some(2)
         );
-        // Eliminate removing a cell's current answer → that cell.
+        // Eliminate removing a question's current answer → that question.
         assert_eq!(
             contradiction_question(
                 &DeduceAction::Eliminate {

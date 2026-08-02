@@ -110,9 +110,9 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
                 };
                 let but = |detail: String| *closing == format!("But {detail}. Contradiction.");
                 let generic = but(no_reason_detail(lr.contradiction_qi));
-                // Routes the sentence identifies better than the variant does: an
-                // out-of-options cell is reported both by the sweep and by the elimination
-                // that emptied it, and a player reads no difference between them.
+                // The sentence identifies this route better than the variant does: a
+                // question with no options left arrives as a `Conflict` on the elimination
+                // that took its last one, not under a variant of its own.
                 let optionless = but(optionless_detail(lr.contradiction_qi));
                 // " would say " is the opener `ClaimSubject::Hypothesis` gives a claim's
                 // own reason, and nothing else uses it, so it identifies that route exactly.
