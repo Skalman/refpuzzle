@@ -1647,12 +1647,12 @@ pub fn deduce_assuming_unique(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 }
 
 #[cfg(test)]
-pub fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
+pub(crate) fn deduce_with_rule(fp: &FlatPuzzle, state: &State, rule: DeduceRule) -> DeduceResults {
     deduce_impl(fp, state, RuleFilter::Only(rule), true, None)
 }
 
 #[cfg(test)]
-pub fn deduce_with_rule_except(
+pub(crate) fn deduce_with_rule_except(
     fp: &FlatPuzzle,
     state: &State,
     exclude: DeduceRule,
@@ -3291,5 +3291,93 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A contradiction is attributed to the conflicting action's target question,
+    /// not the assumption, including the forced-onto-eliminated case (which the
+    /// probe relies on to refute a hypothesis).
+    #[test]
+    fn contradiction_question_reports_the_conflicting_target() {
+        let mut st = State {
+            answers: [None; MAX_N],
+            eliminated: [0; MAX_N],
+        };
+        st.answers[3] = Some(Answer::B);
+        st.eliminated[3] = ALL_OPTIONS_MASK ^ (1 << Answer::B.idx());
+        st.answers[5] = Some(Answer::C);
+        st.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << Answer::C.idx());
+
+        // Force onto a question answered otherwise → that question.
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 3,
+                    answer: Answer::A
+                },
+                &st
+            ),
+            Some(3)
+        );
+        // Force onto an unanswered question whose target option is eliminated →
+        // that question (the refutation signal the lookahead probe relies on).
+        let mut st_elim = State {
+            answers: [None; MAX_N],
+            eliminated: [0; MAX_N],
+        };
+        st_elim.eliminated[2] = 1 << Answer::A.idx();
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 2,
+                    answer: Answer::A
+                },
+                &st_elim
+            ),
+            Some(2)
+        );
+        // Eliminate removing a question's current answer → that question.
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Eliminate {
+                    qi: 5,
+                    oi: Answer::C.idx()
+                },
+                &st
+            ),
+            Some(5)
+        );
+        // EliminateMulti → the lowest conflicting question in the mask (both 3 and 5
+        // conflict here).
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::EliminateMulti {
+                    question_mask: (1 << 3) | (1 << 5),
+                    option_mask: (1 << Answer::B.idx()) | (1 << Answer::C.idx()),
+                },
+                &st
+            ),
+            Some(3)
+        );
+        // Consistent actions → None (no false contradiction).
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Force {
+                    qi: 3,
+                    answer: Answer::B
+                },
+                &st
+            ),
+            None
+        );
+        assert_eq!(
+            contradiction_question(
+                &DeduceAction::Eliminate {
+                    qi: 3,
+                    oi: Answer::A.idx()
+                },
+                &st
+            ),
+            None
+        );
     }
 }

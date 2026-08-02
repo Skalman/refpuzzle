@@ -8,8 +8,9 @@ use arrayvec::ArrayVec;
 
 use super::{LevelRecipe, run_hint_sound, run_hint_standard};
 use crate::check_well_posed::check_well_posed_given_options;
+use crate::construct::assert_accepted;
 use crate::deduce::deduce_single_question;
-use crate::fill::{assert_accepted, valid_values};
+use crate::fill::valid_values;
 use crate::rng::Rng;
 use crate::solve_brute::solve;
 use crate::stats::Stats;

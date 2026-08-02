@@ -173,7 +173,7 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
 
 /// `details` adds [`hint_audit`], which costs several times the rest of the command.
 pub fn reference(details: bool) {
-    let puzzles = crate::daily_puzzles();
+    let puzzles = crate::corpus::daily_puzzles();
 
     // kind -> (display tag, prompt, option labels); rule name -> one rendered hint.
     let mut qtypes: BTreeMap<QuestionTypeKind, (String, String, Vec<String>)> = BTreeMap::new();

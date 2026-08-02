@@ -26,7 +26,9 @@
 //! may panic on poorly formed puzzles; those sites are tagged
 //! `Fatal check_form error.`
 
-use crate::counts::{MaskTally, count_matching_mask};
+use crate::counts::{
+    CountResult, MaskTally, Pred, count_matching, count_matching_mask, count_range,
+};
 use crate::types::*;
 
 /// Play-time verdict for a single question. This is a **wasm wire contract**: the
@@ -176,56 +178,6 @@ const MALFORMED: Judgment = Judgment::Invalid(InvalidReason::Malformed);
 
 // ── Helpers ──
 
-pub(crate) struct CountResult {
-    pub(crate) count: u8,
-    pub(crate) remaining: u8,
-}
-
-#[derive(Clone, Copy)]
-#[allow(clippy::enum_variant_names)]
-pub(crate) enum Pred {
-    IsAnswer(Answer),
-    IsVowel,
-    IsConsonant,
-}
-
-impl Pred {
-    pub(crate) fn matches(self, a: Answer) -> bool {
-        match self {
-            Pred::IsAnswer(t) => a == t,
-            Pred::IsVowel => a.is_vowel(),
-            Pred::IsConsonant => !a.is_vowel(),
-        }
-    }
-    pub(crate) fn mask(self) -> u8 {
-        match self {
-            Pred::IsAnswer(t) => 1u8 << t.idx(),
-            Pred::IsVowel => 0b10001,
-            Pred::IsConsonant => 0b01110,
-        }
-    }
-}
-
-pub(crate) fn count_matching(
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    pred: Pred,
-    from: usize,
-    to: usize,
-) -> CountResult {
-    let mask = pred.mask();
-    let mut count: u8 = 0;
-    let mut remaining: u8 = 0;
-    for i in from..to {
-        match answers[i] {
-            Some(a) if pred.matches(a) => count += 1,
-            None if eliminated[i] & mask != mask => remaining += 1,
-            _ => {}
-        }
-    }
-    CountResult { count, remaining }
-}
-
 fn count_validity(cr: MaskTally, ov: OptionValue) -> Judgment {
     // NONE/UNUSED on a count: malformed but check_answer routes them here for
     // semantic evaluation. Treat as Invalid (the count can never be null).
@@ -246,29 +198,6 @@ fn count_validity(cr: MaskTally, ov: OptionValue) -> Judgment {
         Judgment::Valid
     } else {
         Judgment::Pending
-    }
-}
-
-pub(crate) fn count_range(qt: &QuestionType, n: usize) -> (usize, usize) {
-    match *qt {
-        QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
-        QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
-        _ => (0, n),
-    }
-}
-
-/// The counting predicate for a count-type question, or `None` for any other
-/// kind. Mirrors the TS `countPred`; lets `explain` reproduce count-based
-/// contradiction reasons off the same primitive `check_answer` counts with.
-#[allow(dead_code)] // wired into explain (and thence wasm) in a later increment
-pub(crate) fn count_pred(qt: &QuestionType) -> Option<Pred> {
-    match *qt {
-        QuestionType::CountAnswer { answer }
-        | QuestionType::CountAnswerBefore { answer, .. }
-        | QuestionType::CountAnswerAfter { answer, .. } => Some(Pred::IsAnswer(answer)),
-        QuestionType::CountVowel => Some(Pred::IsVowel),
-        QuestionType::CountConsonant => Some(Pred::IsConsonant),
-        _ => None,
     }
 }
 

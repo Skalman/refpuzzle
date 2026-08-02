@@ -6,10 +6,11 @@
 
 use std::io::IsTerminal;
 
-use crate::construct::{RECIPES, Verdict, generate_skeleton, validate_and_repair};
+use crate::cli::link::playground_link;
+use crate::construct::{Verdict, generate_skeleton, validate_and_repair};
 use crate::fill::fill_options;
+use crate::recipes::RECIPES;
 use crate::rng::Rng;
-use crate::serialize::playground_link;
 use crate::solve_brute::solve;
 use crate::stats::Stats;
 

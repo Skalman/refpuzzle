@@ -7,10 +7,11 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-use crate::check_answer::{
-    InvalidReason, answered_claim, count_matching, count_pred, count_range, judge_answer,
+use crate::check_answer::{InvalidReason, answered_claim, judge_answer};
+use crate::counts::{
+    compute_count_bounds, compute_letter_cells, count_matching, count_matching_mask, count_pred,
+    count_range,
 };
-use crate::counts::{compute_count_bounds, compute_letter_cells, count_matching_mask};
 use crate::deduce::{DeduceAction, DeduceResult, DeduceRule};
 use crate::lookahead::{Contradiction, LookaheadResult, hypothesis, replay_chain};
 use crate::render::{claim_label, q};
@@ -118,6 +119,11 @@ impl ClaimSubject {
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
 /// unanswered). Verdict and reason both come from `check_answer`, so this only renders
 /// a judgment — it never re-decides one, and can't miss a kind that judge can reject.
+///
+/// The only entry point onto [`ClaimSubject::Answered`]. Nothing renders a standalone
+/// "why is this red" line yet, so today only the tests reach it — but that subject is
+/// one of the three `InvalidReason` must phrase under (see its docs), so this stays
+/// wired rather than becoming a test helper.
 pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
     rejected_answer_text(fp, state, qi, ClaimSubject::Answered)
 }
@@ -535,7 +541,7 @@ fn count_rule_label(qt: &QuestionType, count: u8) -> String {
 
 /// Why an eliminated option is impossible, plus the "other" question the reason
 /// leans on (for highlighting), or `None` if this kind has no specific reason.
-pub struct ElimDetail {
+struct ElimDetail {
     pub text: String,
     pub other_qi: Option<usize>,
 }
@@ -554,12 +560,7 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
 /// of the kinds `elim_clause_beyond_check_answer` covers. That is not the same as "no
 /// phrasing for this kind" — an elimination whose argument is *another* question's is
 /// `explain_elimination`'s to phrase, from the rule, before it reaches here.
-pub fn explain_elim_detail(
-    fp: &FlatPuzzle,
-    state: &State,
-    qi: usize,
-    oi: usize,
-) -> Option<ElimDetail> {
+fn explain_elim_detail(fp: &FlatPuzzle, state: &State, qi: usize, oi: usize) -> Option<ElimDetail> {
     let letter = LETTERS[oi];
     let hyp = hypothesis(state, qi, letter);
     let opt = OptionPos { qi, oi };
@@ -761,7 +762,7 @@ fn elim_clause_beyond_check_answer(
 
 /// A short "because …" clause for why question `qi` is forced to `letter`, or an
 /// empty string if none fits. Mirrors the TS `briefForceReason`.
-pub fn brief_force_reason(fp: &FlatPuzzle, state: &State, qi: usize, letter: Answer) -> String {
+fn brief_force_reason(fp: &FlatPuzzle, state: &State, qi: usize, letter: Answer) -> String {
     let answers = &state.answers;
     let n = fp.n;
 
@@ -852,7 +853,7 @@ fn find_count_sat_source(fp: &FlatPuzzle, state: &State, target_letter: Answer) 
 
 /// The narrated steps for a forced answer: `qi` must be `letter` (via `rule`).
 /// Mirrors the TS `explainForce`.
-pub fn explain_force(
+fn explain_force(
     fp: &FlatPuzzle,
     state: &State,
     qi: usize,
@@ -1401,7 +1402,7 @@ fn explain_count_saturation(
 
 /// The narrated steps for eliminating option `oi` of question `qi` (via `rule`).
 /// Mirrors the TS `explainElimination`.
-pub fn explain_elimination(
+fn explain_elimination(
     fp: &FlatPuzzle,
     state: &State,
     qi: usize,

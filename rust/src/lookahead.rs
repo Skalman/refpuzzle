@@ -21,6 +21,41 @@ pub(crate) type LookaheadChain = ArrayVec<DeduceResult, 80>;
 /// reorder — a longer trace sometimes trims further than a shorter one.
 const MINIMIZE_TOP_K: usize = 3;
 
+/// The `N` best items offered, ranked by a `usize` key where lower is better, kept in
+/// rank order. For a scan that would otherwise keep only the single best but whose
+/// ranking key is provisional — the cheap key picks the shortlist, an expensive step then
+/// re-ranks it. Ties keep the earlier offer, so a deterministic scan gives a
+/// deterministic list.
+struct BestN<T, const N: usize> {
+    items: ArrayVec<(usize, T), N>,
+}
+
+impl<T, const N: usize> BestN<T, N> {
+    fn new() -> Self {
+        BestN {
+            items: ArrayVec::new(),
+        }
+    }
+
+    /// Keep `item` if `key` ranks it among the `N` best so far.
+    fn offer(&mut self, key: usize, item: T) {
+        let Some(rank) = self.items.iter().position(|(k, _)| key < *k) else {
+            // Beaten by everything held, so it only belongs here while there is room.
+            let _ = self.items.try_push((key, item));
+            return;
+        };
+        if self.items.is_full() {
+            self.items.pop();
+        }
+        self.items.insert(rank, (key, item));
+    }
+
+    /// The kept items, best first.
+    fn into_items(self) -> impl Iterator<Item = T> {
+        self.items.into_iter().map(|(_, item)| item)
+    }
+}
+
 /// How a hypothesis was refuted at one question — paired with that question's index in
 /// [`LookaheadResult`]. Recorded rather than re-derived, because the hint's closing
 /// "But …. Contradiction." line states it and `Conflict` isn't recoverable from the end
@@ -378,7 +413,6 @@ fn probe_candidate(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::deduce::DeduceAction;
     use serde_json::Value;
 
     #[test]
@@ -456,93 +490,5 @@ mod tests {
 
         eprintln!("{passed}/{} passed", passed + failed);
         assert_eq!(failed, 0, "{failed} test(s) failed");
-    }
-
-    /// A contradiction is attributed to the conflicting action's target question,
-    /// not the assumption, including the forced-onto-eliminated case (which the
-    /// probe relies on to refute a hypothesis).
-    #[test]
-    fn contradiction_question_reports_the_conflicting_target() {
-        let mut st = State {
-            answers: [None; MAX_N],
-            eliminated: [0; MAX_N],
-        };
-        st.answers[3] = Some(Answer::B);
-        st.eliminated[3] = ALL_OPTIONS_MASK ^ (1 << Answer::B.idx());
-        st.answers[5] = Some(Answer::C);
-        st.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << Answer::C.idx());
-
-        // Force onto a question answered otherwise → that question.
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::Force {
-                    qi: 3,
-                    answer: Answer::A
-                },
-                &st
-            ),
-            Some(3)
-        );
-        // Force onto an unanswered question whose target option is eliminated →
-        // that question (the refutation signal the lookahead probe relies on).
-        let mut st_elim = State {
-            answers: [None; MAX_N],
-            eliminated: [0; MAX_N],
-        };
-        st_elim.eliminated[2] = 1 << Answer::A.idx();
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::Force {
-                    qi: 2,
-                    answer: Answer::A
-                },
-                &st_elim
-            ),
-            Some(2)
-        );
-        // Eliminate removing a question's current answer → that question.
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::Eliminate {
-                    qi: 5,
-                    oi: Answer::C.idx()
-                },
-                &st
-            ),
-            Some(5)
-        );
-        // EliminateMulti → the lowest conflicting question in the mask (both 3 and 5
-        // conflict here).
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::EliminateMulti {
-                    question_mask: (1 << 3) | (1 << 5),
-                    option_mask: (1 << Answer::B.idx()) | (1 << Answer::C.idx()),
-                },
-                &st
-            ),
-            Some(3)
-        );
-        // Consistent actions → None (no false contradiction).
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::Force {
-                    qi: 3,
-                    answer: Answer::B
-                },
-                &st
-            ),
-            None
-        );
-        assert_eq!(
-            contradiction_question(
-                &DeduceAction::Eliminate {
-                    qi: 3,
-                    oi: Answer::A.idx()
-                },
-                &st
-            ),
-            None
-        );
     }
 }

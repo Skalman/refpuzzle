@@ -386,7 +386,7 @@ mod tests {
 
     #[test]
     fn arrow_referent_covers_l1_kinds() {
-        use crate::construct::RECIPES;
+        use crate::recipes::RECIPES;
         // Every kind L1's recipe can emit must resolve to an arrow. Probes the real
         // recipe, so coach coverage can't silently drift when the pool changes.
         let l1 = &RECIPES[0];

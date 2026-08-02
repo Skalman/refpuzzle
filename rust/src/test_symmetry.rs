@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use serde_json::Value;
 
-use crate::daily_puzzles;
+use crate::corpus::daily_puzzles;
 use crate::deduce::{apply_action, deduce};
 use crate::serialize::parse_puzzle;
 use crate::solve_brute::solve;

@@ -1,4 +1,5 @@
 use crate::construct;
+use crate::recipes;
 use crate::rng::Rng;
 use crate::solve_deduce::{NoSteps, run_engine};
 use crate::stats::Stats;
@@ -95,7 +96,7 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
 /// `attempts` is the target *puzzle* count, not the generate()-call count.
 /// Capped at 100× calls as a backstop against an infeasible profile.
 fn collect_level(level: u8, attempts: u32, seed: u32) -> LevelData {
-    let recipe = &construct::RECIPES[(level - 1) as usize];
+    let recipe = &recipes::RECIPES[(level - 1) as usize];
     let mut per_type: BTreeMap<QuestionTypeKind, TypeStats> = BTreeMap::new();
     let mut successes = 0u32;
     let mut total_calls = 0u32;
@@ -184,7 +185,7 @@ fn write_fallbacks(md: &mut String, levels: &[LevelData]) {
 fn tally_puzzle(
     result: &FlatPuzzle,
     per_type: &mut BTreeMap<QuestionTypeKind, TypeStats>,
-    recipe: &construct::LevelRecipe,
+    recipe: &recipes::LevelRecipe,
 ) {
     // Read the answer key with the engine the gate accepts on: `standard` at the
     // recipe depth. An accepted puzzle solves under it, so the `unreachable!` below

@@ -15,6 +15,7 @@ pub mod explain;
 pub mod fill;
 pub mod format;
 pub mod lookahead;
+pub mod recipes;
 pub mod render;
 pub mod rng;
 pub mod serialize;
@@ -41,6 +42,7 @@ mod wasm_api {
     use crate::deduce::{DeduceAction, apply_action, deduce_assuming_unique};
     use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
     use crate::lookahead::lookahead_shortest;
+    use crate::recipes;
     use crate::render;
     use crate::rng::Rng;
     use crate::serialize::{parse_puzzle, puzzle_to_compact_value};
@@ -227,7 +229,7 @@ mod wasm_api {
     /// engine as a bonus, and returns the shortest-to-explain step. Level-agnostic
     /// (no need to plumb the level through).
     fn fallback_step(fp: &FlatPuzzle, s: &State) -> Option<StepApi> {
-        let mut depths: Vec<usize> = construct::RECIPES
+        let mut depths: Vec<usize> = recipes::RECIPES
             .iter()
             .map(|r| r.lookahead_deduce_until)
             .collect();
@@ -404,7 +406,7 @@ mod wasm_api {
         // by native `gen`.
         let mut rng = Rng::new(crate::rng::daily_seed(date_key, level as u32));
         match construct::generate(
-            &construct::RECIPES[(level - 1) as usize],
+            &recipes::RECIPES[(level - 1) as usize],
             &mut rng,
             construct::DEFAULT_MAX_REGENERATIONS,
             &mut stats,

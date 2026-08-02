@@ -9,9 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::check_form;
 use crate::check_well_posed;
-use crate::construct;
+use crate::cli::link;
 use crate::deduce;
 use crate::format;
+use crate::recipes;
 use crate::serialize;
 use crate::solve_brute;
 use crate::solve_deduce;
@@ -225,7 +226,7 @@ fn build_question_infos(fp: &FlatPuzzle) -> Vec<QuestionInfo> {
 /// bar — a hard `check` error / stale-bake signal, since the gate only admits
 /// puzzles this engine solves.
 fn recipe_depth_solve(fp: &FlatPuzzle, key: &str) -> Option<(usize, bool, usize)> {
-    let recipe = &construct::RECIPES[key_level(key)? - 1];
+    let recipe = &recipes::RECIPES[key_level(key)? - 1];
     let out = solve_deduce::run_engine(
         fp,
         fp.initial_state,
@@ -325,7 +326,7 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
                 let (day, lvl) = key.split_once('-').expect("dated key must be MMDD-L");
                 make_url(year, day, lvl, steps)
             }
-            None => serialize::playground_link(ORIGIN, fp, state),
+            None => link::playground_link(ORIGIN, fp, state),
         }
     };
 
@@ -1215,14 +1216,57 @@ fn first_incorrect_action(
 
 // ── Solve engine ──
 
-pub struct CheckResult {
+/// One solve step as the compact mark tokens `check` prints: `3B` forces #3 to B,
+/// `3b` eliminates it. An `EliminateMulti` expands to one token per cell it touches.
+fn format_step(step: &solve_deduce::SolveStep) -> Vec<String> {
+    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
+    match step {
+        solve_deduce::SolveStep::Deduce(dr) => match dr.action {
+            deduce::DeduceAction::Force { qi, answer } => {
+                vec![format!("{}{}", qi + 1, answer.as_char())]
+            }
+            deduce::DeduceAction::Eliminate { qi, oi } => {
+                vec![format!("{}{}", qi + 1, letters_lower[oi])]
+            }
+            deduce::DeduceAction::EliminateMulti {
+                question_mask,
+                option_mask,
+            } => {
+                let mut out = Vec::new();
+                for i in 0..MAX_N {
+                    if (question_mask >> i) & 1 == 1 {
+                        for oi in 0..5usize {
+                            if (option_mask >> oi) & 1 == 1 {
+                                out.push(format!("{}{}", i + 1, letters_lower[oi]));
+                            }
+                        }
+                    }
+                }
+                out
+            }
+        },
+        solve_deduce::SolveStep::Lookahead(lr) => {
+            vec![format!(
+                "{}{}",
+                lr.eliminate_qi + 1,
+                letters_lower[lr.eliminate_oi]
+            )]
+        }
+    }
+}
+
+fn format_steps(steps: &[solve_deduce::SolveStep]) -> Vec<String> {
+    steps.iter().flat_map(format_step).collect()
+}
+
+struct CheckResult {
     pub ok: bool,
     pub steps: Vec<String>,
     pub answers: [Option<Answer>; MAX_N],
     pub eliminated: [u8; MAX_N],
 }
 
-pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
+fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     let mut log = solve_deduce::StepLog::default();
     let out = solve_deduce::run_engine(
         fp,
@@ -1239,7 +1283,7 @@ pub fn run_check(fp: &FlatPuzzle, key: &str) -> CheckResult {
     }
     CheckResult {
         ok: out.solved,
-        steps: solve_deduce::format_steps(&log.0),
+        steps: format_steps(&log.0),
         answers: out.state.answers,
         eliminated: out.state.eliminated,
     }

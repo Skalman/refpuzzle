@@ -66,9 +66,9 @@ All TS engine and generator files have Rust counterparts in `rust/src/` unless n
 
   `solve()` — brute-force backtracking solver. Returns all valid solutions up to a max (default 2). Used as a safety net to verify exactly 1 solution exists.
 
-- **construct.rs `RECIPES`**
+- **recipes.rs**
 
-  `LevelRecipe` definitions — per-level settings: question count, option count, required/allowed question types, per-type caps, and lookahead depth.
+  `LevelRecipe` definitions — per-level settings: question count, option count, required/allowed question types, per-type caps, and lookahead depth. A leaf module, so anything that only needs a level's parameters can read it without depending on the generator.
 
 - **rng.rs / rng.ts**
 

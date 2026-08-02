@@ -1,16 +1,208 @@
-//! Option filling: given a skeleton's question types and answer key, encode each
-//! question's full option row — the correct value plus its distractors — and the
-//! per-option statements for TrueStmt questions.
+//! Concrete content for a question type against a fixed answer key: the random
+//! parametrization that turns a kind into a full `QuestionType`, each question's
+//! option row — the correct value plus its distractors — and the per-option
+//! statements for TrueStmt questions.
 
 use arrayvec::ArrayVec;
 use serde_json::{Value, json};
 
 use crate::check_answer::check_claim_fast;
 use crate::check_form;
-use crate::construct::{exact_recipe, format_stmt_qt, random_type_params};
-use crate::format::format_type_tag;
+use crate::counts::{count_letter, letter_counts};
+use crate::format::{format_stmt_qt, format_type_tag};
+use crate::recipes::exact_recipe;
 use crate::rng::Rng;
 use crate::types::*;
+
+// ── Question-type parametrization ──
+
+/// Draw random parameters for `kind` at slot `qi`, giving a full `QuestionType`, or
+/// `None` if the board can't host the kind there — a pool too small to yield
+/// `option_count` distinct option values, or a key the kind can't satisfy.
+/// `construct`'s skeleton builder draws slot types with this; `fill` draws TrueStmt
+/// claim types with it.
+pub(crate) fn random_type_params(
+    kind: QuestionTypeKind,
+    qi: usize,
+    n: usize,
+    option_count: usize,
+    solution: &[Answer; MAX_N],
+    rng: &mut Rng,
+) -> Option<QuestionType> {
+    match kind {
+        QuestionTypeKind::CountAnswer => Some(QuestionType::CountAnswer {
+            answer: rng.pick_letter(option_count),
+        }),
+        QuestionTypeKind::CountAnswerBefore => {
+            // Need before_index with at least oc distinct count values (0..=before_index).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::CountAnswerBefore {
+                answer: rng.pick_letter(option_count),
+                before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
+            })
+        }
+        QuestionTypeKind::CountAnswerAfter => {
+            // Need after_index with at least oc distinct count values (0..=n-1-after_index).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::CountAnswerAfter {
+                answer: rng.pick_letter(option_count),
+                after_index: rng.int(0, n as i32 - option_count as i32) as u8,
+            })
+        }
+        QuestionTypeKind::CountVowel => Some(QuestionType::CountVowel),
+        QuestionTypeKind::CountConsonant => Some(QuestionType::CountConsonant),
+        QuestionTypeKind::MostCommonCount => Some(QuestionType::MostCommonCount),
+        QuestionTypeKind::AnswerOf => {
+            // Placeholder self-pointer; `wire_answer_of_targets` assigns the real
+            // target later, once the whole type map is known.
+            Some(QuestionType::AnswerOf {
+                question_index: qi as u8,
+            })
+        }
+        QuestionTypeKind::LetterDist => {
+            let mut pool = [0u8; MAX_N];
+            let mut pool_len = 0;
+            for j in 0..n {
+                if j != qi {
+                    pool[pool_len] = j as u8;
+                    pool_len += 1;
+                }
+            }
+            Some(QuestionType::LetterDist {
+                question_index: rng.pick(&pool[..pool_len]),
+            })
+        }
+        QuestionTypeKind::ClosestAfter => {
+            // Need after_index with at least oc distinct option values
+            // (positions after_index+1..n, plus null).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::ClosestAfter {
+                after_index: rng.int(0, n as i32 - option_count as i32) as u8,
+                answer: rng.pick_letter(option_count),
+            })
+        }
+        QuestionTypeKind::ClosestBefore => {
+            // Need before_index with at least oc distinct option values
+            // (positions 0..before_index, plus null).
+            if n < option_count {
+                return None;
+            }
+            Some(QuestionType::ClosestBefore {
+                before_index: rng.int(option_count as i32 - 1, n as i32 - 1) as u8,
+                answer: rng.pick_letter(option_count),
+            })
+        }
+        QuestionTypeKind::FirstWith => Some(QuestionType::FirstWith {
+            answer: rng.pick_letter(option_count),
+        }),
+        QuestionTypeKind::LastWith => Some(QuestionType::LastWith {
+            answer: rng.pick_letter(option_count),
+        }),
+        QuestionTypeKind::PrevSame => {
+            // Need oc distinct option values; pool size is qi + 1 (positions [0, qi) + null).
+            if qi + 1 < option_count {
+                return None;
+            }
+            Some(QuestionType::PrevSame)
+        }
+        QuestionTypeKind::NextSame => {
+            // Need oc distinct option values; pool size is n - qi (positions (qi, n) + null).
+            if n - qi < option_count {
+                return None;
+            }
+            Some(QuestionType::NextSame)
+        }
+        QuestionTypeKind::OnlySame => Some(QuestionType::OnlySame),
+        QuestionTypeKind::SameAs => {
+            // Feasibility: fill needs oc-1 distinct distractor targets. If qi's answer
+            // is unique the pool is the n-1 other questions; if a match exists, the
+            // same-answer questions are excluded (they'd be alternate correct answers),
+            // leaving (n - same_count) differing questions + "none". Must be >= oc-1,
+            // else fill_one_question can't build the row.
+            let same_count = count_letter(solution, solution[qi], n) as usize;
+            let pool = if same_count == 1 {
+                n - 1
+            } else {
+                n - same_count + 1
+            };
+            if pool < option_count - 1 {
+                return None;
+            }
+            Some(QuestionType::SameAs)
+        }
+        QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
+        QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
+            let answer = rng.pick_letter(option_count);
+            Some(if kind == QuestionTypeKind::OnlyOdd {
+                QuestionType::OnlyOdd { answer }
+            } else {
+                QuestionType::OnlyEven { answer }
+            })
+        }
+        QuestionTypeKind::LeastCommon => Some(QuestionType::LeastCommon),
+        QuestionTypeKind::MostCommon => Some(QuestionType::MostCommon),
+        QuestionTypeKind::NoOtherHasAnswer => Some(QuestionType::NoOtherHasAnswer),
+        QuestionTypeKind::EqualCount => {
+            let ref_letter = rng.pick_letter(option_count);
+            let ref_count = count_letter(solution, ref_letter, n);
+            let has_match = LETTERS[..option_count]
+                .iter()
+                .any(|&l| l != ref_letter && count_letter(solution, l, n) == ref_count);
+            // When no other letter shares ref's count the "equal count" reads as a
+            // near-miss, so keep it only ~40% of the time (reject 3 of 5 draws) to
+            // thin them out; a natural match (has_match) is always kept.
+            if !has_match && rng.int(0, 4) > 1 {
+                return None;
+            }
+            Some(QuestionType::EqualCount { answer: ref_letter })
+        }
+        QuestionTypeKind::AnswerIsSelf => Some(QuestionType::AnswerIsSelf),
+        QuestionTypeKind::TrueStmt => {
+            if option_count < 5 {
+                return None;
+            }
+            Some(QuestionType::TrueStmt)
+        }
+        QuestionTypeKind::SameAsWhich => {
+            let mut pool = [0u8; MAX_N];
+            let mut pool_len = 0;
+            for j in 0..n {
+                if j != qi {
+                    pool[pool_len] = j as u8;
+                    pool_len += 1;
+                }
+            }
+            if pool_len == 0 {
+                return None;
+            }
+            let ref_qi = rng.pick(&pool[..pool_len]) as usize;
+            if solution[ref_qi] == solution[qi] {
+                return None;
+            }
+            // No structural match requirement: with a NONE option, "no listed
+            // candidate shares ref's answer" is an ordinary answer, so a key where
+            // only `ref_qi` holds that letter is placeable.
+            // Capacity: need at least oc-1 questions whose answer differs from ref (distractors).
+            let distractor_count = (0..n)
+                .filter(|&j| j != qi && solution[j] != solution[ref_qi])
+                .count();
+            if distractor_count < option_count - 1 {
+                return None;
+            }
+            Some(QuestionType::SameAsWhich {
+                question_index: ref_qi as u8,
+            })
+        }
+    }
+}
+
+// ── Option value domains ──
 
 /// Upper bound on a single question's candidate-value pool: one value per
 /// question index (≤ `MAX_N`) plus a handful of specials (NONE, counts up to n).
@@ -133,22 +325,6 @@ pub(crate) fn valid_values(
         }
     }
     out
-}
-
-pub(crate) fn assert_accepted(fp: &FlatPuzzle, brute_count: usize, label: &str) {
-    assert_eq!(
-        brute_count, 1,
-        "BUG [{label}]: expected 1 solution, got {brute_count}"
-    );
-    let fe = check_form::check_form(fp);
-    assert!(
-        fe.is_empty(),
-        "BUG [{label}]: form errors: {}",
-        fe.iter()
-            .map(|e| format!("Q{}: {}", e.qi + 1, e.message))
-            .collect::<Vec<_>>()
-            .join(", ")
-    );
 }
 
 // ── Build FlatPuzzle with options ──
@@ -752,7 +928,7 @@ fn is_counting_type(qt: &QuestionType) -> bool {
     )
 }
 
-/// Share of `kind`'s instances at `level` (0-based, as `construct::RECIPES` is indexed) whose
+/// Share of `kind`'s instances at `level` (0-based, as `recipes::RECIPES` is indexed) whose
 /// answer is NONE, or `None` where the kind isn't used at that level. Measured with
 /// `type-stats --attempts 10000 --seed 1`, to two decimals — a third digit sits below the
 /// measurement's own run-to-run reproducibility.
@@ -952,24 +1128,6 @@ fn place_letter_distractors(
             di += 1;
         }
     }
-}
-
-pub fn letter_counts(sol: &[Answer; MAX_N], n: usize) -> [i32; 5] {
-    let mut counts = [0i32; 5];
-    for i in 0..n {
-        counts[sol[i].idx()] += 1;
-    }
-    counts
-}
-
-pub fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
-    let mut c = 0i32;
-    for i in 0..n {
-        if sol[i] == letter {
-            c += 1;
-        }
-    }
-    c
 }
 
 // ── Statements for TrueStmt ──
@@ -1218,7 +1376,7 @@ mod tests {
     use super::*;
 
     use crate::check_answer::check_answer;
-    use crate::construct::RECIPES;
+    use crate::recipes::RECIPES;
     use serde_json::Value;
 
     /// `none_correct_rate` stores one column per level, so a recipe added or removed

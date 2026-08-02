@@ -1,9 +1,9 @@
 use crate::check_answer::check_answers;
 use crate::deduce::{
-    DeduceAction, DeduceResult, apply_action, contradiction_question, deduce,
-    deduce_assuming_unique,
+    DeduceResult, apply_action, contradiction_question, deduce, deduce_assuming_unique,
 };
 use crate::lookahead::{LookaheadResult, lookahead, lookahead_shortest};
+use crate::recipes::{LevelRecipe, guess_recipe};
 use crate::time::{us, wasm_now};
 use crate::types::*;
 
@@ -79,6 +79,20 @@ impl EngineConfig {
             lookahead_deduce_until: usize::MAX,
             pick_shortest: true,
         }
+    }
+}
+
+/// The two presets a level's recipe pins. Written here rather than in `recipes` so
+/// that module names no engine code and stays a leaf.
+impl LevelRecipe {
+    /// [`EngineConfig::generation`] at this recipe's depth — the sound pre-uniqueness
+    /// engine (repair proposals, the working state repair advances).
+    pub fn generation_config(&self) -> EngineConfig {
+        EngineConfig::generation(self.lookahead_deduce_until)
+    }
+    /// [`EngineConfig::standard`] at this recipe's depth — the player engine / ship bar.
+    pub fn standard_config(&self) -> EngineConfig {
+        EngineConfig::standard(self.lookahead_deduce_until)
     }
 }
 
@@ -245,7 +259,7 @@ pub fn run_engine<S: StepSink>(
 /// depth — a shipped puzzle always solves under `standard` by construction). Reports
 /// only the final answers; skips step recording (`NoSteps`).
 pub fn solve(fp: &FlatPuzzle) -> SolveResult {
-    let recipe = crate::construct::guess_recipe(fp.n);
+    let recipe = guess_recipe(fp.n);
     let max_iters = fp.n * VERIFY_ITERS_PER_QUESTION;
     let out = run_engine(
         fp,
@@ -269,45 +283,6 @@ pub fn solve(fp: &FlatPuzzle) -> SolveResult {
         solved: out.solved,
         answers: out.state.answers,
     }
-}
-
-pub fn format_step(step: &SolveStep) -> Vec<String> {
-    let letters_lower = ['a', 'b', 'c', 'd', 'e'];
-    match step {
-        SolveStep::Deduce(dr) => match dr.action {
-            DeduceAction::Force { qi, answer } => vec![format!("{}{}", qi + 1, answer.as_char())],
-            DeduceAction::Eliminate { qi, oi } => {
-                vec![format!("{}{}", qi + 1, letters_lower[oi])]
-            }
-            DeduceAction::EliminateMulti {
-                question_mask,
-                option_mask,
-            } => {
-                let mut out = Vec::new();
-                for i in 0..MAX_N {
-                    if (question_mask >> i) & 1 == 1 {
-                        for oi in 0..5usize {
-                            if (option_mask >> oi) & 1 == 1 {
-                                out.push(format!("{}{}", i + 1, letters_lower[oi]));
-                            }
-                        }
-                    }
-                }
-                out
-            }
-        },
-        SolveStep::Lookahead(lr) => {
-            vec![format!(
-                "{}{}",
-                lr.eliminate_qi + 1,
-                letters_lower[lr.eliminate_oi]
-            )]
-        }
-    }
-}
-
-pub fn format_steps(steps: &[SolveStep]) -> Vec<String> {
-    steps.iter().flat_map(format_step).collect()
 }
 
 #[cfg(test)]

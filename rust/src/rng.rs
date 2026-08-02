@@ -14,7 +14,7 @@ impl Rng {
         Rng { s: seed }
     }
 
-    pub fn next_u32(&mut self) -> u32 {
+    fn next_u32(&mut self) -> u32 {
         self.s = self.s.wrapping_add(0x6d2b79f5);
         let mut t = self.s;
         t = (t ^ (t >> 15)).wrapping_mul(t | 1);
@@ -47,7 +47,7 @@ impl Rng {
     }
 
     /// Uniform random `Answer` from `LETTERS[start..end]` (half-open).
-    pub fn pick_letter_from(&mut self, start: usize, end: usize) -> Answer {
+    fn pick_letter_from(&mut self, start: usize, end: usize) -> Answer {
         debug_assert!(start < end && end <= 5);
         Answer::from(self.int(start as i32, end as i32 - 1) as u8)
     }

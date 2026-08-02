@@ -1,9 +1,87 @@
-//! Count/tally primitives shared by `deduce`, `check_answer`, and `explain`: the
-//! mask-selected tally, per-letter cell accounting, and whole-puzzle
-//! count-question bounds. Lives here — not in `deduce` or `check_answer` — so both
-//! can use it without a module cycle (`deduce` already depends on `check_answer`).
+//! Count/tally primitives shared by `deduce`, `check_answer`, `explain`, and the
+//! generator: the counting predicate, the mask-selected tally, per-letter cell
+//! accounting, whole-puzzle count-question bounds, and the answer-key tallies
+//! generation reads. Lives here — not in `deduce` or `check_answer` — so every
+//! consumer can use them without a module cycle (`deduce` already depends on
+//! `check_answer`).
 
 use crate::types::*;
+
+/// What a count question counts: one answer letter, or a letter class.
+#[derive(Clone, Copy)]
+#[allow(clippy::enum_variant_names)]
+pub(crate) enum Pred {
+    IsAnswer(Answer),
+    IsVowel,
+    IsConsonant,
+}
+
+impl Pred {
+    pub(crate) fn matches(self, a: Answer) -> bool {
+        match self {
+            Pred::IsAnswer(t) => a == t,
+            Pred::IsVowel => a.is_vowel(),
+            Pred::IsConsonant => !a.is_vowel(),
+        }
+    }
+    pub(crate) fn mask(self) -> u8 {
+        match self {
+            Pred::IsAnswer(t) => 1u8 << t.idx(),
+            Pred::IsVowel => 0b10001,
+            Pred::IsConsonant => 0b01110,
+        }
+    }
+}
+
+/// The counting predicate for a count-type question, or `None` for any other kind.
+pub(crate) fn count_pred(qt: &QuestionType) -> Option<Pred> {
+    match *qt {
+        QuestionType::CountAnswer { answer }
+        | QuestionType::CountAnswerBefore { answer, .. }
+        | QuestionType::CountAnswerAfter { answer, .. } => Some(Pred::IsAnswer(answer)),
+        QuestionType::CountVowel => Some(Pred::IsVowel),
+        QuestionType::CountConsonant => Some(Pred::IsConsonant),
+        _ => None,
+    }
+}
+
+/// The question range a count kind scans: the whole board, or the sub-range a
+/// Before/After kind names.
+pub(crate) fn count_range(qt: &QuestionType, n: usize) -> (usize, usize) {
+    match *qt {
+        QuestionType::CountAnswerBefore { before_index, .. } => (0, before_index as usize),
+        QuestionType::CountAnswerAfter { after_index, .. } => (after_index as usize + 1, n),
+        _ => (0, n),
+    }
+}
+
+/// Coarser counterpart to [`MaskTally`]: `count` answered matches plus `remaining`
+/// unanswered questions that could still match, with the locked-in ones folded in
+/// rather than split out.
+pub(crate) struct CountResult {
+    pub(crate) count: u8,
+    pub(crate) remaining: u8,
+}
+
+pub(crate) fn count_matching(
+    answers: &[Option<Answer>; MAX_N],
+    eliminated: &[u8; MAX_N],
+    pred: Pred,
+    from: usize,
+    to: usize,
+) -> CountResult {
+    let mask = pred.mask();
+    let mut count: u8 = 0;
+    let mut remaining: u8 = 0;
+    for i in from..to {
+        match answers[i] {
+            Some(a) if pred.matches(a) => count += 1,
+            None if eliminated[i] & mask != mask => remaining += 1,
+            _ => {}
+        }
+    }
+    CountResult { count, remaining }
+}
 
 /// Mask-selected tally over a range: `count` answered matches, `guaranteed`
 /// unanswered questions *locked* to a match (only masked options remain), and
@@ -258,4 +336,27 @@ pub(crate) fn compute_count_bounds(
         ceil[letter_index].at_most(hi + extra_possible, qi);
     }
     CountBounds { floor, ceil }
+}
+
+// ── Answer-key tallies ──
+//
+// Generation-side counterparts to the state-based tallies above: the answer key is
+// complete, so these are exact counts with no bounds to track.
+
+pub(crate) fn letter_counts(sol: &[Answer; MAX_N], n: usize) -> [i32; 5] {
+    let mut counts = [0i32; 5];
+    for i in 0..n {
+        counts[sol[i].idx()] += 1;
+    }
+    counts
+}
+
+pub(crate) fn count_letter(sol: &[Answer; MAX_N], letter: Answer, n: usize) -> i32 {
+    let mut c = 0i32;
+    for i in 0..n {
+        if sol[i] == letter {
+            c += 1;
+        }
+    }
+    c
 }
