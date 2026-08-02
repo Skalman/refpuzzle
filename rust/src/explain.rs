@@ -75,33 +75,93 @@ fn try_looking(qis: &[usize]) -> ExplainStep {
     ExplainStep::Look { qis: unique }
 }
 
+/// Who is making a rejected claim. Fixes two things at once, because they are the same
+/// decision: how the sentence opens, and how much of the board the "but …" clause may
+/// state as fact.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClaimSubject {
+    /// The question's own committed answer is what's being judged — "#3 claims …". Every
+    /// cell and tally the reason names really holds what it says.
+    Answered,
+    /// One of the question's options, judged on a board that *assumes* it — "#3 option B
+    /// claims …". #3's answer is that assumption, so anything downstream of it reads in the
+    /// conditional: this sentence stands alone, with nothing before it to establish the
+    /// assumption.
+    Option,
+    /// A refuted hypothesis, reported in the conditional — "#3 would say …". The clause
+    /// stays indicative: a lookahead hint's earlier lines have already stated the cells it
+    /// names ("#2 must be B."), so hedging them again would read as doubting facts the
+    /// player was just handed.
+    Hypothesis,
+}
+
+impl ClaimSubject {
+    /// The sentence opener, through the verb: "#3 claims", "#3 option B claims", "#3 would
+    /// say".
+    fn opening(self, opt: OptionPos) -> String {
+        match self {
+            ClaimSubject::Answered => format!("{} claims", q(opt.qi)),
+            ClaimSubject::Option => {
+                format!("{} option {} claims", q(opt.qi), LETTERS[opt.oi])
+            }
+            ClaimSubject::Hypothesis => format!("{} would say", q(opt.qi)),
+        }
+    }
+
+    /// Whether the clause may state the board as fact. False only for `Option`, whose
+    /// board carries an assumption no preceding line has stated.
+    fn indicative(self) -> bool {
+        !matches!(self, ClaimSubject::Option)
+    }
+}
+
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
 /// unanswered). Verdict and reason both come from `check_answer`, so this only renders
 /// a judgment — it never re-decides one, and can't miss a kind that judge can reject.
 pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
+    rejected_answer_text(fp, state, qi, ClaimSubject::Answered)
+}
+
+/// [`explain_invalid`] under a chosen subject — `explain_lookahead` reports the same
+/// judgment about a hypothesis, so it asks for the conditional opening.
+fn rejected_answer_text(
+    fp: &FlatPuzzle,
+    state: &State,
+    qi: usize,
+    subject: ClaimSubject,
+) -> Option<String> {
     let a = state.answers[qi]?;
     let reason = judge_answer(fp, *state, qi).reason()?;
     let claim = answered_claim(fp, state, qi)?;
-    invalid_claim_text(state, OptionPos { qi, oi: a.idx() }, &claim, reason)
+    rejected_claim_text(
+        subject,
+        state,
+        OptionPos { qi, oi: a.idx() },
+        &claim,
+        reason,
+    )
 }
 
-/// A rejected claim as one sentence: "#3 claims *what it asserts*, but *what breaks
+/// A rejected claim as one sentence: "*subject* claims *what it asserts*, but *what breaks
 /// it*". `None` only for the two reasons with nothing to say — a `Malformed` value
 /// (which `check_form` rejects as an error, so no shipped puzzle carries one) and
 /// `NoOptionsLeft` (which is about the question, not a claim).
 ///
 /// `opt` is the option the claim came from — for a `TrueStmt` the statement it picked,
-/// whose subject then reads as the question's own. [`explain_lookahead`] rewrites
-/// " claims " into " would say ", so every sentence must contain it exactly once.
-fn invalid_claim_text(
+/// whose subject then reads as the question's own.
+fn rejected_claim_text(
+    subject: ClaimSubject,
     state: &State,
     opt: OptionPos,
     claim: &Claim,
     reason: InvalidReason,
 ) -> Option<String> {
     let assertion = claim_assertion(state, opt, claim)?;
-    let clause = invalid_clause(state, opt, claim, reason)?;
-    Some(format!("{} claims {assertion}, but {clause}", q(opt.qi)))
+    let clause = invalid_clause(state, opt, claim, reason, subject)?;
+    Some(format!(
+        "{} {assertion}, but {clause}",
+        subject.opening(opt)
+    ))
 }
 
 /// What a claim asserts, as the continuation of "#3 claims …". Exhaustive over
@@ -242,64 +302,119 @@ fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<Strin
 
 /// What broke a claim, as the continuation of "…, but …" — see [`InvalidReason`], which
 /// carries the cells and tallies these read.
+///
+/// A clause naming a cell reads in the conditional when that cell is `opt.qi` and its answer
+/// is only assumed — "#1 is answered A" is a claim about the board a player can check and
+/// find empty. Tallies hedge on the subject instead: they are counted on the board that
+/// assumes the option, so under `Option` the number can include the assumed cell and may
+/// not be visible on the board ("there would already be 2"). Under `Hypothesis` they stay
+/// indicative — the lookahead's earlier lines have already stated the cells the count reads.
 fn invalid_clause(
     state: &State,
     opt: OptionPos,
     claim: &Claim,
     reason: InvalidReason,
+    subject: ClaimSubject,
 ) -> Option<String> {
     use InvalidReason::*;
     let answers = &state.answers;
     let value = claim.value.is_num().then(|| claim.value.value());
+    let indicative = subject.indicative();
+    // Is the board's account of this cell an assumption rather than a fact?
+    let assumed = |at: u8| !indicative && usize::from(at) == opt.qi;
+    // "#2 has answer B", or its conditional form when that cell is the assumption itself.
+    let has = |at: u8| {
+        if assumed(at) {
+            "itself would have"
+        } else {
+            "has"
+        }
+    };
 
     Some(match reason {
         Malformed | NoOptionsLeft => return None,
 
         CountFloor { count, guaranteed } => {
-            if guaranteed == 0 {
+            if guaranteed == 0 && indicative {
                 format!("there are already {count}")
+            } else if guaranteed == 0 {
+                format!("there would already be {count}")
             } else {
-                format!("{} are already certain", count + guaranteed)
+                format!(
+                    "{} {} certain",
+                    count + guaranteed,
+                    if indicative {
+                        "are already"
+                    } else {
+                        "would be"
+                    }
+                )
             }
         }
-        CountCeiling { max } | PeakCeiling { max } => format!("at most {max} are possible"),
-        PeakFloor { letter, floor } => {
-            format!("{letter} is already certain to appear {}", times(floor))
-        }
+        CountCeiling { max } | PeakCeiling { max } => format!(
+            "at most {max} {} possible",
+            if indicative { "are" } else { "would be" }
+        ),
+        PeakFloor { letter, floor } => format!(
+            "{letter} {} certain to appear {}",
+            if indicative { "is already" } else { "would be" },
+            times(floor)
+        ),
 
-        TargetAnswered { at, answer } => format!("{} is answered {answer}", q(at)),
+        TargetAnswered { at, answer } => {
+            if assumed(at) {
+                format!("{} itself would be {answer}", q(at))
+            } else {
+                format!("{} is answered {answer}", q(at))
+            }
+        }
+        // Reads the rest of the board's eliminations. `opt.qi` can't be the target here —
+        // under an assumption it is answered, which `target_broken` reports as answered.
         TargetCannot { at, letter } => format!("{letter} is ruled out for {}", q(at)),
-        OtherHasLetter { at, letter } => format!("{} has answer {letter} too", q(at)),
+        OtherHasLetter { at, letter } => {
+            let joins = if assumed(at) { "" } else { also(claim) };
+            format!("{} {} answer {letter}{joins}", q(at), has(at))
+        }
         // Directional reasons only come from a claim that named a position, so `value?`
         // can't decline here.
-        EarlierHasLetter { at, letter } => format!(
-            "{} has answer {letter} and comes before {}",
-            q(at),
-            q(value?)
-        ),
-        LaterHasLetter { at, letter } => format!(
-            "{} has answer {letter} and comes after {}",
-            q(at),
-            q(value?)
-        ),
-
-        PairDiffers { at, first, second } => {
+        EarlierHasLetter { at, letter } | LaterHasLetter { at, letter } => {
+            let comes = if matches!(reason, EarlierHasLetter { .. }) {
+                "before"
+            } else {
+                "after"
+            };
             format!(
-                "{} is {first} and {} is {second}",
+                "{} {} answer {letter} and comes {comes} {}",
                 q(at),
-                q(at as usize + 1)
+                has(at),
+                q(value?)
             )
         }
-        PairImpossible { at } => format!(
-            "{} and {} have no answer left in common",
+
+        PairDiffers { at, first, second } => format!(
+            "{} {} {first} and {} {} {second}",
             q(at),
-            q(at as usize + 1)
+            if assumed(at) { "would be" } else { "is" },
+            q(at as usize + 1),
+            if assumed(at + 1) { "would be" } else { "is" },
         ),
-        // "too" only if the claim named a pair of its own; the NONE option denies there
-        // is any.
+        // Leans on both cells' remaining options, so the assumption narrowing `opt.qi`'s can
+        // be what closed the overlap.
+        PairImpossible { at } => {
+            let pair = format!("{} and {}", q(at), q(at as usize + 1));
+            if assumed(at) || assumed(at + 1) {
+                format!("{pair} would have no answer left in common")
+            } else {
+                format!("{pair} have no answer left in common")
+            }
+        }
         OtherPairMatches { at } => {
-            let also = if value.is_some() { " too" } else { "" };
-            format!("{} and {} are identical{also}", q(at), q(at as usize + 1))
+            let pair = format!("{} and {}", q(at), q(at as usize + 1));
+            if assumed(at) || assumed(at + 1) {
+                format!("{pair} would be identical")
+            } else {
+                format!("{pair} are identical{}", also(claim))
+            }
         }
 
         CountsCantMeet {
@@ -308,23 +423,46 @@ fn invalid_clause(
             over,
             over_min,
         } => format!(
-            "{over} already appears at least {} and {short} can reach at most {short_max}",
-            times(over_min)
+            "{over} {} at least {} and {short} {} reach at most {short_max}",
+            if indicative {
+                "already appears"
+            } else {
+                "would appear"
+            },
+            times(over_min),
+            if indicative { "can" } else { "could" }
         ),
-        OtherLetterTies { letter } => format!("{letter} does"),
+        OtherLetterTies { letter } => {
+            format!("{letter} {}", if indicative { "does" } else { "would" })
+        }
 
         NotExtremum {
             rival,
             rival_count,
             claimed_count,
         } => format!(
-            "{rival} appears {} and {} {}",
+            "{rival} {} {} and {} {}",
+            if indicative {
+                "appears"
+            } else {
+                "would appear"
+            },
             times(rival_count),
             LETTERS[value? as usize],
             times(claimed_count)
         ),
-        ExtremumTied { rival, count } => format!("{rival} appears {} too", times(count)),
+        ExtremumTied { rival, count } => format!(
+            "{rival} {} {} too",
+            if indicative {
+                "appears"
+            } else {
+                "would appear"
+            },
+            times(count)
+        ),
 
+        // Pure letter arithmetic against the other question's answer — the assumption is the
+        // subject of the claim, not evidence for the clause.
         WrongDistance { actual } => {
             let QuestionType::LetterDist { question_index } = claim.question_type else {
                 return None;
@@ -334,6 +472,26 @@ fn invalid_clause(
             format!("{} is {} from {other}", LETTERS[opt.oi], letters(actual))
         }
     })
+}
+
+/// " too", or nothing when the claim denies the thing exists anywhere ("no question has
+/// answer B", "no two consecutive questions have identical answers"). Every other claim
+/// has already pointed at an instance — the position it named, or the question's own
+/// answer — so a second one *joins* it; these have nothing for it to join.
+fn also(claim: &Claim) -> &'static str {
+    use QuestionType::*;
+    let denies_any = !claim.value.is_num()
+        && matches!(
+            claim.question_type,
+            FirstWith { .. }
+                | LastWith { .. }
+                | ClosestAfter { .. }
+                | ClosestBefore { .. }
+                | OnlyOdd { .. }
+                | OnlyEven { .. }
+                | ConsecIdent
+        );
+    if denies_any { "" } else { " too" }
 }
 
 /// A count with the matching plural, e.g. "1 time" / "3 times".
@@ -385,1090 +543,218 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
     Some(ElimDetail { text, other_qi })
 }
 
-/// The option value `answer` selects at question `qi`, if numeric.
-/// A listed candidate of scoped-sameness question `qi`, other than `except` (the
-/// option's own target; `None` for the "none" option, which has none), that is
-/// already answered `letter` — the counterexample to an option's only-clause.
-/// Candidates are the questions the numeric options name minus the one `letter` is
-/// read off, matching `check_scoped_sameness`'s reading — so `qi` counts for
-/// `SameAsWhich` but not for `SameAs`.
-fn listed_candidate_answered(
+/// Why option `oi` of question `qi` is impossible, as one sentence — "#1 option C claims
+/// the first A is #3, but #2 has answer A and comes before #3." Answering `oi` would commit
+/// `qi` to a claim, so this asks the judge about *that* claim on the state that assumes it,
+/// and renders the verdict through the same [`rejected_claim_text`] the answered case uses,
+/// under a hypothetical subject.
+///
+/// `None` when there is nothing to say: the judge doesn't reject the claim and it isn't one
+/// of the kinds [`elim_clause_beyond_check_answer`] covers. That is not the same as "no
+/// phrasing for this kind" — an elimination whose argument is *another* question's is
+/// `explain_elimination`'s to phrase, from the rule, before it reaches here.
+pub fn explain_elim_detail(
     fp: &FlatPuzzle,
+    state: &State,
     qi: usize,
-    except: Option<usize>,
-    letter: Answer,
-    answers: &[Option<Answer>; MAX_N],
-) -> Option<usize> {
-    let source = match fp.question_types[qi] {
-        QuestionType::SameAsWhich { question_index } => usize::from(question_index),
-        // `SameAs` reads the matched letter off its own answer.
-        _ => qi,
-    };
-    (0..fp.option_count).find_map(|ci| {
-        let ov = fp.options[qi][ci];
-        let j = ov.is_num().then(|| usize::from(ov.value()))?;
-        (j < fp.n && j != source && Some(j) != except && answers[j] == Some(letter)).then_some(j)
-    })
+    oi: usize,
+) -> Option<ElimDetail> {
+    let letter = LETTERS[oi];
+    let hyp = hypothesis(state, qi, letter);
+    let opt = OptionPos { qi, oi };
+    let claim = answered_claim(fp, &hyp, qi)?;
+    let subject = ClaimSubject::Option;
+
+    if let Some(reason) = judge_answer(fp, hyp, qi).reason()
+        && let Some(text) = rejected_claim_text(subject, &hyp, opt, &claim, reason)
+    {
+        return detail(format!("{text}."), reason_other_qi(qi, &claim, reason));
+    }
+    let (clause, other_qi) = elim_clause_beyond_check_answer(fp, &hyp, opt, &claim)?;
+    let assertion = claim_assertion(&hyp, opt, &claim)?;
+    detail(
+        format!("{} {assertion}, but {clause}.", subject.opening(opt)),
+        other_qi,
+    )
 }
 
+/// The question an [`InvalidReason`] points at, for the elimination's "Try looking at …"
+/// highlight — the cell that refutes the claim, or none when the reason is about tallies
+/// rather than a place, or when that cell is `qi` itself (which the hint already points at,
+/// and which would collapse the two-question `Look` to one). Exhaustive so a new reason has
+/// to say which it is.
+fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<usize> {
+    use InvalidReason::*;
+    match reason {
+        TargetAnswered { at, .. }
+        | TargetCannot { at, .. }
+        | OtherHasLetter { at, .. }
+        | EarlierHasLetter { at, .. }
+        | LaterHasLetter { at, .. } => Some(usize::from(at)).filter(|&at| at != qi),
+        // A pair reason names two cells; when the first is `qi` itself the partner still
+        // carries the argument, so the highlight moves there instead of vanishing.
+        PairDiffers { at, .. } | PairImpossible { at } | OtherPairMatches { at } => {
+            let at = usize::from(at);
+            Some(if at == qi { at + 1 } else { at })
+        }
+        // The distance is measured against the question the kind names; the reason carries
+        // only the distance itself.
+        WrongDistance { .. } => match claim.question_type {
+            QuestionType::LetterDist { question_index } => Some(usize::from(question_index)),
+            _ => None,
+        },
+        Malformed
+        | NoOptionsLeft
+        | CountFloor { .. }
+        | CountCeiling { .. }
+        | PeakFloor { .. }
+        | PeakCeiling { .. }
+        | CountsCantMeet { .. }
+        | OtherLetterTies { .. }
+        | NotExtremum { .. }
+        | ExtremumTied { .. } => None,
+    }
+}
+
+/// The option value `answer` selects at question `qi`, if numeric.
 fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
     let ov = fp.options[qi][answer.idx()];
     ov.is_num().then(|| ov.value())
 }
 
-/// Over/at-most count check shared by the count kinds (`CountAnswer`,
-/// `CountAnswerBefore`, `CountAnswerAfter`, `CountVowel`, `CountConsonant`).
-/// `MostCommonCount` is intentionally NOT here — it has its own max-known /
-/// max-possible logic.
-fn count_kind_elim_detail(
-    qt: &QuestionType,
-    qi: usize,
-    letter: Answer,
-    ov: Option<u8>,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    n: usize,
-) -> Option<ElimDetail> {
-    let pred = count_pred(qt)?;
-    let (from, to) = count_range(qt, n);
-    let cr = count_matching(answers, eliminated, pred, from, to);
-    if let Some(ov) = ov {
-        if cr.count > ov {
-            return detail(
-                format!(
-                    "{} option {letter} claims {ov} {}, but there are already {}.",
-                    q(qi),
-                    count_rule_label(qt, ov),
-                    cr.count
-                ),
-                None,
-            );
-        }
-        if cr.count + cr.remaining < ov {
-            return detail(
-                format!(
-                    "{} option {letter} claims {ov} {}, but at most {} are possible.",
-                    q(qi),
-                    count_rule_label(qt, ov),
-                    cr.count + cr.remaining
-                ),
-                None,
-            );
-        }
-    }
-    None
-}
-
-/// Positional forward reason shared by `FirstWith` (scan from 0) and
-/// `ClosestAfter` (scan from just after the anchor). `label` is "first" or
-/// "closest".
-#[allow(clippy::too_many_arguments)]
-fn forward_positional_elim_detail(
-    label: &str,
-    scan_start: usize,
-    answer: Answer,
-    qi: usize,
-    letter: Answer,
-    ov: Option<u8>,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    n: usize,
-) -> Option<ElimDetail> {
-    match ov {
-        Some(ov) => {
-            let target = ov as usize;
-            if target < scan_start || target >= n {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
-                        q(qi),
-                        q(target)
-                    ),
-                    None,
-                );
-            }
-            match answers[target] {
-                Some(av) if av != answer => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                None if is_eliminated(eliminated, target, answer.idx()) => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                _ => {}
-            }
-            for j in scan_start..target {
-                if answers[j] == Some(answer) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} already has answer {answer} and comes before {}.",
-                            q(qi),
-                            q(target),
-                            q(j),
-                            q(target)
-                        ),
-                        Some(j),
-                    );
-                }
-            }
-            if letter == answer && qi >= scan_start && qi < target {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {label} {answer} is {}, but {} itself is before {} and would have answer {answer}. Contradiction.",
-                        q(qi),
-                        q(target),
-                        q(qi),
-                        q(target)
-                    ),
-                    None,
-                );
-            }
-        }
-        None => {
-            for j in scan_start..n {
-                if answers[j] == Some(answer) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
-                            q(qi),
-                            q(j)
-                        ),
-                        Some(j),
-                    );
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Positional backward reason shared by `LastWith` (scan up to `n`) and
-/// `ClosestBefore` (scan up to the anchor). `label` is "last" or "closest".
-#[allow(clippy::too_many_arguments)]
-fn backward_positional_elim_detail(
-    label: &str,
-    before_idx: usize,
-    answer: Answer,
-    qi: usize,
-    letter: Answer,
-    vnum: Option<u8>,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-) -> Option<ElimDetail> {
-    match vnum {
-        Some(v) => {
-            let target = v as usize;
-            if target >= before_idx {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {label} {answer} is {}, but that's out of range.",
-                        q(qi),
-                        q(target)
-                    ),
-                    None,
-                );
-            }
-            match answers[target] {
-                Some(av) if av != answer => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} is answered {av}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                None if is_eliminated(eliminated, target, answer.idx()) => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {answer} is ruled out for {}.",
-                            q(qi),
-                            q(target),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                _ => {}
-            }
-            for j in (target + 1..before_idx).rev() {
-                if answers[j] == Some(answer) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {label} {answer} is {}, but {} has answer {answer} and comes after {}.",
-                            q(qi),
-                            q(target),
-                            q(j),
-                            q(target)
-                        ),
-                        Some(j),
-                    );
-                }
-            }
-            if letter == answer && qi > target && qi < before_idx {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {label} {answer} is {}, but {} itself is after {} and would have answer {answer}. Contradiction.",
-                        q(qi),
-                        q(target),
-                        q(qi),
-                        q(target)
-                    ),
-                    None,
-                );
-            }
-        }
-        None => {
-            for j in 0..before_idx {
-                if answers[j] == Some(answer) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims no question has answer {answer}, but {} has answer {answer}.",
-                            q(qi),
-                            q(j)
-                        ),
-                        Some(j),
-                    );
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Parity reason shared by `OnlyOdd` (parity 1) and `OnlyEven` (parity 0).
-/// `wrong_parity` labels a mispointed target's parity; `own_parity` labels this
-/// question's parity for the no-match case.
-#[allow(clippy::too_many_arguments)]
-fn parity_elim_detail(
-    parity: u8,
-    wrong_parity: &str,
-    own_parity: &str,
-    answer: Answer,
-    qi: usize,
-    letter: Answer,
-    vnum: Option<u8>,
-    answers: &[Option<Answer>; MAX_N],
-    eliminated: &[u8; MAX_N],
-    n: usize,
-) -> Option<ElimDetail> {
-    match vnum {
-        Some(v) => {
-            let target = v as usize;
-            if (target + 1) % 2 != parity as usize {
-                return detail(
-                    format!(
-                        "{} option {letter} claims {}, but {} is {wrong_parity}-numbered.",
-                        q(qi),
-                        q(target),
-                        q(target)
-                    ),
-                    None,
-                );
-            }
-            if target < n {
-                match answers[target] {
-                    Some(av) if av != answer => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has answer {answer}, but {} is answered {av}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    None if is_eliminated(eliminated, target, answer.idx()) => {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has answer {answer}, but {answer} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    _ => {}
-                }
-            }
-        }
-        None => {
-            for i in 0..n {
-                if (i + 1) % 2 == parity as usize && answers[i] == Some(answer) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims no {own_parity}-numbered question has answer {answer}, but {} does.",
-                            q(qi),
-                            q(i)
-                        ),
-                        Some(i),
-                    );
-                }
-            }
-        }
-    }
-    None
-}
-
-/// Why option `oi` (value `ov`) of question `qi` is being eliminated. Mirrors
-/// the TS `explainElimDetail`. Only called for options the engine has ruled out,
-/// so a matching reason is expected; `None` means no phrasing for this kind.
+/// The "…, but *what breaks it*" clause for the eliminations `check_answer` can't reach a
+/// verdict on, plus the question to highlight. The one place `explain` still works out
+/// *why* rather than rendering a judgment, because there is no judgment to render: these
+/// four kinds are ruled out by deduce rules that outrun `check_claim`'s scope —
+/// `LeastCommonElim` / `MostCommonElim` / `LeastCommonCountFloor` / `MostCommonCountCeil`
+/// argue from cell and count bounds where `check_claim` waits for a full board, and
+/// `LetterDistImpossible` / `LetterDistNoMatch` argue from letter arithmetic and the
+/// target's remaining options where `check_claim` waits for its answer.
 ///
-/// Exhaustive over `QuestionType` on purpose: every kind can have options
-/// eliminated, so a new variant must supply a reason (or join the explicit
-/// no-reason arm). Mirrors the exhaustive `render::question_text`.
-pub fn explain_elim_detail(
+/// It decides the reason but not the wording: where the judge has a variant for the same
+/// shape, the clause is built by handing that variant to [`invalid_clause`], so the two
+/// paths can't drift into two phrasings of one argument. The assertion half always comes
+/// from [`claim_assertion`].
+fn elim_clause_beyond_check_answer(
     fp: &FlatPuzzle,
-    qt: &QuestionType,
-    qi: usize,
-    oi: usize,
-    ov: OptionValue,
     state: &State,
-    n: usize,
-) -> Option<ElimDetail> {
-    let letter = LETTERS[oi];
+    opt: OptionPos,
+    claim: &Claim,
+) -> Option<(String, Option<usize>)> {
+    let n = fp.n;
+    let oc = fp.option_count;
+    let oi = opt.oi;
     let answers = &state.answers;
-    let eliminated = &state.eliminated;
-    let ov = ov.is_num().then(|| ov.value());
+    let value = claim.value.is_num().then(|| claim.value.value())?;
+    // Always under an assumption: this is only reached from `explain_elim_detail`.
+    let shared = |reason| invalid_clause(state, opt, claim, reason, ClaimSubject::Option);
 
-    match qt {
-        QuestionType::CountAnswer { .. }
-        | QuestionType::CountAnswerBefore { .. }
-        | QuestionType::CountAnswerAfter { .. }
-        | QuestionType::CountVowel
-        | QuestionType::CountConsonant => {
-            count_kind_elim_detail(qt, qi, letter, ov, answers, eliminated, n)
-        }
-
-        QuestionType::MostCommonCount => {
-            if let Some(ov) = ov {
-                // Mirror `MostCommonCountElim`: a letter's known floor is its
-                // min (answered + forced-unanswered), its ceiling is its max.
-                let mut max_known = 0u8;
-                let mut max_possible = 0u8;
-                for l in LETTERS {
-                    let (count, guaranteed, possible) = count_tally(state, Pred::IsAnswer(l), 0, n);
-                    max_known = max_known.max(count + guaranteed);
-                    max_possible = max_possible.max(count + guaranteed + possible);
-                }
-                let plural = |k: u8| if k == 1 { "" } else { "s" };
-                if ov < max_known {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims the most common answer appears {ov} time{}, but one already appears {max_known} time{}.",
-                            q(qi),
-                            plural(ov),
-                            plural(max_known)
-                        ),
-                        None,
-                    );
-                }
-                if ov > max_possible {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims the most common answer appears {ov} times, but at most {max_possible} are possible.",
-                            q(qi)
-                        ),
-                        None,
-                    );
+    match claim.question_type {
+        // Argued from the answered cells, which is weaker than the rule's own bound — a
+        // letter short of the extreme can still catch up on the open ones. The last arm is
+        // where that shows: a bound the counts so far can't display.
+        // Only the puzzle's real letters count: a phantom slot past `option_count` sits at 0
+        // forever and would hold every minimum, refuting a claim with a letter the board
+        // doesn't offer.
+        QuestionType::LeastCommon | QuestionType::MostCommon if usize::from(value) < oc => {
+            let ci = usize::from(value);
+            let least = matches!(claim.question_type, QuestionType::LeastCommon);
+            let mut counts = [0u8; 5];
+            for j in 0..n {
+                if let Some(aj) = answers[j] {
+                    counts[aj.idx()] += 1;
                 }
             }
-            None
-        }
-
-        QuestionType::ClosestAfter {
-            after_index,
-            answer,
-        } => forward_positional_elim_detail(
-            "closest",
-            *after_index as usize + 1,
-            *answer,
-            qi,
-            letter,
-            ov,
-            answers,
-            eliminated,
-            n,
-        ),
-        QuestionType::FirstWith { answer } => forward_positional_elim_detail(
-            "first", 0, *answer, qi, letter, ov, answers, eliminated, n,
-        ),
-
-        QuestionType::ClosestBefore {
-            before_index,
-            answer,
-        } => backward_positional_elim_detail(
-            "closest",
-            *before_index as usize,
-            *answer,
-            qi,
-            letter,
-            ov,
-            answers,
-            eliminated,
-        ),
-        QuestionType::LastWith { answer } => {
-            backward_positional_elim_detail("last", n, *answer, qi, letter, ov, answers, eliminated)
-        }
-
-        QuestionType::OnlyOdd { answer } => parity_elim_detail(
-            1, "even", "odd", *answer, qi, letter, ov, answers, eliminated, n,
-        ),
-        QuestionType::OnlyEven { answer } => parity_elim_detail(
-            0, "odd", "even", *answer, qi, letter, ov, answers, eliminated, n,
-        ),
-
-        QuestionType::AnswerOf { question_index } => {
-            if let Some(v) = ov
-                && v < 5
-                && is_eliminated(eliminated, *question_index as usize, v as usize)
-            {
-                let k = *question_index as usize;
-                return detail(
-                    format!(
-                        "{} option {letter} claims {}'s answer is {}, but {} is ruled out for {}.",
-                        q(qi),
-                        q(k),
-                        LETTERS[v as usize],
-                        LETTERS[v as usize],
-                        q(k)
-                    ),
-                    Some(k),
-                );
+            let extreme = if least {
+                counts[..oc].iter().copied().min()
+            } else {
+                counts[..oc].iter().copied().max()
             }
-            None
-        }
-
-        QuestionType::SameAsWhich { question_index } => {
-            let k = *question_index as usize;
-            let ref_ans = answers[k]?;
-            let Some(v) = ov else {
-                // SameAsWhichNoneMatch: the "none" option claims no listed candidate
-                // matches, which any matching candidate refutes.
-                let j = listed_candidate_answered(fp, qi, None, ref_ans, answers)?;
-                return detail(
-                    format!(
-                        "{} option {letter} claims none of these questions has the same answer as {} ({ref_ans}), but {} does.",
-                        q(qi),
-                        q(k),
-                        q(j)
-                    ),
-                    Some(j),
-                );
+            .unwrap_or(0);
+            // One counterexample is enough, and it can't be the claimed letter itself.
+            let rival = (0..oc)
+                .find(|&li| li != ci && counts[li] == extreme)
+                .map(|li| LETTERS[li]);
+            let clause = match rival {
+                Some(rival) if counts[ci] != extreme => shared(InvalidReason::NotExtremum {
+                    rival,
+                    rival_count: extreme,
+                    claimed_count: counts[ci],
+                })?,
+                Some(rival) => shared(InvalidReason::ExtremumTied {
+                    rival,
+                    count: extreme,
+                })?,
+                // The claimed letter holds the extreme alone, so the counts can't show what
+                // the rule saw — only its bound over the open cells can.
+                None => format!(
+                    "{} can't be uniquely {}",
+                    LETTERS[ci],
+                    if least { "least" } else { "most" }
+                ),
             };
-            let target = v as usize;
-            if target >= n {
+            Some((clause, None))
+        }
+
+        // The judge's own "these two can't meet", with the bound deduce is allowed to use:
+        // `CountBounds` folds sibling count questions in, so the contradiction can come from
+        // a `CountAnswer` elsewhere and not from placed and eliminated cells alone — which
+        // is cross-question reasoning, outside `check_claim`'s scope.
+        QuestionType::EqualCount { answer } if usize::from(value) < oc => {
+            let ci = usize::from(value);
+            let claimed = LETTERS[ci];
+            let cells = compute_letter_cells(answers, &state.eliminated, n);
+            let bounds = compute_count_bounds(fp, answers, &state.eliminated, n);
+            // Whichever way round the two can't meet: one is held under the other's floor.
+            let (short, over) = if bounds.upper(&cells, answer.idx()) < bounds.lower(&cells, ci) {
+                (answer, claimed)
+            } else if bounds.upper(&cells, ci) < bounds.lower(&cells, answer.idx()) {
+                (claimed, answer)
+            } else {
+                return None;
+            };
+            let clause = shared(InvalidReason::CountsCantMeet {
+                short,
+                short_max: bounds.upper(&cells, short.idx()),
+                over,
+                over_min: bounds.lower(&cells, over.idx()),
+            })?;
+            Some((clause, None))
+        }
+
+        // A distance the letter arithmetic can't reach at all refutes itself — the target
+        // is irrelevant, so blame the alphabet and highlight nothing (mirrors
+        // `LetterDistImpossible`'s `max_dist`). Otherwise, unanswered target: no option it
+        // still has left sits `value` letters from this one. Neither reads the assumption,
+        // so both stay indicative.
+        QuestionType::LetterDist { question_index } => {
+            let max_dist = oi.max(oc - 1 - oi) as u8;
+            if value > max_dist {
+                return Some((
+                    format!(
+                        "{} can be at most {} from any answer",
+                        LETTERS[oi],
+                        letters(max_dist)
+                    ),
+                    None,
+                ));
+            }
+            let k = usize::from(question_index);
+            if answers[k].is_some() {
                 return None;
             }
-            match answers[target] {
-                Some(target_ans) if target_ans != ref_ans => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {} is answered {target_ans}.",
-                            q(qi),
-                            q(target),
-                            q(k),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                None if is_eliminated(eliminated, target, ref_ans.idx()) => {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {} has the same answer as {} ({ref_ans}), but {ref_ans} is ruled out for {}.",
-                            q(qi),
-                            q(target),
-                            q(k),
-                            q(target)
-                        ),
-                        Some(target),
-                    );
-                }
-                _ => {}
-            }
-            // SameAsWhichOtherMatch: the target has to be the *only* listed match.
-            let j = listed_candidate_answered(fp, qi, Some(target), ref_ans, answers)?;
-            detail(
-                format!(
-                    "{} option {letter} claims {} is the only one of these questions with the same answer as {} ({ref_ans}), but {} matches too.",
-                    q(qi),
-                    q(target),
-                    q(k),
-                    q(j)
-                ),
-                Some(j),
-            )
+            let reachable = (0..oc).any(|ti| {
+                !state.is_eliminated(k, ti) && (oi as i32 - ti as i32).unsigned_abs() as u8 == value
+            });
+            (!reachable).then(|| {
+                (
+                    format!("no answer {} still has left is that far off", q(k)),
+                    Some(k),
+                )
+            })
         }
 
-        QuestionType::LetterDist { question_index } => {
-            let k = *question_index as usize;
-            let max_dist = oi.max(4 - oi) as u8;
-            if let Some(v) = ov
-                && v > max_dist
-            {
-                return detail(
-                    format!(
-                        "{} option {letter} claims letter distance {v}, but {letter} can be at most {max_dist} letters from any answer.",
-                        q(qi)
-                    ),
-                    None,
-                );
-            }
-            match answers[k] {
-                Some(other) => {
-                    if let Some(v) = ov {
-                        let dist = (oi as i32 - other.idx() as i32).unsigned_abs() as u8;
-                        if dist != v {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims letter distance {v}, but {letter} is {dist} letters from {}'s answer {other}.",
-                                    q(qi),
-                                    q(k)
-                                ),
-                                Some(k),
-                            );
-                        }
-                    }
-                }
-                None => {
-                    if let Some(v) = ov {
-                        let any_possible = (0..5).any(|ti| {
-                            !is_eliminated(eliminated, k, ti)
-                                && (oi as i32 - ti as i32).unsigned_abs() as u8 == v
-                        });
-                        if !any_possible {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims letter distance {v}, but no remaining answer for {} gives that distance from {letter}.",
-                                    q(qi),
-                                    q(k)
-                                ),
-                                Some(k),
-                            );
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::ConsecIdent => {
-            match ov {
-                Some(v) => {
-                    let start = v as usize;
-                    if start + 1 >= n {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} and {}, but that's out of range.",
-                                q(qi),
-                                q(start),
-                                q(start + 1)
-                            ),
-                            None,
-                        );
-                    }
-                    if start == qi || start + 1 == qi {
-                        let partner = if start == qi { start + 1 } else { start };
-                        if is_eliminated(eliminated, partner, oi) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims {} and {} are the consecutive pair, but {letter} is ruled out for {} so they can't match.",
-                                    q(qi),
-                                    q(start),
-                                    q(start + 1),
-                                    q(partner)
-                                ),
-                                Some(partner),
-                            );
-                        }
-                    }
-                    let poss_a = !eliminated[start] & ALL_OPTIONS_MASK;
-                    let poss_b = !eliminated[start + 1] & ALL_OPTIONS_MASK;
-                    if poss_a & poss_b == 0 {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} and {} are the consecutive pair, but they share no possible answer.",
-                                q(qi),
-                                q(start),
-                                q(start + 1)
-                            ),
-                            Some(start),
-                        );
-                    }
-                }
-                None => {
-                    for i in 0..n.saturating_sub(1) {
-                        if let (Some(a), Some(b)) = (answers[i], answers[i + 1])
-                            && a == b
-                        {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims no consecutive pair exists, but {} and {} both have answer {a}.",
-                                    q(qi),
-                                    q(i),
-                                    q(i + 1)
-                                ),
-                                Some(i),
-                            );
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::PrevSame => {
-            match ov {
-                None => {
-                    for j in 0..qi {
-                        if answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims no previous question has answer {letter}, but {} does.",
-                                    q(qi),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-                Some(v) => {
-                    let target = v as usize;
-                    if target >= qi {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {}, but {} is not before {}.",
-                                q(qi),
-                                q(target),
-                                q(target),
-                                q(qi)
-                            ),
-                            None,
-                        );
-                    }
-                    if is_eliminated(eliminated, target, oi) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    for j in (target + 1..qi).rev() {
-                        if answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims previous same answer is {}, but {} also has answer {letter} and is closer.",
-                                    q(qi),
-                                    q(target),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::NextSame => {
-            match ov {
-                None => {
-                    for j in (qi + 1)..n {
-                        if answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims no later question has answer {letter}, but {} does.",
-                                    q(qi),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-                Some(v) => {
-                    let target = v as usize;
-                    if target <= qi || target >= n {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {}, but {} is not after {}.",
-                                q(qi),
-                                q(target),
-                                q(target),
-                                q(qi)
-                            ),
-                            None,
-                        );
-                    }
-                    if is_eliminated(eliminated, target, oi) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    for j in (qi + 1)..target {
-                        if answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims next same answer is {}, but {} also has answer {letter} and is closer.",
-                                    q(qi),
-                                    q(target),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::OnlySame => {
-            match ov {
-                None => {
-                    for j in 0..n {
-                        if j != qi && answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims no other question has answer {letter}, but {} does.",
-                                    q(qi),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-                Some(v) => {
-                    let target = v as usize;
-                    if target == qi {
-                        return detail(
-                            format!(
-                                "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
-                                q(qi),
-                                q(qi)
-                            ),
-                            None,
-                        );
-                    }
-                    if target < n && is_eliminated(eliminated, target, oi) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    if target < n && target != qi {
-                        for j in 0..n {
-                            if j != qi && j != target && answers[j] == Some(letter) {
-                                return detail(
-                                    format!(
-                                        "{} option {letter} claims {} is the only other with answer {letter}, but {} already has answer {letter}.",
-                                        q(qi),
-                                        q(target),
-                                        q(j)
-                                    ),
-                                    Some(j),
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::SameAs => {
-            match ov {
-                // A "none" answer claims none of the listed candidate questions
-                // shares this letter — scoped, so only a candidate can refute it
-                // (OnlySameNoneMatch fires for SameAs too, via the shared arm).
-                None => {
-                    for ci in 0..fp.option_count {
-                        let candidate = fp.options[qi][ci];
-                        if !candidate.is_num() {
-                            continue;
-                        }
-                        let j = candidate.value() as usize;
-                        if j < n && j != qi && answers[j] == Some(letter) {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims none of these questions has answer {letter}, but {} does.",
-                                    q(qi),
-                                    q(j)
-                                ),
-                                Some(j),
-                            );
-                        }
-                    }
-                }
-                Some(v) => {
-                    let target = v as usize;
-                    if target == qi {
-                        return detail(
-                            format!(
-                                "{} option {letter} points to {} itself, but a question can't share an answer with itself.",
-                                q(qi),
-                                q(qi)
-                            ),
-                            None,
-                        );
-                    }
-                    if target >= n {
-                        return None;
-                    }
-                    // OnlySameRuledOut, both branches: the target can't hold this
-                    // letter, either because it's answered otherwise or because the
-                    // letter is struck out there.
-                    if let Some(target_ans) = answers[target] {
-                        if target_ans != letter {
-                            return detail(
-                                format!(
-                                    "{} option {letter} claims {} has the same answer, but {} is answered {target_ans}.",
-                                    q(qi),
-                                    q(target),
-                                    q(target)
-                                ),
-                                Some(target),
-                            );
-                        }
-                    } else if is_eliminated(eliminated, target, oi) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} has the same answer, but {letter} is ruled out for {}.",
-                                q(qi),
-                                q(target),
-                                q(target)
-                            ),
-                            Some(target),
-                        );
-                    }
-                    // SameAsOtherMatch: the option claims its target is the *only*
-                    // listed question sharing the letter.
-                    if let Some(j) =
-                        listed_candidate_answered(fp, qi, Some(target), letter, answers)
-                    {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {} is the only one of these questions with answer {letter}, but {} has it too.",
-                                q(qi),
-                                q(target),
-                                q(j)
-                            ),
-                            Some(j),
-                        );
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::NoOtherHasAnswer => {
-            for i in 0..n {
-                if answers[i] == Some(letter) {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {letter} is unique, but {} already has answer {letter}.",
-                            q(qi),
-                            q(i)
-                        ),
-                        Some(i),
-                    );
-                }
-            }
-            None
-        }
-
-        QuestionType::EqualCount { answer } => {
-            if let Some(v) = ov {
-                if LETTERS[v as usize] == *answer {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {}, but the question asks for a different letter with the same count as {answer}.",
-                            q(qi),
-                            LETTERS[v as usize]
-                        ),
-                        None,
-                    );
-                }
-                if v < 5 {
-                    let claimed = LETTERS[v as usize];
-                    // Mirror `EqualCountRangeElim`: both bounds fold sibling Count
-                    // questions in (via `CountBounds`), so a floor/ceiling from a
-                    // CountAnswer elsewhere can force the contradiction — not just
-                    // placed and eliminated cells.
-                    let cells = compute_letter_cells(answers, eliminated, n);
-                    let bounds = compute_count_bounds(fp, answers, eliminated, n);
-                    let (ai, ci) = (answer.idx(), v as usize);
-                    if bounds.upper(&cells, ai) < bounds.lower(&cells, ci) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {claimed} has the same count as {answer}, but {answer} can appear at most {} times while {claimed} must appear at least {}.",
-                                q(qi),
-                                bounds.upper(&cells, ai),
-                                bounds.lower(&cells, ci)
-                            ),
-                            None,
-                        );
-                    }
-                    if bounds.upper(&cells, ci) < bounds.lower(&cells, ai) {
-                        return detail(
-                            format!(
-                                "{} option {letter} claims {claimed} has the same count as {answer}, but {claimed} can appear at most {} times while {answer} must appear at least {}.",
-                                q(qi),
-                                bounds.upper(&cells, ci),
-                                bounds.lower(&cells, ai)
-                            ),
-                            None,
-                        );
-                    }
-                }
-            }
-            None
-        }
-
-        QuestionType::LeastCommon => {
-            if let Some(v) = ov
-                && v < 5
-            {
-                let mut counts = [0u8; 5];
-                for j in 0..n {
-                    if let Some(aj) = answers[j] {
-                        counts[aj.idx()] += 1;
-                    }
-                }
-                let claimed = LETTERS[v as usize];
-                let min_count = counts.iter().copied().min().unwrap();
-                let min_letters: Vec<Answer> = (0..5)
-                    .filter(|&i| counts[i] == min_count)
-                    .map(|i| LETTERS[i])
-                    .collect();
-                if counts[v as usize] > min_count {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {claimed} is the least common, but {claimed} appears {} time(s) while {} appears only {min_count}.",
-                            q(qi),
-                            counts[v as usize],
-                            min_letters[0]
-                        ),
-                        None,
-                    );
-                }
-                if min_letters.len() > 1 {
-                    let joined = min_letters
-                        .iter()
-                        .map(|l| l.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" and ");
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {claimed} is the least common, but {joined} are tied at {min_count} — no unique least.",
-                            q(qi)
-                        ),
-                        None,
-                    );
-                }
-                return detail(
-                    format!(
-                        "{} option {letter} claims {claimed} is the least common, but {claimed} can't be uniquely least.",
-                        q(qi)
-                    ),
-                    None,
-                );
-            }
-            None
-        }
-
-        QuestionType::MostCommon => {
-            if let Some(v) = ov
-                && v < 5
-            {
-                let mut counts = [0u8; 5];
-                for j in 0..n {
-                    if let Some(aj) = answers[j] {
-                        counts[aj.idx()] += 1;
-                    }
-                }
-                let claimed = LETTERS[v as usize];
-                let max_count = counts.iter().copied().max().unwrap();
-                let max_letters: Vec<Answer> = (0..5)
-                    .filter(|&i| counts[i] == max_count)
-                    .map(|i| LETTERS[i])
-                    .collect();
-                if counts[v as usize] < max_count {
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {claimed} is the most common, but {claimed} appears {} time(s) while {} appears {max_count}.",
-                            q(qi),
-                            counts[v as usize],
-                            max_letters[0]
-                        ),
-                        None,
-                    );
-                }
-                if max_letters.len() > 1 {
-                    let joined = max_letters
-                        .iter()
-                        .map(|l| l.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" and ");
-                    return detail(
-                        format!(
-                            "{} option {letter} claims {claimed} is the most common, but {joined} are tied at {max_count} — no unique most.",
-                            q(qi)
-                        ),
-                        None,
-                    );
-                }
-                return detail(
-                    format!(
-                        "{} option {letter} claims {claimed} is the most common, but {claimed} can't be uniquely most.",
-                        q(qi)
-                    ),
-                    None,
-                );
-            }
-            None
-        }
-
-        // These kinds assert nothing that can rule an option out on its own.
-        QuestionType::AnswerIsSelf | QuestionType::TrueStmt => None,
+        _ => None,
     }
 }
 
@@ -2220,7 +1506,6 @@ pub fn explain_elimination(
     rule: DeduceRule,
 ) -> Vec<ExplainStep> {
     let letter = LETTERS[oi];
-    let qt = fp.question_types[qi];
     let ov = fp.options[qi][oi];
     let n = fp.n;
     let answers = &state.answers;
@@ -2512,8 +1797,8 @@ pub fn explain_elimination(
         return steps;
     }
 
-    // Generic fallback: the per-type elimination reason.
-    let detail = explain_elim_detail(fp, &qt, qi, oi, ov, state, n);
+    // Generic fallback: the claim that answering this option would commit `qi` to, rejected.
+    let detail = explain_elim_detail(fp, state, qi, oi);
     if let Some(other) = detail.as_ref().and_then(|d| d.other_qi) {
         steps.push(try_looking(&[qi, other]));
     }
@@ -2894,10 +2179,10 @@ pub fn explain_lookahead(
 
     let contradiction_qi = result.contradiction_qi;
     involved.insert(contradiction_qi);
-    let detail = match explain_invalid(fp, &hyp, contradiction_qi) {
-        Some(reason) => reason.replace(" claims ", " would say "),
-        // `explain_invalid` only speaks about a committed answer being wrong, so it has
-        // nothing for the routes that leave a question with no legal answer instead.
+    let detail = match rejected_answer_text(fp, &hyp, contradiction_qi, ClaimSubject::Hypothesis) {
+        Some(reason) => reason,
+        // It only speaks about a committed answer being wrong, so it has nothing for the
+        // routes that leave a question with no legal answer instead.
         None => refutation_detail(fp, &hyp, contradiction_qi, &result.contradiction),
     };
     lines.push(format!("But {detail}. Contradiction."));
@@ -2938,6 +2223,65 @@ mod tests {
             Vec::<usize>::new()
         );
         assert_eq!(leading_questions(&[]), Vec::<usize>::new());
+    }
+
+    /// An elimination is judged on a board that *assumes* the option, so whatever rests on
+    /// that assumption has to read as hypothetical. Both sentences here would otherwise
+    /// state an unanswered #1's answer as fact, and the highlight would point at #1 —
+    /// which the hint already points at, collapsing the two-question `Look` to one.
+    #[test]
+    fn elim_under_assumption_reads_as_hypothetical() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "FirstWith", "a": 1}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, None, None]);
+        // Option A names #1 itself: assuming it makes #1 an A, not the B it claims to find.
+        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
+        assert_eq!(
+            d.text,
+            "#1 option A claims the first B is #1, but #1 itself would be A."
+        );
+        assert_eq!(d.other_qi, None);
+        // Option B names #2, but assuming it puts a B at #1, which comes first.
+        let d = explain_elim_detail(&fp, &state, 0, 1).unwrap();
+        assert_eq!(
+            d.text,
+            "#1 option B claims the first B is #2, but #1 itself would have answer B and comes \
+             before #2."
+        );
+        assert_eq!(d.other_qi, None);
+    }
+
+    /// Only the puzzle's real letters may refute an extremum claim. On three options D and E
+    /// sit at 0 forever, so scanning all five would find one of them holding the minimum and
+    /// report a rival the board doesn't offer ("D would appear 0 times and A 1 time").
+    #[test]
+    fn elim_extremum_ignores_phantom_letters() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "LeastCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"},
+                  {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // B once, C twice, #5 still open — so the judge is still Pending and this falls to
+        // the cell-count clause. Assuming #1 = A leaves A and B tied at 1.
+        let state = state_with(
+            &fp,
+            &[
+                None,
+                Some(Answer::B),
+                Some(Answer::C),
+                Some(Answer::C),
+                None,
+            ],
+        );
+        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
+        assert_eq!(
+            d.text,
+            "#1 option A claims A is the least common answer, but B would appear 1 time too."
+        );
     }
 
     /// A puzzle shell of `n` questions and `oc` options. `judge_claim` reads nothing else
@@ -3114,18 +2458,22 @@ mod tests {
                             continue;
                         }
                         *seen.entry(reason_name(reason)).or_insert(0) += 1;
-                        match invalid_claim_text(&state, opt, &claim, reason) {
-                            // The lookahead hint rewrites this marker, so there has to be
-                            // exactly one to rewrite.
-                            Some(text) if text.matches(" claims ").count() != 1 => {
-                                unrendered.push(format!("{text:?} — not one ' claims '"))
+                        // Every subject, since `ClaimSubject::Option` selects different clause
+                        // wording — a reason left unrendered under any of the three is a gap.
+                        for subject in [
+                            ClaimSubject::Answered,
+                            ClaimSubject::Option,
+                            ClaimSubject::Hypothesis,
+                        ] {
+                            if rejected_claim_text(subject, &state, opt, &claim, reason).is_none()
+                                && unrendered.len() < 10
+                            {
+                                unrendered.push(format!(
+                                    "seed {seed} qi={qi} {question_type:?} value={value:?} \
+                                     {reason:?} under {:?}: no prose",
+                                    subject.opening(opt)
+                                ));
                             }
-                            Some(_) => {}
-                            None if unrendered.len() < 10 => unrendered.push(format!(
-                                "seed {seed} qi={qi} {question_type:?} value={value:?} \
-                                 {reason:?}: no prose"
-                            )),
-                            None => {}
                         }
                     }
                 }
@@ -3213,6 +2561,36 @@ mod tests {
         );
     }
 
+    /// "too" needs a first holder for the second one to join. A claim that reserves the
+    /// letter for one place has one (here the question's own answer); a claim that denies
+    /// the letter anywhere has none, and the cell that has it simply refutes the claim.
+    #[test]
+    fn a_second_holder_joins_only_a_claim_that_had_a_first() {
+        let denies_any = parse_puzzle(&json!({
+            "q": [{"t": "FirstWith", "a": 0}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[1, 2, null], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // #1 = C is the "no question has answer A" option; #2 is A.
+        let state = state_with(&denies_any, &[Some(Answer::C), Some(Answer::A), None]);
+        assert_eq!(
+            explain_invalid(&denies_any, &state, 0).as_deref(),
+            Some("#1 claims no question has answer A, but #2 has answer A")
+        );
+
+        let names_one = parse_puzzle(&json!({
+            "q": [{"t": "OnlySame"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[1, 2, null], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        // #1 = C claims no *other* question shares C — #1 itself is the first holder.
+        let state = state_with(&names_one, &[Some(Answer::C), Some(Answer::C), None]);
+        assert_eq!(
+            explain_invalid(&names_one, &state, 0).as_deref(),
+            Some("#1 claims no other question has answer C, but #2 has answer C too")
+        );
+    }
+
     #[test]
     fn consistent_answer_is_not_invalid() {
         let fp = parse_puzzle(&json!({
@@ -3245,45 +2623,31 @@ mod tests {
         .unwrap();
         // Option C claims first A is #3, but #2 already has A and comes before it.
         let state = state_with(&fp, &[None, Some(Answer::A), None]);
-        let d = explain_elim_detail(
-            &fp,
-            &fp.question_types[0],
-            0,
-            2,
-            OptionValue::num(2),
-            &state,
-            3,
-        )
-        .unwrap();
+        let d = explain_elim_detail(&fp, &state, 0, 2).unwrap();
         assert_eq!(
             d.text,
-            "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."
+            "#1 option C claims the first A is #3, but #2 has answer A and comes before #3."
         );
         assert_eq!(d.other_qi, Some(1));
     }
 
+    /// The extremum kinds are the residue: with #4 still open the board isn't full, so
+    /// `check_answer` grades the assumed answer `Pending` and the clause comes from
+    /// `elim_clause_beyond_check_answer` — while the assertion still comes from the shared
+    /// `claim_assertion`. (Full board, and the judge's own `NotExtremum` reason renders it.)
     #[test]
     fn elim_least_common_not_least() {
         let fp = parse_puzzle(&json!({
-            "q": [{"t": "LeastCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
-            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+            "q": [{"t": "LeastCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
         }))
         .unwrap();
-        // Q2 and Q3 answered A ⇒ A appears twice; option A can't be least common.
-        let state = state_with(&fp, &[None, Some(Answer::A), Some(Answer::A)]);
-        let d = explain_elim_detail(
-            &fp,
-            &fp.question_types[0],
-            0,
-            0,
-            OptionValue::num(0),
-            &state,
-            3,
-        )
-        .unwrap();
+        // Q2 and Q3 answered A ⇒ assuming #1 = A makes three; option A can't be least common.
+        let state = state_with(&fp, &[None, Some(Answer::A), Some(Answer::A), None]);
+        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
         assert_eq!(
             d.text,
-            "#1 option A claims A is the least common, but A appears 2 time(s) while B appears only 0."
+            "#1 option A claims A is the least common answer, but B would appear 0 times and A 3 times."
         );
         assert_eq!(d.other_qi, None);
     }
@@ -3307,16 +2671,8 @@ mod tests {
     }
 
     fn elim_text(fp: &FlatPuzzle, state: &State, oi: usize) -> ElimDetail {
-        explain_elim_detail(
-            fp,
-            &fp.question_types[0],
-            0,
-            oi,
-            fp.options[0][oi],
-            state,
-            fp.n,
-        )
-        .expect("every scoped-sameness elimination carries a reason")
+        explain_elim_detail(fp, state, 0, oi)
+            .expect("every scoped-sameness elimination carries a reason")
     }
 
     /// §3.6: the target being *answered otherwise* needs its own wording — "ruled
@@ -3328,7 +2684,7 @@ mod tests {
         let d = elim_text(&fp, &state, 0);
         assert_eq!(
             d.text,
-            "#1 option A claims #2 has the same answer, but #2 is answered B."
+            "#1 option A claims #2 is the only one of these questions with answer A, but #2 is answered B."
         );
         assert_eq!(d.other_qi, Some(1));
     }
@@ -3341,7 +2697,7 @@ mod tests {
         let d = elim_text(&fp, &state, 0);
         assert_eq!(
             d.text,
-            "#1 option A claims #2 is the only one of these questions with answer A, but #3 has it too."
+            "#1 option A claims #2 is the only one of these questions with answer A, but #3 has answer A too."
         );
         assert_eq!(d.other_qi, Some(2));
     }
@@ -3357,7 +2713,7 @@ mod tests {
         let d = elim_text(&fp, &state, 0);
         assert_eq!(
             d.text,
-            "#1 option A claims #2 is the only one of these questions with the same answer as #4 (C), but #3 matches too."
+            "#1 option A claims #2 is the only one of these questions with the same answer as #4 (C), but #3 has answer C too."
         );
         assert_eq!(d.other_qi, Some(2));
     }
@@ -3369,7 +2725,7 @@ mod tests {
         let d = elim_text(&fp, &state, 2);
         assert_eq!(
             d.text,
-            "#1 option C claims none of these questions has the same answer as #4 (C), but #3 does."
+            "#1 option C claims none of these questions has the same answer as #4 (C), but #3 has answer C too."
         );
         assert_eq!(d.other_qi, Some(2));
     }
@@ -3535,7 +2891,7 @@ mod tests {
                 try_looking(&[0, 1]),
                 simple("What if #1 is C?".into()),
                 simple(
-                    "#1 option C claims first A is #3, but #2 already has answer A and comes before #3."
+                    "#1 option C claims the first A is #3, but #2 has answer A and comes before #3."
                         .into()
                 ),
             ]

@@ -59,10 +59,11 @@ impl Validity {
 /// describe. Carries just what a renderer can't read back off the puzzle and the state:
 /// which cell or letter is at fault, plus any tally this module computed on the way.
 ///
-/// [`explain::invalid_claim_text`](crate::explain) renders these; every variant except
+/// [`explain::rejected_claim_text`](crate::explain) renders these — for an answered
+/// question, for one of its options, and for a refuted hypothesis. Every variant except
 /// [`Malformed`](InvalidReason::Malformed) and
-/// [`NoOptionsLeft`](InvalidReason::NoOptionsLeft) must yield a sentence there, which
-/// `explain`'s `every_invalid_reason_renders` pins.
+/// [`NoOptionsLeft`](InvalidReason::NoOptionsLeft) must yield a sentence under all three,
+/// which `explain`'s `every_invalid_reason_renders` pins.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum InvalidReason {
     /// The option value can't mean anything for this kind: a NONE where a number is

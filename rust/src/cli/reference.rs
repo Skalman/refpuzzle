@@ -111,8 +111,8 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
                         "But {}. Contradiction.",
                         no_reason_detail(lr.contradiction_qi)
                     );
-                // " would say " is the marker `explain_lookahead` stamps on a claim's own
-                // reason when it rewrites " claims ", so it identifies that route exactly.
+                // " would say " is the opener `ClaimSubject::Hypothesis` gives a claim's
+                // own reason, and nothing else uses it, so it identifies that route exactly.
                 let route = match (generic, closing.contains(" would say ")) {
                     (true, _) => 4,
                     (_, true) => 0,
