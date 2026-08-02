@@ -116,11 +116,11 @@ pub(crate) fn compute_letter_cells(
 /// answered questions. `floor[i]` is a lower bound on the total count of letter i;
 /// `ceil[i]` an upper bound.
 ///
-/// Floors come from all three count kinds — a sub-range floor still
-/// lower-bounds the total. Ceilings come from full-range `CountAnswer` only: a
-/// `Before`/`After` ceiling bounds a sub-range and says nothing about the rest
-/// of the puzzle. Consumers combine these with `LetterCells` via `lower`/`upper`
-/// — never feed them into a per-question `±1`, which would double-count.
+/// Both bounds come from all three count kinds, but they arrive differently. A
+/// sub-range floor lower-bounds the total as it stands. A sub-range *ceiling* has to
+/// be widened first: it caps only its own range, so the total is capped at that plus
+/// every question outside the range. Consumers combine these with `LetterCells` via
+/// `lower`/`upper` — never feed them into a per-question `±1`, which would double-count.
 ///
 /// Each bound also records the question that set it, so `explain` can name the
 /// source instead of re-deriving it with a second copy of this scan.
@@ -219,10 +219,9 @@ pub(crate) fn compute_count_bounds(
     let mut floor = [Bound::unrestricted(0); 5];
     let mut ceil = [Bound::unrestricted(n as u8); 5];
     for qi in 0..n {
-        // `hi` starts at the weakest cap the kind can impose, so both bounds can then be
-        // fed in unconditionally: a full-range `CountAnswer` caps the total at its largest
-        // surviving option, while a Before/After question bounds only a sub-range and caps
-        // nothing — its `n` is already the trivial ceiling.
+        // Questions outside the range this one counts — they can hold the letter too, so
+        // its ceiling only caps the total once widened by them. Zero for a full-range
+        // `CountAnswer`, which caps the total directly.
         let qt = fp.question_types[qi];
         let (letter_index, extra_possible) = match qt {
             QuestionType::CountAnswer { answer } => (answer.idx(), 0),
