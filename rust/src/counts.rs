@@ -208,17 +208,22 @@ pub(crate) struct CountBounds {
     ceil: [Bound; 5],
 }
 
-/// One directional bound on a letter's count. `value` is the bound itself, and all
-/// `lower`/`upper` read.
+/// One directional bound on a letter's whole-board count. `value` is the bound itself,
+/// and all `lower`/`upper` read.
 ///
-/// `source` is auxiliary, for `explain` alone: the count question that tightened the
-/// bound to where it stands. Only a question that actually tightens it is credited, so
-/// the named source always still binds, and a bound left unrestricted names nobody —
-/// quoting a vacuous one produces "there are at least 0 questions with answer B, so B
-/// appears too often to be the least common".
+/// `source` and `own_range_value` are auxiliary, for `explain` alone: the count question
+/// that tightened the bound to where it stands, and the bound that question stated over
+/// the range *it* counts. Only a question that actually tightens it is credited, so the
+/// named source always still binds, and a bound left unrestricted names nobody — quoting
+/// a vacuous one produces "there are at least 0 questions with answer B, so B appears too
+/// often to be the least common".
+///
+/// The two differ only for a sub-range ceiling, which caps its own range and has to be
+/// widened by the questions outside it before it caps the board.
 #[derive(Clone, Copy)]
 struct Bound {
     value: u8,
+    own_range_value: u8,
     source: Option<u8>,
 }
 
@@ -227,6 +232,7 @@ impl Bound {
     fn unrestricted(value: u8) -> Self {
         Bound {
             value,
+            own_range_value: value,
             source: None,
         }
     }
@@ -234,13 +240,18 @@ impl Bound {
     fn at_least(&mut self, value: u8, question_index: usize) {
         if value > self.value {
             self.value = value;
+            self.own_range_value = value;
             self.source = Some(question_index as u8);
         }
     }
 
-    fn at_most(&mut self, value: u8, question_index: usize) {
+    /// `own_range_value` caps the source's own range; `outside` is how many questions lie
+    /// beyond it, so the two sum to the whole-board cap.
+    fn at_most(&mut self, own_range_value: u8, outside: u8, question_index: usize) {
+        let value = own_range_value + outside;
         if value < self.value {
             self.value = value;
+            self.own_range_value = own_range_value;
             self.source = Some(question_index as u8);
         }
     }
@@ -271,9 +282,13 @@ impl CountBounds {
         self.floor[i].attributed()
     }
 
-    /// The count question imposing the ceiling on letter `i`, and that ceiling.
-    pub(crate) fn ceil_source(&self, i: usize) -> Option<(usize, u8)> {
-        self.ceil[i].attributed()
+    /// The count question imposing the ceiling on letter `i`, that whole-board ceiling,
+    /// and the cap the question stated over the range it counts.
+    pub(crate) fn ceil_source(&self, i: usize) -> Option<(usize, u8, u8)> {
+        let bound = &self.ceil[i];
+        bound
+            .attributed()
+            .map(|(question, value)| (question, value, bound.own_range_value))
     }
 }
 
@@ -333,7 +348,7 @@ pub(crate) fn compute_count_bounds(
             continue;
         }
         floor[letter_index].at_least(lo, qi);
-        ceil[letter_index].at_most(hi + extra_possible, qi);
+        ceil[letter_index].at_most(hi, extra_possible, qi);
     }
     CountBounds { floor, ceil }
 }

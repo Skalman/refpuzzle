@@ -539,6 +539,17 @@ fn count_rule_label(qt: &QuestionType, count: u8) -> String {
     }
 }
 
+/// The questions a sub-range count question doesn't cover, as the subject of "even if …
+/// were B" — "the question outside that range", "both questions outside that range",
+/// "all 3 questions outside that range". Only called with a non-zero count.
+fn outside_range_phrase(outside: u8) -> String {
+    match outside {
+        1 => "the question outside that range".to_string(),
+        2 => "both questions outside that range".to_string(),
+        _ => format!("all {outside} questions outside that range"),
+    }
+}
+
 /// Why an eliminated option is impossible, plus the "other" question the reason
 /// leans on (for highlighting), or `None` if this kind has no specific reason.
 struct ElimDetail {
@@ -1653,7 +1664,8 @@ fn explain_elimination(
 
     // The bound these two rules argue from, named by the question that set it — read off
     // `CountBounds`, the same scan deduce bounds letters with, rather than rediscovered here.
-    // A claimed letter the board doesn't offer has no bound to quote.
+    // A claimed letter the board doesn't offer has no bound to quote, and either source may
+    // be absent — the cell-based explanation below takes over.
     if matches!(
         rule,
         DeduceRule::LeastCommonCountFloor | DeduceRule::MostCommonCountCeil
@@ -1661,31 +1673,45 @@ fn explain_elimination(
         && (ov.value() as usize) < fp.option_count
     {
         let claimed_index = ov.value() as usize;
-        let least = matches!(rule, DeduceRule::LeastCommonCountFloor);
+        let claimed = LETTERS[claimed_index];
         let bounds = compute_count_bounds(fp, answers, &state.eliminated, n);
-        let source = if least {
-            bounds.floor_source(claimed_index)
-        } else {
-            bounds.ceil_source(claimed_index)
-        };
-        if let Some((src_qi, bound)) = source {
-            let (direction, verdict) = if least {
-                ("at least", "too often to be the least common")
-            } else {
-                ("at most", "too rarely to be the most common")
-            };
+        if matches!(rule, DeduceRule::LeastCommonCountFloor) {
+            // A sub-range floor bounds the whole board as it stands, so label and number
+            // describe the same set.
+            if let Some((src_qi, bound)) = bounds.floor_source(claimed_index) {
+                let src_qt = fp.question_types[src_qi];
+                steps.push(try_looking(&[qi, src_qi]));
+                steps.push(what_if());
+                steps.push(simple(format!(
+                    "{} means there are at least {bound} {}, so {claimed} appears too often to be the least common.",
+                    q(src_qi),
+                    count_rule_label(&src_qt, bound),
+                )));
+                return steps;
+            }
+        } else if let Some((src_qi, bound, own_range)) = bounds.ceil_source(claimed_index) {
             let src_qt = fp.question_types[src_qi];
+            let outside = bound - own_range;
             steps.push(try_looking(&[qi, src_qi]));
             steps.push(what_if());
-            steps.push(simple(format!(
-                "{} means there are {direction} {bound} {}, so {} appears {verdict}.",
-                q(src_qi),
-                count_rule_label(&src_qt, bound),
-                LETTERS[claimed_index]
-            )));
+            // The sentence has to walk the widening rather than quote the whole-board total
+            // under the source's own label, which would state a cap the source never set.
+            steps.push(simple(if outside == 0 {
+                format!(
+                    "{} means there are at most {bound} {}, so {claimed} appears too rarely to be the most common.",
+                    q(src_qi),
+                    count_rule_label(&src_qt, bound),
+                )
+            } else {
+                format!(
+                    "{} means there are at most {own_range} {}, and even if {} were {claimed}, that's at most {bound} in all — so {claimed} appears too rarely to be the most common.",
+                    q(src_qi),
+                    count_rule_label(&src_qt, own_range),
+                    outside_range_phrase(outside),
+                )
+            }));
             return steps;
         }
-        // No count question bounds the letter: fall through to the cell-based explanation.
     }
 
     if matches!(rule, DeduceRule::TrueStatementMatchElim) {
@@ -2118,6 +2144,7 @@ pub fn explain_lookahead(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::deduce::deduce;
     use crate::serialize::parse_puzzle;
     use arrayvec::ArrayVec;
     use serde_json::json;
@@ -2712,6 +2739,75 @@ mod tests {
             "#1 says #2 is the only one of its listed questions answered C (the answer to #4), so the others cannot be C."
         );
         assert_eq!(src, Some(0));
+    }
+
+    /// A sub-range ceiling caps only the range it names, so the sentence walks the widening
+    /// rather than quoting the whole-board total under the source's own label.
+    #[test]
+    fn elim_most_common_ceiling_widens_a_sub_range_source() {
+        // Three questions, three options. The unique most-common letter needs 2 of the 3
+        // answers, and #2 caps C at 0 after #1 — leaving only #1 itself, so at most 1 C.
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "MostCommon"}, {"t": "CountAnswerAfter", "a": 2, "q": 0}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, Some(Answer::A), None]);
+        assert_ceiling_rules_out_c(&fp, &state);
+        let steps = explain_elimination(&fp, &state, 0, 2, DeduceRule::MostCommonCountCeil);
+        assert_eq!(
+            render_text(&steps),
+            "What if #1 is C? #2 means there are at most 0 questions after #1 with answer C, \
+             and even if the question outside that range were C, that's at most 1 in all — \
+             so C appears too rarely to be the most common."
+        );
+        assert_eq!(leading_questions(&steps), vec![0, 1]);
+
+        // Same shape with two questions outside the range, for the "both" phrasing.
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "MostCommon"}, {"t": "CountAnswerBefore", "a": 2, "q": 3},
+                  {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, Some(Answer::A), None, None, None]);
+        assert_ceiling_rules_out_c(&fp, &state);
+        let steps = explain_elimination(&fp, &state, 0, 2, DeduceRule::MostCommonCountCeil);
+        assert_eq!(
+            render_text(&steps),
+            "What if #1 is C? #2 means there are at most 0 questions before #4 with answer C, \
+             and even if both questions outside that range were C, that's at most 2 in all — \
+             so C appears too rarely to be the most common."
+        );
+    }
+
+    /// A full-range source needs no widening: its own cap *is* the whole-board bound, so the
+    /// sentence stays the direct one.
+    #[test]
+    fn elim_most_common_ceiling_from_a_full_range_source() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "MostCommon"}, {"t": "CountAnswer", "a": 2}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, Some(Answer::B), None]);
+        assert_ceiling_rules_out_c(&fp, &state);
+        let steps = explain_elimination(&fp, &state, 0, 2, DeduceRule::MostCommonCountCeil);
+        assert_eq!(
+            render_text(&steps),
+            "What if #1 is C? #2 means there are at most 1 question with answer C, \
+             so C appears too rarely to be the most common."
+        );
+    }
+
+    /// The sentences above describe a firing, so each board has to be one: `#1` option C
+    /// really is ruled out by `MostCommonCountCeil` and not by some other rule.
+    fn assert_ceiling_rules_out_c(fp: &FlatPuzzle, state: &State) {
+        let fired = deduce(fp, state).into_iter().any(|dr| {
+            dr.rule == DeduceRule::MostCommonCountCeil
+                && dr.action == DeduceAction::Eliminate { qi: 0, oi: 2 }
+        });
+        assert!(fired, "MostCommonCountCeil should rule out #1 option C");
     }
 
     fn render_text(steps: &[ExplainStep]) -> String {
