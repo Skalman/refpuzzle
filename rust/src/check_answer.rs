@@ -27,7 +27,8 @@
 //! `Fatal check_form error.`
 
 use crate::counts::{
-    CountResult, MaskTally, Pred, count_matching, count_matching_mask, count_range,
+    CountResult, MaskTally, Pred, compute_letter_cells, count_matching, count_matching_mask,
+    count_range,
 };
 use crate::types::*;
 
@@ -134,9 +135,27 @@ pub enum InvalidReason {
     /// `LeastCommon`/`MostCommon`: `rival` ties the claimed letter, so neither is the
     /// single extreme.
     ExtremumTied { rival: Answer, count: u8 },
+    /// `LeastCommon`/`MostCommon` on a partial board: `over` is placed more times than
+    /// `short` can still reach. Which side holds the claimed letter flips with the kind —
+    /// `short` for `MostCommon`, `over` for `LeastCommon`.
+    ///
+    /// Bounds, not `NotExtremum`'s settled tallies: routing a still-reachable ceiling
+    /// through that variant would render it as a final count.
+    ExtremumOutOfReach {
+        over: Answer,
+        over_min: u8,
+        short: Answer,
+        short_max: u8,
+    },
 
     /// `LetterDist`: the distance the answers actually sit apart.
     WrongDistance { actual: u8 },
+    /// `LetterDist`: no letter at all is the claimed distance from this option, so the
+    /// target's answer is irrelevant — `max` is the furthest any letter reaches from here.
+    DistanceUnreachable { max: u8 },
+    /// `LetterDist` with the target unanswered: some letter is the claimed distance away,
+    /// but none the target still has left. `WrongDistance`'s partial-board counterpart.
+    NoLetterAtDistance,
 }
 
 /// A [`Validity`] verdict with, when it is `Invalid`, why — see [`InvalidReason`]. The
@@ -494,20 +513,45 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             }
         }
 
-        QuestionType::LetterDist { question_index } => match answers[question_index as usize] {
-            Some(other) => {
-                if !ov.is_num() {
-                    return MALFORMED;
+        // The target's answer decides it outright; failing that, its remaining options still
+        // can. Mirrors `deduce`'s `LetterDistImpossible` / `LetterDistNoMatch` split.
+        QuestionType::LetterDist { question_index } => {
+            if !ov.is_num() {
+                return MALFORMED;
+            }
+            let target = question_index as usize;
+            match answers[target] {
+                Some(other) => {
+                    let dist = (self_oi as u8).abs_diff(other as u8);
+                    if dist == ov.value() {
+                        Judgment::Valid
+                    } else {
+                        Judgment::Invalid(InvalidReason::WrongDistance { actual: dist })
+                    }
                 }
-                let dist = (self_oi as u8).abs_diff(other as u8);
-                if dist == ov.value() {
-                    Judgment::Valid
-                } else {
-                    Judgment::Invalid(InvalidReason::WrongDistance { actual: dist })
+                None => {
+                    // Furthest any letter sits from `self_oi`; `saturating_sub` so a
+                    // malformed `self_oi >= oc` can't underflow it.
+                    let max_dist = self_oi.max(oc.saturating_sub(1 + self_oi)) as u8;
+                    if ov.value() > max_dist {
+                        // Further than any letter sits from this one, so the target never
+                        // mattered.
+                        Judgment::Invalid(InvalidReason::DistanceUnreachable { max: max_dist })
+                    } else {
+                        let reachable = (0..oc).any(|letter| {
+                            eliminated[target] & (1u8 << letter) == 0
+                                && (self_oi as u8).abs_diff(letter as u8) == ov.value()
+                        });
+                        if reachable {
+                            Judgment::Pending
+                        } else {
+                            // Some letter is that far off, but none the target still has left.
+                            Judgment::Invalid(InvalidReason::NoLetterAtDistance)
+                        }
+                    }
                 }
             }
-            None => Judgment::Pending,
-        },
+        }
 
         // Scoped sameness — never a claim. Fatal `check_form` error.
         QuestionType::SameAs | QuestionType::SameAsWhich { .. } => {
@@ -810,39 +854,68 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             }
         }
 
-        // ── Global: need all answers ──
+        // ── Global: a full board pins the extreme, a partial one can still refute it ──
         QuestionType::LeastCommon | QuestionType::MostCommon => {
             if !ov.is_num() || ov.value() as usize >= oc {
                 return MALFORMED;
             }
-            if !all_answered(answers, n) {
-                return Judgment::Pending;
-            }
             let ov = ov.value() as usize;
-            let c = fill_counts(answers, n);
-            let extreme = match *qt {
-                QuestionType::LeastCommon => c[..oc].iter().copied().min(),
-                _ => c[..oc].iter().copied().max(),
-            }
-            .unwrap_or(0);
-            // The claimed letter has to hold the extreme, and hold it alone — so any
-            // other letter at `extreme` refutes it, either by beating it or by tying.
-            let rival = (0..oc)
-                .find(|&li| li != ov && c[li] == extreme)
-                .map(|li| Answer::from(li as u8));
-            match (c[ov] == extreme, rival) {
-                (true, None) => Judgment::Valid,
-                (true, Some(rival)) => Judgment::Invalid(InvalidReason::ExtremumTied {
-                    rival,
-                    count: extreme,
-                }),
-                // `extreme` is the min/max over `0..oc`, so when the claimed letter
-                // isn't holding it another letter is.
-                (false, rival) => Judgment::Invalid(InvalidReason::NotExtremum {
-                    rival: rival.expect("some letter holds the extreme count"),
-                    rival_count: extreme,
-                    claimed_count: c[ov],
-                }),
+            let least = matches!(*qt, QuestionType::LeastCommon);
+            if !all_answered(answers, n) {
+                // Cell bounds alone: a letter out of the claimed letter's reach settles the
+                // claim under every completion. Counted off the state as given — a "what if
+                // `qi` were `oi`" is the caller's to encode, and adjusting for it here would
+                // apply it twice.
+                let cells = compute_letter_cells(answers, eliminated, n);
+                let out_of_reach = (0..oc).filter(|&rival| rival != ov).find_map(|rival| {
+                    // Least needs the claim at or below the rival, so the claim's floor
+                    // passing the rival's ceiling kills it; Most is the mirror.
+                    let (over, over_min, short, short_max) = if least {
+                        (ov, cells.filled[ov], rival, cells.cell_max(rival))
+                    } else {
+                        (rival, cells.filled[rival], ov, cells.cell_max(ov))
+                    };
+                    // Strict, so equal bounds stay `Pending`: a forced tie refutes a *unique*
+                    // extremum too, but the clause would read as two matching numbers rather
+                    // than as a refutation. Deduce draws the line in the same place.
+                    (over_min > short_max).then_some(InvalidReason::ExtremumOutOfReach {
+                        over: Answer::from(over as u8),
+                        over_min,
+                        short: Answer::from(short as u8),
+                        short_max,
+                    })
+                });
+                match out_of_reach {
+                    Some(reason) => Judgment::Invalid(reason),
+                    None => Judgment::Pending,
+                }
+            } else {
+                let c = fill_counts(answers, n);
+                let extreme = if least {
+                    c[..oc].iter().copied().min()
+                } else {
+                    c[..oc].iter().copied().max()
+                }
+                .unwrap_or(0);
+                // The claimed letter has to hold the extreme, and hold it alone — so any
+                // other letter at `extreme` refutes it, either by beating it or by tying.
+                let rival = (0..oc)
+                    .find(|&li| li != ov && c[li] == extreme)
+                    .map(|li| Answer::from(li as u8));
+                match (c[ov] == extreme, rival) {
+                    (true, None) => Judgment::Valid,
+                    (true, Some(rival)) => Judgment::Invalid(InvalidReason::ExtremumTied {
+                        rival,
+                        count: extreme,
+                    }),
+                    // `extreme` is the min/max over `0..oc`, so when the claimed letter
+                    // isn't holding it another letter is.
+                    (false, rival) => Judgment::Invalid(InvalidReason::NotExtremum {
+                        rival: rival.expect("some letter holds the extreme count"),
+                        rival_count: extreme,
+                        claimed_count: c[ov],
+                    }),
+                }
             }
         }
 

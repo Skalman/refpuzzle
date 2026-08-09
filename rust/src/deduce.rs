@@ -1920,12 +1920,12 @@ fn deduce_impl(
                             );
                         }
                     }
-                    for oi in 0..5usize {
+                    for oi in 0..fp.option_count {
                         if is_eliminated(eliminated, qi, oi) {
                             continue;
                         }
                         let ov = fp.options[qi][oi];
-                        let max_dist = oi.max(4 - oi) as u8;
+                        let max_dist = oi.max(fp.option_count - 1 - oi) as u8;
                         if ov.is_num() && ov.value() > max_dist {
                             push(
                                 DeduceRule::LetterDistImpossible,
@@ -1946,7 +1946,7 @@ fn deduce_impl(
                         }
                         if ov.is_num() && target_ans.is_none() && ov.value() <= max_dist {
                             let ov = ov.value();
-                            let no_match = !(0..5usize).any(|ti| {
+                            let no_match = !(0..fp.option_count).any(|ti| {
                                 !is_eliminated(eliminated, target_qi, ti)
                                     && (oi as u8).abs_diff(ti as u8) == ov
                             });
@@ -3062,6 +3062,7 @@ mod tests {
         let mut skipped_ambiguous = 0;
         let mut kind_tally = [0u32; QUESTION_KIND_COUNT];
         let mut rules_fired: std::collections::BTreeSet<&'static str> = Default::default();
+        let mut agreement = Agreement::default();
         // Two failures have to outlive the silenced hook below: a `fill_options` panic
         // that isn't a precondition rejection, and the construction cross-check. Carry
         // them out of the loop and report once the hook is back.
@@ -3177,12 +3178,17 @@ mod tests {
                     }
                 }
 
-                let drs = deduce(
+                let state = State {
+                    answers,
+                    eliminated,
+                };
+                let drs = deduce(&fp, &state);
+                check_answer_agreement(
                     &fp,
-                    &State {
-                        answers,
-                        eliminated,
-                    },
+                    &state,
+                    &drs,
+                    &mut agreement,
+                    &format!("seed={seed} state_seed={state_seed}"),
                 );
                 for dr in &drs {
                     rules_fired.insert(dr.rule.to_str());
@@ -3238,10 +3244,13 @@ mod tests {
 
         std::panic::set_hook(hook);
 
+        let agreed_total: usize = agreement.agreed.values().sum();
         eprintln!(
-            "Fuzz: {puzzles_tested} puzzles tested, {failures} soundness failures \
-             ({attempted} seeds, {skipped_precondition} precondition rejection(s), \
-             {skipped_form} form error(s), {skipped_ambiguous} not uniquely solvable)"
+            "Fuzz: {puzzles_tested} puzzles tested, {failures} soundness failures, \
+             {agreed_total} check_answer agreements across {} rule(s) ({attempted} seeds, \
+             {skipped_precondition} precondition rejection(s), \
+             {skipped_form} form error(s), {skipped_ambiguous} not uniquely solvable)",
+            agreement.agreed.len()
         );
         // Reported, not asserted: `test_shared_deduce` already requires a fixture per
         // rule, so this is about which rules the *random-state* sweep reaches. It never
@@ -3270,6 +3279,33 @@ mod tests {
             panic!("fill_options bug: brute solution != construction solution ({msg})");
         }
         assert_eq!(failures, 0, "{failures} soundness failure(s)");
+        assert!(
+            agreement.failures.is_empty(),
+            "{} check_answer/deduce disagreement(s):\n  {}",
+            agreement.failures.len(),
+            agreement.failures.join("\n  ")
+        );
+        // Two tripwires, because agreement is worthless once the sweep stops reaching the
+        // arguments. The total catches the cross-check going dark altogether; the per-rule
+        // pass catches one rule dropping out behind a still-large total. It asks nothing of
+        // a rule the sweep never fired, so it can't flake on the rare ones — but a rule
+        // whose cells are now *all* skipped (answered `qi`, or already eliminated) trips it,
+        // and that rule belongs in `beyond_check_answer` with a note on which path it takes.
+        assert!(
+            agreed_total > 100,
+            "only {agreed_total} check_answer/deduce agreement(s) — the sweep no longer reaches them"
+        );
+        let silent: Vec<&str> = agreement
+            .named_cells
+            .iter()
+            .copied()
+            .filter(|rule| !agreement.agreed.contains_key(rule))
+            .collect();
+        assert!(
+            silent.is_empty(),
+            "{} rule(s) eliminated cells but never once agreed with check_answer: {silent:?}",
+            silent.len()
+        );
         // Nineteen of every twenty seeds are discarded, and the rejections concentrate
         // in the kinds with the tightest preconditions, so a passing run says little
         // unless every kind actually reached the sweep. Deliberately loose — it catches
@@ -3291,6 +3327,124 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// What the `check_answer` cross-check saw, accumulated over the whole sweep.
+    #[derive(Default)]
+    struct Agreement {
+        /// Cells the judge also called invalid, per rule.
+        agreed: std::collections::BTreeMap<&'static str, usize>,
+        /// Rules that named at least one cell, counted before the skips so it also holds
+        /// rules whose cells never reached the judge — which is what the tripwire looks for.
+        named_cells: std::collections::BTreeSet<&'static str>,
+        /// The first few disagreements, for the failure message.
+        failures: Vec<String>,
+    }
+
+    /// No deduce rule may outrun `check_answer`: eliminating `(qi, oi)` asserts the board
+    /// that answers `qi` with `oi` is broken, and for a mark-local rule `check_answer` grades
+    /// that same board and must agree. Exempt rules are listed in [`beyond_check_answer`]; the
+    /// default is that a rule must agree, so a new one has to justify itself to be excused.
+    ///
+    /// An answered `qi` is skipped: there the extremum rules also argue by whole-board
+    /// pigeonhole, which `check_answer` never attempts. The carve-out is by path rather than
+    /// by rule because the same rule argues pairwise, and agrees, while `qi` is blank.
+    ///
+    /// The converse — every `check_answer` verdict reaching a rule — is deliberately not
+    /// checked. Deduce's job is progress, not completeness, so it is never obliged to make an
+    /// argument `check_answer` can make.
+    fn check_answer_agreement(
+        fp: &FlatPuzzle,
+        state: &State,
+        drs: &DeduceResults,
+        agreement: &mut Agreement,
+        at: &str,
+    ) {
+        use crate::check_answer::{Judgment, judge_answer};
+
+        // Both action shapes: a batched elimination makes the same assertion cell by cell,
+        // and several rules only ever emit the batched one.
+        let cells = |dr: &DeduceResult| -> Vec<(usize, usize)> {
+            match dr.action {
+                DeduceAction::Eliminate { qi, oi } => vec![(qi, oi)],
+                DeduceAction::EliminateMulti {
+                    question_mask,
+                    option_mask,
+                } => (0..fp.n)
+                    .filter(|qi| (question_mask >> qi) & 1 == 1)
+                    .flat_map(|qi| {
+                        (0..fp.option_count)
+                            .filter(|oi| (option_mask >> oi) & 1 == 1)
+                            .map(move |oi| (qi, oi))
+                    })
+                    .collect(),
+                // A force says what `qi` must be, not that some cell breaks the board, so
+                // there is no assertion here for the judge to second.
+                DeduceAction::Force { .. } => Vec::new(),
+            }
+        };
+
+        for dr in drs {
+            if beyond_check_answer(dr.rule) {
+                continue;
+            }
+            for (qi, oi) in cells(dr) {
+                agreement.named_cells.insert(dr.rule.to_str());
+                if state.answers[qi].is_some() || state.is_eliminated(qi, oi) {
+                    continue;
+                }
+                let mut hyp = *state;
+                hyp.answers[qi] = Some(Answer::from(oi as u8));
+                hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
+                let verdict = judge_answer(fp, hyp, qi);
+                if matches!(verdict, Judgment::Invalid(_)) {
+                    *agreement.agreed.entry(dr.rule.to_str()).or_default() += 1;
+                } else if agreement.failures.len() < 5 {
+                    agreement.failures.push(format!(
+                        "{at}: {} eliminated ({qi},{oi}) but check_answer returned {verdict:?}",
+                        dr.rule.to_str()
+                    ));
+                }
+            }
+        }
+    }
+
+    /// Rules `check_answer` cannot be expected to match, for one of two reasons: the argument
+    /// reads questions it may not read, or it is an argument it never attempts. Everything
+    /// else must agree, which is what [`check_answer_agreement`] pins.
+    ///
+    /// Exempt at rule granularity even where a rule argues within reach *some* of the time.
+    /// Splitting would mean deciding which half fired, i.e. re-deriving the rule inside the
+    /// test — a third copy of an argument that already exists twice.
+    fn beyond_check_answer(rule: DeduceRule) -> bool {
+        matches!(
+            rule,
+            // Whole-board pigeonhole over every letter — `check_answer` only compares letters
+            // pairwise, and that shape is what puts these out of reach. The bound merges cells
+            // with sibling count questions: it fires with none present, and tightens when one is.
+            DeduceRule::LeastCommonCountFloor
+                | DeduceRule::MostCommonCountCeil
+                // A sibling count question tightens a bound past what the cells show.
+                | DeduceRule::EqualCountRangeElim
+                // A count question eliminates elsewhere — the constraint sits on the
+                // counter, the cell removed does not.
+                | DeduceRule::CountSaturated
+                | DeduceRule::CountMustMatchElim
+                | DeduceRule::VowelCrossElim
+                | DeduceRule::ConsonantCrossElim
+                // Reverse, range and negative rules: the argument belongs to the source
+                // question and the cell to another, so grading that other one sees nothing.
+                | DeduceRule::PositionalRangeAnswered
+                | DeduceRule::PositionalRangeUnanswered
+                | DeduceRule::OnlyOddEvenRangeElim
+                | DeduceRule::LetterDistReverseElim
+                | DeduceRule::ConsecIdentReverse
+                | DeduceRule::ConsecIdentForwardElim
+                | DeduceRule::OnlySameNoneForward
+                | DeduceRule::SameAsWhichNoneForward
+                | DeduceRule::SameAsNegative
+                | DeduceRule::SameAsWhichNegative
+        )
     }
 
     /// A contradiction is attributed to the conflicting action's target question,

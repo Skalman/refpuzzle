@@ -467,6 +467,24 @@ fn invalid_clause(
             },
             times(count)
         ),
+        // A floor against a ceiling, so it has to read as bounds: "appears 3 times" would
+        // state a count the board hasn't settled.
+        ExtremumOutOfReach {
+            over,
+            over_min,
+            short,
+            short_max,
+        } => format!(
+            "{over} {} {} and {short} {} reach at most {}",
+            if indicative {
+                "already appears"
+            } else {
+                "would already appear"
+            },
+            times(over_min),
+            if indicative { "can" } else { "could" },
+            times(short_max)
+        ),
 
         // Pure letter arithmetic against the other question's answer — the assumption is the
         // subject of the claim, not evidence for the clause.
@@ -477,6 +495,22 @@ fn invalid_clause(
             // Undecided until the other question is answered, so it always is here.
             let other = answers[usize::from(question_index)]?;
             format!("{} is {} from {other}", LETTERS[opt.oi], letters(actual))
+        }
+        // Neither reads the assumption — one is pure letter arithmetic, the other the
+        // target's remaining options — so both stay indicative under every subject.
+        DistanceUnreachable { max } => format!(
+            "{} can be at most {} from any answer",
+            LETTERS[opt.oi],
+            letters(max)
+        ),
+        NoLetterAtDistance => {
+            let QuestionType::LetterDist { question_index } = claim.question_type else {
+                return None;
+            };
+            format!(
+                "no answer {} still has left is that far off",
+                q(question_index)
+            )
         }
     })
 }
@@ -611,11 +645,13 @@ fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<us
             Some(if at == qi { at + 1 } else { at })
         }
         // The distance is measured against the question the kind names; the reason carries
-        // only the distance itself.
-        WrongDistance { .. } => match claim.question_type {
+        // only the distance itself. `NoLetterAtDistance` too — the target's surviving
+        // options are the evidence.
+        WrongDistance { .. } | NoLetterAtDistance => match claim.question_type {
             QuestionType::LetterDist { question_index } => Some(usize::from(question_index)),
             _ => None,
         },
+        // `DistanceUnreachable` blames the alphabet, not the target.
         Malformed
         | NoOptionsLeft
         | CountFloor { .. }
@@ -625,7 +661,9 @@ fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<us
         | CountsCantMeet { .. }
         | OtherLetterTies { .. }
         | NotExtremum { .. }
-        | ExtremumTied { .. } => None,
+        | ExtremumTied { .. }
+        | ExtremumOutOfReach { .. }
+        | DistanceUnreachable { .. } => None,
     }
 }
 
@@ -637,12 +675,14 @@ fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
 
 /// The "…, but *what breaks it*" clause for the eliminations `check_answer` can't reach a
 /// verdict on, plus the question to highlight. The one place `explain` still works out
-/// *why* rather than rendering a judgment, because there is no judgment to render: these
-/// four kinds are ruled out by deduce rules that outrun `check_claim`'s scope —
-/// `LeastCommonElim` / `MostCommonElim` / `LeastCommonCountFloor` / `MostCommonCountCeil`
-/// argue from cell and count bounds where `check_claim` waits for a full board, and
-/// `LetterDistImpossible` / `LetterDistNoMatch` argue from letter arithmetic and the
-/// target's remaining options where `check_claim` waits for its answer.
+/// *why* rather than rendering a judgment, because there is no judgment to render.
+///
+/// Two kinds of argument land here. `EqualCountRangeElim` folds in sibling *count* questions,
+/// which is cross-question reasoning and outside `check_claim`'s scope by design. The extremum
+/// rules — `LeastCommonCountFloor` / `MostCommonCountCeil`, and the pigeonhole half of
+/// `LeastCommonElim` / `MostCommonElim` — argue by whole-board pigeonhole over every letter,
+/// which `check_claim` never attempts: it compares letters pairwise. Their bound merges cells
+/// with sibling count questions, so they reach here with none present and tighten when one is.
 ///
 /// It decides the reason but not the wording: where the judge has a variant for the same
 /// shape, the clause is built by handing that variant to [`invalid_clause`], so the two
@@ -656,7 +696,6 @@ fn elim_clause_beyond_check_answer(
 ) -> Option<(String, Option<usize>)> {
     let n = fp.n;
     let oc = fp.option_count;
-    let oi = opt.oi;
     let answers = &state.answers;
     let value = claim.value.is_num().then(|| claim.value.value())?;
     // Always under an assumption: this is only reached from `explain_elim_detail`.
@@ -733,38 +772,6 @@ fn elim_clause_beyond_check_answer(
                 over_min: bounds.lower(&cells, over.idx()),
             })?;
             Some((clause, None))
-        }
-
-        // A distance the letter arithmetic can't reach at all refutes itself — the target
-        // is irrelevant, so blame the alphabet and highlight nothing (mirrors
-        // `LetterDistImpossible`'s `max_dist`). Otherwise, unanswered target: no option it
-        // still has left sits `value` letters from this one. Neither reads the assumption,
-        // so both stay indicative.
-        QuestionType::LetterDist { question_index } => {
-            let max_dist = oi.max(oc - 1 - oi) as u8;
-            if value > max_dist {
-                return Some((
-                    format!(
-                        "{} can be at most {} from any answer",
-                        LETTERS[oi],
-                        letters(max_dist)
-                    ),
-                    None,
-                ));
-            }
-            let k = usize::from(question_index);
-            if answers[k].is_some() {
-                return None;
-            }
-            let reachable = (0..oc).any(|ti| {
-                !state.is_eliminated(k, ti) && (oi as i32 - ti as i32).unsigned_abs() as u8 == value
-            });
-            (!reachable).then(|| {
-                (
-                    format!("no answer {} still has left is that far off", q(k)),
-                    Some(k),
-                )
-            })
         }
 
         _ => None,
@@ -2270,7 +2277,10 @@ mod tests {
             OtherLetterTies { .. } => "OtherLetterTies",
             NotExtremum { .. } => "NotExtremum",
             ExtremumTied { .. } => "ExtremumTied",
+            ExtremumOutOfReach { .. } => "ExtremumOutOfReach",
             WrongDistance { .. } => "WrongDistance",
+            DistanceUnreachable { .. } => "DistanceUnreachable",
+            NoLetterAtDistance => "NoLetterAtDistance",
         }
     }
 
@@ -2449,7 +2459,10 @@ mod tests {
             "OtherLetterTies",
             "NotExtremum",
             "ExtremumTied",
+            "ExtremumOutOfReach",
             "WrongDistance",
+            "DistanceUnreachable",
+            "NoLetterAtDistance",
         ];
         for name in expected {
             assert!(
@@ -2576,10 +2589,10 @@ mod tests {
         assert_eq!(d.other_qi, Some(1));
     }
 
-    /// The extremum kinds are the residue: with #4 still open the board isn't full, so
-    /// `check_answer` grades the assumed answer `Pending` and the clause comes from
-    /// `elim_clause_beyond_check_answer` — while the assertion still comes from the shared
-    /// `claim_assertion`. (Full board, and the judge's own `NotExtremum` reason renders it.)
+    /// The extremum kinds on a partial board: #4 is still open, and the judge settles it off
+    /// cell bounds anyway — `ExtremumOutOfReach` through the shared `invalid_clause`, not
+    /// `elim_clause_beyond_check_answer`. The bound wording is the point: #4 could still take
+    /// B, so B's count is not 0 but *at most 1*, and A's 3 is a floor, not a total.
     #[test]
     fn elim_least_common_not_least() {
         let fp = parse_puzzle(&json!({
@@ -2592,7 +2605,7 @@ mod tests {
         let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
         assert_eq!(
             d.text,
-            "#1 option A claims A is the least common answer, but B would appear 0 times and A 3 times."
+            "#1 option A claims A is the least common answer, but A would already appear 3 times and B could reach at most 1 time."
         );
         assert_eq!(d.other_qi, None);
     }
