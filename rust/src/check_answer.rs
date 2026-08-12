@@ -66,8 +66,32 @@ impl Validity {
 /// options, and for a refuted hypothesis. Every variant except `Malformed` and
 /// `NoOptionsLeft` must yield a sentence under all three, which `explain`'s
 /// `every_invalid_reason_renders` pins.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum InvalidReason {
+///
+/// Declared through a macro for one reason: it emits `ALL_INVALID_REASON_NAMES` alongside the
+/// enum, so that test can require prose from every variant but the two named above without a
+/// hand-kept list to fall out of date. Same trick as `deduce`'s rule list.
+macro_rules! invalid_reasons {
+    (
+        $(
+            $(#[$meta:meta])*
+            $variant:ident $({ $($field:ident : $ty:ty),* $(,)? })?
+        ),+ $(,)?
+    ) => {
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        pub enum InvalidReason {
+            $(
+                $(#[$meta])*
+                $variant $({ $($field : $ty),* })?,
+            )+
+        }
+
+        /// Every `InvalidReason` variant's name, in declaration order.
+        #[cfg(test)]
+        pub const ALL_INVALID_REASON_NAMES: &[&str] = &[$(stringify!($variant)),+];
+    };
+}
+
+invalid_reasons! {
     /// The option value can't mean anything for this kind: a NONE where a number is
     /// required, a letter index past the option count, a position outside the window the
     /// kind scans, a self-reference. `check_form` rejects every one of these as an
@@ -147,6 +171,16 @@ pub enum InvalidReason {
         short: Answer,
         short_max: u8,
     },
+    /// `LeastCommon`/`MostCommon`: the whole-board pigeonhole rules the claimed letter out — `n`
+    /// answers over `oc` letters leave it no room to be the extreme one. No rival letter is
+    /// named, which is why `NotExtremum`'s shape does not fit here.
+    ///
+    /// Both fields change sides with the kind:
+    /// - `LeastCommon`: the least common letter can appear at most `threshold` times, and the
+    ///   claimed letter is already placed `reach` times.
+    /// - `MostCommon`: the most common letter must appear at least `threshold` times, and the
+    ///   claimed letter reaches at most `reach` — its placed and still-open cells together.
+    ExtremumPigeonhole { threshold: u8, reach: u8 },
 
     /// `LetterDist`: the distance the answers actually sit apart.
     WrongDistance { actual: u8 },
@@ -885,7 +919,36 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                         short_max,
                     })
                 });
-                match out_of_reach {
+                // No rival out of reach, so the board's own arithmetic instead: `n` answers over
+                // `oc` letters bound what the extreme letter's count can be, and the claimed
+                // letter already sits outside that bound, in every completion. Which side counts
+                // as outside flips with the kind — see `ExtremumPigeonhole`. Cells only: folding
+                // a sibling count question's bound in here would be cross-question reasoning,
+                // which is deduce's job.
+                let pigeonhole = || {
+                    if oc < 2 {
+                        return None;
+                    }
+                    let (threshold, reach, ruled_out) = if least {
+                        // Uniquely least at k needs the other oc-1 letters strictly above it,
+                        // so n >= k + (k + 1)(oc - 1), i.e. k <= (n + 1 - oc) / oc.
+                        if n + 1 < oc {
+                            return None;
+                        }
+                        let threshold = ((n + 1 - oc) / oc) as u8;
+                        let reach = cells.filled[ov];
+                        (threshold, reach, reach > threshold)
+                    } else {
+                        // Mirror: uniquely most at k needs the rest strictly below, so
+                        // n <= k + (k - 1)(oc - 1), i.e. k >= ceil((n + oc - 1) / oc) — which is
+                        // what the integer division spells as (n + 2 * oc - 2) / oc.
+                        let threshold = ((n + 2 * oc - 2) / oc) as u8;
+                        let reach = cells.cell_max(ov);
+                        (threshold, reach, reach < threshold)
+                    };
+                    ruled_out.then_some(InvalidReason::ExtremumPigeonhole { threshold, reach })
+                };
+                match out_of_reach.or_else(pigeonhole) {
                     Some(reason) => Judgment::Invalid(reason),
                     None => Judgment::Pending,
                 }

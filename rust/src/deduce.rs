@@ -2686,6 +2686,8 @@ fn deduce_impl(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::{BTreeMap, BTreeSet};
+
     use super::*;
     use crate::test_util::{fast_tests, slow_test_duration};
     use serde_json::Value;
@@ -2972,6 +2974,7 @@ mod tests {
 
     #[test]
     fn test_deduce_soundness_fuzz() {
+        use crate::explain::{ExplainStep, explain_deduce};
         use crate::fill::fill_options;
         use crate::rng::Rng;
         use crate::solve_brute::solve;
@@ -3061,8 +3064,10 @@ mod tests {
         let mut skipped_form = 0;
         let mut skipped_ambiguous = 0;
         let mut kind_tally = [0u32; QUESTION_KIND_COUNT];
-        let mut rules_fired: std::collections::BTreeSet<&'static str> = Default::default();
+        let mut rules_fired: BTreeSet<&'static str> = Default::default();
         let mut agreement = Agreement::default();
+        const RENDER_PER_RULE: usize = 200;
+        let mut rendered: BTreeMap<&'static str, usize> = Default::default();
         // Two failures have to outlive the silenced hook below: a `fill_options` panic
         // that isn't a precondition rejection, and the construction cross-check. Carry
         // them out of the loop and report once the hook is back.
@@ -3192,6 +3197,24 @@ mod tests {
                 );
                 for dr in &drs {
                     rules_fired.insert(dr.rule.to_str());
+                    // `explain` panics rather than show a step with no reason, so rendering here is
+                    // what keeps that guard from being an untested claim: a rule whose result no
+                    // arm can phrase takes the sweep down with it. Capped per rule — whether a
+                    // rule can be phrased varies with the state, not with how often it fires, and
+                    // rendering every result costs the sweep more puzzles than the extra states
+                    // are worth.
+                    let seen = rendered.entry(dr.rule.to_str()).or_insert(0usize);
+                    if *seen < RENDER_PER_RULE {
+                        *seen += 1;
+                        let steps = explain_deduce(&fp, &state, dr);
+                        assert!(
+                            steps
+                                .iter()
+                                .any(|s| matches!(s, ExplainStep::Simple { .. })),
+                            "{} rendered no reason line at seed={seed} state_seed={state_seed}",
+                            dr.rule.to_str()
+                        );
+                    }
                     let bad = match dr.action {
                         DeduceAction::Force { qi, answer } => answer != solution[qi],
                         DeduceAction::Eliminate { qi, oi } => oi == solution[qi].idx(),
@@ -3333,10 +3356,10 @@ mod tests {
     #[derive(Default)]
     struct Agreement {
         /// Cells the judge also called invalid, per rule.
-        agreed: std::collections::BTreeMap<&'static str, usize>,
+        agreed: BTreeMap<&'static str, usize>,
         /// Rules that named at least one cell, counted before the skips so it also holds
         /// rules whose cells never reached the judge — which is what the tripwire looks for.
-        named_cells: std::collections::BTreeSet<&'static str>,
+        named_cells: BTreeSet<&'static str>,
         /// The first few disagreements, for the failure message.
         failures: Vec<String>,
     }
@@ -3419,9 +3442,10 @@ mod tests {
     fn beyond_check_answer(rule: DeduceRule) -> bool {
         matches!(
             rule,
-            // Whole-board pigeonhole over every letter — `check_answer` only compares letters
-            // pairwise, and that shape is what puts these out of reach. The bound merges cells
-            // with sibling count questions: it fires with none present, and tightens when one is.
+            // The bound merges cells with sibling count questions. `check_answer` makes the
+            // cells-only half of this same pigeonhole itself, so those cases do agree — what
+            // keeps the rules exempt is the other half, where a count question tightens the
+            // bound past the cells and no marks-only argument reaches the conclusion.
             DeduceRule::LeastCommonCountFloor
                 | DeduceRule::MostCommonCountCeil
                 // A sibling count question tightens a bound past what the cells show.

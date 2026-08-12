@@ -120,7 +120,7 @@ impl ClaimSubject {
 /// unanswered). Verdict and reason both come from `check_answer`, so this only renders
 /// a judgment — it never re-decides one, and can't miss a kind that judge can reject.
 ///
-/// The only entry point onto [`ClaimSubject::Answered`]. Nothing renders a standalone
+/// The only entry point onto `ClaimSubject::Answered`. Nothing renders a standalone
 /// "why is this red" line yet, so today only the tests reach it — but that subject is
 /// one of the three `InvalidReason` must phrase under (see its docs), so this stays
 /// wired rather than becoming a test helper.
@@ -485,6 +485,30 @@ fn invalid_clause(
             if indicative { "can" } else { "could" },
             times(short_max)
         ),
+        // No rival to point at: the whole argument is the bound the board's shape puts on the
+        // extreme letter, so the clause states that bound and then the claimed letter's own.
+        ExtremumPigeonhole { threshold, reach } => {
+            let claimed = LETTERS[value? as usize];
+            match claim.question_type {
+                QuestionType::LeastCommon => format!(
+                    "the least common answer can appear at most {}, and {claimed} {} {}",
+                    times(threshold),
+                    if indicative {
+                        "already appears"
+                    } else {
+                        "would already appear"
+                    },
+                    times(reach)
+                ),
+                QuestionType::MostCommon => format!(
+                    "the most common answer must appear at least {}, and {claimed} {} reach at most {}",
+                    times(threshold),
+                    if indicative { "can" } else { "could" },
+                    times(reach)
+                ),
+                _ => return None,
+            }
+        }
 
         // Pure letter arithmetic against the other question's answer — the assumption is the
         // subject of the claim, not evidence for the clause.
@@ -651,7 +675,8 @@ fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<us
             QuestionType::LetterDist { question_index } => Some(usize::from(question_index)),
             _ => None,
         },
-        // `DistanceUnreachable` blames the alphabet, not the target.
+        // None of these blames a question: most are tallies, `DistanceUnreachable` blames the
+        // alphabet, and `ExtremumPigeonhole` the shape of the board. Nowhere to point.
         Malformed
         | NoOptionsLeft
         | CountFloor { .. }
@@ -663,6 +688,7 @@ fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<us
         | NotExtremum { .. }
         | ExtremumTied { .. }
         | ExtremumOutOfReach { .. }
+        | ExtremumPigeonhole { .. }
         | DistanceUnreachable { .. } => None,
     }
 }
@@ -677,14 +703,17 @@ fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
 /// verdict on, plus the question to highlight. The one place `explain` still works out
 /// *why* rather than rendering a judgment, because there is no judgment to render.
 ///
-/// Two kinds of argument land here. `EqualCountRangeElim` folds in sibling *count* questions,
-/// which is cross-question reasoning and outside `check_claim`'s scope by design. The extremum
-/// rules — `LeastCommonCountFloor` / `MostCommonCountCeil`, and the pigeonhole half of
-/// `LeastCommonElim` / `MostCommonElim` — argue by whole-board pigeonhole over every letter,
-/// which `check_claim` never attempts: it compares letters pairwise. Their bound merges cells
-/// with sibling count questions, so they reach here with none present and tighten when one is.
+/// `EqualCount` only. It folds in a sibling *count* question, which is cross-question reasoning
+/// and outside `check_claim`'s scope by design.
 ///
-/// It decides the reason but not the wording: where the judge has a variant for the same
+/// The extremum kinds need nothing here. `check_claim` settles every extremum case arguable from
+/// the marks — pairwise and by whole-board pigeonhole, both off cells alone — and where a sibling
+/// count question set the bound instead, `explain_elimination` quotes that question and returns
+/// before reaching here. Those two cases are complementary, so an extremum arm would have nothing
+/// to say. Should a rule eliminate an extremum cell with no arm of its own, the caller panics
+/// naming that rule, as it does for any kind it cannot phrase.
+///
+/// It decides the reason but not the wording: where `check_claim` has a variant for the same
 /// shape, the clause is built by handing that variant to [`invalid_clause`], so the two
 /// paths can't drift into two phrasings of one argument. The assertion half always comes
 /// from [`claim_assertion`].
@@ -702,52 +731,6 @@ fn elim_clause_beyond_check_answer(
     let shared = |reason| invalid_clause(state, opt, claim, reason, ClaimSubject::Option);
 
     match claim.question_type {
-        // Argued from the answered questions, which is weaker than the rule's own bound — a
-        // letter short of the extreme can still catch up on the open ones. The last arm is
-        // where that shows: a bound the counts so far can't display.
-        // Only the puzzle's real letters count: a phantom slot past `option_count` sits at 0
-        // forever and would hold every minimum, refuting a claim with a letter the board
-        // doesn't offer.
-        QuestionType::LeastCommon | QuestionType::MostCommon if usize::from(value) < oc => {
-            let ci = usize::from(value);
-            let least = matches!(claim.question_type, QuestionType::LeastCommon);
-            let mut counts = [0u8; 5];
-            for j in 0..n {
-                if let Some(aj) = answers[j] {
-                    counts[aj.idx()] += 1;
-                }
-            }
-            let extreme = if least {
-                counts[..oc].iter().copied().min()
-            } else {
-                counts[..oc].iter().copied().max()
-            }
-            .unwrap_or(0);
-            // One counterexample is enough, and it can't be the claimed letter itself.
-            let rival = (0..oc)
-                .find(|&li| li != ci && counts[li] == extreme)
-                .map(|li| LETTERS[li]);
-            let clause = match rival {
-                Some(rival) if counts[ci] != extreme => shared(InvalidReason::NotExtremum {
-                    rival,
-                    rival_count: extreme,
-                    claimed_count: counts[ci],
-                })?,
-                Some(rival) => shared(InvalidReason::ExtremumTied {
-                    rival,
-                    count: extreme,
-                })?,
-                // The claimed letter holds the extreme alone, so the counts can't show what
-                // the rule saw — only its bound over the open questions can.
-                None => format!(
-                    "{} can't be uniquely {}",
-                    LETTERS[ci],
-                    if least { "least" } else { "most" }
-                ),
-            };
-            Some((clause, None))
-        }
-
         // The judge's own "these two can't meet", with the bound deduce is allowed to use:
         // `CountBounds` folds sibling count questions in, so the contradiction can come from
         // a `CountAnswer` elsewhere and not from placed and eliminated cells alone — which
@@ -2206,36 +2189,6 @@ mod tests {
         assert_eq!(d.other_qi, None);
     }
 
-    /// Only the puzzle's real letters may refute an extremum claim. On three options D and E
-    /// sit at 0 forever, so scanning all five would find one of them holding the minimum and
-    /// report a rival the board doesn't offer ("D would appear 0 times and A 1 time").
-    #[test]
-    fn elim_extremum_ignores_phantom_letters() {
-        let fp = parse_puzzle(&json!({
-            "q": [{"t": "LeastCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"},
-                  {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
-            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
-        }))
-        .unwrap();
-        // B once, C twice, #5 still open — so the judge is still Pending and this falls to
-        // the cell-count clause. Assuming #1 = A leaves A and B tied at 1.
-        let state = state_with(
-            &fp,
-            &[
-                None,
-                Some(Answer::B),
-                Some(Answer::C),
-                Some(Answer::C),
-                None,
-            ],
-        );
-        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
-        assert_eq!(
-            d.text,
-            "#1 option A claims A is the least common answer, but B would appear 1 time too."
-        );
-    }
-
     /// A puzzle shell of `n` questions and `oc` options. `judge_claim` reads nothing else
     /// off a puzzle, and neither does the prose — a claim carries its own value.
     fn claim_shell(n: usize, oc: usize) -> FlatPuzzle {
@@ -2278,6 +2231,7 @@ mod tests {
             NotExtremum { .. } => "NotExtremum",
             ExtremumTied { .. } => "ExtremumTied",
             ExtremumOutOfReach { .. } => "ExtremumOutOfReach",
+            ExtremumPigeonhole { .. } => "ExtremumPigeonhole",
             WrongDistance { .. } => "WrongDistance",
             DistanceUnreachable { .. } => "DistanceUnreachable",
             NoLetterAtDistance => "NoLetterAtDistance",
@@ -2442,31 +2396,16 @@ mod tests {
             unrendered.len(),
             unrendered.join("\n  ")
         );
-        let expected = [
-            "CountFloor",
-            "CountCeiling",
-            "PeakFloor",
-            "PeakCeiling",
-            "TargetAnswered",
-            "TargetCannot",
-            "OtherHasLetter",
-            "EarlierHasLetter",
-            "LaterHasLetter",
-            "PairDiffers",
-            "PairImpossible",
-            "OtherPairMatches",
-            "CountsCantMeet",
-            "OtherLetterTies",
-            "NotExtremum",
-            "ExtremumTied",
-            "ExtremumOutOfReach",
-            "WrongDistance",
-            "DistanceUnreachable",
-            "NoLetterAtDistance",
-        ];
-        for name in expected {
+        // A denylist against the enum itself, so a new variant joins this floor by existing
+        // rather than by someone remembering to add it: name the two that carry no sentence and
+        // demand every other declared variant show up.
+        const NO_SENTENCE: [&str; 2] = ["Malformed", "NoOptionsLeft"];
+        for name in crate::check_answer::ALL_INVALID_REASON_NAMES
+            .iter()
+            .filter(|name| !NO_SENTENCE.contains(name))
+        {
             assert!(
-                seen.contains_key(name),
+                seen.contains_key(*name),
                 "the sweep never produced {name} — it no longer covers that reason"
             );
         }
@@ -2606,6 +2545,59 @@ mod tests {
         assert_eq!(
             d.text,
             "#1 option A claims A is the least common answer, but A would already appear 3 times and B could reach at most 1 time."
+        );
+        assert_eq!(d.other_qi, None);
+    }
+
+    /// No rival is out of reach here — every other letter still has four open questions — so the
+    /// refutation is the board's own arithmetic: seven answers over three letters hold the least
+    /// common one to at most 1, and the assumption puts A at 3.
+    #[test]
+    fn elim_least_common_past_the_pigeonhole_cap() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "LeastCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"},
+                  {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"},
+                  {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
+        }))
+        .unwrap();
+        let state = state_with(
+            &fp,
+            &[
+                None,
+                Some(Answer::A),
+                Some(Answer::A),
+                None,
+                None,
+                None,
+                None,
+            ],
+        );
+        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
+        assert_eq!(
+            d.text,
+            "#1 option A claims A is the least common answer, but the least common answer can appear at most 1 time, and A would already appear 3 times."
+        );
+        assert_eq!(d.other_qi, None);
+    }
+
+    /// The mirror, and the reason the bound has to be stated rather than a tally: C is not placed
+    /// anywhere, so a tally would put it at 0 — what actually rules it out is that only #4 is
+    /// left to take it, while four answers over five letters need the most common one at 2 or
+    /// more.
+    #[test]
+    fn elim_most_common_short_of_the_pigeonhole_floor() {
+        let fp = parse_puzzle(&json!({
+            "q": [{"t": "MostCommon"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"},
+                  {"t": "AnswerIsSelf"}],
+            "o": [[2, 0, 1, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]],
+        }))
+        .unwrap();
+        let state = state_with(&fp, &[None, Some(Answer::B), Some(Answer::D), None]);
+        let d = explain_elim_detail(&fp, &state, 0, 0).unwrap();
+        assert_eq!(
+            d.text,
+            "#1 option A claims C is the most common answer, but the most common answer must appear at least 2 times, and C could reach at most 1 time."
         );
         assert_eq!(d.other_qi, None);
     }
