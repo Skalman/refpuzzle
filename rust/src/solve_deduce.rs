@@ -1,4 +1,4 @@
-use crate::check_answer::check_answers;
+use crate::check_answer::check_all_answers;
 use crate::deduce::{
     DeduceResult, apply_action, contradiction_question, deduce, deduce_assuming_unique,
 };
@@ -246,7 +246,7 @@ pub fn run_engine<S: StepSink>(
         break;
     }
     EngineOutcome {
-        solved: all_answered(&state) && check_answers(fp, &state.answers),
+        solved: all_answered(&state) && check_all_answers(fp, &state.answers),
         state,
         telemetry,
         contradiction,

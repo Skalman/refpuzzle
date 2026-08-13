@@ -7,7 +7,7 @@ use std::collections::BTreeSet;
 
 use serde::Serialize;
 
-use crate::check_answer::{InvalidReason, answered_claim, judge_answer};
+use crate::check_answer::{InvalidReason, answered_claim, check_answer_with_reason};
 use crate::counts::{
     compute_count_bounds, compute_letter_cells, count_matching, count_matching_mask, count_pred,
     count_range,
@@ -81,10 +81,10 @@ fn try_looking(qis: &[usize]) -> ExplainStep {
 /// state as fact.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ClaimSubject {
-    /// The question's own committed answer is what's being judged — "#3 claims …". Every
+    /// The question's own committed answer is what's being rejected — "#3 claims …". Every
     /// question and tally the reason names really holds what it says.
     Answered,
-    /// One of the question's options, judged on a board that *assumes* it — "#3 option B
+    /// One of the question's options, rejected on a board that *assumes* it — "#3 option B
     /// claims …". #3's answer is that assumption, so anything downstream of it reads in the
     /// conditional: this sentence stands alone, with nothing before it to establish the
     /// assumption.
@@ -118,7 +118,7 @@ impl ClaimSubject {
 
 /// Why question `qi`'s current answer is invalid, or `None` if it isn't (or is
 /// unanswered). Verdict and reason both come from `check_answer`, so this only renders
-/// a judgment — it never re-decides one, and can't miss a kind that judge can reject.
+/// a verdict — it never re-decides one, and can't miss a kind `check_answer` can reject.
 ///
 /// The only entry point onto `ClaimSubject::Answered`. Nothing renders a standalone
 /// "why is this red" line yet, so today only the tests reach it — but that subject is
@@ -129,7 +129,7 @@ pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Stri
 }
 
 /// [`explain_invalid`] under a chosen subject — `explain_lookahead` reports the same
-/// judgment about a hypothesis, so it asks for the conditional opening.
+/// verdict about a hypothesis, so it asks for the conditional opening.
 fn rejected_answer_text(
     fp: &FlatPuzzle,
     state: &State,
@@ -137,7 +137,7 @@ fn rejected_answer_text(
     subject: ClaimSubject,
 ) -> Option<String> {
     let a = state.answers[qi]?;
-    let reason = judge_answer(fp, *state, qi).reason()?;
+    let reason = check_answer_with_reason(fp, *state, qi).reason()?;
     let claim = answered_claim(fp, state, qi)?;
     rejected_claim_text(
         subject,
@@ -178,11 +178,11 @@ fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<Strin
     let qt = claim.question_type;
     // The value the option asserts — a count, a letter index, or a 0-based question
     // index depending on the kind; `None` is the NONE option's "no such thing". A value
-    // out of its kind's range grades `Malformed` and so is never rendered, which is what
+    // out of its kind's range comes back `Malformed` and so is never rendered, which is what
     // makes `LETTERS[…]` below safe.
     let value = claim.value.is_num().then(|| claim.value.value());
     // What this question's own answer is *for the claim*: the option it selected. The
-    // same reading `check_answer` grades a self-referential kind against.
+    // same reading `check_answer` checks a self-referential kind against.
     let own = LETTERS[opt.oi];
 
     Some(match qt {
@@ -621,11 +621,11 @@ fn detail(text: String, other_qi: Option<usize>) -> Option<ElimDetail> {
 
 /// Why option `oi` of question `qi` is impossible, as one sentence — "#1 option C claims
 /// the first A is #3, but #2 has answer A and comes before #3." Answering `oi` would commit
-/// `qi` to a claim, so this asks the judge about *that* claim on the state that assumes it,
+/// `qi` to a claim, so this asks `check_answer` about *that* claim on the state that assumes it,
 /// and renders the verdict through the same `rejected_claim_text` the answered case uses,
 /// under a hypothetical subject.
 ///
-/// `None` when there is nothing to say: the judge doesn't reject the claim and it isn't one
+/// `None` when there is nothing to say: `check_answer` doesn't reject the claim and it isn't one
 /// of the kinds `elim_clause_beyond_check_answer` covers. That is not the same as "no
 /// phrasing for this kind" — an elimination whose argument is *another* question's is
 /// `explain_elimination`'s to phrase, from the rule, before it reaches here.
@@ -636,7 +636,7 @@ fn explain_elim_detail(fp: &FlatPuzzle, state: &State, qi: usize, oi: usize) -> 
     let claim = answered_claim(fp, &hyp, qi)?;
     let subject = ClaimSubject::Option;
 
-    if let Some(reason) = judge_answer(fp, hyp, qi).reason()
+    if let Some(reason) = check_answer_with_reason(fp, hyp, qi).reason()
         && let Some(text) = rejected_claim_text(subject, &hyp, opt, &claim, reason)
     {
         return detail(format!("{text}."), reason_other_qi(qi, &claim, reason));
@@ -701,7 +701,7 @@ fn option_value_at(fp: &FlatPuzzle, qi: usize, answer: Answer) -> Option<u8> {
 
 /// The "…, but *what breaks it*" clause for the eliminations `check_answer` can't reach a
 /// verdict on, plus the question to highlight. The one place `explain` still works out
-/// *why* rather than rendering a judgment, because there is no judgment to render.
+/// *why* rather than rendering a reason, because there is no reason to render.
 ///
 /// `EqualCount` only. It folds in a sibling *count* question, which is cross-question reasoning
 /// and outside `check_claim`'s scope by design.
@@ -731,7 +731,7 @@ fn elim_clause_beyond_check_answer(
     let shared = |reason| invalid_clause(state, opt, claim, reason, ClaimSubject::Option);
 
     match claim.question_type {
-        // The judge's own "these two can't meet", with the bound deduce is allowed to use:
+        // `check_claim`'s own "these two can't meet", with the bound deduce is allowed to use:
         // `CountBounds` folds sibling count questions in, so the contradiction can come from
         // a `CountAnswer` elsewhere and not from placed and eliminated cells alone — which
         // is cross-question reasoning, outside `check_claim`'s scope.
@@ -2160,7 +2160,7 @@ mod tests {
         assert_eq!(leading_questions(&[]), Vec::<usize>::new());
     }
 
-    /// An elimination is judged on a board that *assumes* the option, so whatever rests on
+    /// An elimination is explained on a board that *assumes* the option, so whatever rests on
     /// that assumption has to read as hypothetical. Both sentences here would otherwise
     /// state an unanswered #1's answer as fact, and the highlight would point at #1 —
     /// which the hint already points at, collapsing the two-question `Look` to one.
@@ -2189,7 +2189,7 @@ mod tests {
         assert_eq!(d.other_qi, None);
     }
 
-    /// A puzzle shell of `n` questions and `oc` options. `judge_claim` reads nothing else
+    /// A puzzle shell of `n` questions and `oc` options. `check_claim_with_reason` reads nothing else
     /// off a puzzle, and neither does the prose — a claim carries its own value.
     fn claim_shell(n: usize, oc: usize) -> FlatPuzzle {
         let question_types = [QuestionType::AnswerIsSelf; MAX_N];
@@ -2243,13 +2243,13 @@ mod tests {
     /// boards against every claimable kind and every value a claim could hold: each
     /// `Invalid` verdict must render a sentence, unless its reason is one of the two
     /// with nothing to say (`Malformed`, which `check_form` rejects outright, and
-    /// `NoOptionsLeft`, which `judge_claim` never returns).
+    /// `NoOptionsLeft`, which `check_claim_with_reason` never returns).
     ///
     /// The per-reason floor is what keeps this honest: agreement is worthless if the
     /// sweep stopped producing a reason, since an unrendered one would then pass.
     #[test]
     fn every_invalid_reason_renders() {
-        use crate::check_answer::judge_claim;
+        use crate::check_answer::check_claim_with_reason;
         use crate::rng::Rng;
         use std::collections::BTreeMap;
 
@@ -2274,7 +2274,7 @@ mod tests {
             let oc = if rng.int(0, 1) == 0 { 3 } else { 5 };
             // A per-seed fill rate so the sweep spans barely-started boards (where a
             // pair can still be made impossible) and fully answered ones (which the
-            // whole-board kinds need before they grade anything).
+            // whole-board kinds need before they settle anything).
             let fill_rate = rng.int(2, 10);
 
             let mut state = State::initial(oc);
@@ -2298,8 +2298,8 @@ mod tests {
                 let answer = rng.pick_letter(oc);
                 let before_index = rng.int(0, n as i32) as u8;
                 let after_index = rng.int(0, (n as i32 - 2).max(0)) as u8;
-                // Every kind a claim can carry. `SameAs`/`SameAsWhich` are graded as
-                // questions, not claims (`check_claim_core` says so with an
+                // Every kind a claim can carry. `SameAs`/`SameAsWhich` are checked as
+                // questions, not claims (`check_claim_impl` says so with an
                 // `unreachable!`), and their reasons are shared with the kinds here.
                 let kinds = [
                     QuestionType::CountAnswer { answer },
@@ -2353,10 +2353,11 @@ mod tests {
                         };
                         // A structurally impossible value asserts on some kinds (see the
                         // `check_answer` module doc); those aren't this test's target.
-                        let judged = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            judge_claim(&fp, state, opt, claim)
-                        }));
-                        let Some(reason) = judged.ok().and_then(|j| j.reason()) else {
+                        let verdict =
+                            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                check_claim_with_reason(&fp, state, opt, claim)
+                            }));
+                        let Some(reason) = verdict.ok().and_then(|j| j.reason()) else {
                             continue;
                         };
                         if matches!(
@@ -2528,7 +2529,7 @@ mod tests {
         assert_eq!(d.other_qi, Some(1));
     }
 
-    /// The extremum kinds on a partial board: #4 is still open, and the judge settles it off
+    /// The extremum kinds on a partial board: #4 is still open, and `check_answer` settles it off
     /// cell bounds anyway — `ExtremumOutOfReach` through the shared `invalid_clause`, not
     /// `elim_clause_beyond_check_answer`. The bound wording is the point: #4 could still take
     /// B, so B's count is not 0 but *at most 1*, and A's 3 is a floor, not a total.
@@ -2680,7 +2681,7 @@ mod tests {
         assert_eq!(d.other_qi, Some(2));
     }
 
-    /// The answered-question summary, for the verdict §2 newly grades `Invalid`.
+    /// The answered-question summary, for the verdict §2 newly turns `Invalid`.
     #[test]
     fn invalid_same_as_only_clause_broken() {
         let fp = same_as_board();

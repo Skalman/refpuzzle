@@ -2,7 +2,7 @@
 //! the current (possibly partial) board? `check_claim` is the single authority the
 //! solver, generator, and UI all share.
 //!
-//! Scope — *one question against the raw marks*. This judges a single question's
+//! Scope — *one question against the raw marks*. This checks a single question's
 //! own constraint against the board's answers + eliminations. It reads every cell's
 //! mark (CountVowel tallies the whole board), but it never interprets another
 //! *question's* meaning: combining two questions — e.g. bounding a letter from a
@@ -58,7 +58,7 @@ impl Validity {
 }
 
 /// Why a claim is `Invalid`, in the terms prose needs — decided here, by the code that
-/// decided the verdict, so `explain` never re-derives a judgment it only has to
+/// decided the verdict, so `explain` never re-derives a verdict it only has to
 /// describe. Carries just what a renderer can't read back off the puzzle and the state:
 /// which question or letter is at fault, plus any tally this module computed on the way.
 ///
@@ -198,7 +198,7 @@ invalid_reasons! {
 /// describes. Callers that only want the verdict take [`Validity`] through
 /// [`check_claim`] / [`check_answer`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Judgment {
+pub enum ValidityWithReason {
     Neutral,
     Valid,
     Consistent,
@@ -206,32 +206,32 @@ pub enum Judgment {
     Invalid(InvalidReason),
 }
 
-impl Judgment {
+impl ValidityWithReason {
     pub fn validity(self) -> Validity {
         match self {
-            Judgment::Neutral => Validity::Neutral,
-            Judgment::Valid => Validity::Valid,
-            Judgment::Consistent => Validity::Consistent,
-            Judgment::Pending => Validity::Pending,
-            Judgment::Invalid(_) => Validity::Invalid,
+            ValidityWithReason::Neutral => Validity::Neutral,
+            ValidityWithReason::Valid => Validity::Valid,
+            ValidityWithReason::Consistent => Validity::Consistent,
+            ValidityWithReason::Pending => Validity::Pending,
+            ValidityWithReason::Invalid(_) => Validity::Invalid,
         }
     }
 
     /// Why this claim is invalid, or `None` if it isn't.
     pub fn reason(self) -> Option<InvalidReason> {
         match self {
-            Judgment::Invalid(reason) => Some(reason),
+            ValidityWithReason::Invalid(reason) => Some(reason),
             _ => None,
         }
     }
 }
 
 /// The verdict for a value `check_form` rejects — see [`InvalidReason::Malformed`].
-const MALFORMED: Judgment = Judgment::Invalid(InvalidReason::Malformed);
+const MALFORMED: ValidityWithReason = ValidityWithReason::Invalid(InvalidReason::Malformed);
 
 // ── Helpers ──
 
-fn count_validity(cr: MaskTally, ov: OptionValue) -> Judgment {
+fn count_result(cr: MaskTally, ov: OptionValue) -> ValidityWithReason {
     // NONE/UNUSED on a count: malformed but check_answer routes them here for
     // semantic evaluation. Treat as Invalid (the count can never be null).
     if !ov.is_num() {
@@ -241,16 +241,16 @@ fn count_validity(cr: MaskTally, ov: OptionValue) -> Judgment {
     // `min` counts forced-unanswered questions too, so ov below it is already exceeded
     // (not just by answered questions); `max` is the ceiling. Valid once pinned.
     if cr.min() > ov {
-        Judgment::Invalid(InvalidReason::CountFloor {
+        ValidityWithReason::Invalid(InvalidReason::CountFloor {
             count: cr.count,
             guaranteed: cr.guaranteed,
         })
     } else if cr.max() < ov {
-        Judgment::Invalid(InvalidReason::CountCeiling { max: cr.max() })
+        ValidityWithReason::Invalid(InvalidReason::CountCeiling { max: cr.max() })
     } else if cr.min() == cr.max() {
-        Judgment::Valid
+        ValidityWithReason::Valid
     } else {
-        Judgment::Pending
+        ValidityWithReason::Pending
     }
 }
 
@@ -261,14 +261,16 @@ fn target_broken(
     eliminated: &[u8; MAX_N],
     answer: Answer,
     at: usize,
-) -> Option<Judgment> {
+) -> Option<ValidityWithReason> {
     match answers[at] {
-        Some(pa) if pa != answer => Some(Judgment::Invalid(InvalidReason::TargetAnswered {
-            at: at as u8,
-            answer: pa,
-        })),
+        Some(pa) if pa != answer => {
+            Some(ValidityWithReason::Invalid(InvalidReason::TargetAnswered {
+                at: at as u8,
+                answer: pa,
+            }))
+        }
         None if eliminated[at] & (1u8 << answer.idx()) != 0 => {
-            Some(Judgment::Invalid(InvalidReason::TargetCannot {
+            Some(ValidityWithReason::Invalid(InvalidReason::TargetCannot {
                 at: at as u8,
                 letter: answer,
             }))
@@ -284,7 +286,7 @@ fn first_in_range(
     start: usize,
     end: usize,
     pos: OptionValue,
-) -> Judgment {
+) -> ValidityWithReason {
     let amask = 1u8 << answer.idx();
     if pos.is_num() {
         let p = pos.value() as usize;
@@ -299,7 +301,7 @@ fn first_in_range(
             if answers[j] == Some(answer) {
                 // Before `p` by construction — the direction is the loop's, not something
                 // the renderer should recover by comparing indices.
-                return Judgment::Invalid(InvalidReason::EarlierHasLetter {
+                return ValidityWithReason::Invalid(InvalidReason::EarlierHasLetter {
                     at: j as u8,
                     letter: answer,
                 });
@@ -309,9 +311,9 @@ fn first_in_range(
             }
         }
         if answers[p] == Some(answer) && all_certain {
-            Judgment::Valid
+            ValidityWithReason::Valid
         } else {
-            Judgment::Pending
+            ValidityWithReason::Pending
         }
     } else {
         none_in_range(answers, eliminated, answer, start, end)
@@ -325,7 +327,7 @@ fn last_in_range(
     start: usize,
     end: usize,
     pos: OptionValue,
-) -> Judgment {
+) -> ValidityWithReason {
     let amask = 1u8 << answer.idx();
     if pos.is_num() {
         let p = pos.value() as usize;
@@ -339,7 +341,7 @@ fn last_in_range(
         for j in (p + 1)..end {
             if answers[j] == Some(answer) {
                 // After `p` by construction — see `first_in_range`.
-                return Judgment::Invalid(InvalidReason::LaterHasLetter {
+                return ValidityWithReason::Invalid(InvalidReason::LaterHasLetter {
                     at: j as u8,
                     letter: answer,
                 });
@@ -349,9 +351,9 @@ fn last_in_range(
             }
         }
         if answers[p] == Some(answer) && all_certain {
-            Judgment::Valid
+            ValidityWithReason::Valid
         } else {
-            Judgment::Pending
+            ValidityWithReason::Pending
         }
     } else {
         none_in_range(answers, eliminated, answer, start, end)
@@ -368,7 +370,7 @@ fn none_in_range(
     answer: Answer,
     start: usize,
     end: usize,
-) -> Judgment {
+) -> ValidityWithReason {
     let amask = 1u8 << answer.idx();
     let mut could_exist = false;
     for j in start..end {
@@ -380,16 +382,16 @@ fn none_in_range(
         }
     }
     if could_exist {
-        Judgment::Pending
+        ValidityWithReason::Pending
     } else {
-        Judgment::Valid
+        ValidityWithReason::Valid
     }
 }
 
 /// `Invalid` because `at` already holds `letter`, which the claim reserves for one
 /// place — or for nowhere.
-fn other_has_letter(at: usize, letter: Answer) -> Judgment {
-    Judgment::Invalid(InvalidReason::OtherHasLetter {
+fn other_has_letter(at: usize, letter: Answer) -> ValidityWithReason {
+    ValidityWithReason::Invalid(InvalidReason::OtherHasLetter {
         at: at as u8,
         letter,
     })
@@ -441,7 +443,13 @@ fn fill_counts(answers: &[Option<Answer>; MAX_N], n: usize) -> [u8; 5] {
 // sites (`check_claim_fast` is the generator's hot path); outlined on wasm
 // where every duplicated body shows up in the download.
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
-fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Claim) -> Judgment {
+fn check_claim_impl(
+    n: usize,
+    oc: usize,
+    state: State,
+    opt: OptionPos,
+    claim: Claim,
+) -> ValidityWithReason {
     let qt = &claim.question_type;
     let ov = claim.value;
     let qi = opt.qi;
@@ -458,17 +466,17 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             let (from, to) = count_range(qt, n);
             let cr =
                 count_matching_mask(answers, eliminated, Pred::IsAnswer(answer).mask(), from, to);
-            count_validity(cr, ov)
+            count_result(cr, ov)
         }
 
         QuestionType::CountVowel => {
             let cr = count_matching_mask(answers, eliminated, Pred::IsVowel.mask(), 0, n);
-            count_validity(cr, ov)
+            count_result(cr, ov)
         }
 
         QuestionType::CountConsonant => {
             let cr = count_matching_mask(answers, eliminated, Pred::IsConsonant.mask(), 0, n);
-            count_validity(cr, ov)
+            count_result(cr, ov)
         }
 
         QuestionType::MostCommonCount => {
@@ -492,16 +500,16 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 max_possible = max_possible.max(cr.max());
             }
             if ov < max_known {
-                Judgment::Invalid(InvalidReason::PeakFloor {
+                ValidityWithReason::Invalid(InvalidReason::PeakFloor {
                     letter: peak,
                     floor: max_known,
                 })
             } else if ov > max_possible {
-                Judgment::Invalid(InvalidReason::PeakCeiling { max: max_possible })
+                ValidityWithReason::Invalid(InvalidReason::PeakCeiling { max: max_possible })
             } else if max_known == max_possible {
-                Judgment::Valid
+                ValidityWithReason::Valid
             } else {
-                Judgment::Pending
+                ValidityWithReason::Pending
             }
         }
 
@@ -528,9 +536,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             match answers[k] {
                 Some(target) => {
                     if target as u8 == ov.value() {
-                        Judgment::Valid
+                        ValidityWithReason::Valid
                     } else {
-                        Judgment::Invalid(InvalidReason::TargetAnswered {
+                        ValidityWithReason::Invalid(InvalidReason::TargetAnswered {
                             at: k as u8,
                             answer: target,
                         })
@@ -538,12 +546,12 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 }
                 // The target can never take the claimed letter if it's eliminated there.
                 None if eliminated[k] & (1u8 << ov.value()) != 0 => {
-                    Judgment::Invalid(InvalidReason::TargetCannot {
+                    ValidityWithReason::Invalid(InvalidReason::TargetCannot {
                         at: k as u8,
                         letter: Answer::from(ov.value()),
                     })
                 }
-                None => Judgment::Pending,
+                None => ValidityWithReason::Pending,
             }
         }
 
@@ -558,9 +566,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 Some(other) => {
                     let dist = (self_oi as u8).abs_diff(other as u8);
                     if dist == ov.value() {
-                        Judgment::Valid
+                        ValidityWithReason::Valid
                     } else {
-                        Judgment::Invalid(InvalidReason::WrongDistance { actual: dist })
+                        ValidityWithReason::Invalid(InvalidReason::WrongDistance { actual: dist })
                     }
                 }
                 None => {
@@ -570,17 +578,19 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     if ov.value() > max_dist {
                         // Further than any letter sits from this one, so the target never
                         // mattered.
-                        Judgment::Invalid(InvalidReason::DistanceUnreachable { max: max_dist })
+                        ValidityWithReason::Invalid(InvalidReason::DistanceUnreachable {
+                            max: max_dist,
+                        })
                     } else {
                         let reachable = (0..oc).any(|letter| {
                             eliminated[target] & (1u8 << letter) == 0
                                 && (self_oi as u8).abs_diff(letter as u8) == ov.value()
                         });
                         if reachable {
-                            Judgment::Pending
+                            ValidityWithReason::Pending
                         } else {
                             // Some letter is that far off, but none the target still has left.
-                            Judgment::Invalid(InvalidReason::NoLetterAtDistance)
+                            ValidityWithReason::Invalid(InvalidReason::NoLetterAtDistance)
                         }
                     }
                 }
@@ -589,7 +599,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
 
         // Scoped sameness — never a claim. Fatal `check_form` error.
         QuestionType::SameAs | QuestionType::SameAsWhich { .. } => {
-            unreachable!("scoped sameness is graded as a question, never as a claim")
+            unreachable!("scoped sameness is checked as a question, never as a claim")
         }
 
         // ── NoOtherHasAnswer: "not the answer to any OTHER question" ──
@@ -614,9 +624,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
             if let Some(j) = other {
                 other_has_letter(j, letter)
             } else if could_match == 0 {
-                Judgment::Valid
+                ValidityWithReason::Valid
             } else {
-                Judgment::Pending
+                ValidityWithReason::Pending
             }
         }
 
@@ -647,9 +657,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 if let Some(j) = other {
                     other_has_letter(j, self_letter)
                 } else if could_match == 0 {
-                    Judgment::Valid
+                    ValidityWithReason::Valid
                 } else {
-                    Judgment::Pending
+                    ValidityWithReason::Pending
                 }
             } else if !ov.is_num() || ov.value() as usize >= n {
                 MALFORMED
@@ -680,9 +690,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     return other_has_letter(j, self_letter);
                 }
                 if answers[target] == Some(self_letter) && other_remaining == 0 {
-                    Judgment::Valid
+                    ValidityWithReason::Valid
                 } else {
-                    Judgment::Pending
+                    ValidityWithReason::Pending
                 }
             }
         }
@@ -698,7 +708,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 if let (Some(pa), Some(pb)) = (answers[ov], answers[ov + 1])
                     && pa != pb
                 {
-                    return Judgment::Invalid(InvalidReason::PairDiffers {
+                    return ValidityWithReason::Invalid(InvalidReason::PairDiffers {
                         at: ov as u8,
                         first: pa,
                         second: pb,
@@ -713,7 +723,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     || answers[ov].is_some_and(|pa| is_eliminated(eliminated, ov + 1, pa.idx()))
                     || answers[ov + 1].is_some_and(|pb| is_eliminated(eliminated, ov, pb.idx()));
                 if impossible {
-                    return Judgment::Invalid(InvalidReason::PairImpossible { at: ov as u8 });
+                    return ValidityWithReason::Invalid(InvalidReason::PairImpossible {
+                        at: ov as u8,
+                    });
                 }
 
                 let mut other_pair: Option<usize> = None;
@@ -730,17 +742,19 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 }
 
                 if let Some(j) = other_pair {
-                    return Judgment::Invalid(InvalidReason::OtherPairMatches { at: j as u8 });
+                    return ValidityWithReason::Invalid(InvalidReason::OtherPairMatches {
+                        at: j as u8,
+                    });
                 }
 
                 if let (Some(pa), Some(pb)) = (answers[ov], answers[ov + 1])
                     && pa == pb
                     && uncertain_pairs == 0
                 {
-                    return Judgment::Valid;
+                    return ValidityWithReason::Valid;
                 }
 
-                Judgment::Pending
+                ValidityWithReason::Pending
             } else if ov.is_none() {
                 let mut pair: Option<usize> = None;
                 let mut any_uncertain = false;
@@ -752,11 +766,11 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     }
                 }
                 if let Some(j) = pair {
-                    Judgment::Invalid(InvalidReason::OtherPairMatches { at: j as u8 })
+                    ValidityWithReason::Invalid(InvalidReason::OtherPairMatches { at: j as u8 })
                 } else if any_uncertain {
-                    Judgment::Pending
+                    ValidityWithReason::Pending
                 } else {
-                    Judgment::Valid
+                    ValidityWithReason::Valid
                 }
             } else {
                 MALFORMED
@@ -798,9 +812,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     return other_has_letter(j, answer);
                 }
                 if answers[ov] == Some(answer) && other_remaining == 0 {
-                    Judgment::Valid
+                    ValidityWithReason::Valid
                 } else {
-                    Judgment::Pending
+                    ValidityWithReason::Pending
                 }
             } else if ov.is_none() {
                 let mut matched: Option<usize> = None;
@@ -819,9 +833,9 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                 if let Some(j) = matched {
                     other_has_letter(j, answer)
                 } else if any_could {
-                    Judgment::Pending
+                    ValidityWithReason::Pending
                 } else {
-                    Judgment::Valid
+                    ValidityWithReason::Valid
                 }
             } else {
                 MALFORMED
@@ -846,7 +860,7 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     remaining: sr,
                 } = count_matching(answers, eliminated, Pred::IsAnswer(claimed), 0, n);
                 let cant_meet = |short, short_max, over, over_min| {
-                    Judgment::Invalid(InvalidReason::CountsCantMeet {
+                    ValidityWithReason::Invalid(InvalidReason::CountsCantMeet {
                         short,
                         short_max,
                         over,
@@ -863,25 +877,27 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     // The two guards above already rejected every inequality reachable
                     // here, so the `cant_meet` arm is a formality.
                     return if rc == sc {
-                        Judgment::Valid
+                        ValidityWithReason::Valid
                     } else if rc < sc {
                         cant_meet(answer, rc, claimed, sc)
                     } else {
                         cant_meet(claimed, sc, answer, rc)
                     };
                 }
-                Judgment::Pending
+                ValidityWithReason::Pending
             } else if ov.is_none() {
                 if !all_answered(answers, n) {
-                    return Judgment::Pending;
+                    return ValidityWithReason::Pending;
                 }
                 let ref_count = count_answer_simple(answers, answer, 0, n);
                 let tie = LETTERS[..oc]
                     .iter()
                     .find(|&&l| l != answer && count_answer_simple(answers, l, 0, n) == ref_count);
                 match tie {
-                    Some(&letter) => Judgment::Invalid(InvalidReason::OtherLetterTies { letter }),
-                    None => Judgment::Valid,
+                    Some(&letter) => {
+                        ValidityWithReason::Invalid(InvalidReason::OtherLetterTies { letter })
+                    }
+                    None => ValidityWithReason::Valid,
                 }
             } else {
                 MALFORMED
@@ -949,8 +965,8 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     ruled_out.then_some(InvalidReason::ExtremumPigeonhole { threshold, reach })
                 };
                 match out_of_reach.or_else(pigeonhole) {
-                    Some(reason) => Judgment::Invalid(reason),
-                    None => Judgment::Pending,
+                    Some(reason) => ValidityWithReason::Invalid(reason),
+                    None => ValidityWithReason::Pending,
                 }
             } else {
                 let c = fill_counts(answers, n);
@@ -966,14 +982,16 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
                     .find(|&li| li != ov && c[li] == extreme)
                     .map(|li| Answer::from(li as u8));
                 match (c[ov] == extreme, rival) {
-                    (true, None) => Judgment::Valid,
-                    (true, Some(rival)) => Judgment::Invalid(InvalidReason::ExtremumTied {
-                        rival,
-                        count: extreme,
-                    }),
+                    (true, None) => ValidityWithReason::Valid,
+                    (true, Some(rival)) => {
+                        ValidityWithReason::Invalid(InvalidReason::ExtremumTied {
+                            rival,
+                            count: extreme,
+                        })
+                    }
                     // `extreme` is the min/max over `0..oc`, so when the claimed letter
                     // isn't holding it another letter is.
-                    (false, rival) => Judgment::Invalid(InvalidReason::NotExtremum {
+                    (false, rival) => ValidityWithReason::Invalid(InvalidReason::NotExtremum {
                         rival: rival.expect("some letter holds the extreme count"),
                         rival_count: extreme,
                         claimed_count: c[ov],
@@ -983,27 +1001,32 @@ fn check_claim_core(n: usize, oc: usize, state: State, opt: OptionPos, claim: Cl
         }
 
         // ── Always valid ──
-        QuestionType::AnswerIsSelf => Judgment::Valid,
+        QuestionType::AnswerIsSelf => ValidityWithReason::Valid,
 
         // TrueStmt can't be checked via check_claim
-        QuestionType::TrueStmt => Judgment::Pending,
+        QuestionType::TrueStmt => ValidityWithReason::Pending,
     }
 }
 
 /// Evaluate the **semantic truth** of a claim against the current puzzle state.
 /// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`. See
-/// `check_claim_core` for the implementation and its caveats.
+/// `check_claim_impl` for the implementation and its caveats.
 pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
-    judge_claim(fp, state, opt, claim).validity()
+    check_claim_with_reason(fp, state, opt, claim).validity()
 }
 
-/// [`check_claim`] with the reason attached — see [`Judgment`]. `explain` renders the
+/// [`check_claim`] with the reason attached — see [`ValidityWithReason`]. `explain` renders the
 /// reason; everything else wants the bare verdict.
-pub fn judge_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Judgment {
-    check_claim_core(fp.n, fp.option_count, state, opt, claim)
+pub fn check_claim_with_reason(
+    fp: &FlatPuzzle,
+    state: State,
+    opt: OptionPos,
+    claim: Claim,
+) -> ValidityWithReason {
+    check_claim_impl(fp.n, fp.option_count, state, opt, claim)
 }
 
-/// Grade a `SameAs` / `SameAsWhich` answer. Both list a candidate set and ask which
+/// Check a `SameAs` / `SameAsWhich` answer. Both list a candidate set and ask which
 /// member is the **only** one answered with the matched letter M: a numeric option
 /// asserts that its target holds M *and* that no other listed candidate does; the
 /// "none" option asserts only the latter, over the whole list.
@@ -1018,9 +1041,9 @@ fn check_scoped_sameness(
     qi: usize,
     answer: Answer,
     source: usize,
-) -> Judgment {
+) -> ValidityWithReason {
     let Some(matched) = state.answers[source] else {
-        return Judgment::Pending;
+        return ValidityWithReason::Pending;
     };
     let amask = 1u8 << matched.idx();
     // Two independent cases: `eliminated` doesn't track answers, so a question
@@ -1047,7 +1070,7 @@ fn check_scoped_sameness(
         None
     } else {
         // An unfilled option slot is undecided, not wrong.
-        return Judgment::Pending;
+        return ValidityWithReason::Pending;
     };
 
     // Second requirement: no *other* listed candidate may hold M.
@@ -1073,9 +1096,9 @@ fn check_scoped_sameness(
     // The "none" option names no target, so the first requirement doesn't apply.
     let target_shares = target.is_none_or(|t| state.answers[t] == Some(matched));
     if others_settled && target_shares {
-        Judgment::Valid
+        ValidityWithReason::Valid
     } else {
-        Judgment::Pending
+        ValidityWithReason::Pending
     }
 }
 
@@ -1087,9 +1110,13 @@ fn affected_by_own_answer(qt: &QuestionType, qi: usize) -> bool {
     }
 }
 
-fn maybe_consistent(result: Judgment, qt: &QuestionType, qi: usize) -> Judgment {
-    if result == Judgment::Valid && affected_by_own_answer(qt, qi) {
-        Judgment::Consistent
+fn maybe_consistent(
+    result: ValidityWithReason,
+    qt: &QuestionType,
+    qi: usize,
+) -> ValidityWithReason {
+    if result == ValidityWithReason::Valid && affected_by_own_answer(qt, qi) {
+        ValidityWithReason::Consistent
     } else {
         result
     }
@@ -1111,7 +1138,7 @@ fn claim_value(fp: &FlatPuzzle, qt: &QuestionType, qi: usize, ai: usize) -> Opti
 
 /// The claim question `qi`'s current answer commits to: the statement it picked for a
 /// `TrueStmt`, its own type and selected option value otherwise. `None` if `qi` is
-/// unanswered (or the picked slot carries no statement). [`judge_answer`] grades exactly
+/// unanswered (or the picked slot carries no statement). [`check_answer_with_reason`] checks exactly
 /// this claim, so `explain` can render exactly it without guessing.
 pub fn answered_claim(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Claim> {
     let ai = state.answers[qi]?.idx();
@@ -1126,21 +1153,21 @@ pub fn answered_claim(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Claim
 }
 
 pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
-    judge_answer(fp, state, qi).validity()
+    check_answer_with_reason(fp, state, qi).validity()
 }
 
-/// [`check_answer`] with the reason attached — see [`Judgment`]. The reason describes
+/// [`check_answer`] with the reason attached — see [`ValidityWithReason`]. The reason describes
 /// [`answered_claim`]'s claim, which for a `TrueStmt` is the statement it picked rather
 /// than the question's own type.
-pub fn judge_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Judgment {
+pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> ValidityWithReason {
     let a = match state.answers[qi] {
         Some(a) => a,
         None => {
             let oc = fp.option_count;
             if (!state.eliminated[qi] & ((1 << oc) - 1)) == 0 {
-                return Judgment::Invalid(InvalidReason::NoOptionsLeft);
+                return ValidityWithReason::Invalid(InvalidReason::NoOptionsLeft);
             }
-            return Judgment::Neutral;
+            return ValidityWithReason::Neutral;
         }
     };
     let ai = a.idx();
@@ -1151,8 +1178,8 @@ pub fn judge_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Judgment {
             Some(c) => c,
             None => return MALFORMED,
         };
-        let selected = judge_claim(fp, state, OptionPos { qi, oi: ai }, selected_claim);
-        if selected != Judgment::Valid {
+        let selected = check_claim_with_reason(fp, state, OptionPos { qi, oi: ai }, selected_claim);
+        if selected != ValidityWithReason::Valid {
             return selected;
         }
         for oi in 0..fp.option_count {
@@ -1161,17 +1188,19 @@ pub fn judge_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Judgment {
             }
             let mut hyp = state;
             hyp.answers[qi] = Some(Answer::from(oi as u8));
-            if judge_claim(fp, hyp, OptionPos { qi, oi }, selected_claim) != Judgment::Valid {
-                return Judgment::Consistent;
+            if check_claim_with_reason(fp, hyp, OptionPos { qi, oi }, selected_claim)
+                != ValidityWithReason::Valid
+            {
+                return ValidityWithReason::Consistent;
             }
         }
-        return Judgment::Valid;
+        return ValidityWithReason::Valid;
     }
 
-    // The scoped-sameness types are graded here rather than through
-    // `check_claim`, which can't see the candidate list. `SameAs` grades
+    // The scoped-sameness types are checked here rather than through
+    // `check_claim`, which can't see the candidate list. `SameAs` comes back
     // `Consistent` (via `maybe_consistent`) because its matched letter *is* qi's
-    // own answer; `SameAsWhich` takes it from another question, so it grades
+    // own answer; `SameAsWhich` takes it from another question, so it comes back
     // `Valid`.
     match *qt {
         QuestionType::SameAs => {
@@ -1186,7 +1215,7 @@ pub fn judge_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Judgment {
     }
 
     maybe_consistent(
-        judge_claim(
+        check_claim_with_reason(
             fp,
             state,
             OptionPos { qi, oi: ai },
@@ -1200,7 +1229,7 @@ pub fn judge_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Judgment {
     )
 }
 
-pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
+pub fn check_all_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
     let state = State {
         answers: *answers,
         eliminated: [fp.initial_eliminated_mask(); MAX_N],
@@ -1213,7 +1242,7 @@ pub fn check_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool
 /// these answers?), not a wellformedness check.
 ///
 /// Builds a throwaway fully-answered `State` from the flat slice and defers to
-/// `check_claim_core`. Eliminated bits only ever gate `None` answer slots there,
+/// `check_claim_impl`. Eliminated bits only ever gate `None` answer slots there,
 /// so leaving them at `State::initial`'s phantom-only mask (rather than
 /// reconstructing "everything but the known answer") is sound — every slot up
 /// to `n` is `Some`. Equivalence to `check_claim` is pinned by
@@ -1232,7 +1261,7 @@ pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, clai
         qi,
         oi: answers[qi].idx(),
     };
-    check_claim_core(n, option_count, state, opt, *claim)
+    check_claim_impl(n, option_count, state, opt, *claim)
         .validity()
         .is_valid()
 }
@@ -1514,7 +1543,7 @@ mod tests {
                         };
                         // Outcome, not just verdict: a structurally impossible value
                         // asserts (see the module doc), and the two wrappers must
-                        // agree on *that* too — they share `check_claim_core`, so a
+                        // agree on *that* too — they share `check_claim_impl`, so a
                         // panic on one path and a verdict on the other would mean the
                         // wrappers had diverged.
                         let fast = catch_unwind(AssertUnwindSafe(|| {
@@ -1552,7 +1581,7 @@ mod tests {
         // Agreement is worthless if the sweep stopped producing one of the outcomes —
         // a narrowed value or kind list would still "pass". The floor is deliberately
         // loose: it catches a count going to zero, not a drift in the mix. A zero on
-        // `panic` means nothing in `check_claim_core` asserts on a malformed value any
+        // `panic` means nothing in `check_claim_impl` asserts on a malformed value any
         // more, which is worth knowing either way.
         for (i, &count) in agreed.iter().enumerate() {
             assert!(

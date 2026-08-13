@@ -5,7 +5,7 @@
 //! `Error` vs `Warning` — whether an already-published puzzle may keep the thing.
 //! Nothing may keep an `Error`: a served puzzle carrying one gets edited, and the
 //! engine may assume it away (see the `check_answer` module doc). A `Warning` is
-//! grandfathered — still legal to load and grade, only retired from generation.
+//! grandfathered — still legal to load and check, only retired from generation.
 //! `generated_puzzles_wellformed` enforces exactly that split: warnings tolerated on
 //! served puzzles, never on later ones.
 
@@ -50,7 +50,7 @@ const fn error<M>(msg: M) -> Option<(M, Severity)> {
 ///
 /// The `Error` kinds say nothing standing alone — they lean on context a statement has
 /// no room for (a candidate list) or on themselves (nesting, asserting their own truth)
-/// — which is also why `check_claim` can't grade one. The `Warning` kinds grade fine and
+/// — which is also why `check_claim` can't check one. The `Warning` kinds check fine and
 /// are merely retired: they describe the statement's own row rather than their
 /// question, or are excluded on taste.
 pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static str, Severity)> {
@@ -520,7 +520,7 @@ mod tests {
         assert_eq!(failed, 0, "{failed} check-form case(s) failed");
     }
 
-    /// `check_answer` asserts on this rather than grading it, so the fatal severity is
+    /// `check_answer` asserts on this rather than checking it, so the fatal severity is
     /// what keeps it out — worth pinning directly.
     #[test]
     fn equal_count_self_reference_is_error() {

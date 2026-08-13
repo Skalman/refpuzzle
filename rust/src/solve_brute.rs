@@ -1,4 +1,4 @@
-use crate::check_answer::{Validity, check_answer, check_answers};
+use crate::check_answer::{Validity, check_all_answers, check_answer};
 use crate::types::*;
 use arrayvec::ArrayVec;
 
@@ -207,7 +207,7 @@ fn search(
     }
 
     if depth == n {
-        if check_answers(fp, current) {
+        if check_all_answers(fp, current) {
             let mut copy = [Answer::A; MAX_N];
             for i in 0..n {
                 copy[i] = current[i].unwrap();
@@ -269,7 +269,7 @@ fn search(
 /// assignment. Delegates to `check_answer`, whose contract is `Invalid` iff no
 /// completion of the open questions can satisfy the constraint, so pruning on it never
 /// discards a branch that still had a valid completion. The full-board leaf
-/// `check_answers` in `search` remains the final authority; this only decides which
+/// `check_all_answers` in `search` remains the final authority; this only decides which
 /// branches are worth descending.
 fn has_contradiction(
     fp: &FlatPuzzle,
@@ -279,7 +279,7 @@ fn has_contradiction(
     all_bits: u16,
 ) -> bool {
     if assigned == all_bits {
-        return !check_answers(fp, answers);
+        return !check_all_answers(fp, answers);
     }
 
     let state = State {
@@ -314,7 +314,7 @@ mod tests {
     use crate::rng::Rng;
     use crate::test_util::{fast_tests, form_invalid, slow_test_duration};
 
-    /// Every full assignment that `check_answers` accepts, by exhaustive
+    /// Every full assignment that `check_all_answers` accepts, by exhaustive
     /// enumeration of `option_count^n` — the pruning-free oracle for `solve`.
     fn exhaustive(fp: &FlatPuzzle) -> Vec<Vec<u8>> {
         let n = fp.n;
@@ -327,7 +327,7 @@ mod tests {
                 answers[i] = Some(Answer::from((c % oc) as u8));
                 c /= oc;
             }
-            if check_answers(fp, &answers) {
+            if check_all_answers(fp, &answers) {
                 out.push((0..n).map(|i| answers[i].unwrap() as u8).collect());
             }
         }
@@ -530,11 +530,11 @@ mod tests {
                 }
             }
             // `fill_options` puts the construction solution's value at each correct
-            // option, so it always grades valid. An empty `want` would mean the
+            // option, so it always comes back valid. An empty `want` would mean the
             // comparison above compared two empty sets and proved nothing.
             if want.is_empty() {
                 vacuous += 1;
-                eprintln!("VACUOUS seed={seed}: no assignment grades valid");
+                eprintln!("VACUOUS seed={seed}: no assignment comes back valid");
             }
             puzzles_tested += 1;
         }

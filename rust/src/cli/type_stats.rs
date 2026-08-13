@@ -489,7 +489,7 @@ fn write_multiplicity(md: &mut String, levels: &[LevelData]) {
 ///
 /// The two readings this exists for: `listed` must be exactly 1 for a
 /// numeric-answered row and 0 for a none-answered one (anything else is a key the
-/// "only one" reading can't grade), and a non-zero `unlisted/none` is what says
+/// "only one" reading can't check), and a non-zero `unlisted/none` is what says
 /// the correct value was picked from the candidate list rather than the key.
 fn write_sharers(md: &mut String, levels: &[LevelData]) {
     let mut rows: Vec<Vec<String>> = Vec::new();

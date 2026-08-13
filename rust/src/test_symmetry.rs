@@ -416,8 +416,8 @@ fn push_corpus(out: &mut Vec<(String, FlatPuzzle)>) {
             };
             // Many fixtures are deliberately malformed — a `SameAs` option naming its
             // own question, say, to exercise the self-reference elimination. The engine
-            // asserts rather than grading those (see the `check_answer` module doc), and
-            // symmetry says nothing about a board that can't be graded.
+            // asserts rather than checking those (see the `check_answer` module doc), and
+            // symmetry says nothing about a board that can't be checked.
             if form_invalid(&fp) {
                 continue;
             }

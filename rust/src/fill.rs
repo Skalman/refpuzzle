@@ -1593,8 +1593,8 @@ mod tests {
 
                 let answers: [Option<Answer>; MAX_N] =
                     std::array::from_fn(|i| if i < n { Some(solution[i]) } else { None });
-                if !crate::check_answer::check_answers(&fp, &answers) {
-                    eprintln!("FAIL: {name} (seed={seed}): check_answers rejected");
+                if !crate::check_answer::check_all_answers(&fp, &answers) {
+                    eprintln!("FAIL: {name} (seed={seed}): check_all_answers rejected");
                     for qi in 0..n {
                         let state = State {
                             answers,

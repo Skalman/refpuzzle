@@ -14,7 +14,7 @@
 //!   `check_answer`, never for deduce.
 //! - Cross-question reasoning is deduce's alone: propagate one question's meaning
 //!   into the marks, and combine questions (e.g. a sibling count bounding a letter)
-//!   — things `check_answer`, which judges one question against the marks, can't do.
+//!   — things `check_answer`, which checks one question against the marks, can't do.
 //!   Single-question validity, by contrast, is check_answer's (see its module doc).
 
 use arrayvec::ArrayVec;
@@ -3118,7 +3118,7 @@ mod tests {
             };
             // These types skip `random_type_params`' pool-size gating, so a row can
             // come out with an UNUSED slot inside `option_count`. That's a fatal form
-            // error, and `check_answer` asserts rather than grading one.
+            // error, and `check_answer` asserts rather than checking one.
             if crate::test_util::form_invalid(&fp) {
                 skipped_form += 1;
                 continue;
@@ -3355,17 +3355,17 @@ mod tests {
     /// What the `check_answer` cross-check saw, accumulated over the whole sweep.
     #[derive(Default)]
     struct Agreement {
-        /// Cells the judge also called invalid, per rule.
+        /// Cells `check_answer` also called invalid, per rule.
         agreed: BTreeMap<&'static str, usize>,
         /// Rules that named at least one cell, counted before the skips so it also holds
-        /// rules whose cells never reached the judge — which is what the tripwire looks for.
+        /// rules whose cells never reached `check_answer` — which is what the tripwire looks for.
         named_cells: BTreeSet<&'static str>,
         /// The first few disagreements, for the failure message.
         failures: Vec<String>,
     }
 
     /// No deduce rule may outrun `check_answer`: eliminating `(qi, oi)` asserts the board
-    /// that answers `qi` with `oi` is broken, and for a mark-local rule `check_answer` grades
+    /// that answers `qi` with `oi` is broken, and for a mark-local rule `check_answer` checks
     /// that same board and must agree. Exempt rules are listed in [`beyond_check_answer`]; the
     /// default is that a rule must agree, so a new one has to justify itself to be excused.
     ///
@@ -3383,7 +3383,7 @@ mod tests {
         agreement: &mut Agreement,
         at: &str,
     ) {
-        use crate::check_answer::{Judgment, judge_answer};
+        use crate::check_answer::{ValidityWithReason, check_answer_with_reason};
 
         // Both action shapes: a batched elimination makes the same assertion cell by cell,
         // and several rules only ever emit the batched one.
@@ -3402,7 +3402,7 @@ mod tests {
                     })
                     .collect(),
                 // A force says what `qi` must be, not that some cell breaks the board, so
-                // there is no assertion here for the judge to second.
+                // there is no assertion here for `check_answer` to second.
                 DeduceAction::Force { .. } => Vec::new(),
             }
         };
@@ -3419,8 +3419,8 @@ mod tests {
                 let mut hyp = *state;
                 hyp.answers[qi] = Some(Answer::from(oi as u8));
                 hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
-                let verdict = judge_answer(fp, hyp, qi);
-                if matches!(verdict, Judgment::Invalid(_)) {
+                let verdict = check_answer_with_reason(fp, hyp, qi);
+                if matches!(verdict, ValidityWithReason::Invalid(_)) {
                     *agreement.agreed.entry(dr.rule.to_str()).or_default() += 1;
                 } else if agreement.failures.len() < 5 {
                     agreement.failures.push(format!(
@@ -3457,7 +3457,7 @@ mod tests {
                 | DeduceRule::VowelCrossElim
                 | DeduceRule::ConsonantCrossElim
                 // Reverse, range and negative rules: the argument belongs to the source
-                // question and the cell to another, so grading that other one sees nothing.
+                // question and the cell to another, so checking that other one sees nothing.
                 | DeduceRule::PositionalRangeAnswered
                 | DeduceRule::PositionalRangeUnanswered
                 | DeduceRule::OnlyOddEvenRangeElim
