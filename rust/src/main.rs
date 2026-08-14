@@ -281,6 +281,10 @@ fn main() {
             cli::reference::reference(args.iter().any(|a| a == "--details"));
             return;
         }
+        "hint-dump" => {
+            cli::hint_dump::hint_dump();
+            return;
+        }
         "type-stats" => {
             let mut attempts: u32 = 10000;
             let mut seed: u32 = 1;

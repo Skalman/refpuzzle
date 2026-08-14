@@ -120,7 +120,7 @@ mod tests {
                 // Which half broke: a chain step no longer derivable where it lands, or
                 // a replay that no longer reaches the contradiction it blames.
                 let mut hyp = hypothesis(&state, lr.assumption_qi, lr.assumption_answer);
-                let replayed = replay_chain(fp, &mut hyp, &lr.chain, &mut 0, |_, _| {});
+                let replayed = replay_chain(fp, &mut hyp, &lr.chain, &mut 0, |_, _, _| {});
                 failures.push(format!(
                     "{key} seed={seed}: chain of {} {} Q{}",
                     lr.chain.len(),

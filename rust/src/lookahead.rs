@@ -9,7 +9,10 @@
 use arrayvec::ArrayVec;
 
 use crate::check_answer::{Validity, check_answer};
-use crate::deduce::{DeduceResult, apply_action, contradiction_question, deduce};
+use crate::deduce::{
+    DeduceReason, DeduceReasons, DeduceResult, apply_action, contradiction_question, deduce,
+    deduce_with_reasons,
+};
 use crate::types::*;
 
 /// Deductions recorded on the way to a contradiction; capacity is the largest board's
@@ -214,9 +217,15 @@ pub(crate) fn chain_contradiction(
     // Keep the last round's pre-state: `contradiction_at` needs it to spot a clash the
     // chain's own steps have since hidden.
     let mut last_round_pre = None;
-    if !replay_chain(fp, &mut hyp, &result.chain, deduce_calls, |round_pre, _| {
-        last_round_pre = Some(*round_pre);
-    }) {
+    if !replay_chain(
+        fp,
+        &mut hyp,
+        &result.chain,
+        deduce_calls,
+        |round_pre, _, _| {
+            last_round_pre = Some(*round_pre);
+        },
+    ) {
         return None;
     }
     contradiction_at(
@@ -229,24 +238,31 @@ pub(crate) fn chain_contradiction(
 }
 
 /// Re-apply `chain` to `hyp`, handing every step to `on_step` along with the state its
-/// reason has to be read against. `false` if the chain doesn't hold together.
+/// reason has to be read against and the [`DeduceReason`] it re-derived — the chain
+/// itself carries none (it must stay `Copy` and equality-matchable), so this replay is
+/// where the explain path collects them. `false` if the chain doesn't hold together.
 pub(crate) fn replay_chain(
     fp: &FlatPuzzle,
     hyp: &mut State,
     chain: &[DeduceResult],
     deduce_calls: &mut u32,
-    mut on_step: impl FnMut(&State, &DeduceResult),
+    mut on_step: impl FnMut(&State, &DeduceResult, DeduceReason),
 ) -> bool {
     let mut applied = 0;
     while applied < chain.len() {
         // One round: everything it covers was derived from this one pre-state.
         let round_pre = *hyp;
         *deduce_calls += 1;
-        let mut batch = deduce(fp, &round_pre);
-        batch.sort_by_key(|dr| dr.rule as u8);
+        let mut reasons = DeduceReasons::new();
+        let results = deduce_with_reasons(fp, &round_pre, &mut reasons);
+        // Sorted as pairs so each result keeps its reason (stable, so same-rule
+        // entries stay in emission order — the same batch `probe_candidate` built).
+        let mut batch: ArrayVec<(DeduceResult, DeduceReason), 80> =
+            results.iter().copied().zip(reasons).collect();
+        batch.sort_by_key(|(dr, _)| dr.rule as u8);
 
         let round_start = applied;
-        for dr in &batch {
+        for (dr, reason) in &batch {
             if applied == chain.len() {
                 break;
             }
@@ -259,7 +275,7 @@ pub(crate) fn replay_chain(
             if contradiction_question(&dr.action, hyp).is_some() {
                 return false;
             }
-            on_step(&round_pre, dr);
+            on_step(&round_pre, dr, *reason);
             apply_action(&dr.action, hyp);
             applied += 1;
         }

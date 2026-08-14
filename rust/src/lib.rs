@@ -39,7 +39,10 @@ mod wasm_api {
     use crate::check_answer::{Validity, check_answer};
     use crate::check_form::{Severity, check_form};
     use crate::construct;
-    use crate::deduce::{DeduceAction, apply_action, deduce_assuming_unique};
+    use crate::deduce::{
+        DeduceAction, DeduceReason, DeduceReasons, DeduceResult, apply_action,
+        deduce_assuming_unique_with_reasons, reason_for,
+    };
     use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
     use crate::lookahead::lookahead_shortest;
     use crate::recipes;
@@ -206,7 +209,11 @@ mod wasm_api {
             };
             if !action_done(s, &action) {
                 let explain = match step {
-                    SolveStep::Deduce(dr) => explain_deduce(fp, &replay, dr),
+                    // The log carries no reasons — recover this step's by deducing
+                    // its pre-step state again (explain-only cost).
+                    SolveStep::Deduce(dr) => {
+                        explain_deduce(fp, &replay, dr, reason_for(fp, &replay, dr))
+                    }
                     SolveStep::Lookahead(lr) => explain_lookahead(fp, &replay, lr),
                 };
                 return Some(StepApi {
@@ -317,10 +324,13 @@ mod wasm_api {
         #[wasm_bindgen(js_name = nextStep)]
         pub fn next_step(&self, state: JsValue) -> Result<JsValue, JsError> {
             let s = parse_state(state, &self.fp)?;
-            let mut drs = deduce_assuming_unique(&self.fp, &s);
-            drs.sort_by_key(|dr| dr.rule as u8);
-            let api = if let Some(dr) = drs.first() {
-                let explain = explain_deduce(&self.fp, &s, dr);
+            let mut reasons = DeduceReasons::new();
+            let results = deduce_assuming_unique_with_reasons(&self.fp, &s, &mut reasons);
+            let mut drs: Vec<(DeduceResult, DeduceReason)> =
+                results.iter().copied().zip(reasons).collect();
+            drs.sort_by_key(|(dr, _)| dr.rule as u8);
+            let api = if let Some((dr, reason)) = drs.first() {
+                let explain = explain_deduce(&self.fp, &s, dr, *reason);
                 StepApi {
                     action: action_to_api(dr.action),
                     focus_qis: leading_questions(&explain),

@@ -6,7 +6,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::deduce::{ALL_DEDUCE_RULES, DeduceAction, apply_action, deduce_assuming_unique};
+use crate::deduce::{
+    ALL_DEDUCE_RULES, DeduceAction, DeduceReasons, apply_action, deduce_assuming_unique,
+    deduce_assuming_unique_with_reasons,
+};
 use crate::explain::{
     ExplainStep, explain_deduce, explain_lookahead, no_reason_detail, optionless_detail,
 };
@@ -214,13 +217,14 @@ pub fn reference(details: bool) {
             if (0..fp.n).all(|i| state.answers[i].is_some()) {
                 break;
             }
-            let drs = deduce_assuming_unique(fp, &state);
+            let mut reasons = DeduceReasons::new();
+            let drs = deduce_assuming_unique_with_reasons(fp, &state, &mut reasons);
             if !drs.is_empty() {
-                for dr in &drs {
+                for (dr, reason) in drs.iter().zip(&reasons) {
                     consider(
                         &mut rules,
                         dr.rule.to_str(),
-                        render_hint(&explain_deduce(fp, &state, dr)),
+                        render_hint(&explain_deduce(fp, &state, dr, *reason)),
                     );
                 }
                 for dr in &drs {
