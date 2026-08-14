@@ -185,6 +185,21 @@ pub enum DeduceReason {
     },
 }
 
+impl DeduceReason {
+    /// The justifying question, for the rules that name exactly one. Exhaustive
+    /// so a new shape has to decide whether it names one — `LetterBound`'s
+    /// source deliberately stays inside its own rules' arms, which match the
+    /// full shape for the bound values.
+    pub fn source(self) -> Option<usize> {
+        match self {
+            DeduceReason::Source { source } => Some(usize::from(source)),
+            DeduceReason::Board
+            | DeduceReason::LetterBound { .. }
+            | DeduceReason::CountsCantMeet { .. } => None,
+        }
+    }
+}
+
 /// Reasons paired positionally with a [`DeduceResults`]: `reasons[i]` justifies
 /// `results[i]`. Collected only on the explain path ([`deduce_with_reasons`]);
 /// generation and solving pass `None` and pay nothing.

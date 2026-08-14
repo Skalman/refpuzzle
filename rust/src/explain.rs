@@ -763,10 +763,7 @@ fn brief_force_reason(
     reason: DeduceReason,
 ) -> String {
     let answers = &state.answers;
-    let source = match reason {
-        DeduceReason::Source { source } => Some(usize::from(source)),
-        _ => None,
-    };
+    let source = reason.source();
 
     match rule {
         DeduceRule::AnswerOfForward => {
@@ -825,10 +822,7 @@ fn explain_force(
     let n = fp.n;
     let qt = fp.question_types[qi];
     let mut steps = vec![try_looking(&[qi])];
-    let source = match reason {
-        DeduceReason::Source { source } => Some(usize::from(source)),
-        _ => None,
-    };
+    let source = reason.source();
 
     // Presentation policy, not attribution: whatever rule fired, a question down to
     // one option is simplest explained by that.
@@ -1329,10 +1323,7 @@ fn explain_elimination(
     let answers = &state.answers;
     let mut steps = vec![try_looking(&[qi])];
     let what_if = || simple(format!("What if {} is {letter}?", q(qi)));
-    let source = match reason {
-        DeduceReason::Source { source } => Some(usize::from(source)),
-        _ => None,
-    };
+    let source = reason.source();
 
     if matches!(
         rule,
@@ -1649,10 +1640,7 @@ fn explain_multi_elim(
     reason: DeduceReason,
 ) -> (String, Option<usize>) {
     let answers = &state.answers;
-    let source = match reason {
-        DeduceReason::Source { source } => Some(usize::from(source)),
-        _ => None,
-    };
+    let source = reason.source();
 
     if matches!(rule, DeduceRule::SameAsNegative)
         && let Some(src) = source
@@ -1818,10 +1806,7 @@ pub fn explain_deduce(
                 } else {
                     0
                 };
-                let source = match reason {
-                    DeduceReason::Source { source } => Some(usize::from(source)),
-                    _ => None,
-                };
+                let source = reason.source();
                 if let Some(src_qi) = source
                     && let Some(text) = positional_range_text(fp, state, src_qi, qis[0], oi)
                 {
