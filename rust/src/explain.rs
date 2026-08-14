@@ -1067,33 +1067,39 @@ fn explain_force(
         }
 
         DeduceRule::TrueStatementMatchForce => {
-            if let Some(k) = source {
-                if let Some(self_claim) = fp.claim_at(qi, letter.idx()) {
-                    // `qi` is the TrueStmt: `k` settled its statement true.
+            // A `SourceCell` reason puts the arguing statement at that cell rather than
+            // at `qi`, which is the plain question the statement points at.
+            if let DeduceReason::SourceCell {
+                source: src,
+                oi: claim_oi,
+            } = reason
+            {
+                let src = usize::from(src);
+                if let Some(claim) = fp.claim_at(src, usize::from(claim_oi)) {
                     return vec![
-                        try_looking(&[k]),
-                        simple(format!(
-                            "{} settles \"{}\", making that statement true — so {} must be {letter}.",
-                            q(k),
-                            claim_label(&self_claim),
-                            q(qi)
-                        )),
-                    ];
-                }
-                // `qi` is a plain question that the chosen true statement `k` points at.
-                if let Some(k_ans) = answers[k]
-                    && let Some(claim) = fp.claim_at(k, k_ans.idx())
-                {
-                    return vec![
-                        try_looking(&[k]),
+                        try_looking(&[qi, src]),
                         simple(format!(
                             "{}'s true statement is \"{}\", so {} must be {letter}.",
-                            q(k),
+                            q(src),
                             claim_label(&claim),
                             q(qi)
                         )),
                     ];
                 }
+            }
+            // `qi` is the TrueStmt: `k` settled one of its statements true.
+            if let Some(k) = source
+                && let Some(self_claim) = fp.claim_at(qi, letter.idx())
+            {
+                return vec![
+                    try_looking(&[k]),
+                    simple(format!(
+                        "{} settles \"{}\", making that statement true — so {} must be {letter}.",
+                        q(k),
+                        claim_label(&self_claim),
+                        q(qi)
+                    )),
+                ];
             }
         }
 
@@ -1501,15 +1507,39 @@ fn explain_elimination(
         return steps;
     }
 
+    // Every answer is either a vowel or a consonant, so the two counts sum to `n`: this
+    // option's count fixes what the partner's would have to be, and the partner has no
+    // option left there. An option stating no count fixes nothing, so it falls back to
+    // the bare clash.
     if matches!(
         rule,
         DeduceRule::VowelCrossElim | DeduceRule::ConsonantCrossElim
     ) {
+        let count = ov.is_num().then(|| ov.value()).filter(|&c| c <= n as u8);
+        let text = match (source, count) {
+            (Some(partner), Some(count)) => format!(
+                "{} would say there are {count} {}, leaving {} {} — but {} has no option left for that.",
+                q(qi),
+                count_rule_label(&fp.question_types[qi], count),
+                n as u8 - count,
+                count_rule_label(&fp.question_types[partner], n as u8 - count),
+                q(partner)
+            ),
+            (Some(partner), None) => format!(
+                "{} option {letter} gives no count at all, so it can't pair with {}.",
+                q(qi),
+                q(partner)
+            ),
+            (None, _) => format!(
+                "{} option {letter}: no compatible option exists on the other counting rule.",
+                q(qi)
+            ),
+        };
+        if let Some(partner) = source {
+            steps.push(try_looking(&[qi, partner]));
+        }
         steps.push(what_if());
-        steps.push(simple(format!(
-            "{} option {letter}: no compatible option exists on the other counting rule.",
-            q(qi)
-        )));
+        steps.push(simple(text));
         return steps;
     }
 
@@ -1565,21 +1595,42 @@ fn explain_elimination(
     }
 
     if matches!(rule, DeduceRule::TrueStatementMatchElim) {
-        let claim = fp.claim_at(qi, oi);
+        // The rule fires in two directions, and only one of them is about a statement
+        // `qi` owns. A `SourceCell` reason means the conclusion landed on a plain
+        // question, argued by a statement *elsewhere*; calling that question's option a
+        // statement would credit it with one it doesn't have.
+        let text = if let DeduceReason::SourceCell {
+            source: src,
+            oi: claim_oi,
+        } = reason
+            && let Some(claim) = fp.claim_at(usize::from(src), usize::from(claim_oi))
+        {
+            format!(
+                "{}'s statement \"{}\" is ruled out, and it would be true if {} were {letter} — so it isn't.",
+                q(src),
+                claim_label(&claim),
+                q(qi)
+            )
+        } else if let Some(own) = fp.claim_at(qi, oi)
+            && let Some(k) = source
+        {
+            format!(
+                "{}'s option {letter} is the statement \"{}\", but {} rules that out — so it can't be the true statement.",
+                q(qi),
+                claim_label(&own),
+                q(k)
+            )
+        } else {
+            format!(
+                "{} option {letter}'s statement can't be true, so it's not the answer.",
+                q(qi)
+            )
+        };
         if let Some(k) = source {
             steps.push(try_looking(&[qi, k]));
         }
         steps.push(what_if());
-        steps.push(simple(match (claim, source) {
-            (Some(c), Some(k)) => format!(
-                "{}'s option {letter} is the statement \"{}\", but {} rules that out — so it can't be the true statement.",
-                q(qi), claim_label(&c), q(k)
-            ),
-            _ => format!(
-                "{} option {letter}'s statement can't be true, so it's not the answer.",
-                q(qi)
-            ),
-        }));
+        steps.push(simple(text));
         return steps;
     }
 
@@ -2718,20 +2769,35 @@ mod tests {
         );
     }
 
-    /// The sentences above describe a firing, so each board has to be one: `#1` option C
-    /// really is ruled out by `MostCommonCountCeil` and not by some other rule. Returns
-    /// the reason the firing carried, so the prose is rendered from the real thing.
-    fn assert_ceiling_rules_out_c(fp: &FlatPuzzle, state: &State) -> DeduceReason {
+    /// The reason `rule` carried when it eliminated `(qi, oi)` on this board, and proof
+    /// that it does: a sentence describing a firing is only worth asserting on a board
+    /// where that firing happens. Taking the real reason matters too — a hand-written one
+    /// would check the format string against itself.
+    fn fired_reason(
+        fp: &FlatPuzzle,
+        state: &State,
+        rule: DeduceRule,
+        qi: usize,
+        oi: usize,
+    ) -> DeduceReason {
         let mut reasons = crate::deduce::DeduceReasons::new();
         let results = crate::deduce::deduce_with_reasons(fp, state, &mut reasons);
-        let fired = results.iter().position(|dr| {
-            dr.rule == DeduceRule::MostCommonCountCeil
-                && dr.action == DeduceAction::Eliminate { qi: 0, oi: 2 }
-        });
+        let fired = results
+            .iter()
+            .position(|dr| dr.rule == rule && dr.action == DeduceAction::Eliminate { qi, oi });
         let Some(i) = fired else {
-            panic!("MostCommonCountCeil should rule out #1 option C");
+            panic!(
+                "{rule:?} should rule out #{} option {}",
+                qi + 1,
+                LETTERS[oi]
+            );
         };
         reasons[i]
+    }
+
+    /// [`fired_reason`] for the extremum-ceiling boards, which all blame `#1` option C.
+    fn assert_ceiling_rules_out_c(fp: &FlatPuzzle, state: &State) -> DeduceReason {
+        fired_reason(fp, state, DeduceRule::MostCommonCountCeil, 0, 2)
     }
 
     fn render_text(steps: &[ExplainStep]) -> String {
@@ -2802,29 +2868,31 @@ mod tests {
         );
     }
 
+    /// Vowels and consonants partition the board, so one count fixes the other. The
+    /// sentence has to name the partner question and the count it would need, which is
+    /// the whole argument — "no compatible option exists" states only that one exists
+    /// somewhere else.
     #[test]
     fn elimination_vowel_cross() {
+        // Three questions, so 0 vowels would need 3 consonants — a count #2 can't take.
         let fp = parse_puzzle(&json!({
-            "q": [{"t": "CountVowel"}, {"t": "AnswerIsSelf"}],
-            "o": [[0, 1, 2], [0, 1, 2]],
+            "q": [{"t": "CountVowel"}, {"t": "CountConsonant"}, {"t": "AnswerIsSelf"}],
+            "o": [[0, 1, 2], [0, 1, 2], [0, 1, 2]],
         }))
         .unwrap();
-        let state = state_with(&fp, &[None, None]);
-        let steps = explain_elimination(
-            &fp,
-            &state,
-            0,
-            1,
-            DeduceRule::VowelCrossElim,
-            DeduceReason::Source { source: 1 },
-        );
+        let state = state_with(&fp, &[None, None, None]);
+        let reason = fired_reason(&fp, &state, DeduceRule::VowelCrossElim, 0, 0);
+        let steps = explain_elimination(&fp, &state, 0, 0, DeduceRule::VowelCrossElim, reason);
         assert_eq!(
             steps,
             vec![
                 try_looking(&[0]),
-                simple("What if #1 is B?".into()),
+                try_looking(&[0, 1]),
+                simple("What if #1 is A?".into()),
                 simple(
-                    "#1 option B: no compatible option exists on the other counting rule.".into()
+                    "#1 would say there are 0 questions with a vowel answer, leaving 3 questions \
+                     with a consonant answer — but #2 has no option left for that."
+                        .into()
                 ),
             ]
         );

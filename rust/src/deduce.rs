@@ -165,6 +165,11 @@ pub enum DeduceReason {
     Board,
     /// The question whose meaning fired the rule.
     Source { source: u8 },
+    /// The cell whose meaning fired the rule, when naming its question isn't enough
+    /// to phrase it — a `TrueStmt` propagating one of its statements outward, where
+    /// the prose has to quote *which* statement. `source` is the question, `oi` its
+    /// option.
+    SourceCell { source: u8, oi: u8 },
     /// A whole-board bound on the claimed letter's count, set by a count question
     /// (`LeastCommonCountFloor` / `MostCommonCountCeil`): `bound` caps or floors
     /// the whole board, `own_range` is what the source stated over the range *it*
@@ -192,7 +197,9 @@ impl DeduceReason {
     /// full shape for the bound values.
     pub fn source(self) -> Option<usize> {
         match self {
-            DeduceReason::Source { source } => Some(usize::from(source)),
+            DeduceReason::Source { source } | DeduceReason::SourceCell { source, .. } => {
+                Some(usize::from(source))
+            }
             DeduceReason::Board
             | DeduceReason::LetterBound { .. }
             | DeduceReason::CountsCantMeet { .. } => None,
@@ -867,8 +874,13 @@ fn link_claim_question(
         );
     }
 
-    // claim → question
+    // claim → question. The conclusion lands on `k`, which holds no statement of its own,
+    // so the reason names the `qi` cell whose statement argues for it.
     if answers[k].is_none() && !is_eliminated(eliminated, k, ok) {
+        let from_claim = DeduceReason::SourceCell {
+            source: qi as u8,
+            oi: oi as u8,
+        };
         if self_answered {
             // selected claim must be true — sound.
             sink.push(
@@ -877,14 +889,14 @@ fn link_claim_question(
                     qi: k,
                     answer: Answer::from(ok as u8),
                 },
-                DeduceReason::Source { source: qi as u8 },
+                from_claim,
             );
         } else if self_elim && assume_unique {
             // not-selected ⇒ false — only under uniqueness.
             sink.push(
                 DeduceRule::TrueStatementMatchElim,
                 DeduceAction::Eliminate { qi: k, oi: ok },
-                DeduceReason::Source { source: qi as u8 },
+                from_claim,
             );
         }
     }
