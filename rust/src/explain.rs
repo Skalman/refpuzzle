@@ -5,6 +5,7 @@
 
 use std::collections::BTreeSet;
 
+use arrayvec::ArrayVec;
 use serde::Serialize;
 
 use crate::check_answer::{InvalidReason, answered_claim, check_answer_with_reason};
@@ -122,27 +123,29 @@ impl ClaimSubject {
 /// one of the three `InvalidReason` must phrase under (see its docs), so this stays
 /// wired rather than becoming a test helper.
 pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
-    rejected_answer_text(fp, state, qi, ClaimSubject::Answered)
+    rejected_answer_text(fp, state, qi, ClaimSubject::Answered).map(|(text, _)| text)
 }
 
-/// [`explain_invalid`] under a chosen subject — `explain_lookahead` reports the same
-/// verdict about a hypothesis, so it asks for the conditional opening.
+/// [`explain_invalid`] under a chosen subject, returning the reason alongside the
+/// sentence. `explain_lookahead` reports this same verdict about a hypothesis: it asks
+/// for the conditional opening, and highlights the questions the reason names.
 fn rejected_answer_text(
     fp: &FlatPuzzle,
     state: &State,
     qi: usize,
     subject: ClaimSubject,
-) -> Option<String> {
+) -> Option<(String, InvalidReason)> {
     let a = state.answers[qi]?;
     let reason = check_answer_with_reason(fp, *state, qi).reason()?;
     let claim = answered_claim(fp, state, qi)?;
-    rejected_claim_text(
+    let text = rejected_claim_text(
         subject,
         state,
         OptionPos { qi, oi: a.idx() },
         &claim,
         reason,
-    )
+    )?;
+    Some((text, reason))
 }
 
 /// A rejected claim as one sentence: "*subject* claims *what it asserts*, but *what breaks
@@ -509,12 +512,9 @@ fn invalid_clause(
 
         // Pure letter arithmetic against the other question's answer — the assumption is the
         // subject of the claim, not evidence for the clause.
-        WrongDistance { actual } => {
-            let QuestionType::LetterDist { question_index } = claim.question_type else {
-                return None;
-            };
+        WrongDistance { at, actual } => {
             // Undecided until the other question is answered, so it always is here.
-            let other = answers[usize::from(question_index)]?;
+            let other = answers[usize::from(at)]?;
             format!("{} is {} from {other}", LETTERS[opt.oi], letters(actual))
         }
         // Neither reads the assumption — one is pure letter arithmetic, the other the
@@ -524,15 +524,10 @@ fn invalid_clause(
             LETTERS[opt.oi],
             letters(max)
         ),
-        NoLetterAtDistance => {
-            let QuestionType::LetterDist { question_index } = claim.question_type else {
-                return None;
-            };
-            format!(
-                "no answer {} still has left is that far off",
-                q(question_index)
-            )
-        }
+        NoLetterAtDistance { at } => format!(
+            "no answer {} still has left is that far off",
+            q(usize::from(at))
+        ),
     })
 }
 
@@ -643,7 +638,7 @@ fn explain_elim_detail(
     if let Some(reason) = check_answer_with_reason(fp, hyp, qi).reason()
         && let Some(text) = rejected_claim_text(subject, &hyp, opt, &claim, reason)
     {
-        return detail(format!("{text}."), reason_other_qi(qi, &claim, reason));
+        return detail(format!("{text}."), reason_other_qi(qi, reason));
     }
     let (clause, other_qi) = elim_clause_beyond_check_answer(&hyp, opt, &claim, deduce_reason)?;
     let assertion = claim_assertion(&hyp, opt, &claim)?;
@@ -654,47 +649,14 @@ fn explain_elim_detail(
 }
 
 /// The question an [`InvalidReason`] points at, for the elimination's "Try looking at …"
-/// highlight — the question that refutes the claim, or none when the reason is about tallies
-/// rather than a place, or when that question is `qi` itself (which the hint already points at,
-/// and which would collapse the two-question `Look` to one). Exhaustive so a new reason has
-/// to say which it is.
-fn reason_other_qi(qi: usize, claim: &Claim, reason: InvalidReason) -> Option<usize> {
-    use InvalidReason::*;
-    match reason {
-        TargetAnswered { at, .. }
-        | TargetCannot { at, .. }
-        | OtherHasLetter { at, .. }
-        | EarlierHasLetter { at, .. }
-        | LaterHasLetter { at, .. } => Some(usize::from(at)).filter(|&at| at != qi),
-        // A pair reason names two questions; when the first is `qi` itself the partner still
-        // carries the argument, so the highlight moves there instead of vanishing.
-        PairDiffers { at, .. } | PairImpossible { at } | OtherPairMatches { at } => {
-            let at = usize::from(at);
-            Some(if at == qi { at + 1 } else { at })
-        }
-        // The distance is measured against the question the kind names; the reason carries
-        // only the distance itself. `NoLetterAtDistance` too — the target's surviving
-        // options are the evidence.
-        WrongDistance { .. } | NoLetterAtDistance => match claim.question_type {
-            QuestionType::LetterDist { question_index } => Some(usize::from(question_index)),
-            _ => None,
-        },
-        // None of these blames a question: most are tallies, `DistanceUnreachable` blames the
-        // alphabet, and `ExtremumPigeonhole` the shape of the board. Nowhere to point.
-        Malformed
-        | NoOptionsLeft
-        | CountFloor { .. }
-        | CountCeiling { .. }
-        | PeakFloor { .. }
-        | PeakCeiling { .. }
-        | CountsCantMeet { .. }
-        | OtherLetterTies { .. }
-        | NotExtremum { .. }
-        | ExtremumTied { .. }
-        | ExtremumOutOfReach { .. }
-        | ExtremumPigeonhole { .. }
-        | DistanceUnreachable { .. } => None,
-    }
+/// highlight. [`InvalidReason::sources`] picks the candidates; this adds only the
+/// presentation policy on top, since the slot holds one question and the hint already
+/// points at `qi` (naming it twice would collapse the two-question `Look` to one).
+///
+/// A pair reason names two questions. When the first is `qi`, the partner still carries
+/// the argument, so the highlight moves there instead of vanishing.
+fn reason_other_qi(qi: usize, reason: InvalidReason) -> Option<usize> {
+    reason.sources().into_iter().find(|&at| at != qi)
 }
 
 /// The option value `answer` selects at question `qi`, if numeric.
@@ -752,8 +714,10 @@ fn elim_clause_beyond_check_answer(
     Some((clause, None))
 }
 
-/// A short "because …" clause for why question `qi` is forced to `letter`, or an
-/// empty string if the rule has no brief phrasing. Mirrors the TS `briefForceReason`.
+/// A short "because …" clause for why question `qi` is forced to `letter`, paired with
+/// the question that clause names. Callers highlight that question rather than recovering
+/// it from the text. Both come back empty when the rule has no brief phrasing.
+/// Mirrors the TS `briefForceReason`.
 fn brief_force_reason(
     fp: &FlatPuzzle,
     state: &State,
@@ -761,7 +725,7 @@ fn brief_force_reason(
     letter: Answer,
     rule: DeduceRule,
     reason: DeduceReason,
-) -> String {
+) -> (String, Option<usize>) {
     let answers = &state.answers;
     let source = reason.source();
 
@@ -770,36 +734,44 @@ fn brief_force_reason(
             if let QuestionType::AnswerOf { question_index } = fp.question_types[qi]
                 && let Some(target) = answers[question_index as usize]
             {
-                return format!("{} is {target}", q(question_index));
+                let k = usize::from(question_index);
+                return (format!("{} is {target}", q(k)), Some(k));
             }
         }
         DeduceRule::AnswerOfReverse => {
             if let Some(other) = source
                 && let Some(other_ans) = answers[other]
             {
-                return format!("{} is {other_ans}, which implies {letter}", q(other));
+                return (
+                    format!("{} is {other_ans}, which implies {letter}", q(other)),
+                    Some(other),
+                );
             }
         }
         DeduceRule::SameAsReverse => {
             if let Some(other) = source {
-                return format!("same answer as {}", q(other));
+                return (format!("same answer as {}", q(other)), Some(other));
             }
         }
         DeduceRule::PrevNextOnlySameReverse => {
             if let Some(other) = source
                 && let Some(other_ans) = answers[other]
             {
-                return format!("{} is {other_ans}, same answer as {}", q(other), q(qi));
+                return (
+                    format!("{} is {other_ans}, same answer as {}", q(other), q(qi)),
+                    Some(other),
+                );
             }
         }
         _ => {}
     }
 
+    // Reads only `qi`'s own option row, which the hint already points at.
     if (!state.eliminated[qi] & ALL_OPTIONS_MASK).count_ones() == 1 {
-        return "only option left".to_string();
+        return ("only option left".to_string(), None);
     }
 
-    String::new()
+    (String::new(), None)
 }
 
 /// The narrated steps for a forced answer: `qi` must be `letter` (via `rule`,
@@ -1835,6 +1807,19 @@ pub fn explain_deduce(
     }
 }
 
+/// Where an action's marks land. The structural half of a hint's highlight; the
+/// arguing half comes from the reason.
+fn action_targets(action: &DeduceAction, n: usize) -> ArrayVec<usize, MAX_N> {
+    match *action {
+        DeduceAction::Force { qi, .. } | DeduceAction::Eliminate { qi, .. } => {
+            std::iter::once(qi).collect()
+        }
+        DeduceAction::EliminateMulti { question_mask, .. } => {
+            (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect()
+        }
+    }
+}
+
 /// `{extra} ∪ qis`, sorted and deduplicated (0-based).
 fn sorted_qs(extra: usize, qis: &[usize]) -> Vec<usize> {
     let mut all = vec![extra];
@@ -1902,7 +1887,7 @@ fn refutation_detail(
                 // The chain carries no reasons (see `replay_chain`), so recover this
                 // conflict's by deducing its recorded pre-state again.
                 let deduce_reason = reason_for(fp, derived_from, result);
-                let reason =
+                let (reason, _) =
                     brief_force_reason(fp, derived_from, qi, answer, result.rule, deduce_reason);
                 let forced = if reason.is_empty() {
                     format!("{} would have to be {answer}", q(qi))
@@ -1943,6 +1928,10 @@ pub fn explain_lookahead(
 
     let mut hyp = hypothesis(state, qi, letter);
 
+    // Every question the hint's lines name: the assumption, each step's own targets, and
+    // the questions each step's *reason* argues from. That last group comes from the
+    // reason itself, never from a list maintained alongside it — a stale list would aim
+    // the coach at a question the prose never mentions.
     let mut involved: BTreeSet<usize> = BTreeSet::from([qi]);
     let mut lines: Vec<String> = Vec::new();
 
@@ -1956,38 +1945,44 @@ pub fn explain_lookahead(
         &result.chain,
         &mut 0,
         |round_pre, dr, reason| {
+            involved.extend(action_targets(&dr.action, n));
             match dr.action {
                 DeduceAction::Force { qi: fqi, answer } => {
-                    involved.insert(fqi);
-                    let brief = brief_force_reason(fp, round_pre, fqi, answer, dr.rule, reason);
+                    let (brief, named) =
+                        brief_force_reason(fp, round_pre, fqi, answer, dr.rule, reason);
+                    involved.extend(named);
                     lines.push(if brief.is_empty() {
                         format!("{} must be {answer}.", q(fqi))
                     } else {
                         format!("{} must be {answer} ({brief}).", q(fqi))
                     });
                 }
-                DeduceAction::EliminateMulti {
-                    question_mask,
-                    option_mask,
-                } => {
-                    let qis: Vec<usize> =
-                        (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
-                    involved.extend(qis.iter().copied());
+                // A chain states a multi-elimination without its reason: "Eliminate B, C
+                // from #3, #4." The line names no source, so nothing beyond the questions
+                // it touches joins the highlight.
+                DeduceAction::EliminateMulti { option_mask, .. } => {
                     let opt_str = (0..5)
                         .filter(|&b| (option_mask >> b) & 1 == 1)
                         .map(|b| LETTERS[b].to_string())
                         .collect::<Vec<_>>()
                         .join(", ");
-                    let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+                    let q_list = action_targets(&dr.action, n)
+                        .iter()
+                        .map(|&i| q(i))
+                        .collect::<Vec<_>>()
+                        .join(", ");
                     lines.push(format!("Eliminate {opt_str} from {q_list}."));
                 }
                 DeduceAction::Eliminate { qi: eqi, oi } => {
-                    involved.insert(eqi);
                     // Reuse the single-elimination explainer so every per-rule reason
                     // (ConsecIdent, count, positional, true-statement, …) reads the same
                     // inside a chain as on its own — no thinner second path to drift.
-                    let (line, extra) = elim_chain_line(fp, round_pre, eqi, oi, dr.rule, reason);
-                    involved.extend(extra);
+                    // It reports whichever questions its own sentence names, and that is
+                    // more than the reason's sources: the prose also names what the *kind*
+                    // implies, such as a ConsecIdent pair's other half or a SameAsWhich's
+                    // reference question.
+                    let (line, named) = elim_chain_line(fp, round_pre, eqi, oi, dr.rule, reason);
+                    involved.extend(named);
                     lines.push(format!(
                         "Eliminate {} option {}: {line}",
                         q(eqi),
@@ -2002,7 +1997,13 @@ pub fn explain_lookahead(
     let contradiction_qi = result.contradiction_qi;
     involved.insert(contradiction_qi);
     let detail = match rejected_answer_text(fp, &hyp, contradiction_qi, ClaimSubject::Hypothesis) {
-        Some(reason) => reason,
+        Some((text, reason)) => {
+            // The closing line argues from the questions its reason names, so the
+            // highlight has to reach them. A chain ending "but #2 has answer A and comes
+            // before #3" would otherwise leave #2 out of the set entirely.
+            involved.extend(reason.sources());
+            text
+        }
         // It only speaks about a committed answer being wrong, so it has nothing for the
         // routes that leave a question with no legal answer instead.
         None => refutation_detail(fp, &hyp, contradiction_qi, &result.contradiction),
@@ -2121,7 +2122,7 @@ mod tests {
             ExtremumPigeonhole { .. } => "ExtremumPigeonhole",
             WrongDistance { .. } => "WrongDistance",
             DistanceUnreachable { .. } => "DistanceUnreachable",
-            NoLetterAtDistance => "NoLetterAtDistance",
+            NoLetterAtDistance { .. } => "NoLetterAtDistance",
         }
     }
 
@@ -2396,6 +2397,7 @@ mod tests {
         }))
         .unwrap();
         let state = state_with(&fp, &[None, Some(Answer::B)]);
+        // The clause carries the question it names, so no caller recovers it from the text.
         assert_eq!(
             brief_force_reason(
                 &fp,
@@ -2405,7 +2407,7 @@ mod tests {
                 DeduceRule::AnswerOfForward,
                 DeduceReason::Source { source: 1 }
             ),
-            "#2 is B"
+            ("#2 is B".to_string(), Some(1))
         );
     }
 

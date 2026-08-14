@@ -26,6 +26,8 @@
 //! may panic on poorly formed puzzles; those sites are tagged
 //! `Fatal check_form error.`
 
+use arrayvec::ArrayVec;
+
 use crate::counts::{
     CountResult, MaskTally, Pred, compute_letter_cells, count_matching, count_matching_mask,
     count_range,
@@ -182,14 +184,60 @@ invalid_reasons! {
     ///   claimed letter reaches at most `reach` — its placed and still-open cells together.
     ExtremumPigeonhole { threshold: u8, reach: u8 },
 
-    /// `LetterDist`: the distance the answers actually sit apart.
-    WrongDistance { actual: u8 },
+    /// `LetterDist`: `at`'s answer sits `actual` letters away, not the claimed distance.
+    WrongDistance { at: u8, actual: u8 },
     /// `LetterDist`: no letter at all is the claimed distance from this option, so the
     /// target's answer is irrelevant — `max` is the furthest any letter reaches from here.
+    /// Names no question for that reason.
     DistanceUnreachable { max: u8 },
-    /// `LetterDist` with the target unanswered: some letter is the claimed distance away,
-    /// but none the target still has left. `WrongDistance`'s partial-board counterpart.
-    NoLetterAtDistance,
+    /// `LetterDist` with `at` unanswered: some letter is the claimed distance away, but none
+    /// `at` still has left. `WrongDistance`'s partial-board counterpart.
+    NoLetterAtDistance { at: u8 },
+}
+
+impl InvalidReason {
+    /// Which questions this reason argues from — its own `at` fields, nothing
+    /// else. A hint derives its highlight from here rather than tracking one
+    /// alongside, so the two can't drift: a stale list would aim the coach at a
+    /// question the prose never mentions.
+    ///
+    /// A pair reason names two questions, `at` and `at + 1`, and returns both.
+    /// Exhaustive: a new variant has to say which questions it argues from, if
+    /// any.
+    pub fn sources(self) -> ArrayVec<usize, 2> {
+        use InvalidReason::*;
+        let mut out = ArrayVec::new();
+        match self {
+            TargetAnswered { at, .. }
+            | TargetCannot { at, .. }
+            | OtherHasLetter { at, .. }
+            | EarlierHasLetter { at, .. }
+            | LaterHasLetter { at, .. }
+            | WrongDistance { at, .. }
+            | NoLetterAtDistance { at } => out.push(usize::from(at)),
+            PairDiffers { at, .. } | PairImpossible { at } | OtherPairMatches { at } => {
+                out.push(usize::from(at));
+                out.push(usize::from(at) + 1);
+            }
+            // Tallies and bounds argue from the whole board, `DistanceUnreachable`
+            // from the alphabet alone, and `ExtremumPigeonhole` from the board's
+            // shape. No question to point at.
+            Malformed
+            | NoOptionsLeft
+            | CountFloor { .. }
+            | CountCeiling { .. }
+            | PeakFloor { .. }
+            | PeakCeiling { .. }
+            | CountsCantMeet { .. }
+            | OtherLetterTies { .. }
+            | NotExtremum { .. }
+            | ExtremumTied { .. }
+            | ExtremumOutOfReach { .. }
+            | ExtremumPigeonhole { .. }
+            | DistanceUnreachable { .. } => {}
+        }
+        out
+    }
 }
 
 /// A [`Validity`] verdict with, when it is `Invalid`, why — see [`InvalidReason`]. The
@@ -568,7 +616,10 @@ fn check_claim_impl(
                     if dist == ov.value() {
                         ValidityWithReason::Valid
                     } else {
-                        ValidityWithReason::Invalid(InvalidReason::WrongDistance { actual: dist })
+                        ValidityWithReason::Invalid(InvalidReason::WrongDistance {
+                            at: question_index,
+                            actual: dist,
+                        })
                     }
                 }
                 None => {
@@ -590,7 +641,9 @@ fn check_claim_impl(
                             ValidityWithReason::Pending
                         } else {
                             // Some letter is that far off, but none the target still has left.
-                            ValidityWithReason::Invalid(InvalidReason::NoLetterAtDistance)
+                            ValidityWithReason::Invalid(InvalidReason::NoLetterAtDistance {
+                                at: question_index,
+                            })
                         }
                     }
                 }

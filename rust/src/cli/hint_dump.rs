@@ -1,20 +1,26 @@
 //! `refpuzzle hint-dump`: every hint the corpus can produce, one line each, for
-//! diffing prose across engine changes. Walks each puzzle's verify solve and
-//! renders every deduction of every round (against that round's pre-state) plus
-//! every lookahead refutation — the same paths `reference` samples, dumped in
-//! full instead of one example per rule. Bin-only.
+//! diffing what players read across engine changes. Walks each puzzle's verify
+//! solve and renders every deduction of every round (against that round's
+//! pre-state) plus every lookahead refutation — the same paths `reference`
+//! samples, dumped in full instead of one example per rule.
 
 use crate::deduce::{
     DeduceReason, DeduceReasons, DeduceResult, apply_action, deduce_assuming_unique_with_reasons,
 };
-use crate::explain::{ExplainStep, explain_deduce, explain_lookahead};
+use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
 use crate::lookahead::lookahead_shortest;
 use crate::solve_deduce::VERIFY_ITERS_PER_QUESTION;
 
-/// The user-facing prose of an explanation: its text steps joined (`Look` steps
-/// are navigation, carrying no text).
+/// One hint as a line: first the questions its last `Look` step points at (where
+/// the L1 coach aims its arrows), then the prose from its text steps. The
+/// highlight can move while the wording holds still, so the line carries both.
 fn render_hint(steps: &[ExplainStep]) -> String {
-    steps
+    let look = leading_questions(steps)
+        .iter()
+        .map(|qi| format!("#{}", qi + 1))
+        .collect::<Vec<_>>()
+        .join(",");
+    let prose = steps
         .iter()
         .filter_map(|s| match s {
             ExplainStep::Simple { text } => Some(text.clone()),
@@ -24,7 +30,8 @@ fn render_hint(steps: &[ExplainStep]) -> String {
             ExplainStep::Look { .. } => None,
         })
         .collect::<Vec<_>>()
-        .join(" ")
+        .join(" ");
+    format!("[look {look}] {prose}")
 }
 
 pub fn hint_dump() {
