@@ -1315,22 +1315,7 @@ fn explain_elimination(
             steps.push(simple(text));
         } else {
             steps.push(what_if());
-            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
-        }
-        return steps;
-    }
-
-    if matches!(
-        rule,
-        DeduceRule::PositionalRangeAnswered | DeduceRule::PositionalRangeUnanswered
-    ) {
-        if let Some(src_qi) = source
-            && let Some(text) = positional_range_text(fp, state, src_qi, qi, oi)
-        {
-            steps.push(try_looking(&[src_qi, qi]));
-            steps.push(simple(text));
-        } else {
-            steps.push(simple(format!("{} can't be {letter}.", q(qi))));
+            steps.push(simple(unexplained_elim(qi, letter)));
         }
         return steps;
     }
@@ -1530,10 +1515,7 @@ fn explain_elimination(
                 q(qi),
                 q(partner)
             ),
-            (None, _) => format!(
-                "{} option {letter}: no compatible option exists on the other counting rule.",
-                q(qi)
-            ),
+            (None, _) => unexplained_elim(qi, letter),
         };
         if let Some(partner) = source {
             steps.push(try_looking(&[qi, partner]));
@@ -1621,10 +1603,7 @@ fn explain_elimination(
                 q(k)
             )
         } else {
-            format!(
-                "{} option {letter}'s statement can't be true, so it's not the answer.",
-                q(qi)
-            )
+            unexplained_elim(qi, letter)
         };
         if let Some(k) = source {
             steps.push(try_looking(&[qi, k]));
@@ -1813,12 +1792,7 @@ pub fn explain_deduce(
             option_mask,
         } => {
             let qis: Vec<usize> = (0..n).filter(|&i| (question_mask >> i) & 1 == 1).collect();
-            let opt_str = (0..5)
-                .filter(|&b| (option_mask >> b) & 1 == 1)
-                .map(|b| LETTERS[b].to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
-            let q_list = qis.iter().map(|&i| q(i)).collect::<Vec<_>>().join(", ");
+            let (q_list, opt_str) = multi_lists(n, question_mask, option_mask);
 
             if matches!(
                 result.rule,
@@ -1839,7 +1813,7 @@ pub fn explain_deduce(
                         simple(format!("{q_list} can't be {opt_str}: {text}")),
                     ]
                 } else {
-                    vec![simple(format!("{q_list} can't be {opt_str}."))]
+                    vec![simple(unexplained_multi_elim(&q_list, &opt_str))]
                 }
             } else {
                 let (text, other_qi) =
@@ -1856,6 +1830,22 @@ pub fn explain_deduce(
             }
         }
     }
+}
+
+/// The two lists a multi-elimination line reads out: the questions it touches and the
+/// options it drops, each comma-joined.
+fn multi_lists(n: usize, question_mask: u16, option_mask: u8) -> (String, String) {
+    let q_list = (0..n)
+        .filter(|&i| (question_mask >> i) & 1 == 1)
+        .map(q)
+        .collect::<Vec<_>>()
+        .join(", ");
+    let opt_str = (0..5)
+        .filter(|&b| (option_mask >> b) & 1 == 1)
+        .map(|b| LETTERS[b].to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    (q_list, opt_str)
 }
 
 /// Where an action's marks land. The structural half of a hint's highlight; the
@@ -1903,6 +1893,17 @@ fn elim_chain_line(
         .collect::<Vec<_>>()
         .join(" ");
     (reason, leading_questions(&steps))
+}
+
+/// The bare line an elimination falls back to when it can't say *why* — every arm that
+/// needs something its reason didn't supply ends here.
+fn unexplained_elim(qi: usize, letter: Answer) -> String {
+    format!("{} can't be {letter}.", q(qi))
+}
+
+/// [`unexplained_elim`] for an elimination spanning several questions.
+fn unexplained_multi_elim(q_list: &str, opt_str: &str) -> String {
+    format!("{q_list} can't be {opt_str}.")
 }
 
 /// The closing detail when nothing can be said about *why* `qi` broke — a committed answer
@@ -2143,6 +2144,151 @@ mod tests {
             option_count: oc,
             initial_state: State::initial(oc),
         }
+    }
+
+    /// The name of a `DeduceReason` shape, for the coverage tally below. Exhaustive on
+    /// purpose: a new shape won't compile until it is listed here, which is the prompt to
+    /// give it prose and a fixture.
+    fn deduce_reason_name(reason: DeduceReason) -> &'static str {
+        match reason {
+            DeduceReason::Board => "Board",
+            DeduceReason::Source { .. } => "Source",
+            DeduceReason::SourceCell { .. } => "SourceCell",
+            DeduceReason::LetterBound { .. } => "LetterBound",
+            DeduceReason::CountsCantMeet { .. } => "CountsCantMeet",
+        }
+    }
+
+    /// Every deduce rule says *why*, not just what. Runs over the `tests/deduce.json`
+    /// fixtures, which `test_shared_deduce` already guarantees cover every rule — so a new
+    /// rule arrives here automatically.
+    ///
+    /// Two properties, both structural rather than English-matching:
+    ///
+    /// 1. **No hint is the bare fall-through.** Every arm that can't use what its reason
+    ///    supplied ends at [`unexplained_elim`], so asking whether a rendered sentence *is*
+    ///    that string catches exactly the reason-less hints and nothing else. Comparing
+    ///    against the function, not a copy of its wording, is what keeps this from being an
+    ///    English test.
+    /// 2. **Every rule renders a sentence.** `explain_*` panics rather than return none, so
+    ///    this mostly guards the panic itself — but it also pins the fixtures as the place
+    ///    a new rule's prose gets exercised.
+    ///
+    /// Deliberately *not* checked: that a hint points at the question its `DeduceReason`
+    /// names. An elimination's prose comes from `check_answer`'s verdict on the hypothesis,
+    /// which may argue through a different question than the one that fired the rule (and
+    /// legitimately so — "#3 itself would be E" argues from the assumption). Its highlight
+    /// is already derived from `InvalidReason::sources`, so nothing here can drift.
+    ///
+    /// The shape tally at the end is the same denylist trick as
+    /// [`every_invalid_reason_renders`]: agreement is worthless if the sweep stopped
+    /// producing a shape, since an unrendered one would then pass unnoticed.
+    #[test]
+    fn every_deduce_rule_explains_its_reason() {
+        use crate::deduce::{DeduceReasons, deduce_assuming_unique_with_reasons};
+        use std::collections::BTreeMap;
+
+        let json_str =
+            std::fs::read_to_string("../tests/deduce.json").expect("can't read tests/deduce.json");
+        let suite: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+
+        let mut shapes: BTreeMap<&'static str, usize> = BTreeMap::new();
+        let mut silent: Vec<String> = Vec::new();
+        let mut rendered = 0usize;
+
+        for test in suite["tests"].as_array().unwrap() {
+            let (Some(name), Some(states)) = (
+                test.get("name").and_then(|v| v.as_str()),
+                test.get("state").and_then(|v| v.as_array()),
+            ) else {
+                continue; // section header
+            };
+            let Some(fp) = parse_puzzle(&test["puzzle"]) else {
+                continue; // parse failures are `test_shared_deduce`'s to report
+            };
+
+            let mut state = fp.initial_state;
+            for (qi, cell) in states.iter().enumerate().take(fp.n) {
+                for ch in cell.as_str().unwrap_or("").chars() {
+                    let oi = usize::from((ch as u8).to_ascii_lowercase() - b'a');
+                    if ch.is_ascii_uppercase() {
+                        state.answers[qi] = Some(Answer::from(oi as u8));
+                        state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << oi);
+                    } else if ch.is_ascii_lowercase() {
+                        state.eliminated[qi] |= 1 << oi;
+                    }
+                }
+            }
+
+            // Every deduction the fixture's board offers, not just the one it asserts on:
+            // the extra results are free coverage, and each is a hint some player can see.
+            let mut reasons = DeduceReasons::new();
+            let results = deduce_assuming_unique_with_reasons(&fp, &state, &mut reasons);
+            for (dr, reason) in results.iter().zip(&reasons) {
+                *shapes.entry(deduce_reason_name(*reason)).or_insert(0) += 1;
+                let steps = explain_deduce(&fp, &state, dr, *reason);
+                rendered += 1;
+
+                assert!(
+                    steps
+                        .iter()
+                        .any(|s| matches!(s, ExplainStep::Simple { .. })),
+                    "{}: {} rendered no sentence",
+                    name,
+                    dr.rule.to_str()
+                );
+                // Built from the same functions the renderer uses, so this compares
+                // structure rather than a second copy of the wording.
+                let bare = match dr.action {
+                    DeduceAction::Force { .. } => None,
+                    DeduceAction::Eliminate { qi, oi } => Some(unexplained_elim(qi, LETTERS[oi])),
+                    DeduceAction::EliminateMulti {
+                        question_mask,
+                        option_mask,
+                    } => {
+                        let (q_list, opt_str) = multi_lists(fp.n, question_mask, option_mask);
+                        Some(unexplained_multi_elim(&q_list, &opt_str))
+                    }
+                };
+                let fell_through = steps.iter().any(
+                    |s| matches!(s, ExplainStep::Simple { text } if Some(text) == bare.as_ref()),
+                );
+                if fell_through && silent.len() < 10 {
+                    silent.push(format!(
+                        "{name}: {} rendered the bare fall-through",
+                        dr.rule.to_str()
+                    ));
+                }
+            }
+        }
+
+        assert!(
+            silent.is_empty(),
+            "{} hint(s) dropped the question their reason names:\n  {}",
+            silent.len(),
+            silent.join("\n  ")
+        );
+        // A shape the fixtures never produce is a shape this gate isn't really checking.
+        for shape in [
+            "Board",
+            "Source",
+            "SourceCell",
+            "LetterBound",
+            "CountsCantMeet",
+        ] {
+            assert!(
+                shapes.contains_key(shape),
+                "no fixture produced a {shape} reason — the gate no longer covers it"
+            );
+        }
+        eprintln!(
+            "every_deduce_rule_explains_its_reason: {rendered} hint(s), {}",
+            shapes
+                .iter()
+                .map(|(name, count)| format!("{name} {count}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     /// The name of an `InvalidReason` variant, for the coverage tally. Exhaustive on
