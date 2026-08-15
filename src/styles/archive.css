@@ -1,0 +1,191 @@
+/* ── Archive page ──
+ * Every month is a weekday-column grid, newest month and newest week first, all
+ * of them in one scroll. A day carries its done-ness twice: a six-segment level
+ * track and a bg tint.
+ */
+.archive-page {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 1rem;
+
+  & h2 {
+    margin-bottom: 1rem;
+  }
+}
+
+.archive-month {
+  margin-bottom: 1.5rem;
+}
+
+.archive-month-title {
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.archive-weekdays,
+.archive-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.4rem;
+}
+
+.archive-weekdays {
+  padding: 0.5rem 0 0.25rem;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  text-align: center;
+}
+
+.archive-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  /* Height comes from the content, not a square aspect — the number and the
+     track sit tight between equal margins. */
+  padding: 0.4rem 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  color: var(--text);
+  transition: background 0.15s;
+
+  /* Coarse done-ness. Violet is the one hue no level owns, so a partial day
+     can't be read as a track color. */
+  &.partial {
+    background: color-mix(in srgb, #8b5cf6 8%, var(--bg-surface));
+  }
+  &.done {
+    background: color-mix(in srgb, var(--valid) 12%, var(--bg-surface));
+  }
+  &.stale {
+    background: color-mix(in srgb, var(--invalid) 12%, var(--bg-surface));
+  }
+  /* Doubled by an inset ring rather than a 2px border, which would make this
+     one row taller than the rest. */
+  &.today {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+}
+
+/* Hover moves the border, not the background — the tint is the whole point. */
+a.archive-day {
+  text-decoration: none;
+
+  &:hover {
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+}
+
+.archive-daynum {
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.archive-day.today .archive-daynum {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Height is reserved for the thickest segment, so a level completing never
+   nudges the day number. Segments center on a shared axis: bottom-aligned they
+   would read as a bar chart, i.e. quantity rather than state. */
+.archive-track {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  /* Wide enough that even the thickest segment stays wider than it is tall —
+     a square segment reads as a tile, not a rail. */
+  width: 90%;
+  height: var(--track-solved, 7px);
+}
+
+/* Six fixed slots in tab order, each in its level's tab color, so a missing
+   level reads by position. Thickness carries done-ness without color and
+   survives a low-density display, where a 1px step is still exact: hairline
+   untouched, 3px started, 7px solved. Whole pixels only — rem would land on
+   fractions at the font-size breakpoints. */
+.archive-level {
+  --level-ink: color-mix(
+    in srgb,
+    var(--level-color) var(--level-strength, 100%),
+    var(--bg-surface)
+  );
+
+  flex: 1;
+  /* A hairline is exact at every density, so it doesn't scale with the rest. */
+  height: 1px;
+  background: color-mix(in srgb, var(--level-ink) 70%, transparent);
+
+  &:nth-child(1) {
+    --level-color: var(--tab-intro);
+  }
+  &:nth-child(2) {
+    --level-color: var(--tab-beginner);
+  }
+  &:nth-child(3) {
+    --level-color: var(--tab-easy);
+  }
+  &:nth-child(4) {
+    --level-color: var(--tab-medium);
+  }
+  &:nth-child(5) {
+    --level-color: var(--tab-hard);
+  }
+  &:nth-child(6) {
+    --level-color: var(--tab-expert);
+  }
+
+  /* Only the track's two outer corners round off, so the six segments still
+     read as one rail rather than six pills. */
+  &:first-child {
+    border-bottom-left-radius: 2px;
+  }
+  &:last-child {
+    border-bottom-right-radius: 2px;
+  }
+
+  &.started {
+    height: var(--track-started, 3px);
+    background: var(--level-ink);
+  }
+  &.solved,
+  &.stale {
+    height: var(--track-solved, 7px);
+    background: var(--level-ink);
+  }
+}
+
+/* A stale day grays every level but the one(s) needing a recheck, which go
+   bright red. It stops reporting the rest — the alarm is the point. */
+.archive-day.stale .archive-level {
+  --level-color: var(--neutral-bar);
+}
+.archive-day.stale .archive-level.stale {
+  --level-color: var(--invalid);
+}
+
+/* Small days: keep all six segments, step the scale down so a solved segment
+   stays a line rather than a block, and mix the colors toward the day bg. */
+@media (max-width: 480px) {
+  .archive-page {
+    padding: 0.5rem;
+  }
+  .archive-weekdays,
+  .archive-grid {
+    gap: 0.25rem;
+  }
+  .archive-track {
+    --track-started: 3px;
+    --track-solved: 5px;
+  }
+  .archive-level {
+    --level-strength: 75%;
+  }
+}

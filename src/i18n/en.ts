@@ -94,13 +94,17 @@ export default {
     tryLooking: (qis: number[]) => `Try looking at ${qList(qis)}.`,
   },
   daily: {
-    dayNumber: (num: number) => `Day #${num}`,
     dayLabel: (num: number, date: string) => `Day #${num} — ${date}`,
     today: "Today",
-    pastPuzzles: "Past puzzles",
-    allSolved: "All solved!",
-    notStarted: "Not started",
+    archive: "Archive",
     printAll: "Print all puzzles",
+    // One archive day, spoken: the level track carries the same state visually.
+    // A stale day's track reports only the levels needing a recheck, so its
+    // label does too.
+    archiveDay: (date: string, solved: number, levels: number) =>
+      `${date} — ${solved} of ${levels} solved`,
+    archiveDayStale: (date: string, stale: number) =>
+      `${date} — ${plural(stale, "level needs", "levels need")} rechecking`,
   },
   backup: {
     button: "Sync and backup",

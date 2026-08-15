@@ -5,7 +5,7 @@ import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
 import { KeyboardHelp } from "./components/KeyboardHelp.tsx";
 import { IconCheck, IconX, IconDot, IconWarning } from "./components/Icons.tsx";
-import { exportData, planImport, applyImport } from "./lib/backup.ts";
+import { planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
 // QR components lazy-loaded via dynamic import (no preact dependency in chunks)
@@ -14,7 +14,6 @@ import {
   fetchDaily,
   dayNumber,
   isValidDate,
-  dateStrFromOffset,
   puzzleId,
   parseCompactPuzzle,
 } from "./puzzles/daily.ts";
@@ -25,10 +24,10 @@ import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
 import { pointerKind } from "./lib/pointer.ts";
 import { t } from "./i18n/index.ts";
 import { replayLogoAnimation } from "./components/Logo.tsx";
-import { BackupDialog } from "./components/BackupDialog.tsx";
-import { SyncDialog } from "./components/SyncDialog.tsx";
 import { ImportPreview } from "./components/ImportPreview.tsx";
 import { AppHeader } from "./components/AppHeader.tsx";
+import { ArchivePage } from "./components/ArchivePage.tsx";
+import { useBackupFlow, BackupDialogs } from "./components/BackupFlow.tsx";
 import { ErrorOverlay } from "./components/ErrorOverlay.tsx";
 
 if (new URLSearchParams(window.location.search).has("debug")) {
@@ -92,123 +91,6 @@ function InlineHelp({ highlight }: { highlight?: boolean }) {
         <p key={p}>{p}</p>
       ))}
     </div>
-  );
-}
-
-function downloadBackup(filename: string) {
-  const json = exportData();
-  const blob = new Blob([json], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function useBackupFlow(opts?: { onChanged?: () => void }) {
-  const s = t();
-  const [showBackup, setShowBackup] = useState(false);
-  const [showSync, setShowSync] = useState(false);
-  const [importPlan, setImportPlan] = useState<ImportPlan | null>(null);
-
-  function openBackup() {
-    setShowBackup(true);
-  }
-  function closeBackup() {
-    setShowBackup(false);
-  }
-
-  function handleUploadFile(e: Event) {
-    setShowBackup(false);
-    const input = e.target;
-    if (!(input instanceof HTMLInputElement)) return;
-    const file = input.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      try {
-        if (typeof reader.result !== "string") return;
-        setImportPlan(planImport(reader.result));
-      } catch (err) {
-        alert(s.backup.uploadFailed(err instanceof Error ? err.message : "unknown error"));
-      }
-    };
-    reader.readAsText(file);
-    input.value = "";
-  }
-
-  function openSync() {
-    setShowBackup(false);
-    setShowSync(true);
-  }
-  function closeSync() {
-    setShowSync(false);
-  }
-
-  function handleSyncReceive(json: string) {
-    setShowSync(false);
-    try {
-      setImportPlan(planImport(json));
-    } catch (err) {
-      alert(s.backup.uploadFailed(err instanceof Error ? err.message : "unknown error"));
-    }
-  }
-
-  function confirmUpload() {
-    if (!importPlan) return;
-    applyImport(importPlan);
-    setImportPlan(null);
-    opts?.onChanged?.();
-  }
-
-  function cancelUpload() {
-    setImportPlan(null);
-  }
-
-  return {
-    showBackup,
-    openBackup,
-    closeBackup,
-    showSync,
-    closeSync,
-    importPlan,
-    handleUploadFile,
-    openSync,
-    handleSyncReceive,
-    confirmUpload,
-    cancelUpload,
-  };
-}
-
-function BackupDialogs({
-  backup,
-  exportFilename,
-}: {
-  backup: ReturnType<typeof useBackupFlow>;
-  exportFilename: string;
-}) {
-  return (
-    <>
-      {backup.showBackup && (
-        <BackupDialog
-          onExport={() => downloadBackup(exportFilename)}
-          onImport={backup.handleUploadFile}
-          onSync={backup.openSync}
-          onClose={backup.closeBackup}
-        />
-      )}
-      {backup.showSync && (
-        <SyncDialog onImport={backup.handleSyncReceive} onClose={backup.closeSync} />
-      )}
-      {backup.importPlan && (
-        <ImportPreview
-          plan={backup.importPlan}
-          onConfirm={backup.confirmUpload}
-          onCancel={backup.cancelUpload}
-        />
-      )}
-    </>
   );
 }
 
@@ -350,8 +232,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
       />
       <div class="daily-header">
         {!isToday && (
-          <a href="/past" class="back-link">
-            &larr; {s.daily.pastPuzzles}
+          <a href="/archive" class="back-link">
+            &larr; {s.daily.archive}
           </a>
         )}
         <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
@@ -469,122 +351,11 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   );
 }
 
-function DayItem({ dateStr, isToday }: { dateStr: string; isToday: boolean }) {
-  const s = t();
-  const levels = [1, 2, 3, 4, 5, 6].map((l) => {
-    const { started, completed, stale } = hasState(puzzleId(dateStr, l));
-    return { level: l, started, completed, stale };
-  });
-  const solved = levels.filter((l) => l.completed && !l.stale);
-  const stale = levels.filter((l) => l.stale);
-  const started = levels.filter((l) => l.started && !l.completed && !l.stale);
-  return (
-    <a href={`/${dateStr}/1`} class={`history-item ${isToday ? "history-today" : ""}`}>
-      <span class="history-date">
-        {isToday ? s.daily.today : dateStr}
-        <span class="history-day"> {s.daily.dayNumber(dayNumber(dateStr))}</span>
-      </span>
-      <span class="history-progress">
-        {solved.length === 6 ? (
-          s.daily.allSolved
-        ) : solved.length > 0 || stale.length > 0 || started.length > 0 ? (
-          <>
-            {solved.length > 0 && (
-              <span>
-                <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />{" "}
-                {solved.map((l) => s.difficulty[l.level]).join(", ")}
-              </span>
-            )}
-            {stale.length > 0 && (
-              <span>
-                {" "}
-                <IconWarning size="0.9em" class="icon-stale" />{" "}
-                {stale.map((l) => s.difficulty[l.level]).join(", ")}
-              </span>
-            )}
-            {(solved.length > 0 || stale.length > 0) && started.length > 0 && "  "}
-            {started.length > 0 && (
-              <span>
-                <IconDot size="0.9em" class="icon-hint" />{" "}
-                {started.map((l) => s.difficulty[l.level]).join(", ")}
-              </span>
-            )}
-          </>
-        ) : (
-          s.daily.notStarted
-        )}
-      </span>
-    </a>
-  );
-}
-
-function PastPuzzlesPage() {
-  const s = t();
-  const backup = useBackupFlow();
-  const today = useToday();
-  const currentMonth = today.slice(0, 7);
-
-  const allDates: string[] = [];
-  for (let i = 0; ; i++) {
-    const d = dateStrFromOffset(i);
-    if (!isValidDate(d)) break;
-    allDates.push(d);
-  }
-
-  const months = new Map<string, string[]>();
-  for (const d of allDates) {
-    const month = d.slice(0, 7);
-    const list = months.get(month) ?? [];
-    list.push(d);
-    months.set(month, list);
-  }
-
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set([currentMonth]));
-
-  function toggleMonth(month: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(month)) next.delete(month);
-      else next.add(month);
-      return next;
-    });
-  }
-
-  function formatMonth(ym: string): string {
-    const [y, m] = ym.split("-");
-    const date = new Date(Number(y), Number(m) - 1);
-    return date.toLocaleString(undefined, { month: "long", year: "numeric" });
-  }
-
-  return (
-    <>
-      <AppHeader onBackup={backup.openBackup} />
-
-      <div class="history-page">
-        <h2>{s.daily.pastPuzzles}</h2>
-        {[...months.entries()].map(([month, dates]) => {
-          const isOpen = expanded.has(month);
-          return (
-            <div key={month} class="history-month">
-              <button class="history-month-header" onClick={() => toggleMonth(month)}>
-                <span>{formatMonth(month)}</span>
-                <span class={`history-month-arrow ${isOpen ? "open" : ""}`}>&#9662;</span>
-              </button>
-              {isOpen && (
-                <div class="history-list">
-                  {dates.map((dateStr) => (
-                    <DayItem key={dateStr} dateStr={dateStr} isToday={dateStr === today} />
-                  ))}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-
-      <BackupDialogs backup={backup} exportFilename="refpuzzle-backup.json" />
-    </>
-  );
+/** The archive's old slug; kept so bookmarks and shared links survive. */
+function ArchiveRedirect() {
+  const { route } = useLocation();
+  useEffect(() => route("/archive", true), [route]);
+  return null;
 }
 
 function DayRoute() {
@@ -725,7 +496,8 @@ export function App() {
         <ErrorOverlay />
         <Router>
           <Route path="/" component={DailyPage} />
-          <Route path="/past" component={PastPuzzlesPage} />
+          <Route path="/archive" component={ArchivePage} />
+          <Route path="/past" component={ArchiveRedirect} />
           <Route path="/sync" component={SyncRoute} />
           <Route path="/playground" component={PlaygroundRoute} />
           <Route path="/:date/:level" component={DayRoute} />

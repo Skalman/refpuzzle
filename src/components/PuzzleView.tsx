@@ -944,10 +944,10 @@ export function PuzzleView({
               <a
                 // oxlint-disable-next-line typescript/no-unsafe-type-assertion
                 ref={nextPuzzleRef as Ref<HTMLAnchorElement>}
-                href="/past"
+                href="/archive"
                 class="next-puzzle-btn"
               >
-                {s.daily.pastPuzzles} &rarr;
+                {s.daily.archive} &rarr;
               </a>
             )}
           </div>

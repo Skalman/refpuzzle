@@ -168,13 +168,8 @@ export function AppHeader({
         </a>
       </h1>
       <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler(".header-btn")}>
-        <a
-          href="/past"
-          class="header-btn hide-mobile"
-          tabIndex={0}
-          aria-label={s.daily.pastPuzzles}
-        >
-          <IconCalendar /> {s.daily.pastPuzzles}
+        <a href="/archive" class="header-btn hide-mobile" tabIndex={0}>
+          <IconCalendar /> {s.daily.archive}
         </a>
         <button
           class="header-btn hide-mobile"
@@ -212,12 +207,12 @@ export function AppHeader({
                 {isInstalled ? s.install.shareApp : s.install.button}
               </button>
               <a
-                href="/past"
+                href="/archive"
                 class="more-menu-item show-mobile"
                 role="menuitem"
                 onClick={() => setMoreMenu(false)}
               >
-                {s.daily.pastPuzzles}
+                {s.daily.archive}
               </a>
               <button
                 class="more-menu-item show-mobile"
