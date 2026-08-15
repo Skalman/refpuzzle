@@ -111,7 +111,9 @@ neither flag is a fact about the solve: solved is derivable from the board,
 and stale is about this device's cache (v0 already stripped it before
 sharing). Invariants: `st` only ever appears beside `s`, and a completed
 puzzle's ledger is exactly `s` or `s.st` — so the list pages' solved/stale
-checks are a prefix read, no decode.
+checks are a prefix read, no decode. Both the boot re-check and a solve in
+play can set or clear `st`; either way the writer has just checked the board
+against the current puzzle.
 
 ### Examples
 

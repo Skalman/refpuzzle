@@ -138,6 +138,7 @@ export function PuzzleView({
   const tabStateRef = useRef({
     started: initState.history.length > 1,
     completed: initCompleted,
+    stale: initState.stale,
   });
   useEffect(() => {
     if (initCompleted && !initState.completed && !ephemeral) {
@@ -296,11 +297,14 @@ export function PuzzleView({
       setValidity(result);
 
       const isCompleted = result.every(isValid);
+      // The board just faced the current puzzle version, so a solve retires the
+      // stale flag; short of one, the flag stands as the last sweep left it.
+      const nowStale = tabStateRef.current.stale && !isCompleted;
       if (!ephemeral) {
         saveState(puzzle.id, {
           questions: qs,
           completed: isCompleted,
-          stale: false,
+          stale: nowStale,
           history: historyRef.current,
           historyIdx: historyIdxRef.current,
           hints: hintMarkers.current,
@@ -312,9 +316,10 @@ export function PuzzleView({
       const nowStarted = historyRef.current.length > 1;
       if (
         nowStarted !== tabStateRef.current.started ||
-        isCompleted !== tabStateRef.current.completed
+        isCompleted !== tabStateRef.current.completed ||
+        nowStale !== tabStateRef.current.stale
       ) {
-        tabStateRef.current = { started: nowStarted, completed: isCompleted };
+        tabStateRef.current = { started: nowStarted, completed: isCompleted, stale: nowStale };
         onChanged();
       }
     },

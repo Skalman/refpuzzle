@@ -474,12 +474,10 @@ export function saveState(puzzleId: string, state: SavedState) {
     const existing = localStorage.getItem(PREFIX + puzzleId);
     const existingLedger = existing ? ledgerPart(existing) : "";
     // Completion swaps the ledger to the outcome family (the analytics event
-    // reads the in-memory copy, so the swap can't outrun the report). `st` is
-    // owned by mark/unmarkStale and survives; live counters are preserved
-    // verbatim while solving.
-    const ledger = state.completed
-      ? "s" + (existingLedger.split(".").includes("st") ? ".st" : "")
-      : existingLedger;
+    // reads the in-memory copy, so the swap can't outrun the report), and the
+    // caller's `stale` settles `st` — a completed save carries a fresh
+    // check_answer verdict. Live counters are preserved verbatim while solving.
+    const ledger = state.completed ? (state.stale ? "s.st" : "s") : existingLedger;
     localStorage.setItem(
       PREFIX + puzzleId,
       encodeHistory(state) + (ledger ? META_SEP + ledger : ""),
