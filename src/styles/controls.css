@@ -139,7 +139,8 @@
   display: inline-flex;
   align-items: stretch;
 
-  & .toolbar-accent-btn {
+  & .toolbar-accent-btn,
+  & .header-btn {
     border-radius: 6px 0 0 6px;
   }
 }
@@ -187,6 +188,49 @@
       background: var(--bg-hover);
     }
   }
+}
+
+/* ── Theme options (auto / light / dark) ──
+ * The same three rows in two hosts: the header's split-button popup and the ⋯
+ * menu's expanded block. Each selector has to outweigh its host's own row rule,
+ * hence the element qualifier and the `.more-menu` scope.
+ */
+button.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 0.4em;
+
+  & .theme-option-check {
+    flex: none;
+    color: var(--accent);
+    visibility: hidden;
+  }
+
+  &[aria-checked="true"] {
+    color: var(--accent);
+    font-weight: 600;
+
+    & .theme-option-check {
+      visibility: visible;
+    }
+  }
+}
+
+/* Inside the ⋯ menu the rows sit under their disclosure, at full tap height. */
+.more-menu .theme-option {
+  padding-left: 1.6rem;
+  min-height: 2.75rem;
+  border-radius: 0;
+}
+
+.disclosure-chevron {
+  display: inline-block;
+  vertical-align: -0.1em;
+  transition: transform 0.15s;
+}
+
+[aria-expanded="false"] > .disclosure-chevron {
+  transform: rotate(-90deg);
 }
 
 /* ── Share toast ── */

@@ -128,12 +128,19 @@ export default {
   },
   aria: {
     close: "Close",
-    toggleTheme: "Toggle theme",
     more: "More",
     logo: "Refpuzzle logo",
   },
   header: {
     theme: "Theme",
+    themeOptions: "Theme options",
+    // Names where the press lands; the button's icon shows the mode it is in.
+    themeToggle: {
+      auto: "Use system theme",
+      light: "Switch to light theme",
+      dark: "Switch to dark theme",
+    },
+    themeModes: { auto: "Auto", light: "Light", dark: "Dark" },
   },
   share: {
     share: "Share",

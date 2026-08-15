@@ -1,46 +1,124 @@
 import { useState, useRef, useEffect, useCallback } from "preact/hooks";
-import { IconCalendar, IconMoon, IconSun, IconSunMoon } from "./Icons.tsx";
+import {
+  IconCalendar,
+  IconCheck,
+  IconChevronDown,
+  IconMoon,
+  IconSun,
+  IconSunMoon,
+} from "./Icons.tsx";
 import { Logo } from "./Logo.tsx";
 import { ShareSheet } from "./ShareSheet.tsx";
+import { SplitMenu } from "./SplitMenu.tsx";
 import { t } from "../i18n/index.ts";
-import { arrowNavHandler } from "../lib/keyboard.ts";
+import { arrowNavHandler, menuNavHandler } from "../lib/keyboard.ts";
 
 if (import.meta.env.DEV) document.title = `(dev) ${document.title}`;
+
+const THEME_MODES = ["auto", "light", "dark"] as const;
+type ThemeMode = (typeof THEME_MODES)[number];
+type Appearance = "light" | "dark";
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+const THEME_KEY = "refpuzzle:theme";
 
 function updateThemeColor(dark: boolean) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fa");
 }
 
-export function useTheme() {
-  const [mode, setMode] = useState(
-    () => document.documentElement.getAttribute("data-theme") ?? "auto",
-  );
+function themeIcon(mode: ThemeMode) {
+  return mode === "light" ? <IconSun /> : mode === "dark" ? <IconMoon /> : <IconSunMoon />;
+}
 
-  const cycle = useCallback(() => {
-    const html = document.documentElement;
-    const current = html.getAttribute("data-theme");
-    if (current === "dark") {
-      html.setAttribute("data-theme", "light");
-      localStorage.setItem("refpuzzle:theme", "light");
-      setMode("light");
-      updateThemeColor(false);
-    } else if (current === "light") {
-      html.removeAttribute("data-theme");
-      localStorage.removeItem("refpuzzle:theme");
-      setMode("auto");
-      updateThemeColor(matchMedia("(prefers-color-scheme: dark)").matches);
-    } else {
-      html.setAttribute("data-theme", "dark");
-      localStorage.setItem("refpuzzle:theme", "dark");
-      setMode("dark");
-      updateThemeColor(true);
-    }
+export function useTheme() {
+  const s = t();
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    const attr = document.documentElement.getAttribute("data-theme");
+    return attr === "light" || attr === "dark" ? attr : "auto";
+  });
+  const [systemDark, setSystemDark] = useState(() => matchMedia(DARK_QUERY).matches);
+
+  // The toggle's target and label depend on the system preference in every mode,
+  // not just auto, so this tracks it unconditionally.
+  useEffect(() => {
+    const query = matchMedia(DARK_QUERY);
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    query.addEventListener("change", onChange);
+    return () => query.removeEventListener("change", onChange);
   }, []);
 
-  const icon = mode === "dark" ? <IconMoon /> : mode === "light" ? <IconSun /> : <IconSunMoon />;
+  const system: Appearance = systemDark ? "dark" : "light";
+  const resolved: Appearance = mode === "auto" ? system : mode;
 
-  return { mode, cycle, icon };
+  useEffect(() => {
+    updateThemeColor(resolved === "dark");
+  }, [resolved]);
+
+  // Every press flips the appearance. It lands on auto whenever auto already
+  // resolves to the appearance being switched to, so a press never looks dead.
+  const flipped: Appearance = resolved === "dark" ? "light" : "dark";
+  const target: ThemeMode = system === flipped ? "auto" : flipped;
+
+  const select = useCallback((next: ThemeMode) => {
+    const html = document.documentElement;
+    if (next === "auto") {
+      html.removeAttribute("data-theme");
+      localStorage.removeItem(THEME_KEY);
+    } else {
+      html.setAttribute("data-theme", next);
+      localStorage.setItem(THEME_KEY, next);
+    }
+    setMode(next);
+  }, []);
+
+  const toggle = useCallback(() => select(target), [select, target]);
+
+  // The icon reports the mode you are in; the label names where a press lands.
+  return {
+    mode,
+    select,
+    toggle,
+    modeIcon: themeIcon(mode),
+    toggleLabel: s.header.themeToggle[target],
+  };
+}
+
+/**
+ * The explicit Auto / Light / Dark choice, revealed by a disclosure: the
+ * header's split-button popup and the ⋯ menu's expanded block both render it.
+ * `itemClass` enrolls the rows in whichever host's arrow-key walk surrounds them.
+ */
+function ThemeOptions({
+  theme,
+  itemClass,
+  onPick,
+}: {
+  theme: ReturnType<typeof useTheme>;
+  itemClass: string;
+  onPick?: () => void;
+}) {
+  const s = t();
+  return (
+    <>
+      {THEME_MODES.map((choice) => (
+        <button
+          key={choice}
+          class={itemClass}
+          role="menuitemradio"
+          aria-checked={theme.mode === choice}
+          onClick={(e) => {
+            e.stopPropagation();
+            theme.select(choice);
+            onPick?.();
+          }}
+        >
+          <IconCheck size="0.9em" class="theme-option-check" />
+          {s.header.themeModes[choice]}
+        </button>
+      ))}
+    </>
+  );
 }
 
 type InstallState =
@@ -108,52 +186,43 @@ export function AppHeader({
   const isInstalled = window.matchMedia("(display-mode: standalone)").matches;
   const [showInstallInfo, setShowInstallInfo] = useState(false);
   const [moreMenu, setMoreMenu] = useState(false);
+  const [themeOptions, setThemeOptions] = useState(false);
   const moreBtnRef = useRef<HTMLButtonElement>(null);
   const moreMenuRef = useRef<HTMLDivElement>(null);
+  const themeOptionsBtnRef = useRef<HTMLButtonElement>(null);
+
+  // Rows the viewport breakpoint hides have no offsetParent; skip those.
+  function visibleMenuItems(): HTMLElement[] {
+    const items: HTMLElement[] = [];
+    for (const el of moreMenuRef.current?.querySelectorAll(".more-menu-item") ?? []) {
+      if (el instanceof HTMLElement && el.offsetParent !== null) items.push(el);
+    }
+    return items;
+  }
+
+  // The disclosure starts collapsed every time the menu opens.
+  useEffect(() => {
+    if (!moreMenu) setThemeOptions(false);
+  }, [moreMenu]);
 
   useEffect(() => {
     if (!moreMenu) return undefined;
     const close = () => setMoreMenu(false);
     document.addEventListener("click", close);
-    // Auto-focus the first visible item
-    requestAnimationFrame(() => {
-      const items = moreMenuRef.current?.querySelectorAll(".more-menu-item");
-      if (items) {
-        for (const item of items) {
-          if (item instanceof HTMLElement && item.offsetParent !== null) {
-            item.focus();
-            break;
-          }
-        }
-      }
-    });
+    requestAnimationFrame(() => visibleMenuItems()[0]?.focus());
     return () => document.removeEventListener("click", close);
   }, [moreMenu]);
 
-  function handleMoreMenuKeyDown(e: KeyboardEvent) {
-    const allItems = moreMenuRef.current?.querySelectorAll(".more-menu-item");
-    if (!allItems) return;
-    const items: HTMLElement[] = [];
-    for (const el of allItems) {
-      if (el instanceof HTMLElement && el.offsetParent !== null) items.push(el);
+  const handleMoreMenuKeyDown = menuNavHandler(visibleMenuItems, () => {
+    // Escape collapses the theme disclosure first, then closes the menu.
+    if (themeOptions) {
+      setThemeOptions(false);
+      themeOptionsBtnRef.current?.focus();
+      return;
     }
-    if (!items.length) return;
-
-    const current = document.activeElement;
-    const idx = current instanceof HTMLElement ? items.indexOf(current) : -1;
-
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      items[(idx + 1) % items.length].focus();
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      items[(idx - 1 + items.length) % items.length].focus();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      setMoreMenu(false);
-      moreBtnRef.current?.focus();
-    }
-  }
+    setMoreMenu(false);
+    moreBtnRef.current?.focus();
+  });
 
   return (
     <header class="app-header">
@@ -171,14 +240,20 @@ export function AppHeader({
         <a href="/archive" class="header-btn hide-mobile" tabIndex={0}>
           <IconCalendar /> {s.daily.archive}
         </a>
-        <button
-          class="header-btn hide-mobile"
-          tabIndex={-1}
-          onClick={theme.cycle}
-          aria-label={s.aria.toggleTheme}
-        >
-          {theme.icon} {s.header.theme}
-        </button>
+        <span class="split-btn hide-mobile">
+          <button
+            class="header-btn"
+            tabIndex={-1}
+            onClick={theme.toggle}
+            aria-label={theme.toggleLabel}
+            title={theme.toggleLabel}
+          >
+            {theme.modeIcon} {s.header.theme}
+          </button>
+          <SplitMenu buttonClass="header-btn" tabIndex={-1} label={s.header.themeOptions}>
+            {(close) => <ThemeOptions theme={theme} itemClass="theme-option" onPick={close} />}
+          </SplitMenu>
+        </span>
         <span class="more-menu-wrapper">
           <button
             ref={moreBtnRef}
@@ -217,13 +292,31 @@ export function AppHeader({
               <button
                 class="more-menu-item show-mobile"
                 role="menuitem"
+                aria-label={theme.toggleLabel}
                 onClick={(e) => {
                   e.stopPropagation();
-                  theme.cycle();
+                  theme.toggle();
                 }}
               >
-                {theme.icon} {s.header.theme}
+                {theme.modeIcon} {s.header.theme}
               </button>
+              <button
+                ref={themeOptionsBtnRef}
+                class="more-menu-item show-mobile"
+                role="menuitem"
+                aria-expanded={themeOptions}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setThemeOptions((v) => !v);
+                }}
+              >
+                <IconChevronDown size="0.9em" class="disclosure-chevron" /> {s.header.themeOptions}
+              </button>
+              {themeOptions && (
+                <div class="show-mobile" role="group" aria-label={s.header.themeOptions}>
+                  <ThemeOptions theme={theme} itemClass="more-menu-item theme-option" />
+                </div>
+              )}
               <hr class="more-menu-divider show-mobile" />
               {onKeyboardHelp && (
                 <button
