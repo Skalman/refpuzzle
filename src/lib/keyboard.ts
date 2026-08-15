@@ -20,6 +20,35 @@ export function arrowNavHandler(selector: string) {
   };
 }
 
+/**
+ * Vertical focus walk for a menu or popup: ArrowUp/Down cycle through `items()`,
+ * Escape runs `onEscape`. Sideways arrows are swallowed too, so an enclosing
+ * toolbar doesn't walk its own items while the menu is open.
+ */
+export function menuNavHandler(items: () => HTMLElement[], onEscape: () => void) {
+  return (e: KeyboardEvent) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      e.stopPropagation();
+      onEscape();
+      return;
+    }
+    if (!e.key.startsWith("Arrow")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const step = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    const list = items();
+    if (!list.length) return;
+    const current = document.activeElement;
+    const idx = current instanceof HTMLElement ? list.indexOf(current) : -1;
+    // Nothing focused yet: enter from whichever end the press came from.
+    const next =
+      idx < 0 ? (step > 0 ? 0 : list.length - 1) : (idx + step + list.length) % list.length;
+    list[next].focus();
+  };
+}
+
 export function initRovingTabindex(
   container: HTMLElement | null,
   selector: string,

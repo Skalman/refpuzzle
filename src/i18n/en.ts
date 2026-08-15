@@ -41,6 +41,7 @@ export default {
     reset: "Reset",
     resetConfirm: "Reset?",
     share: "Share puzzle",
+    shareOptions: "More share options",
     copyLink: "Copy puzzle link",
     shareApp: "Share app",
     copyApp: "Copy app link",

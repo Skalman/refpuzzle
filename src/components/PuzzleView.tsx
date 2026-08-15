@@ -23,15 +23,8 @@ import { useForceUpdate } from "../lib/hooks.ts";
 import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
 import { ShareSheet } from "./ShareSheet.tsx";
-import {
-  IconUndo,
-  IconRedo,
-  IconPin,
-  IconHint,
-  IconChevronDown,
-  IconReset,
-  IconShare,
-} from "./Icons.tsx";
+import { SplitMenu } from "./SplitMenu.tsx";
+import { IconUndo, IconRedo, IconPin, IconHint, IconReset, IconShare } from "./Icons.tsx";
 import type { Ref } from "preact";
 
 interface PuzzleViewProps {
@@ -170,9 +163,6 @@ export function PuzzleView({
   /** The Checkpoint button's verdict. Shares the hint's slot; only one speaks. */
   const [checkpointNote, setCheckpointNote] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ url: string; title: string } | null>(null);
-  const [shareMenu, setShareMenu] = useState(false);
-  const shareMenuRef = useRef(false);
-  const shareDropRef = useRef<HTMLButtonElement>(null);
 
   const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(null);
   const [focusedOption, setFocusedOptionRaw] = useState<number | null>(null);
@@ -193,13 +183,6 @@ export function PuzzleView({
     focusedOptionRef.current = v;
     setFocusedOptionRaw(v);
   }
-
-  useEffect(() => {
-    if (!shareMenu) return undefined;
-    const close = () => setShareMenu(false);
-    document.addEventListener("click", close);
-    return () => document.removeEventListener("click", close);
-  }, [shareMenu]);
 
   /**
    * Markers on steps a history rewrite discards fold onto the branch point —
@@ -765,18 +748,6 @@ export function PuzzleView({
     }
   }
 
-  function handleShareMenuKeyDown(e: KeyboardEvent) {
-    if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      setShareMenu(false);
-      shareMenuRef.current = false;
-      shareDropRef.current?.focus();
-    } else if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-    }
-  }
-
   // Tinykeys shortcuts
   useEffect(() => {
     const g = guarded;
@@ -1004,48 +975,13 @@ export function PuzzleView({
             <button class="toolbar-accent-btn" onClick={openSharePuzzle}>
               <IconShare size="0.9em" /> {s.puzzle.share}
             </button>
-            <span class="split-btn-wrapper">
-              <button
-                ref={shareDropRef}
-                class="toolbar-accent-btn split-btn-drop"
-                aria-haspopup="true"
-                aria-expanded={shareMenu}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShareMenu((v) => {
-                    shareMenuRef.current = !v;
-                    return !v;
-                  });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShareMenu(true);
-                    shareMenuRef.current = true;
-                    requestAnimationFrame(() => {
-                      const item = shareDropRef.current
-                        ?.closest(".split-btn-wrapper")
-                        ?.querySelector(".split-btn-menu button");
-                      if (item instanceof HTMLElement) item.focus();
-                    });
-                  } else if (e.key === "Escape" && shareMenuRef.current) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShareMenu(false);
-                    shareMenuRef.current = false;
-                  }
-                }}
-              >
-                <IconChevronDown size="1em" />
-              </button>
-              {shareMenu && (
-                <div class="split-btn-menu" onKeyDown={handleShareMenuKeyDown}>
+            <SplitMenu buttonClass="toolbar-accent-btn" label={s.puzzle.shareOptions}>
+              {(close) => (
+                <>
                   <button
                     role="menuitem"
                     onClick={() => {
-                      setShareMenu(false);
-                      shareMenuRef.current = false;
+                      close();
                       openShareApp();
                     }}
                   >
@@ -1055,17 +991,16 @@ export function PuzzleView({
                     <button
                       role="menuitem"
                       onClick={() => {
-                        setShareMenu(false);
-                        shareMenuRef.current = false;
+                        close();
                         openShareProgress();
                       }}
                     >
                       {s.puzzle.shareWithProgress}
                     </button>
                   )}
-                </div>
+                </>
               )}
-            </span>
+            </SplitMenu>
           </span>
           <button
             class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
