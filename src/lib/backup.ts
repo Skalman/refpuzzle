@@ -1,3 +1,5 @@
+import { migrateValue, isSolvedValue } from "./store.ts";
+
 const PREFIX = "refpuzzle:puzzle:";
 const BACKUP_VERSION = 1;
 
@@ -46,18 +48,14 @@ export function exportData(): string {
   return JSON.stringify(data, null, 2);
 }
 
-function history(val: string): string {
-  const i = val.indexOf("|");
-  return i >= 0 ? val.slice(0, i) : val;
-}
-
-function isCompleted(val: string): boolean {
-  const h = history(val);
-  return h.endsWith(".x") || h === "x";
-}
-
+/** Steps the history records: action tokens (digit-first or `cp`) only. */
 function stepCount(val: string): number {
-  return history(val).split(".").length;
+  const history = val.split("|", 1)[0];
+  let count = 0;
+  for (const token of history.split(".")) {
+    if (token === "cp" || /^\d/.test(token)) count++;
+  }
+  return count;
 }
 
 export function planImport(json: string): ImportPlan {
@@ -68,24 +66,27 @@ export function planImport(json: string): ImportPlan {
   const entries: ImportEntry[] = [];
   for (const [id, val] of Object.entries(data.puzzles)) {
     if (typeof val !== "string") continue;
+    // Backup files are immortal v0 sources — convert on the way in, so the
+    // comparison and the stored result are both v1.
+    const incoming = migrateValue(val);
     const existing = localStorage.getItem(PREFIX + id);
 
     let action: ImportAction;
     if (!existing) {
       action = "new";
-    } else if (existing === val) {
+    } else if (existing === incoming) {
       action = "identical";
-    } else if (isCompleted(val) && !isCompleted(existing)) {
+    } else if (isSolvedValue(incoming) && !isSolvedValue(existing)) {
       action = "replace-completed";
-    } else if (isCompleted(existing)) {
+    } else if (isSolvedValue(existing)) {
       action = "keep-completed";
-    } else if (stepCount(val) > stepCount(existing)) {
+    } else if (stepCount(incoming) > stepCount(existing)) {
       action = "replace-longer";
     } else {
       action = "keep-longer";
     }
 
-    entries.push({ id, incoming: val, existing, action });
+    entries.push({ id, incoming, existing, action });
   }
 
   return { entries };

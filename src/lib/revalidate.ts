@@ -1,7 +1,7 @@
 import {
   PUZZLE_VERSION,
-  getStoredVersion,
-  setStoredVersion,
+  getVersions,
+  setVersion,
   getCompletedPuzzleIds,
   loadState,
   markStale,
@@ -16,11 +16,11 @@ const BATCH_SIZE = 20;
 // Runs before render. Results are written to localStorage but don't trigger
 // re-renders — the UI picks them up on the next page load.
 export function revalidateIfNeeded(): void {
-  if (getStoredVersion() >= PUZZLE_VERSION) return;
+  if (getVersions().puzzle >= PUZZLE_VERSION) return;
 
   const ids = getCompletedPuzzleIds();
   if (ids.length === 0) {
-    setStoredVersion(PUZZLE_VERSION);
+    setVersion("puzzle", PUZZLE_VERSION);
     return;
   }
 
@@ -35,7 +35,7 @@ async function processAll(ids: string[]): Promise<void> {
     // oxlint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 0));
   }
-  setStoredVersion(PUZZLE_VERSION);
+  setVersion("puzzle", PUZZLE_VERSION);
 }
 
 async function revalidateOne(puzzleId: string): Promise<void> {

@@ -40,3 +40,4 @@ A puzzle is a grid: `n` **questions** down, `option_count` **options** across.
 
 - `docs/engine.md` — what each module does.
 - `docs/engine-details.md` — the deduce rules and lookahead in detail.
+- `docs/encoding.md` — the saved-state / share-URL string format (v0 and v1).

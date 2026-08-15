@@ -2,8 +2,8 @@ import type { SavedState } from "./store.ts";
 import { encodeHistory, decodeHistory } from "./store.ts";
 
 export function getShareUrl(dateStr: string, level: number, state: SavedState): string {
-  const shareState = state.stale ? { ...state, stale: false } : state;
-  const encoded = encodeHistory(shareState);
+  // The history segment carries no flags, so nothing device-local can leak.
+  const encoded = encodeHistory(state);
   return `${window.location.origin}/${dateStr}/${level}#${encoded}`;
 }
 

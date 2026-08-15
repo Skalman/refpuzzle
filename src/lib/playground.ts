@@ -25,6 +25,7 @@ export function savedStateFromMarks(marks: Marks[]): SavedState {
     history,
     historyIdx: history.length - 1,
     hints: new Map(),
+    fails: new Map(),
   };
 }
 

@@ -5,7 +5,7 @@ import { FRESH_MARKS } from "../engine/types.ts";
 import { isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts";
-import { loadState, saveState, saveMeta, clearMeta, cloneStates } from "../lib/store.ts";
+import { loadState, saveState, saveMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
@@ -61,8 +61,8 @@ export function PuzzleView({
 
   // Ephemeral (playground) mode persists nothing: the puzzle is fully described
   // by the URL. Gating the two saveState calls is sufficient — saveMeta /
-  // clearMeta / loadMeta all no-op without an existing entry, and loadState
-  // returns null, so no other store touchpoint can write.
+  // loadMeta all no-op without an existing entry, and loadState returns null,
+  // so no other store touchpoint can write.
 
   // Initialize synchronously to avoid flicker
   const initState = (() => {
@@ -86,6 +86,7 @@ export function PuzzleView({
       history: [blankClone],
       historyIdx: 0,
       hints: new Map<number, number>(),
+      fails: new Map<number, number>(),
     };
   })();
 
@@ -146,6 +147,7 @@ export function PuzzleView({
         history: initState.history,
         historyIdx: initState.historyIdx,
         hints: initState.hints,
+        fails: initState.fails,
       });
       onChanged();
     }
@@ -229,6 +231,7 @@ export function PuzzleView({
   }
 
   const hintMarkers = useRef<Map<number, number>>(initState.hints);
+  const failMarkers = useRef<Map<number, number>>(initState.fails);
 
   function pushHintMarker(hintLevel: number) {
     hintMarkers.current.set(historyIdxRef.current, hintLevel);
@@ -257,6 +260,7 @@ export function PuzzleView({
           history: historyRef.current,
           historyIdx: historyIdxRef.current,
           hints: hintMarkers.current,
+          fails: failMarkers.current,
         });
       }
       if (analytics.wasStarted.current && !analytics.wasCompleted.current)
@@ -304,7 +308,13 @@ export function PuzzleView({
     handleRef,
   });
 
+  // Whether this session made any local change. v1 share URLs carry no
+  // completed flag — completion is derived once wasm loads — so this is what
+  // separates "you solved it" from "it arrived solved".
+  const interactedRef = useRef(false);
+
   function applyChange(next: QuestionState[]) {
+    interactedRef.current = true;
     analytics.markStarted();
     pushHistory(next);
     setQuestions(next);
@@ -441,6 +451,7 @@ export function PuzzleView({
         history: historyRef.current,
         historyIdx: historyIdxRef.current,
         hints: hintMarkers.current,
+        fails: failMarkers.current,
       }),
       title: s.puzzle.shareWithProgress,
     });
@@ -460,6 +471,9 @@ export function PuzzleView({
   useEffect(() => {
     if (!completed || analytics.wasCompleted.current) return undefined;
     analytics.wasCompleted.current = true;
+    // Completion that predates any local change arrived via a share URL or
+    // storage — someone else's solve. Acknowledge it, celebrate nothing.
+    if (!interactedRef.current) return undefined;
     const m = analytics.meta.current;
     if (m.sessionStart != null) {
       m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
@@ -476,7 +490,8 @@ export function PuzzleView({
       ...(m.fromShared && { fromShared: true }),
       ...getClientInfo(),
     });
-    clearMeta(puzzle.id);
+    // The event above reads the in-memory counters; saveState already swapped
+    // the stored ledger to the outcome family on the completing mark.
     confetti();
     // Scroll the whole completion banner into view right as the confetti starts — the
     // celebration overlay masks the viewport motion, so it reads smoother than scrolling after.
