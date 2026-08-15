@@ -110,10 +110,10 @@ export function PuzzleView({
   const handleRef = useRef<PuzzleHandle | null>(null);
   const [handleReady, setHandleReady] = useState(false);
   useEffect(() => {
-    let cancelled = false;
+    let canceled = false;
     void (async () => {
       await wasmReady();
-      if (cancelled) return;
+      if (canceled) return;
       const handle = createPuzzleHandle(puzzle.compact, puzzle.id);
       handleRef.current = handle;
       const initial = handle.checkAllAnswers(
@@ -124,7 +124,7 @@ export function PuzzleView({
       setHandleReady(true);
     })();
     return () => {
-      cancelled = true;
+      canceled = true;
       handleRef.current?.free();
       handleRef.current = null;
       setHandleReady(false);

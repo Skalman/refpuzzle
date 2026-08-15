@@ -53,7 +53,7 @@ export function ErrorOverlay() {
         sawAny = true;
         if (m[0].startsWith(window.location.origin)) return true;
       }
-      return !sawAny; // no recognisable frames → can't tell, default to showing
+      return !sawAny; // no recognizable frames → can't tell, default to showing
     };
 
     const onError = (e: ErrorEvent) => {

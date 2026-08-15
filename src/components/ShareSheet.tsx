@@ -34,7 +34,7 @@ export function ShareSheet({
     try {
       await navigator.share({ title: shareTitle, url });
     } catch {
-      /* cancelled */
+      /* canceled */
     }
   }
 
