@@ -1,6 +1,7 @@
 import { AppHeader } from "./AppHeader.tsx";
 import { useBackupFlow, BackupDialogs } from "./BackupFlow.tsx";
 import { hasState } from "../lib/store.ts";
+import { useRevalidated } from "../lib/hooks.ts";
 import { useToday } from "../lib/today.ts";
 import { dateStrFromOffset, isValidDate, puzzleId } from "../puzzles/daily.ts";
 import { t } from "../i18n/index.ts";
@@ -150,6 +151,7 @@ export function ArchivePage() {
   const s = t();
   const backup = useBackupFlow();
   const today = useToday();
+  useRevalidated();
 
   // Newest month first, so today sits at the top of the scroll.
   const months: string[] = [];

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { useForceUpdate } from "./lib/hooks.ts";
+import { useForceUpdate, useRevalidated } from "./lib/hooks.ts";
 import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
@@ -107,6 +107,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   const [loading, setLoading] = useState(true);
   const forcePuzzleUpdate = useForceUpdate();
   const backup = useBackupFlow({ onChanged: forcePuzzleUpdate });
+  useRevalidated();
 
   const initialHash = window.location.hash.slice(1) || null;
   const [activeLevel, setActiveLevel] = useState(
