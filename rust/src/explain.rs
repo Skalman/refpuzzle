@@ -343,24 +343,24 @@ fn invalid_clause(
 
         CountFloor { count, guaranteed } => {
             if guaranteed == 0 && indicative {
-                format!("there are already {count}")
+                format!("there {} already {count}", is_are(count))
             } else if guaranteed == 0 {
                 format!("there would already be {count}")
             } else {
+                let certain = count + guaranteed;
                 format!(
-                    "{} {} certain",
-                    count + guaranteed,
+                    "{certain} {} certain",
                     if indicative {
-                        "are already"
+                        format!("{} already", is_are(certain))
                     } else {
-                        "would be"
+                        "would be".to_string()
                     }
                 )
             }
         }
         CountCeiling { max } | PeakCeiling { max } => format!(
             "at most {max} {} possible",
-            if indicative { "are" } else { "would be" }
+            if indicative { is_are(max) } else { "would be" }
         ),
         PeakFloor { letter, floor } => format!(
             "{letter} {} certain to appear {}",
@@ -567,6 +567,11 @@ fn letters(n: u8) -> String {
     } else {
         format!("{n} letters")
     }
+}
+
+/// The verb agreeing with a count, e.g. "there is 1 question" / "there are 2 questions".
+fn is_are(count: u8) -> &'static str {
+    if count == 1 { "is" } else { "are" }
 }
 
 /// The pluralized noun phrase for a count claim, e.g. "questions with answer A"
@@ -942,7 +947,8 @@ fn explain_force(
                 if tally.possible == 0 {
                     let total = tally.min();
                     steps.push(simple(format!(
-                        "There are {total} {}, so {} must be {letter}.",
+                        "There {} {total} {}, so {} must be {letter}.",
+                        is_are(total),
                         count_rule_label(&qt, total),
                         q(qi)
                     )));
@@ -962,8 +968,8 @@ fn explain_force(
                 let cr = count_matching(answers, &state.eliminated, pred, from, to);
                 steps.push(try_looking(&[qi, src]));
                 steps.push(simple(format!(
-                    "{} says there are {src_val} {}. Only {} found so far, and {} is the only remaining question that could be {letter} — so {} must be {letter}.",
-                    q(src), count_rule_label(&src_qt, src_val), cr.count, q(qi), q(qi)
+                    "{} says there {} {src_val} {}. Only {} found so far, and {} is the only remaining question that could be {letter} — so {} must be {letter}.",
+                    q(src), is_are(src_val), count_rule_label(&src_qt, src_val), cr.count, q(qi), q(qi)
                 )));
                 return steps;
             }
@@ -1268,17 +1274,21 @@ fn count_saturation_text(
         // CountSaturated: `value` matches are already locked in (answered or forced),
         // so no other question can take a matching option.
         DeduceRule::CountSaturated => format!(
-            "{} says there are {value} {}, and {value} are already fixed — so {} can't also be {letter}.",
+            "{} says there {} {value} {}, and {value} {} already fixed — so {} can't also be {letter}.",
             q(src),
+            is_are(value),
             count_rule_label(&src_qt, value),
+            is_are(value),
             q(qi)
         ),
         // CountMustMatchElim: the count can only reach `value` if every remaining
         // unknown matches, so a non-matching option is impossible.
         DeduceRule::CountMustMatchElim => format!(
-            "{} says there are {value} {}. Only {min} are fixed so far and every remaining unknown must match — so {} can't be {letter}.",
+            "{} says there {} {value} {}. Only {min} {} fixed so far and every remaining unknown must match — so {} can't be {letter}.",
             q(src),
+            is_are(value),
             count_rule_label(&src_qt, value),
+            is_are(min),
             q(qi)
         ),
         _ => return None,
@@ -1503,8 +1513,9 @@ fn explain_elimination(
         let count = ov.is_num().then(|| ov.value()).filter(|&c| c <= n as u8);
         let text = match (source, count) {
             (Some(partner), Some(count)) => format!(
-                "{} would say there are {count} {}, leaving {} {} — but {} has no option left for that.",
+                "{} would say there {} {count} {}, leaving {} {} — but {} has no option left for that.",
                 q(qi),
+                is_are(count),
                 count_rule_label(&fp.question_types[qi], count),
                 n as u8 - count,
                 count_rule_label(&fp.question_types[partner], n as u8 - count),
@@ -1548,8 +1559,9 @@ fn explain_elimination(
             steps.push(try_looking(&[qi, src_qi]));
             steps.push(what_if());
             steps.push(simple(format!(
-                "{} means there are at least {bound} {}, so {claimed} appears too often to be the least common.",
+                "{} means there {} at least {bound} {}, so {claimed} appears too often to be the least common.",
                 q(src_qi),
+                is_are(bound),
                 count_rule_label(&src_qt, bound),
             )));
             return steps;
@@ -1561,14 +1573,16 @@ fn explain_elimination(
         // under the source's own label, which would state a cap the source never set.
         steps.push(simple(if outside == 0 {
             format!(
-                "{} means there are at most {bound} {}, so {claimed} appears too rarely to be the most common.",
+                "{} means there {} at most {bound} {}, so {claimed} appears too rarely to be the most common.",
                 q(src_qi),
+                is_are(bound),
                 count_rule_label(&src_qt, bound),
             )
         } else {
             format!(
-                "{} means there are at most {own_range} {}, and even if {} were {claimed}, that's at most {bound} in all — so {claimed} appears too rarely to be the most common.",
+                "{} means there {} at most {own_range} {}, and even if {} were {claimed}, that's at most {bound} in all — so {claimed} appears too rarely to be the most common.",
                 q(src_qi),
+                is_are(own_range),
                 count_rule_label(&src_qt, own_range),
                 outside_range_phrase(outside),
             )
@@ -2910,7 +2924,7 @@ mod tests {
         let steps = explain_elimination(&fp, &state, 0, 2, DeduceRule::MostCommonCountCeil, reason);
         assert_eq!(
             render_text(&steps),
-            "What if #1 is C? #2 means there are at most 1 question with answer C, \
+            "What if #1 is C? #2 means there is at most 1 question with answer C, \
              so C appears too rarely to be the most common."
         );
     }
