@@ -9,6 +9,9 @@ interface Props {
   mark: OptionMark;
   implied?: boolean;
   disabled?: boolean;
+  /** Verified by a checkpoint: still clickable, but the click only sweeps. */
+  checkpointed?: boolean;
+  sweep?: boolean;
   focused?: boolean;
   onClick: () => void;
 }
@@ -20,6 +23,8 @@ export function OptionButton({
   mark,
   implied,
   disabled,
+  checkpointed,
+  sweep,
   focused,
   onClick,
 }: Props) {
@@ -31,9 +36,10 @@ export function OptionButton({
 
   return (
     <button
-      class={`option-btn ${mark} ${implied ? "implied" : ""}`}
+      class={`option-btn ${mark} ${implied ? "implied" : ""} ${checkpointed ? "checkpointed" : ""} ${sweep ? "sweep" : ""}`}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
+      aria-disabled={checkpointed}
       title={title}
       aria-label={title}
       tabIndex={focused ? 0 : -1}

@@ -97,6 +97,13 @@ export function IconWarning(p: Props) {
   return <I {...p} d="M12 2 1 21h22L12 2zm0 7v6m0 2v2" />;
 }
 
+// Bare exclamation (a refused checkpoint). No enclosing circle — the badge or
+// pill it sits in is the enclosure. Deliberately not X-based either: the bare X
+// is the elimination mark in the same history strip.
+export function IconAlert(p: Props) {
+  return <IM {...p} paths={["M12 7v6", "M12 19h.01"]} />;
+}
+
 // X (incorrect mark)
 export function IconX(p: Props) {
   return <IM {...p} paths={["M18 6 6 18", "m6 6 12 12"]} />;

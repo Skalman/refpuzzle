@@ -149,6 +149,52 @@
   }
 }
 
+/* Verified by a checkpoint, so no longer editable. */
+.option-btn.checkpointed {
+  cursor: not-allowed;
+}
+
+/* The checkpointed sweep, in the pin's green: run across cells a checkpoint
+   just settled, and replayed on one cell when a click is refused. The overlay
+   is a clipped pseudo-element, so it rides over whatever background the mark
+   already has. `forwards` parks it off the right edge — without it the band
+   snaps back to center and blinks. */
+.option-btn.sweep {
+  position: relative;
+  overflow: hidden;
+  border-color: var(--valid);
+}
+
+.option-btn.sweep::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--valid) 45%, transparent),
+    transparent
+  );
+  animation: checkpoint-sweep 0.45s ease-out forwards;
+}
+
+@keyframes checkpoint-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .option-btn.sweep::after {
+    animation: none;
+    background: color-mix(in srgb, var(--valid) 25%, transparent);
+  }
+}
+
 .option-btn:focus-visible {
   outline-offset: -1px;
   z-index: 1;
@@ -198,6 +244,17 @@
 .hint-list {
   padding-left: 1.5rem;
   margin: 0.3rem 0 0;
+}
+
+/* Checkpoint verdict — the hint's slot, muted so it never reads as a hint. */
+.puzzle-note {
+  padding: 0.6rem 1rem;
+  margin-top: 0.75rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
 }
 
 .hint-more {

@@ -1,5 +1,11 @@
 /* ── History strip ── */
 .history-strip {
+  /* One shared content line for every control in the strip. The icons vary in
+     size (0.65rem…1rem) and would otherwise each set their container's height;
+     against this line they all center instead, so steps, the pill, and the
+     hint/fail badges come out exactly equal. Must fit the largest icon. */
+  --strip-line: 1rem;
+
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
@@ -19,6 +25,7 @@
   border-radius: 4px;
   padding: 0.1rem 0.4rem;
   font-size: 0.65rem;
+  line-height: var(--strip-line);
   font-family: inherit;
   cursor: pointer;
   color: var(--text-muted);
@@ -47,26 +54,82 @@
     border-color: var(--border);
   }
 
-  &.completed-step {
+  /* Settled ground before the last checkpoint, folded into one pill. */
+  &.history-collapsed {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    border-color: var(--border-muted);
+
+    & .history-icon {
+      transition: transform 0.15s ease;
+    }
+    &.expanded .history-icon {
+      transform: rotate(180deg);
+    }
+  }
+
+  /* While collapsed the pill and the checkpoint pin butt together, so the pair
+     reads as one control without giving up two separate click targets. */
+  &.history-collapsed.joined {
+    border-right: 0;
+    border-radius: 999px 0 0 999px;
+    margin-right: -2px;
+  }
+  &.joined:not(.history-collapsed) {
+    border-radius: 0 4px 4px 0;
+  }
+
+  /* Solved: the pill has swallowed the whole track and now carries the verdict. */
+  &.history-collapsed.solved {
     border-color: var(--valid);
     color: var(--valid);
     font-weight: 600;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.2em;
   }
 }
 
 .history-icon {
   display: inline-flex;
+  align-items: center;
+  height: var(--strip-line);
   vertical-align: middle;
 }
 
-.history-hint {
+.history-hint,
+.history-fail {
+  display: inline-flex;
+  align-items: center;
   font-size: 0.55rem;
+  line-height: var(--strip-line);
   opacity: 0.7;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: 4px;
   padding: 0.1rem 0.25rem;
+}
+
+.history-fail {
+  border-color: var(--invalid);
+  color: var(--invalid);
+  opacity: 1;
+}
+
+/* Folded markers render as pill text, not nested chips — no box; content on
+   the label's line can't change the pill's height. Icons at the chevron's
+   scale, so they read as line content rather than badges. */
+.history-collapsed :is(.history-hint, .history-fail) {
+  font-size: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  /* On top of the pill's gap: sets the markers off from the label. */
+  margin-left: 0.15em;
+
+  & svg {
+    width: 1.2em;
+    height: 1.2em;
+  }
 }

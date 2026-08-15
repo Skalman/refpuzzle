@@ -101,3 +101,6 @@
 .icon-stale {
   color: var(--invalid);
 }
+.icon-error {
+  color: var(--invalid);
+}

@@ -10,6 +10,10 @@ interface Props {
   marks: Marks;
   validity: Validity;
   disabled?: boolean;
+  /** Bitmask of options this question had marked at the last checkpoint. */
+  checkpointedMask?: number;
+  /** Bitmask of options playing the checkpointed sweep right now. */
+  sweepMask?: number;
   focusedOption?: number | null;
   defaultFocus?: boolean;
   onOptionClick: (questionIndex: number, optionIndex: number) => void;
@@ -29,6 +33,8 @@ export const QuestionRow = memo(
     marks,
     validity,
     disabled,
+    checkpointedMask = 0,
+    sweepMask = 0,
     focusedOption,
     defaultFocus,
     onOptionClick,
@@ -54,6 +60,8 @@ export const QuestionRow = memo(
               mark={marks[oi]}
               implied={hasCorrect && marks[oi] === "unmarked"}
               disabled={disabled || (hasCorrect && marks[oi] !== "correct")}
+              checkpointed={((checkpointedMask >> oi) & 1) === 1}
+              sweep={((sweepMask >> oi) & 1) === 1}
               focused={focusedOption === oi || (defaultFocus && oi === 0)}
               onClick={() => onOptionClick(index, oi)}
             />
@@ -68,6 +76,8 @@ export const QuestionRow = memo(
     marksEqual(prev.marks, next.marks) &&
     prev.validity === next.validity &&
     prev.disabled === next.disabled &&
+    prev.checkpointedMask === next.checkpointedMask &&
+    prev.sweepMask === next.sweepMask &&
     prev.focusedOption === next.focusedOption &&
     prev.defaultFocus === next.defaultFocus &&
     prev.onOptionClick === next.onOptionClick,

@@ -3,6 +3,8 @@ import type { Answer, Puzzle } from "../engine/types.ts";
 import { letterIdx } from "../engine/types.ts";
 import { deriveState } from "../engine/state.ts";
 import type { DeduceAction, ExplainStep, SolveStep } from "../engine/hint-types.ts";
+import { findMistake } from "../engine/mistake.ts";
+import type { Mistake } from "../engine/mistake.ts";
 import type { ArrowReferent, ArrowSpec, CoachMessage } from "../engine/coach-types.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
@@ -41,7 +43,6 @@ interface CoachOpts {
   onHint?: (level: number) => void;
 }
 
-type Mistake = { qi: number; kind: "answer" | "elim" };
 type EngineState = { answers: (Answer | null)[]; eliminated: number[] };
 
 /**
@@ -85,26 +86,6 @@ function whereToStart(step: SolveStep): CoachMessage {
     arrow: { mode: "point", qis: focus },
     tone: "calm",
   };
-}
-
-/**
- * The first mark that disagrees with the answer key, or null. Mirrors the
- * hint engine's `findError`: a filled answer ≠ key, or the key answer ruled
- * out. Key-based, so it flags a mistake before the red validity bar would.
- */
-function findMistake(
-  answers: (Answer | null)[],
-  eliminated: number[],
-  solution: (Answer | null)[],
-): Mistake | null {
-  for (let qi = 0; qi < solution.length; qi++) {
-    const correct = solution[qi];
-    if (correct == null) continue;
-    const oi = letterIdx(correct);
-    if (answers[qi] != null && answers[qi] !== correct) return { qi, kind: "answer" };
-    if ((eliminated[qi] >> oi) & 1) return { qi, kind: "elim" };
-  }
-  return null;
 }
 
 function blankState(puzzle: Puzzle): EngineState {
@@ -245,12 +226,10 @@ export function useL1Coach(
    * — a wrong *answer* is already visible on the board, so there's nothing to
    * sharpen and re-animating would be noise.
    */
-  function buildMistakePoint(mistake: Mistake, solution: (Answer | null)[]): CoachMessage {
-    const bad = solution[mistake.qi];
-    if (bad == null) return buildMistake(mistake);
+  function buildMistakePoint(mistake: Mistake): CoachMessage {
     return {
       text: t().coach.mistakeElim(mistake.qi + 1),
-      arrow: { mode: "point", qis: [mistake.qi], oi: letterIdx(bad) },
+      arrow: { mode: "point", qis: [mistake.qi], oi: letterIdx(mistake.answer) },
       tone: "alert",
       arrowKey: `mistake:${mistake.qi}`,
     };
@@ -305,7 +284,7 @@ export function useL1Coach(
           const now = deriveMarks(stateRef.current.questions, optionCount);
           const still = findMistake(now.answers, now.eliminated, solution);
           if (still && still.kind === "elim" && !stateRef.current.completed) {
-            setMessage(buildMistakePoint(still, solution));
+            setMessage(buildMistakePoint(still));
             onHintRef.current?.(2);
           }
         }, MISTAKE_MS + MISTAKE_POINT_MS);

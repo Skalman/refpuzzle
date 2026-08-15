@@ -35,6 +35,14 @@ A puzzle is a grid: `n` **questions** down, `option_count` **options** across.
   e.g. `CountAnswer`. Used for per-kind tables and coverage counts.
 - **board** / **state** — `State`: the answers and eliminations, nothing else. The puzzle
   itself is a `FlatPuzzle`, which never changes during a solve.
+- **checkpoint** — a history step that changes no marks, planted only when the board
+  matches the key. Its marks are then verified, so they lock: clicking one refuses and
+  flashes rather than changing it. Rewinding past the pin unlocks them, at the cost of
+  the checkpoint. A safe rewind target, and the boundary the history track collapses at.
+  Frontend-only.
+- **marker** — a hint or refused-checkpoint record attached to a history step. Sits
+  where the event happened; when a rewrite discards its step it folds onto the last
+  surviving step instead of vanishing, so rewinding never erases the record.
 
 ## Related
 

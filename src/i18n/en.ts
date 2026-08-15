@@ -48,12 +48,30 @@ export default {
     copyWithProgress: "Copy puzzle progress",
     hint: "Hint",
     checkpoint: "Checkpoint",
+    // Checkpoint verdicts. The button doesn't warn that the press can be refused,
+    // so the two refusals carry the gentle framing instead.
+    checkpointSet: "Checkpoint set — everything so far holds up.",
+    checkpointWrong: "Not yet — something's off further back.",
+    // `n` counts marks, not steps: the pins and retractions in the range don't
+    // establish anything.
+    verifiedMarks: (n: number) => `Verified · ${n}`,
+    verifiedTitle: (answered: number, questions: number) =>
+      `Verified: ${answered} of ${questions} questions answered`,
+    checkpointFailsTitle: (n: number) => plural(n, "refused checkpoint", "refused checkpoints"),
     solved: "Puzzle solved!",
     nextPuzzle: "Next puzzle",
     linkCopied: "Link copied!",
     start: "Start",
     solvedBadge: "Solved",
     more: "More",
+  },
+  // The escalating key-diff notes, shared by the Hint button and a refused
+  // checkpoint. `qi` is 0-based; `letter` is the answer the note names.
+  mistake: {
+    vague: "You made an error.",
+    question: (qi: number) => `You made an error in #${qi + 1}.`,
+    answer: (qi: number, letter: string) => `#${qi + 1} is not ${letter} — try a different answer.`,
+    elim: (qi: number, letter: string) => `You incorrectly eliminated #${qi + 1} option ${letter}.`,
   },
   // L1 in-play coach: calm, self-fading lines shown in the board padding. `#Q`
   // and force-vs-eliminate wording are templated from the engine's next step.

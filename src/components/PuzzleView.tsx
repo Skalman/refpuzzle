@@ -2,8 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
 import type { Marks, Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS } from "../engine/types.ts";
-import { isValid, V_NEUTRAL } from "../engine/state.ts";
+import { deriveState, isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
+import { findMistake } from "../engine/mistake.ts";
 import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts";
 import { loadState, saveState, saveMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
@@ -13,7 +14,7 @@ import { confetti } from "../lib/confetti.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { HistoryStrip, describeDiff } from "./HistoryStrip.tsx";
+import { HistoryStrip, describeDiff, lastCheckpointIdx } from "./HistoryStrip.tsx";
 import { HintStep } from "./HintStep.tsx";
 import { CoachText } from "./CoachText.tsx";
 import { CoachArrows } from "./CoachArrows.tsx";
@@ -165,6 +166,8 @@ export function PuzzleView({
 
   const [resetPending, setResetPending] = useState(false);
   const resetPendingRef = useRef(false);
+  /** The Checkpoint button's verdict. Shares the hint's slot; only one speaks. */
+  const [checkpointNote, setCheckpointNote] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ url: string; title: string } | null>(null);
   const [shareMenu, setShareMenu] = useState(false);
   const shareMenuRef = useRef(false);
@@ -197,14 +200,34 @@ export function PuzzleView({
     return () => document.removeEventListener("click", close);
   }, [shareMenu]);
 
+  /**
+   * Markers on steps a history rewrite discards fold onto the branch point —
+   * the step just before the newly added one — rather than being deleted, so
+   * no rewind can erase the record. Refusal counts add up; hint markers keep
+   * the deepest level reached, since that's what the value means (and the wire
+   * format caps at `h4`).
+   */
+  function foldMarkers(branchIdx: number) {
+    for (const [key, hintLevel] of [...hintMarkers.current]) {
+      if (key <= branchIdx) continue;
+      hintMarkers.current.delete(key);
+      hintMarkers.current.set(
+        branchIdx,
+        Math.max(hintMarkers.current.get(branchIdx) ?? 0, hintLevel),
+      );
+    }
+    for (const [key, count] of [...failMarkers.current]) {
+      if (key <= branchIdx) continue;
+      failMarkers.current.delete(key);
+      failMarkers.current.set(branchIdx, (failMarkers.current.get(branchIdx) ?? 0) + count);
+    }
+  }
+
   function pushHistory(qs: QuestionState[]) {
     const h = historyRef.current;
     const idx = historyIdxRef.current;
     historyRef.current = h.slice(0, idx + 1);
-    // Clean up hint markers for discarded future steps
-    for (const key of hintMarkers.current.keys()) {
-      if (key > idx) hintMarkers.current.delete(key);
-    }
+    foldMarkers(idx);
 
     const cloned = cloneStates(qs);
     if (historyRef.current.length >= 2) {
@@ -215,8 +238,10 @@ export function PuzzleView({
       if (lastDiff.qi >= 0 && lastDiff.qi === newDiff.qi && lastDiff.oi === newDiff.oi) {
         const merged = describeDiff(prev, cloned);
         if (merged.qi < 0) {
+          // The step un-did itself out of existence; its markers slide back too.
           historyRef.current.pop();
           historyIdxRef.current = historyRef.current.length - 1;
+          foldMarkers(historyIdxRef.current);
         } else {
           historyRef.current[historyRef.current.length - 1] = cloned;
         }
@@ -231,10 +256,29 @@ export function PuzzleView({
   }
 
   const hintMarkers = useRef<Map<number, number>>(initState.hints);
+  /**
+   * Refused checkpoint presses, keyed by the step the press landed on. History
+   * rewrites can't shake them off — `foldMarkers` slides them onto the branch
+   * point instead of deleting them. `meta.checkpointFails` tallies the same
+   * presses monotonically for scoring.
+   */
   const failMarkers = useRef<Map<number, number>>(initState.fails);
 
+  function pushFailMarker() {
+    const map = failMarkers.current;
+    const idx = historyIdxRef.current;
+    map.set(idx, (map.get(idx) ?? 0) + 1);
+    analytics.meta.current.checkpointFails++;
+    saveMeta(puzzle.id, analytics.meta.current);
+    forceHistoryUpdate();
+  }
+
   function pushHintMarker(hintLevel: number) {
-    hintMarkers.current.set(historyIdxRef.current, hintLevel);
+    const map = hintMarkers.current;
+    const idx = historyIdxRef.current;
+    // Deepest level reached at this step — a fresh press never lowers a level
+    // that folded here from rewritten history.
+    map.set(idx, Math.max(map.get(idx) ?? 0, hintLevel));
     analytics.meta.current.hints++;
     saveMeta(puzzle.id, analytics.meta.current);
     forceHistoryUpdate();
@@ -320,9 +364,60 @@ export function PuzzleView({
     setQuestions(next);
     revalidate(next);
     hints.clear();
+    setCheckpointNote(null);
+  }
+
+  /**
+   * The board the last checkpoint at or behind the cursor verified, or null.
+   * Every mark on it is known correct, so those cells are locked; rewinding
+   * past the pin unlocks them (and marking there discards it).
+   */
+  function checkpointBoard(): QuestionState[] | null {
+    const cpIdx = lastCheckpointIdx(historyRef.current, historyIdxRef.current);
+    return cpIdx > 0 ? historyRef.current[cpIdx] : null;
+  }
+
+  /**
+   * Cells playing the checkpointed sweep (see `.option-btn.sweep`), as a
+   * per-question option bitmask: what a landing checkpoint just settled, or the
+   * one cell a click bounced off. Cleared once the animation has run.
+   */
+  const [sweepMasks, setSweepMasks] = useState<number[] | null>(null);
+  const sweepTimer = useRef(0);
+  function playSweep(masks: number[]) {
+    clearTimeout(sweepTimer.current);
+    setSweepMasks(masks);
+    sweepTimer.current = window.setTimeout(() => setSweepMasks(null), 600);
+  }
+  useEffect(() => () => clearTimeout(sweepTimer.current), []);
+
+  /**
+   * What the checkpoint at the cursor settled that the one before it hadn't.
+   * A question with an answer contributes only that answer — its eliminations
+   * are subsumed by it, so re-announcing them would be noise.
+   */
+  function newlySettledMasks(): number[] {
+    const cpIdx = lastCheckpointIdx(historyRef.current, historyIdxRef.current);
+    const prevIdx = lastCheckpointIdx(historyRef.current, cpIdx - 1);
+    const prev = prevIdx > 0 ? historyRef.current[prevIdx] : null;
+    return historyRef.current[cpIdx].map((q, qi) => {
+      const isNew = (oi: number) => prev == null || prev[qi].marks[oi] === "unmarked";
+      const answerOi = q.marks.indexOf("correct");
+      if (answerOi >= 0) return isNew(answerOi) ? 1 << answerOi : 0;
+      let mask = 0;
+      for (let oi = 0; oi < puzzle.optionCount; oi++) {
+        if (q.marks[oi] === "incorrect" && isNew(oi)) mask |= 1 << oi;
+      }
+      return mask;
+    });
   }
 
   function handleOptionClick(questionIdx: number, optionIdx: number) {
+    const verified = checkpointBoard();
+    if (verified && verified[questionIdx].marks[optionIdx] !== "unmarked") {
+      playSweep(puzzle.questions.map((_q, qi) => (qi === questionIdx ? 1 << optionIdx : 0)));
+      return;
+    }
     const next = cloneStates(questionsRef.current);
     const q = next[questionIdx];
     const current = q.marks[optionIdx];
@@ -371,6 +466,7 @@ export function PuzzleView({
     setQuestions(qs);
     revalidate(qs);
     hints.clear();
+    setCheckpointNote(null);
     forceHistoryUpdate();
     focusCurrentStep();
   }
@@ -383,6 +479,7 @@ export function PuzzleView({
     setQuestions(qs);
     revalidate(qs);
     hints.clear();
+    setCheckpointNote(null);
     forceHistoryUpdate();
     focusCurrentStep();
   }
@@ -395,24 +492,41 @@ export function PuzzleView({
     setQuestions(qs);
     revalidate(qs);
     hints.clear();
+    setCheckpointNote(null);
     forceHistoryUpdate();
   }
 
+  /**
+   * Grant a checkpoint if nothing on the board contradicts the key. Marks the
+   * last checkpoint verified are locked against editing, so a re-verified
+   * range can only have grown — the one way to fail is a wrong new mark, which
+   * lands a refusal marker and opens the hint panel's escalation ladder.
+   */
   function handleSave() {
-    if (historyRef.current.length <= 1) return;
-    const prev = historyRef.current[historyIdxRef.current - 1];
-    const curr = historyRef.current[historyIdxRef.current];
-    if (prev && describeDiff(prev, curr).qi < 0) {
-      // Current step is already a checkpoint — toggle it off (remove)
-      historyRef.current.splice(historyIdxRef.current, 1);
-      hintMarkers.current.delete(historyIdxRef.current);
-      historyIdxRef.current--;
-      forceHistoryUpdate();
-    } else {
-      analytics.meta.current.checkpoints++;
-      saveMeta(puzzle.id, analytics.meta.current);
-      pushHistory(cloneStates(questionsRef.current));
+    const idx = historyIdxRef.current;
+    if (idx < 1 || lastCheckpointIdx(historyRef.current, idx) === idx) return;
+    const current = questionsRef.current;
+    const marks = current.map((q) => q.marks);
+
+    const { answers, eliminated } = deriveState(marks, puzzle.optionCount);
+    const mistake = findMistake(answers, eliminated, hints.getSolution());
+    if (mistake) {
+      setCheckpointNote(null);
+      pushFailMarker();
+      hints.showMistake(mistake, s.puzzle.checkpointWrong);
+      return;
     }
+
+    analytics.meta.current.checkpoints++;
+    saveMeta(puzzle.id, analytics.meta.current);
+    pushHistory(cloneStates(current));
+    // The pin is only in the history ref until something else persists — commit
+    // it now so a granted checkpoint survives a reload.
+    revalidate(current);
+    hints.clear();
+    setCheckpointNote(s.puzzle.checkpointSet);
+    // Announce what this checkpoint settled that the last one hadn't.
+    playSweep(newlySettledMasks());
   }
 
   function handleReset() {
@@ -428,13 +542,35 @@ export function PuzzleView({
     }));
     historyRef.current = [cloneStates(fresh)];
     historyIdxRef.current = 0;
+    // Explicit, or the next mark's foldMarkers would pile them all onto Start.
+    hintMarkers.current = new Map();
+    failMarkers.current = new Map();
     setQuestions(fresh);
     revalidate(fresh);
     hints.clear();
+    setCheckpointNote(null);
     analytics.wasCompleted.current = false;
   }
 
+  // Per-question bitmask of the cells the last checkpoint verified.
+  const verifiedBoard = checkpointBoard();
+  const checkpointedMasks = puzzle.questions.map((_q, qi) => {
+    if (!verifiedBoard) return 0;
+    let mask = 0;
+    for (let oi = 0; oi < puzzle.optionCount; oi++) {
+      if (verifiedBoard[qi].marks[oi] !== "unmarked") mask |= 1 << oi;
+    }
+    return mask;
+  });
+
   const hasProgress = historyRef.current.length > 1;
+  // Nothing to verify on a blank board, and a checkpoint can't checkpoint itself.
+  const canCheckpoint =
+    historyIdxRef.current > 0 &&
+    describeDiff(
+      historyRef.current[historyIdxRef.current - 1],
+      historyRef.current[historyIdxRef.current],
+    ).qi >= 0;
 
   function openSharePuzzle() {
     setShareSheet({ url: getPuzzleUrl(dateStr, level), title: s.puzzle.share });
@@ -484,14 +620,17 @@ export function PuzzleView({
       level,
       elapsedS: m.elapsedS,
       sessions: m.sessions,
-      ...(m.hints > 0 && { hints: m.hints }),
-      ...(m.checkpoints > 0 && { checkpoints: m.checkpoints }),
-      ...(m.historyBursts > 0 && { historyBursts: m.historyBursts }),
-      ...(m.fromShared && { fromShared: true }),
+      // Zeroes drop to undefined.
+      hints: m.hints || undefined,
+      checkpoints: m.checkpoints || undefined,
+      checkpointFails: m.checkpointFails || undefined,
+      historyBursts: m.historyBursts || undefined,
+      fromShared: m.fromShared || undefined,
       ...getClientInfo(),
     });
-    // The event above reads the in-memory counters; saveState already swapped
-    // the stored ledger to the outcome family on the completing mark.
+    // No clearMeta: saveState already swapped the ledger to the outcome
+    // family when the completing mark was saved; the event above reads the
+    // in-memory copy.
     confetti();
     // Scroll the whole completion banner into view right as the confetti starts — the
     // celebration overlay masks the viewport motion, so it reads smoother than scrolling after.
@@ -742,6 +881,8 @@ export function PuzzleView({
               marks={questions[qi]?.marks ?? FRESH_MARKS}
               validity={validity[qi] ?? "neutral"}
               disabled={completed}
+              checkpointedMask={checkpointedMasks[qi]}
+              sweepMask={sweepMasks?.[qi] ?? 0}
               focusedOption={focusedQuestion === qi ? focusedOption : null}
               defaultFocus={focusedQuestion == null && qi === 0}
               onOptionClick={stableOptionClick}
@@ -782,6 +923,9 @@ export function PuzzleView({
             )}
           </div>
         )}
+
+        {/* Checkpoint verdict */}
+        {!completed && checkpointNote && <div class="puzzle-note">{checkpointNote}</div>}
 
         {/* Completion banner */}
         {completed && (
@@ -832,7 +976,11 @@ export function PuzzleView({
           >
             <IconRedo />
           </button>
-          <button class="toolbar-accent-btn" onClick={handleSave} disabled={completed}>
+          <button
+            class="toolbar-accent-btn"
+            onClick={handleSave}
+            disabled={completed || !canCheckpoint}
+          >
             <IconPin size="0.9em" /> {s.puzzle.checkpoint}
           </button>
           <button
@@ -930,6 +1078,7 @@ export function PuzzleView({
             history={historyRef.current}
             currentIdx={historyIdxRef.current}
             hints={hintMarkers.current}
+            fails={failMarkers.current}
             completed={completed}
             onJump={handleJumpTo}
             containerRef={historyStripRef}

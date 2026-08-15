@@ -1,10 +1,31 @@
 import { useRef, useState, useEffect } from "preact/hooks";
 import type { Answer, Puzzle } from "../engine/types.ts";
-import { letterIdx } from "../engine/types.ts";
 import type { ExplainStep } from "../engine/hint-types.ts";
 import { deriveState } from "../engine/state.ts";
+import { findMistake } from "../engine/mistake.ts";
+import type { Mistake } from "../engine/mistake.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
+import { t } from "../i18n/index.ts";
+
+/**
+ * The escalation ladder for a key-wrong mark: vague, then the question, then the
+ * option. `lead` opens it, so the caller can frame why it's showing.
+ */
+function mistakeSteps(mistake: Mistake, lead: string): ExplainStep[] {
+  const s = t().mistake;
+  return [
+    { type: "simple", text: lead },
+    { type: "simple", text: s.question(mistake.qi) },
+    {
+      type: "simple",
+      text:
+        mistake.kind === "answer"
+          ? s.answer(mistake.qi, mistake.answer)
+          : s.elim(mistake.qi, mistake.answer),
+    },
+  ];
+}
 
 export function useHintEngine(
   puzzle: Puzzle,
@@ -37,31 +58,8 @@ export function useHintEngine(
   }
 
   function findError(answers: (Answer | null)[], eliminated: number[]): ExplainStep[] | null {
-    const solution = getSolution();
-    const n = puzzle.questions.length;
-    for (let qi = 0; qi < n; qi++) {
-      const correct = solution[qi];
-      if (correct == null) continue;
-      const correctOi = letterIdx(correct);
-      if (answers[qi] != null && answers[qi] !== correct) {
-        return [
-          { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in #${qi + 1}.` },
-          { type: "simple", text: `#${qi + 1} is not ${answers[qi]} — try a different answer.` },
-        ];
-      }
-      if ((eliminated[qi] >> correctOi) & 1) {
-        return [
-          { type: "simple", text: "You made an error." },
-          { type: "simple", text: `You made an error in #${qi + 1}.` },
-          {
-            type: "simple",
-            text: `You incorrectly eliminated #${qi + 1} option ${correct}.`,
-          },
-        ];
-      }
-    }
-    return null;
+    const mistake = findMistake(answers, eliminated, getSolution());
+    return mistake ? mistakeSteps(mistake, t().mistake.vague) : null;
   }
 
   function computeHint(): { steps: ExplainStep[] } | null {
@@ -115,6 +113,22 @@ export function useHintEngine(
     }
   }
 
+  /**
+   * Show a mistake spotted outside the hint flow (a refused checkpoint) in the
+   * hint panel, seeding the ladder so "More" walks on to the question and then
+   * the option. The opening line is priced by the caller, not as a hint; only
+   * escalation past it lands markers.
+   */
+  function showMistake(mistake: Mistake, lead: string) {
+    const steps = mistakeSteps(mistake, lead);
+    if (optsRef.current.debugMode) {
+      setDebugHints(steps);
+      return;
+    }
+    hintRef.current = { steps, step: 0 };
+    setHintText(steps[0]);
+  }
+
   function clear() {
     setHintText(null);
     hintRef.current = null;
@@ -123,5 +137,5 @@ export function useHintEngine(
   const hasMore =
     hintRef.current != null && hintRef.current.step < hintRef.current.steps.length - 1;
 
-  return { hintText, debugHints, hasMore, handleHint, getSolution, clear };
+  return { hintText, debugHints, hasMore, handleHint, getSolution, showMistake, clear };
 }
