@@ -156,12 +156,16 @@
 
 /* The checkpointed sweep, in the pin's green: run across cells a checkpoint
    just settled, and replayed on one cell when a click is refused. The overlay
-   is a clipped pseudo-element, so it rides over whatever background the mark
-   already has. `forwards` parks it off the right edge — without it the band
-   snaps back to center and blinks. */
+   is a pseudo-element, so it rides over whatever background the mark already
+   has. The band travels as a background-position rather than a transform, so
+   it stays within the padding box and the cell needs no clipping: overflow
+   would make the button a scroll container and zero its flex minimum size,
+   resizing the cell mid-animation, and clip-path eats the border edge.
+   `forwards` parks it off the right — without it the band snaps back to
+   center and blinks. The band is half the cell wide, so -100%/200% are the
+   positions that sit it just off either edge. */
 .option-btn.sweep {
   position: relative;
-  overflow: hidden;
   border-color: var(--valid);
 }
 
@@ -169,6 +173,7 @@
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
     90deg,
@@ -176,15 +181,17 @@
     color-mix(in srgb, var(--valid) 45%, transparent),
     transparent
   );
+  background-repeat: no-repeat;
+  background-size: 50% 100%;
   animation: checkpoint-sweep 0.45s ease-out forwards;
 }
 
 @keyframes checkpoint-sweep {
   from {
-    transform: translateX(-100%);
+    background-position: -100% 0;
   }
   to {
-    transform: translateX(100%);
+    background-position: 200% 0;
   }
 }
 
