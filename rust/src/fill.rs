@@ -350,7 +350,7 @@ pub(crate) fn fill_one_question(
                 );
             }
         }
-        for oi in 0..5 {
+        for oi in 0..option_count {
             slots[oi] = OptionValue::num(oi as u8);
         }
         return;
@@ -585,7 +585,7 @@ fn trace_question(
     let vals: Vec<Value> = (0..option_count)
         .map(|oi| {
             let ov = options_qi[oi];
-            if matches!(qt, QuestionType::TrueStmt) || ov.is_none() || ov.is_unused() {
+            if matches!(qt, QuestionType::TrueStmt) || !ov.is_num() {
                 Value::Null
             } else {
                 json!(ov.value())
@@ -1673,11 +1673,11 @@ mod tests {
                 }
 
                 // Distinctness: distractor option values must differ from the correct value
-                // and from each other (across the active option count). Identity-option
-                // and TrueStmt types don't store distinct distractor values, so skip them.
+                // and from each other (across the active option count). TrueStmt is skipped
+                // — its rows hold per-claim values, which may legitimately repeat.
                 for qi in 0..n {
                     let qt = &fp.question_types[qi];
-                    if qt.has_identity_options() || matches!(qt, QuestionType::TrueStmt) {
+                    if matches!(qt, QuestionType::TrueStmt) {
                         continue;
                     }
                     let slots = &fp.options[qi];

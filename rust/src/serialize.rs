@@ -16,9 +16,7 @@ pub fn puzzle_to_compact_value(fp: &FlatPuzzle) -> Value {
         .collect();
     obj.insert("q".into(), json!(qs));
 
-    let opts: Vec<Value> = (0..n)
-        .map(|qi| option_row_json(&question_types[qi], qi, oc, fp))
-        .collect();
+    let opts: Vec<Value> = (0..n).map(|qi| option_row_json(qi, oc, fp)).collect();
     obj.insert("o".into(), json!(opts));
 
     if let Some(types) = fp.true_stmt_question_types.as_ref() {
@@ -32,18 +30,14 @@ pub fn puzzle_to_compact_value(fp: &FlatPuzzle) -> Value {
     Value::Object(obj)
 }
 
-fn option_row_json(qt: &QuestionType, qi: usize, oc: usize, fp: &FlatPuzzle) -> Value {
-    if qt.has_identity_options() {
-        let row: Vec<Value> = (0..oc).map(|oi| json!(oi)).collect();
-        return json!(row);
-    }
+fn option_row_json(qi: usize, oc: usize, fp: &FlatPuzzle) -> Value {
     let row: Vec<Value> = (0..oc)
         .map(|oi| {
             let ov = fp.options[qi][oi];
-            if !ov.is_num() {
-                Value::Null
-            } else {
+            if ov.is_num() {
                 json!(ov.value())
+            } else {
+                Value::Null
             }
         })
         .collect();

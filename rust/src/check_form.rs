@@ -357,19 +357,16 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
             }
         } else {
             // Per-qi: duplicate option values — the same choice offered twice, so
-            // two options are equally right. Identity-option types are excluded (their
-            // values are fixed by position), and so is TrueStmt, above: distinct statements
-            // may legitimately assert the same number.
-            if !qt.has_identity_options() {
-                let vals: Vec<OptionValue> = (0..oc).map(|oi| fp.options[qi][oi]).collect();
-                let unique: std::collections::HashSet<OptionValue> = vals.iter().copied().collect();
-                if unique.len() < vals.len() {
-                    errors.push(FormError {
-                        qi,
-                        message: "Duplicate option values".into(),
-                        severity: Severity::Error,
-                    });
-                }
+            // two options are equally right. TrueStmt is excluded, above: distinct
+            // statements may legitimately assert the same number.
+            let vals: Vec<OptionValue> = (0..oc).map(|oi| fp.options[qi][oi]).collect();
+            let unique: std::collections::HashSet<OptionValue> = vals.iter().copied().collect();
+            if unique.len() < vals.len() {
+                errors.push(FormError {
+                    qi,
+                    message: "Duplicate option values".into(),
+                    severity: Severity::Error,
+                });
             }
 
             // Per-qi: NONE disallowed for kinds whose answer is always a value.

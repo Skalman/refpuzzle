@@ -1714,8 +1714,8 @@ fn apply_vowel_consonant_cross_elim(
     // leaving it in `valid` without a partner is what triggers the cross-elim.
     let valid_mask = |q: usize| -> u8 {
         let mut mask = 0u8;
-        for oi in 0..5 {
-            if !is_eliminated(eliminated, q, oi) && !fp.options[q][oi].is_unused() {
+        for oi in 0..fp.option_count {
+            if !is_eliminated(eliminated, q, oi) {
                 mask |= 1 << oi;
             }
         }
@@ -2081,45 +2081,43 @@ fn deduce_impl(
                     // Reverse (src answered): narrow target's options to those at the claimed distance.
                     if target_qi < n && target_qi != qi && answers[target_qi].is_none() {
                         let ov = fp.options[qi][a.idx()];
-                        if !ov.is_unused() {
-                            // NONE distance is unsatisfiable: every non-eliminated option
-                            // ends up in elim_mask (the `actual == ov.value()` check is
-                            // skipped when the source's distance value is null).
-                            let mut elim_mask = 0u8;
-                            let mut valid_count = 0u8;
-                            let mut valid_oi = 0usize;
-                            for oi in 0..5usize {
-                                if is_eliminated(eliminated, target_qi, oi) {
-                                    continue;
-                                }
-                                let actual = (oi as u8).abs_diff(a as u8);
-                                if ov.is_num() && actual == ov.value() {
-                                    valid_count += 1;
-                                    valid_oi = oi;
-                                } else {
-                                    elim_mask |= 1 << oi;
-                                }
+                        // NONE distance is unsatisfiable: every non-eliminated option
+                        // ends up in elim_mask (the `actual == ov.value()` check is
+                        // skipped when the source's distance value is null).
+                        let mut elim_mask = 0u8;
+                        let mut valid_count = 0u8;
+                        let mut valid_oi = 0usize;
+                        for oi in 0..fp.option_count {
+                            if is_eliminated(eliminated, target_qi, oi) {
+                                continue;
                             }
-                            if valid_count == 1 && elim_mask != 0 {
-                                sink.push(
-                                    DeduceRule::LetterDistReverseForce,
-                                    DeduceAction::Force {
-                                        qi: target_qi,
-                                        answer: Answer::from(valid_oi as u8),
-                                    },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
+                            let actual = (oi as u8).abs_diff(a as u8);
+                            if ov.is_num() && actual == ov.value() {
+                                valid_count += 1;
+                                valid_oi = oi;
+                            } else {
+                                elim_mask |= 1 << oi;
                             }
-                            if elim_mask != 0 && valid_count != 1 {
-                                sink.push(
-                                    DeduceRule::LetterDistReverseElim,
-                                    DeduceAction::EliminateMulti {
-                                        question_mask: 1 << target_qi,
-                                        option_mask: elim_mask,
-                                    },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
-                            }
+                        }
+                        if valid_count == 1 && elim_mask != 0 {
+                            sink.push(
+                                DeduceRule::LetterDistReverseForce,
+                                DeduceAction::Force {
+                                    qi: target_qi,
+                                    answer: Answer::from(valid_oi as u8),
+                                },
+                                DeduceReason::Source { source: qi as u8 },
+                            );
+                        }
+                        if elim_mask != 0 && valid_count != 1 {
+                            sink.push(
+                                DeduceRule::LetterDistReverseElim,
+                                DeduceAction::EliminateMulti {
+                                    question_mask: 1 << target_qi,
+                                    option_mask: elim_mask,
+                                },
+                                DeduceReason::Source { source: qi as u8 },
+                            );
                         }
                     }
                 } else {

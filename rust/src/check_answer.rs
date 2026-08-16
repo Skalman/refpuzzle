@@ -1175,18 +1175,12 @@ fn maybe_consistent(
     }
 }
 
-/// The value question `qi`'s option `ai` asserts: the option index itself for the
-/// identity-option kinds, the stored option value for everyone else (filled for every
-/// slot within `option_count`).
-fn claim_value(fp: &FlatPuzzle, qt: &QuestionType, qi: usize, ai: usize) -> OptionValue {
-    if qt.has_identity_options() {
-        OptionValue::num(ai as u8)
-    } else {
-        let ov = fp.options[qi][ai];
-        // Fatal check_form error, or an answer past `option_count`.
-        assert!(!ov.is_unused(), "Q{} has no option {ai}", qi + 1);
-        ov
-    }
+/// The value question `qi`'s option `ai` asserts.
+fn claim_value(fp: &FlatPuzzle, qi: usize, ai: usize) -> OptionValue {
+    let ov = fp.options[qi][ai];
+    // Fatal check_form error, or an answer past `option_count`.
+    assert!(!ov.is_unused(), "Q{} has no option {ai}", qi + 1);
+    ov
 }
 
 /// The claim question `qi`'s current answer commits to: the statement it picked for a
@@ -1201,7 +1195,7 @@ pub fn answered_claim(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Claim
     }
     Some(Claim {
         question_type: qt,
-        value: claim_value(fp, &qt, qi, ai),
+        value: claim_value(fp, qi, ai),
     })
 }
 
@@ -1265,7 +1259,7 @@ pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> Val
 
     let claim = Claim {
         question_type: *qt,
-        value: claim_value(fp, qt, qi, ai),
+        value: claim_value(fp, qi, ai),
     };
     let verdict = check_claim_with_reason(fp, state, OptionPos { qi, oi: ai }, claim);
     maybe_consistent(verdict, qt, qi)

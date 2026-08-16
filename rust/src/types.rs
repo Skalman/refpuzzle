@@ -37,35 +37,6 @@ impl OptionValue {
     }
 }
 
-// Wire format for OptionValue: JSON `null` for NONE, integer for Num(v).
-// UNUSED never serializes — it's a storage-only artifact of fixed arrays.
-impl Serialize for OptionValue {
-    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
-        if self.is_none() {
-            s.serialize_none()
-        } else if self.is_num() {
-            s.serialize_u8(self.value())
-        } else {
-            // UNUSED slipped through — serialize as null defensively rather
-            // than panicking from the debug_assert in value().
-            s.serialize_none()
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for OptionValue {
-    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
-        let v = Option::<u8>::deserialize(d)?;
-        match v {
-            None => Ok(Self::NONE),
-            Some(n) if n < 0xFE => Ok(Self::num(n)),
-            Some(n) => Err(serde::de::Error::custom(format!(
-                "invalid option value: {n}"
-            ))),
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[repr(u8)]
 pub enum Answer {
@@ -496,8 +467,10 @@ impl std::ops::Index<usize> for SmallList {
 
 pub struct FlatPuzzle {
     pub question_types: [QuestionType; MAX_N],
-    /// Per-option values. For TrueStmt rows this stores the per-claim values;
-    /// the matching claim question types live in `true_stmt_question_types`.
+    /// Per-option values, one per slot below `option_count`; slots at or above
+    /// it are `UNUSED` padding and reading one is a bug. For TrueStmt rows this
+    /// stores the per-claim values; the matching claim question types live in
+    /// `true_stmt_question_types`.
     pub options: [[OptionValue; 5]; MAX_N],
     /// Question types for the TrueStmt's claims, indexed by option. `Some` iff
     /// the puzzle has exactly one TrueStmt question. Slots beyond
