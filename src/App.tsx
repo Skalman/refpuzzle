@@ -164,7 +164,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         if (activeLevelRef.current < 6) selectLevel(activeLevelRef.current + 1);
       }),
       Escape: (ev: KeyboardEvent) => {
-        // Priority: dialog handled natively > menu > overlay > pending reset
+        // Priority: dialog handled natively > menu > overlay
         const target = ev.target;
         if (target instanceof HTMLElement && target.closest("dialog")) return;
         if (showKeyboardHelpRef.current) {

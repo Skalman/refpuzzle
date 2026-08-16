@@ -146,8 +146,8 @@ export function IconChevronDown(p: Props) {
   return <I {...p} d="m6 9 6 6 6-6" />;
 }
 
-// Refresh (reset)
-export function IconReset(p: Props) {
+// Refresh (replay)
+export function IconReplay(p: Props) {
   return (
     <IM
       {...p}

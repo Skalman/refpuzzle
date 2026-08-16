@@ -25,7 +25,7 @@ import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
 import { ShareSheet } from "./ShareSheet.tsx";
 import { SplitMenu } from "./SplitMenu.tsx";
-import { IconUndo, IconRedo, IconPin, IconHint, IconReset, IconShare } from "./Icons.tsx";
+import { IconUndo, IconRedo, IconPin, IconHint, IconShare } from "./Icons.tsx";
 import type { Ref } from "preact";
 
 interface PuzzleViewProps {
@@ -151,8 +151,6 @@ export function PuzzleView({
     historyBurstRef.current.lastTime = now;
   }
 
-  const [resetPending, setResetPending] = useState(false);
-  const resetPendingRef = useRef(false);
   /** The Checkpoint button's verdict. Shares the hint's slot; only one speaks. */
   const [checkpointNote, setCheckpointNote] = useState<string | null>(null);
   const [shareSheet, setShareSheet] = useState<{ url: string; title: string } | null>(null);
@@ -416,8 +414,6 @@ export function PuzzleView({
     }
 
     applyChange(next);
-    setResetPending(false);
-    resetPendingRef.current = false;
     setFocusedQuestion(questionIdx);
     setFocusedOption(optionIdx);
   }
@@ -510,14 +506,8 @@ export function PuzzleView({
     playSweep(newlySettledMasks());
   }
 
-  function handleReset() {
-    if (!resetPendingRef.current) {
-      setResetPending(true);
-      resetPendingRef.current = true;
-      return;
-    }
-    setResetPending(false);
-    resetPendingRef.current = false;
+  /** Back to a blank board and an empty track — the solve, and its record, go. */
+  function handlePlayAgain() {
     const fresh = puzzle.questions.map(() => ({
       marks: [...FRESH_MARKS] as Marks,
     }));
@@ -573,16 +563,6 @@ export function PuzzleView({
       title: s.puzzle.shareWithProgress,
     });
   }
-
-  // Clear reset pending after timeout
-  useEffect(() => {
-    if (!resetPending) return undefined;
-    const timer = setTimeout(() => {
-      setResetPending(false);
-      resetPendingRef.current = false;
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [resetPending]);
 
   // Confetti + scroll to next puzzle on completion
   useEffect(() => {
@@ -995,15 +975,6 @@ export function PuzzleView({
               )}
             </SplitMenu>
           </span>
-          <button
-            class={classNames("toolbar-accent-btn", resetPending && "reset-confirm")}
-            onClick={handleReset}
-            disabled={historyRef.current.length <= 1}
-          >
-            <IconReset size="0.9em" />
-            <span>{s.puzzle.reset}</span>
-            {resetPending && <span class="reset-overlay">{s.puzzle.resetConfirm}</span>}
-          </button>
         </div>
 
         {historyRef.current.length > 1 && (
@@ -1014,6 +985,7 @@ export function PuzzleView({
             fails={failMarkers.current}
             completed={completed}
             onJump={handleJumpTo}
+            onPlayAgain={handlePlayAgain}
             containerRef={historyStripRef}
           />
         )}

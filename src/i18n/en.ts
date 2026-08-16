@@ -38,8 +38,6 @@ export default {
   puzzle: {
     undo: "Undo",
     redo: "Redo",
-    reset: "Reset",
-    resetConfirm: "Reset?",
     share: "Share puzzle",
     shareOptions: "More share options",
     copyLink: "Copy puzzle link",
@@ -64,6 +62,9 @@ export default {
     linkCopied: "Link copied!",
     start: "Start",
     solvedBadge: "Solved",
+    playAgain: "Play again",
+    // The armed label: a second press is what actually discards the solve.
+    playAgainConfirm: "Clear board?",
     more: "More",
   },
   // The escalating key-diff notes, shared by the Hint button and a refused

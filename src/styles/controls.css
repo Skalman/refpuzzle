@@ -60,29 +60,6 @@
     opacity: 0.35;
     cursor: default;
   }
-
-  &.reset-confirm {
-    color: var(--invalid);
-    background: var(--invalid-soft);
-    position: relative;
-
-    &:hover {
-      color: var(--invalid);
-      background: var(--invalid-soft);
-    }
-
-    & > :not(.reset-overlay) {
-      visibility: hidden;
-    }
-  }
-
-  & .reset-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
 }
 
 /* ── More menu (header) ── */

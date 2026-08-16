@@ -13,6 +13,7 @@ import {
   IconPlay,
   IconChevronDown,
   IconAlert,
+  IconReplay,
 } from "./Icons.tsx";
 
 interface MoveInfo {
@@ -84,6 +85,40 @@ function FailBadge({ count }: { count: number }) {
   );
 }
 
+/**
+ * Wipes the board for a second run at the same puzzle. Shown only once solved,
+ * where it is the one way back — every step in the track is frozen by then.
+ * Two presses: the first arms the button for three seconds, since the press
+ * discards the solve and nothing can undo it.
+ */
+function ReplayButton({ onPlayAgain }: { onPlayAgain: () => void }) {
+  const s = t();
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return undefined;
+    const timer = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(timer);
+  }, [armed]);
+  return (
+    <button
+      class={classNames("history-step history-replay", armed && "armed")}
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          return;
+        }
+        setArmed(false);
+        onPlayAgain();
+      }}
+    >
+      <span class="history-icon">
+        <IconReplay size="1em" />
+      </span>
+      {armed ? s.puzzle.playAgainConfirm : s.puzzle.playAgain}
+    </button>
+  );
+}
+
 /** Questions holding an answer on one board. */
 function answeredCount(board: QuestionState[]): number {
   let n = 0;
@@ -111,6 +146,7 @@ export function HistoryStrip({
   fails,
   completed,
   onJump,
+  onPlayAgain,
   containerRef,
 }: {
   history: QuestionState[][];
@@ -120,6 +156,7 @@ export function HistoryStrip({
   fails: Map<number, number>;
   completed: boolean;
   onJump: (idx: number) => void;
+  onPlayAgain: () => void;
   containerRef?: { current: HTMLDivElement | null };
 }) {
   const s = t();
@@ -176,6 +213,9 @@ export function HistoryStrip({
       role="toolbar"
       onKeyDown={arrowNavHandler("button.history-step:not(:disabled)")}
     >
+      {/* Leads the row: expanding the Solved pill pushes the whole track out to
+          the right, and the way out shouldn't travel with it. */}
+      {completed && <ReplayButton onPlayAgain={onPlayAgain} />}
       {collapsible && (
         <button
           class={classNames(

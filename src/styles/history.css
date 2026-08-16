@@ -89,6 +89,24 @@
     color: var(--valid);
     font-weight: 600;
   }
+
+  /* Play again: pill-shaped like its Solved neighbor, but deliberately the
+     quieter of the two — Next puzzle stays the way forward. Armed, it borrows
+     the refusal color to say the next press throws the solve away. */
+  &.history-replay {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    padding: 0.1rem 0.5rem;
+    border-radius: 999px;
+
+    &.armed {
+      border-color: var(--invalid);
+      background: var(--invalid-soft);
+      color: var(--invalid);
+      font-weight: 600;
+    }
+  }
 }
 
 .history-icon {
