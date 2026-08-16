@@ -1,6 +1,7 @@
 import type { OptionMark } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import { IconCheck, IconX } from "./Icons.tsx";
+import { classNames } from "../lib/classNames.ts";
 
 interface Props {
   index: number;
@@ -36,7 +37,13 @@ export function OptionButton({
 
   return (
     <button
-      class={`option-btn ${mark} ${implied ? "implied" : ""} ${checkpointed ? "checkpointed" : ""} ${sweep ? "sweep" : ""}`}
+      class={classNames(
+        "option-btn",
+        mark,
+        implied && "implied",
+        checkpointed && "checkpointed",
+        sweep && "sweep",
+      )}
       onClick={disabled ? undefined : onClick}
       disabled={disabled}
       aria-disabled={checkpointed}

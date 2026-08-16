@@ -10,6 +10,7 @@ import { loadState, saveState, saveMeta, cloneStates } from "../lib/store.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getShareUrl, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
+import { classNames } from "../lib/classNames.ts";
 import { confetti } from "../lib/confetti.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
@@ -829,7 +830,7 @@ export function PuzzleView({
         {/* Questions */}
         <div
           ref={gridRef}
-          class={`questions-grid${puzzle.questions.length <= 3 ? " single-col" : ""}`}
+          class={classNames("questions-grid", puzzle.questions.length <= 3 && "single-col")}
           style={{
             gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
           }}
@@ -995,7 +996,7 @@ export function PuzzleView({
             </SplitMenu>
           </span>
           <button
-            class={`toolbar-accent-btn ${resetPending ? "reset-confirm" : ""}`}
+            class={classNames("toolbar-accent-btn", resetPending && "reset-confirm")}
             onClick={handleReset}
             disabled={historyRef.current.length <= 1}
           >

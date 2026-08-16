@@ -1,6 +1,7 @@
 import { AppHeader } from "./AppHeader.tsx";
 import { useBackupFlow, BackupDialogs } from "./BackupFlow.tsx";
 import { hasState } from "../lib/store.ts";
+import { classNames } from "../lib/classNames.ts";
 import { useRevalidated } from "../lib/hooks.ts";
 import { useToday } from "../lib/today.ts";
 import { dateStrFromOffset, isValidDate, puzzleId } from "../puzzles/daily.ts";
@@ -73,18 +74,24 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
   return (
     <a
       href={`/${dateStr}/1`}
-      class={`archive-day ${tint} ${isToday ? "today" : ""}`}
+      class={classNames("archive-day", tint, isToday && "today")}
       aria-label={label}
     >
       <span class="archive-daynum">{day}</span>
       <span class="archive-track" aria-hidden="true">
-        {states.map((state, i) => (
-          <span
+        {states.map((state, i) => {
+          const levelTint = state.stale
+            ? "stale"
+            : state.completed
+              ? "solved"
+              : state.started
+                ? "started"
+                : "";
+          return (
             // oxlint-disable-next-line react/no-array-index-key
-            key={i}
-            class={`archive-level ${state.stale ? "stale" : state.completed ? "solved" : state.started ? "started" : ""}`}
-          />
-        ))}
+            <span key={i} class={classNames("archive-level", levelTint)} />
+          );
+        })}
       </span>
     </a>
   );

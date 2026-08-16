@@ -3,6 +3,7 @@ import type { RenderedQuestion, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
 import { OptionButton } from "./OptionButton.tsx";
+import { classNames } from "../lib/classNames.ts";
 
 interface Props {
   index: number;
@@ -50,7 +51,7 @@ export const QuestionRow = memo(
           <span class="question-num">{index + 1}.</span>
           <span class="question-text">{question.text}</span>
         </div>
-        <div class={`question-options ${isLong ? "options-vertical" : ""}`}>
+        <div class={classNames("question-options", isLong && "options-vertical")}>
           {question.options.map((_label, oi) => (
             <OptionButton
               key={LETTERS[oi]}

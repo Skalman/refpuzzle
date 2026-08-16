@@ -18,6 +18,7 @@ import {
   parseCompactPuzzle,
 } from "./puzzles/daily.ts";
 import { useToday } from "./lib/today.ts";
+import { classNames } from "./lib/classNames.ts";
 import { decodePlaygroundHash } from "./lib/playground.ts";
 import { hasState } from "./lib/store.ts";
 import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
@@ -59,7 +60,7 @@ function InlineHelp({ highlight }: { highlight?: boolean }) {
 
   return (
     <div class="inline-help">
-      <div class={`how-to-play${show ? " how-to-play--first-visit" : ""}`}>
+      <div class={classNames("how-to-play", show && "how-to-play--first-visit")}>
         <h4>{s.help.title}</h4>
         <p class="how-to-goal">{s.help.goal}</p>
         <ol>
@@ -255,7 +256,13 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
               role="tab"
               aria-selected={activeLevel === level}
               tabIndex={activeLevel === level ? 0 : -1}
-              class={`difficulty-tab ${activeLevel === level ? "active" : ""} ${solved && !stale ? "tab-solved" : ""} ${stale ? "tab-stale" : ""} ${started ? "tab-started" : ""}`}
+              class={classNames(
+                "difficulty-tab",
+                activeLevel === level && "active",
+                solved && !stale && "tab-solved",
+                stale && "tab-stale",
+                started && "tab-started",
+              )}
               onClick={() => selectLevel(level)}
             >
               {solved && !stale && (
@@ -330,7 +337,10 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
                       {qi + 1}. {q.text}
                     </div>
                     <div
-                      class={`print-options ${q.options.some((l) => l.length > 12) ? "print-options-long" : ""}`}
+                      class={classNames(
+                        "print-options",
+                        q.options.some((l) => l.length > 12) && "print-options-long",
+                      )}
                     >
                       {q.options.map((label, oi) => (
                         // oxlint-disable-next-line react/no-array-index-key

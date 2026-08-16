@@ -1,6 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { LETTERS } from "../engine/types.ts";
 import { arrowNavHandler } from "../lib/keyboard.ts";
+import { classNames } from "../lib/classNames.ts";
 import type { QuestionState } from "../lib/store.ts";
 import { t } from "../i18n/index.ts";
 import {
@@ -177,7 +178,12 @@ export function HistoryStrip({
     >
       {collapsible && (
         <button
-          class={`history-step history-collapsed ${showAll ? "expanded" : ""} ${!showAll && !completed ? "joined" : ""} ${completed ? "solved" : ""}`}
+          class={classNames(
+            "history-step history-collapsed",
+            showAll && "expanded",
+            !showAll && !completed && "joined",
+            completed && "solved",
+          )}
           aria-expanded={showAll}
           title={s.puzzle.verifiedTitle(answered, history[0].length)}
           onClick={() => setExpanded((v) => !v)}
@@ -199,7 +205,7 @@ export function HistoryStrip({
       {showAll && (
         <span class="history-entry">
           <button
-            class={`history-step ${currentIdx === 0 ? "current" : ""}`}
+            class={classNames("history-step", currentIdx === 0 && "current")}
             onClick={completed ? undefined : () => onJump(0)}
             disabled={completed}
           >
@@ -219,12 +225,18 @@ export function HistoryStrip({
         const isCheckpoint = move.qi < 0;
         const isLastCp = stepIdx === activeCpIdx;
         // Butt up against the collapsed pill, so the pair reads as one control.
-        const joined = !showAll && stepIdx === foldTo ? "joined" : "";
+        const joined = !showAll && stepIdx === foldTo;
         return (
           // oxlint-disable-next-line react/no-array-index-key
           <span key={i} class="history-entry">
             <button
-              class={`history-step ${joined} ${!completed && stepIdx === currentIdx ? "current" : ""} ${stepIdx > currentIdx ? "future" : ""} ${isCheckpoint && isLastCp ? "checkpoint" : ""} ${isCheckpoint && !isLastCp ? "checkpoint-old" : ""}`}
+              class={classNames(
+                "history-step",
+                joined && "joined",
+                !completed && stepIdx === currentIdx && "current",
+                stepIdx > currentIdx && "future",
+                isCheckpoint && (isLastCp ? "checkpoint" : "checkpoint-old"),
+              )}
               onClick={completed ? undefined : () => onJump(stepIdx)}
               disabled={completed}
               title={move.text}
