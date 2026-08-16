@@ -1705,8 +1705,7 @@ fn apply_vowel_consonant_cross_elim(
         let v = fp.options[vq][va.idx()];
         let c = fp.options[cq][ca.idx()];
         // Valid only if they sum to n.
-        let ok = v.is_num() && c.is_num() && v.value() + c.value() == n as u8;
-        if ok {
+        if v.is_num() && c.is_num() && v.value() + c.value() == n as u8 {
             return;
         }
     }
@@ -2626,10 +2625,9 @@ fn deduce_impl(
                         if ov.is_none() {
                             // SameAsWhichNoneMatch: a listed candidate already
                             // holds the matched letter, so "none of these" is false.
-                            let sharer = (0..fp.option_count).find_map(|ci| {
+                            if let Some(sharer) = (0..fp.option_count).find_map(|ci| {
                                 listed(fp.options[qi][ci]).filter(|&j| answers[j] == Some(ra))
-                            });
-                            if let Some(sharer) = sharer {
+                            }) {
                                 sink.push(
                                     DeduceRule::SameAsWhichNoneMatch,
                                     DeduceAction::Eliminate { qi, oi },
@@ -2664,11 +2662,10 @@ fn deduce_impl(
                         // (OnlyOptionLeft turns it into the answer), two or more
                         // empty the row outright, which is a genuine contradiction
                         // no valid key can produce.
-                        let other_match = (0..fp.option_count).find_map(|ci| {
+                        if let Some(other_match) = (0..fp.option_count).find_map(|ci| {
                             listed(fp.options[qi][ci])
                                 .filter(|&j| j != pos && answers[j] == Some(ra))
-                        });
-                        if let Some(other_match) = other_match {
+                        }) {
                             sink.push(
                                 DeduceRule::SameAsWhichOtherMatch,
                                 DeduceAction::Eliminate { qi, oi },
@@ -3169,13 +3166,10 @@ mod tests {
             let rule_filter = test.get("rule").and_then(|v| v.as_str());
 
             let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
-            let fp = match fp {
-                Some(fp) => fp,
-                None => {
-                    failed += 1;
-                    eprintln!("FAIL: {name}: parse failed");
-                    continue;
-                }
+            let Some(fp) = fp else {
+                failed += 1;
+                eprintln!("FAIL: {name}: parse failed");
+                continue;
             };
 
             let n = fp.n;

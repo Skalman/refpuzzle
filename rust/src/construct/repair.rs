@@ -99,8 +99,7 @@ fn repair_pass(
         // scratch. The brute + from-scratch re-check backstops below gate acceptance
         // regardless; a rejected edit is left in place (discarded on regenerate).
         let out = run_hint_sound(fp, *state, stats, recipe);
-        let (solved, advanced_state) = (out.solved, out.state);
-        if solved {
+        if out.solved {
             let solutions = solve(fp, 2);
             if solutions.len() != 1 {
                 // Not actually unique — the edit added a second valid answer.
@@ -120,7 +119,7 @@ fn repair_pass(
             stats.distractor_ok += 1;
             return PassOutcome::Solved;
         }
-        *state = advanced_state; // useful edit — keep it and repair from the new position
+        *state = out.state; // useful edit — keep it and repair from the new position
         changed = true;
     }
     if changed {

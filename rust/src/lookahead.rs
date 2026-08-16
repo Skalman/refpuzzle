@@ -450,12 +450,9 @@ mod tests {
             let expect = test["expect"].as_str();
 
             let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
-            let fp = match fp {
-                Some(fp) => fp,
-                None => {
-                    eprintln!("SKIP: {name}: parse failed");
-                    continue;
-                }
+            let Some(fp) = fp else {
+                eprintln!("SKIP: {name}: parse failed");
+                continue;
             };
 
             let n = fp.n;

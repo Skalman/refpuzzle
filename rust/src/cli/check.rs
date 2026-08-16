@@ -470,12 +470,9 @@ fn compute_check_output(path: &str, target: Option<&str>) -> CheckOutput {
             {
                 continue;
             }
-            let fp = match serialize::parse_puzzle(puzzle) {
-                Some(fp) => fp,
-                None => {
-                    eprintln!("  SKIP {key}: parse failed");
-                    continue;
-                }
+            let Some(fp) = serialize::parse_puzzle(puzzle) else {
+                eprintln!("  SKIP {key}: parse failed");
+                continue;
             };
             puzzles.push(check_one_puzzle(&fp, &key, link_year));
         }

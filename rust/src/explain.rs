@@ -524,10 +524,7 @@ fn invalid_clause(
             LETTERS[opt.oi],
             letters(max)
         ),
-        NoLetterAtDistance { at } => format!(
-            "no answer {} still has left is that far off",
-            q(usize::from(at))
-        ),
+        NoLetterAtDistance { at } => format!("no answer {} still has left is that far off", q(at)),
     })
 }
 
@@ -916,7 +913,7 @@ fn explain_force(
                 steps.push(try_looking(&[qi, question_index as usize]));
                 steps.push(simple(format!(
                     "{} is answered {target}. Only option {letter} gives the right letter distance.",
-                    q(question_index as usize)
+                    q(question_index)
                 )));
                 return steps;
             }
@@ -1079,19 +1076,17 @@ fn explain_force(
                 source: src,
                 oi: claim_oi,
             } = reason
+                && let Some(claim) = fp.claim_at(usize::from(src), usize::from(claim_oi))
             {
-                let src = usize::from(src);
-                if let Some(claim) = fp.claim_at(src, usize::from(claim_oi)) {
-                    return vec![
-                        try_looking(&[qi, src]),
-                        simple(format!(
-                            "{}'s true statement is \"{}\", so {} must be {letter}.",
-                            q(src),
-                            claim_label(&claim),
-                            q(qi)
-                        )),
-                    ];
-                }
+                return vec![
+                    try_looking(&[qi, usize::from(src)]),
+                    simple(format!(
+                        "{}'s true statement is \"{}\", so {} must be {letter}.",
+                        q(src),
+                        claim_label(&claim),
+                        q(qi)
+                    )),
+                ];
             }
             // `qi` is the TrueStmt: `k` settled one of its statements true.
             if let Some(k) = source
@@ -1150,7 +1145,7 @@ fn positional_range_text(
                 Some(v) => format!(
                     "{} says {label} {letter} is {}, so {} can't be {letter}.",
                     q(src),
-                    q(v as usize),
+                    q(v),
                     q(qi)
                 ),
                 None => format!(
@@ -1192,7 +1187,7 @@ fn positional_range_text(
                 Some(v) => format!(
                     "{} says {label} {letter} is {}, so {} can't be {letter}.",
                     q(src),
-                    q(v as usize),
+                    q(v),
                     q(qi)
                 ),
                 None => format!(
@@ -1227,7 +1222,7 @@ fn positional_range_text(
         return Some(format!(
             "{} is {letter} and says next same answer is {}, so {} can't be {letter}.",
             q(src),
-            q(v as usize),
+            q(v),
             q(qi)
         ));
     }
@@ -1238,7 +1233,7 @@ fn positional_range_text(
         return Some(format!(
             "{} is {letter} and says previous same answer is {}, so {} can't be {letter}.",
             q(src),
-            q(v as usize),
+            q(v),
             q(qi)
         ));
     }
@@ -1408,31 +1403,29 @@ fn explain_elimination(
         return steps;
     }
 
-    if matches!(rule, DeduceRule::OnlySameNoneForward) {
-        // Fires for both OnlySame and SameAs (the shared "none = unique" arm);
-        // `source` is the question answered "none".
-        if let Some(src) = source
-            && answers[src] == Some(letter)
-        {
-            steps.push(try_looking(&[qi, src]));
-            steps.push(what_if());
-            steps.push(simple(
-                if matches!(fp.question_types[src], QuestionType::SameAs) {
-                    format!(
-                        "{} is {letter} and claims none of its listed questions shares that answer, so {} can't be {letter}.",
-                        q(src),
-                        q(qi)
-                    )
-                } else {
-                    format!(
-                        "{} is {letter} and claims no other question shares that answer, so {} can't be {letter}.",
-                        q(src),
-                        q(qi)
-                    )
-                },
-            ));
-            return steps;
-        }
+    // Fires for both OnlySame and SameAs (the shared "none = unique" arm);
+    // `source` is the question answered "none".
+    if matches!(rule, DeduceRule::OnlySameNoneForward)
+        && let Some(src) = source
+        && answers[src] == Some(letter)
+    {
+        let text = if matches!(fp.question_types[src], QuestionType::SameAs) {
+            format!(
+                "{} is {letter} and claims none of its listed questions shares that answer, so {} can't be {letter}.",
+                q(src),
+                q(qi)
+            )
+        } else {
+            format!(
+                "{} is {letter} and claims no other question shares that answer, so {} can't be {letter}.",
+                q(src),
+                q(qi)
+            )
+        };
+        steps.push(try_looking(&[qi, src]));
+        steps.push(what_if());
+        steps.push(simple(text));
+        return steps;
     }
 
     if matches!(rule, DeduceRule::SameAsWhichNoneForward)
@@ -1571,7 +1564,7 @@ fn explain_elimination(
         steps.push(what_if());
         // The sentence has to walk the widening rather than quote the whole-board total
         // under the source's own label, which would state a cap the source never set.
-        steps.push(simple(if outside == 0 {
+        let text = if outside == 0 {
             format!(
                 "{} means there {} at most {bound} {}, so {claimed} appears too rarely to be the most common.",
                 q(src_qi),
@@ -1586,7 +1579,8 @@ fn explain_elimination(
                 count_rule_label(&src_qt, own_range),
                 outside_range_phrase(outside),
             )
-        }));
+        };
+        steps.push(simple(text));
         return steps;
     }
 
@@ -1677,23 +1671,21 @@ fn explain_multi_elim(
         && let Some(target) = option_value_at(fp, src, src_ans)
     {
         let k = usize::from(question_index);
-        return (
-            match answers[k] {
-                Some(ref_ans) => format!(
-                    "{} says {} is the only one of its listed questions answered {ref_ans} (the answer to {}), so the others cannot be {ref_ans}.",
-                    q(src),
-                    q(target as usize),
-                    q(k)
-                ),
-                None => format!(
-                    "{} says {} is the only one of its listed questions matching {}, so the others cannot match it.",
-                    q(src),
-                    q(target as usize),
-                    q(k)
-                ),
-            },
-            Some(src),
-        );
+        let text = match answers[k] {
+            Some(ref_ans) => format!(
+                "{} says {} is the only one of its listed questions answered {ref_ans} (the answer to {}), so the others cannot be {ref_ans}.",
+                q(src),
+                q(target),
+                q(k)
+            ),
+            None => format!(
+                "{} says {} is the only one of its listed questions matching {}, so the others cannot match it.",
+                q(src),
+                q(target),
+                q(k)
+            ),
+        };
+        return (text, Some(src));
     }
 
     if matches!(rule, DeduceRule::LetterDistReverseElim)
@@ -1817,8 +1809,7 @@ pub fn explain_deduce(
                 } else {
                     0
                 };
-                let source = reason.source();
-                if let Some(src_qi) = source
+                if let Some(src_qi) = reason.source()
                     && let Some(text) = positional_range_text(fp, state, src_qi, qis[0], oi)
                 {
                     vec![

@@ -1213,23 +1213,19 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
 /// [`answered_claim`]'s claim, which for a `TrueStmt` is the statement it picked rather
 /// than the question's own type.
 pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> ValidityWithReason {
-    let a = match state.answers[qi] {
-        Some(a) => a,
-        None => {
-            let oc = fp.option_count;
-            if (!state.eliminated[qi] & ((1 << oc) - 1)) == 0 {
-                return ValidityWithReason::Invalid(InvalidReason::NoOptionsLeft);
-            }
-            return ValidityWithReason::Neutral;
+    let Some(a) = state.answers[qi] else {
+        let oc = fp.option_count;
+        if (!state.eliminated[qi] & ((1 << oc) - 1)) == 0 {
+            return ValidityWithReason::Invalid(InvalidReason::NoOptionsLeft);
         }
+        return ValidityWithReason::Neutral;
     };
     let ai = a.idx();
     let qt = &fp.question_types[qi];
 
     if matches!(qt, QuestionType::TrueStmt) {
-        let selected_claim = match fp.claim_at(qi, ai) {
-            Some(c) => c,
-            None => return MALFORMED,
+        let Some(selected_claim) = fp.claim_at(qi, ai) else {
+            return MALFORMED;
         };
         let selected = check_claim_with_reason(fp, state, OptionPos { qi, oi: ai }, selected_claim);
         if selected != ValidityWithReason::Valid {
@@ -1267,19 +1263,12 @@ pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> Val
         _ => {}
     }
 
-    maybe_consistent(
-        check_claim_with_reason(
-            fp,
-            state,
-            OptionPos { qi, oi: ai },
-            Claim {
-                question_type: *qt,
-                value: claim_value(fp, qt, qi, ai),
-            },
-        ),
-        qt,
-        qi,
-    )
+    let claim = Claim {
+        question_type: *qt,
+        value: claim_value(fp, qt, qi, ai),
+    };
+    let verdict = check_claim_with_reason(fp, state, OptionPos { qi, oi: ai }, claim);
+    maybe_consistent(verdict, qt, qi)
 }
 
 pub fn check_all_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
@@ -1344,12 +1333,9 @@ mod tests {
             let expect = test["expect"].as_str().unwrap();
 
             let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
-            let fp = match fp {
-                Some(fp) => fp,
-                None => {
-                    eprintln!("SKIP: {name}: parse failed");
-                    continue;
-                }
+            let Some(fp) = fp else {
+                eprintln!("SKIP: {name}: parse failed");
+                continue;
             };
 
             let n = fp.n;
@@ -1418,12 +1404,9 @@ mod tests {
             let expect = test["expect"].as_bool().unwrap();
 
             let fp = crate::serialize::parse_puzzle(&test["puzzle"]);
-            let fp = match fp {
-                Some(fp) => fp,
-                None => {
-                    eprintln!("SKIP: {name}: parse failed");
-                    continue;
-                }
+            let Some(fp) = fp else {
+                eprintln!("SKIP: {name}: parse failed");
+                continue;
             };
 
             let n = fp.n;

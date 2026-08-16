@@ -266,11 +266,11 @@ fn main() {
                     }
                 }
             }
-            if file.is_none() {
+            let Some(file) = file else {
                 eprintln!("Usage: refpuzzle check <file.json> [MMDD-level] [--json]");
                 std::process::exit(1);
-            }
-            cli::check::check_command(file.as_ref().unwrap(), target.as_deref(), json_output);
+            };
+            cli::check::check_command(&file, target.as_deref(), json_output);
             return;
         }
         "format-check" => {
@@ -413,14 +413,15 @@ fn main() {
         eprintln!("Error: date range is required. Example: refpuzzle gen 2051 -o out.json");
         std::process::exit(1);
     });
-    let dr = parse_date_range(&date_range_str);
-    let year = dr.year;
-    let start = format!("{}-{:02}-{:02}", year, dr.start_mm, dr.start_dd);
-    let end = format!("{}-{:02}-{:02}", year, dr.end_mm, dr.end_dd);
-    let start_mm = dr.start_mm;
-    let start_dd = dr.start_dd;
-    let end_mm = dr.end_mm;
-    let end_dd = dr.end_dd;
+    let DateRange {
+        year,
+        start_mm,
+        start_dd,
+        end_mm,
+        end_dd,
+    } = parse_date_range(&date_range_str);
+    let start = format!("{year}-{start_mm:02}-{start_dd:02}");
+    let end = format!("{year}-{end_mm:02}-{end_dd:02}");
 
     let output_path = output_path.unwrap_or_else(|| {
         eprintln!("Error: -o/--output is required (use -o - for stdout)");
@@ -578,7 +579,9 @@ fn main() {
             let entry = existing
                 .entry(date)
                 .or_insert_with(|| Value::Object(serde_json::Map::new()));
-            if let (Value::Object(existing_day), Value::Object(new_levels)) = (entry, levels) {
+            if let Value::Object(existing_day) = entry
+                && let Value::Object(new_levels) = levels
+            {
                 for (level_key, puzzle) in new_levels {
                     existing_day.insert(level_key, puzzle);
                 }
