@@ -12,6 +12,7 @@
     "fmt": "oxfmt --write src/ tests/ e2e/ public/sw.js *.ts *.json",
     "fmt:check": "oxfmt --check src/ tests/ e2e/ public/sw.js *.ts *.json",
     "test:e2e": "playwright test",
+    "test:unit": "node --test \"src/**/*.test.ts\"",
     "gen": "cargo run --release -- gen",
     "check": "cargo run --release -- check",
     "test": "cargo test --release"
