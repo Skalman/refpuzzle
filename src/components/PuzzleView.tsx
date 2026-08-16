@@ -147,18 +147,31 @@ export function PuzzleView({
   const historyIdxRef = useRef(initState.historyIdx);
   const forceHistoryUpdate = useForceUpdate();
 
-  const initCompleted = initState.completed || validity.every(isValid);
   const tabStateRef = useRef({
     started: initState.history.length > 1,
-    completed: initCompleted,
+    completed: initState.completed,
     stale: initState.stale,
   });
+  // Whether this session made any local change. v1 share URLs carry no
+  // completed flag — completion is derived once wasm loads — so this is what
+  // separates "you solved it" from "it arrived solved".
+  const interactedRef = useRef(false);
+  /**
+   * A board can arrive already complete without being recorded as such — a
+   * shared board that's solved, or a save predating a format change — and only
+   * wasm can tell. The verdict is read once, off the board as it arrived: left
+   * reacting to live validity it would fire again the moment the player solves,
+   * writing this mount snapshot over the history they just built.
+   */
+  const arrivalRecorded = useRef(false);
   useEffect(() => {
-    if (initCompleted && !initState.completed && !ephemeral) {
-      saveState(puzzle.id, { ...initState, completed: true, stale: false });
-      onChanged();
-    }
-  }, [initCompleted, initState, puzzle.id, onChanged, ephemeral]);
+    if (arrivalRecorded.current || ephemeral || !handleReady) return;
+    arrivalRecorded.current = true;
+    if (interactedRef.current || initState.completed) return;
+    if (!validity.every(isValid)) return;
+    saveState(puzzle.id, { ...initState, completed: true, stale: false });
+    onChanged();
+  }, [handleReady, validity, initState, puzzle.id, onChanged, ephemeral]);
   const historyBurstRef = useRef({ lastTime: 0 });
 
   function trackHistoryBurst() {
@@ -354,11 +367,6 @@ export function PuzzleView({
     questions,
     handleRef,
   });
-
-  // Whether this session made any local change. v1 share URLs carry no
-  // completed flag — completion is derived once wasm loads — so this is what
-  // separates "you solved it" from "it arrived solved".
-  const interactedRef = useRef(false);
 
   function applyChange(next: QuestionState[]) {
     interactedRef.current = true;
