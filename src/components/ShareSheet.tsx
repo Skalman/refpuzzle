@@ -23,12 +23,23 @@ export function ShareSheet({
   const shareTitle = title ?? "Share";
   const s = t();
   const ref = useRef<HTMLDialogElement>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
   const canShare = typeof navigator !== "undefined" && !!navigator.share;
 
   useEffect(() => {
     ref.current?.showModal();
   }, []);
+
+  useEffect(() => {
+    let canceled = false;
+    void import("./QrCode.tsx").then(({ default: renderQrSvg }) => {
+      if (!canceled && qrRef.current) qrRef.current.innerHTML = renderQrSvg(url);
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [url]);
 
   async function handleShare() {
     try {
@@ -64,15 +75,7 @@ export function ShareSheet({
             &times;
           </button>
         </div>
-        <div
-          class="share-sheet-qr"
-          ref={(el) => {
-            if (!el) return;
-            import("./QrCode.tsx").then(({ default: renderQrSvg }) => {
-              el.innerHTML = renderQrSvg(url);
-            });
-          }}
-        />
+        <div ref={qrRef} class="share-sheet-qr" />
         <div class="share-sheet-url">{url.replace(/^https?:\/\//, "").replace(/\/$/, "")}</div>
         {installAction && (
           <button class="primary-btn share-sheet-btn" onClick={installAction}>

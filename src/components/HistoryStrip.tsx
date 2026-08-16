@@ -165,12 +165,12 @@ export function HistoryStrip({
   // after, i.e. the checkpoint a rewind would land on.
   const cpStepIdx = lastCheckpointIdx(history, history.length - 1);
   const activeCpIdx = completed ? 0 : lastCheckpointIdx(history, currentIdx);
-  const [expanded, setExpanded] = useState(false);
-  // A newly planted checkpoint re-collapses the range it just closed, and so does
-  // solving the board — the range it folds is what just changed underneath.
-  useEffect(() => {
-    setExpanded(false);
-  }, [cpStepIdx, completed]);
+  // The pill is expanded only for the range it was opened on, so a newly planted
+  // checkpoint re-collapses it, and so does solving the board — the range it
+  // folds is what just changed underneath.
+  const foldId = `${cpStepIdx}:${completed}`;
+  const [expandedFold, setExpandedFold] = useState<string | null>(null);
+  const expanded = expandedFold === foldId;
   if (history.length <= 1) return null;
 
   const moves: MoveInfo[] = [];
@@ -226,7 +226,7 @@ export function HistoryStrip({
           )}
           aria-expanded={showAll}
           title={s.puzzle.verifiedTitle(answered, history[0].length)}
-          onClick={() => setExpanded((v) => !v)}
+          onClick={() => setExpandedFold(expanded ? null : foldId)}
         >
           <span class="history-icon">
             <IconChevronDown size="1.2em" />

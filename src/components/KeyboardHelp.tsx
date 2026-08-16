@@ -1,3 +1,4 @@
+import { Fragment } from "preact";
 import { t } from "../i18n/index.ts";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
@@ -50,10 +51,10 @@ export function KeyboardShortcutList() {
               <div key={sc.keys[0]} class="shortcut-row">
                 <dt>
                   {sc.keys.map((k, i) => (
-                    <>
+                    <Fragment key={k}>
                       {i > 0 && " / "}
                       <kbd>{k}</kbd>
-                    </>
+                    </Fragment>
                   ))}
                 </dt>
                 <dd>{sc.desc}</dd>

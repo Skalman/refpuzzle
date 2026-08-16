@@ -4,10 +4,8 @@ import { hasState } from "../lib/store.ts";
 import { classNames } from "../lib/classNames.ts";
 import { useRevalidated } from "../lib/hooks.ts";
 import { useToday } from "../lib/today.ts";
-import { dateStrFromOffset, isValidDate, puzzleId } from "../puzzles/daily.ts";
+import { LEVELS, dateStrFromOffset, isValidDate, puzzleId } from "../puzzles/daily.ts";
 import { t } from "../i18n/index.ts";
-
-const LEVELS = [1, 2, 3, 4, 5, 6];
 
 interface WeekInfoLocale extends Intl.Locale {
   getWeekInfo?: () => { firstDay: number };
@@ -79,7 +77,8 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
     >
       <span class="archive-daynum">{day}</span>
       <span class="archive-track" aria-hidden="true">
-        {states.map((state, i) => {
+        {LEVELS.map((level, i) => {
+          const state = states[i];
           const levelTint = state.stale
             ? "stale"
             : state.completed
@@ -87,10 +86,7 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
               : state.started
                 ? "started"
                 : "";
-          return (
-            // oxlint-disable-next-line react/no-array-index-key
-            <span key={i} class={classNames("archive-level", levelTint)} />
-          );
+          return <span key={level} class={classNames("archive-level", levelTint)} />;
         })}
       </span>
     </a>
@@ -130,9 +126,8 @@ function ArchiveMonth({ ym, today }: { ym: string; today: string }) {
     <section class="archive-month">
       <h3 class="archive-month-title">{formatMonth(year, month)}</h3>
       <div class="archive-weekdays" aria-hidden="true">
-        {WEEKDAYS.map((name, i) => (
-          // oxlint-disable-next-line react/no-array-index-key
-          <span key={i}>{name}</span>
+        {WEEKDAYS.map((name) => (
+          <span key={name}>{name}</span>
         ))}
       </div>
       <div class="archive-grid">

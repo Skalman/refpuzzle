@@ -3,6 +3,11 @@ import { t } from "../i18n/index.ts";
 import { startSync, pollSync, joinSync } from "../lib/sync.ts";
 import { IconScan } from "./Icons.tsx";
 
+/** The link a scanner follows to join this sync session. */
+function syncUrl(code: string): string {
+  return `${window.location.origin}/sync#${code}`;
+}
+
 export function SyncDialog({
   onImport,
   onClose,
@@ -17,20 +22,16 @@ export function SyncDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
-  const stopScanRef = useRef<(() => void) | null>(null);
+  const scanBoxRef = useRef<HTMLDivElement>(null);
+  const qrRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     ref.current?.showModal();
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
-      stopScanRef.current?.();
     };
   }, []);
-
-  function syncUrl(c: string) {
-    return `${window.location.origin}/sync#${c}`;
-  }
 
   function handleStart() {
     setBusy(true);
@@ -80,6 +81,44 @@ export function SyncDialog({
       setScanning(false);
     }
   }
+
+  // The camera loop outlives the render that armed it, so it reads the handler
+  // through a ref; rebinding it would restart the camera on every render.
+  const onScanRef = useRef(handleScan);
+  onScanRef.current = handleScan;
+
+  useEffect(() => {
+    const box = scanBoxRef.current;
+    if (!scanning || !box) return undefined;
+    let stop: (() => void) | null = null;
+    let canceled = false;
+    void import("./QrScanner.tsx").then(({ default: startScan }) => {
+      if (canceled) return;
+      stop = startScan(
+        box,
+        (data) => onScanRef.current(data),
+        (msg) => {
+          setError(msg);
+          setScanning(false);
+        },
+      );
+    });
+    return () => {
+      canceled = true;
+      stop?.();
+    };
+  }, [scanning]);
+
+  useEffect(() => {
+    if (!code) return undefined;
+    let canceled = false;
+    void import("./QrCode.tsx").then(({ default: renderQrSvg }) => {
+      if (!canceled && qrRef.current) qrRef.current.innerHTML = renderQrSvg(syncUrl(code));
+    });
+    return () => {
+      canceled = true;
+    };
+  }, [code]);
 
   return (
     <dialog
@@ -148,27 +187,8 @@ export function SyncDialog({
 
         {!code && scanning && (
           <>
-            <div
-              class="qr-scanner"
-              ref={(el) => {
-                if (!el) return;
-                import("./QrScanner.tsx").then(({ default: startScan }) => {
-                  stopScanRef.current?.();
-                  stopScanRef.current = startScan(el, handleScan, (msg) => {
-                    setError(msg);
-                    setScanning(false);
-                  });
-                });
-              }}
-            />
-            <button
-              class="sync-scan-btn"
-              onClick={() => {
-                stopScanRef.current?.();
-                stopScanRef.current = null;
-                setScanning(false);
-              }}
-            >
+            <div ref={scanBoxRef} class="qr-scanner" />
+            <button class="sync-scan-btn" onClick={() => setScanning(false)}>
               {s.sync.enterCode}
             </button>
           </>
@@ -176,15 +196,7 @@ export function SyncDialog({
 
         {code && (
           <div class="sync-waiting">
-            <div
-              class="qr-image"
-              ref={(el) => {
-                if (!el) return;
-                import("./QrCode.tsx").then(({ default: renderQrSvg }) => {
-                  el.innerHTML = renderQrSvg(syncUrl(code));
-                });
-              }}
-            />
+            <div ref={qrRef} class="qr-image" />
             <div class="sync-code-display">{code}</div>
             <p class="sync-waiting-text">{s.sync.waiting}</p>
           </div>

@@ -46,6 +46,8 @@ const MIN_POINTER = 40;
 export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: Props) {
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
   const [geom, setGeom] = useState<(Geom & { seq: number }) | null>(null);
+  // Bumped on resize. Only a dependency of the geometry effect — the count
+  // itself means nothing.
   const [viewport, setViewport] = useState(0);
 
   // `seq` keys the shapes. It bumps on a genuinely new message (→ remount →
@@ -56,10 +58,9 @@ export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: P
   const lastMsgRef = useRef<CoachMessage | null>(null);
   const lastKeyRef = useRef<string | null>(null);
 
-  // A signature of the current answers: recompute geometry (and tally counts)
-  // when the board or the message changes, or the viewport shifts.
-  const answerSig = marks.map((m) => m.indexOf("correct")).join(",");
-
+  // Recomputes when the board or the message changes, or the viewport shifts.
+  // `marks` only changes identity when the board does (the caller memoizes it),
+  // so listing it here doesn't loop the `setGeom` back around.
   useLayoutEffect(() => {
     const g = computeGeometry({
       svg,
@@ -75,8 +76,7 @@ export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: P
     lastMsgRef.current = message;
     lastKeyRef.current = key;
     setGeom(g ? { ...g, seq: seqRef.current } : null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [svg, message, answerSig, viewport]);
+  }, [svg, message, marks, optionCount, gridRef, textRef, viewport]);
 
   // Only resize can reflow the board and change the arrows' geometry. Scroll
   // can't: the overlay and the rows share `.puzzle-view`, so their relative

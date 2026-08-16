@@ -2,6 +2,8 @@ import type { Puzzle } from "../engine/types.ts";
 import { wasmReady, generatePuzzle, createPuzzleHandle } from "../lib/wasm.ts";
 
 const START_DATE = "2026-04-19";
+/** The difficulty levels every day carries, in tab order. */
+export const LEVELS = [1, 2, 3, 4, 5, 6];
 const YEAR_RAW = new Map<string, Record<string, Record<string, CompactPuzzle>> | null>();
 const DAY_CACHE = new Map<string, Record<string, Puzzle>>();
 
@@ -110,7 +112,13 @@ export async function fetchDaily(dateStr: string): Promise<Record<string, Puzzle
   const mmdd = dateStr.slice(5, 7) + dateStr.slice(8, 10);
   const raw = await fetchYearRaw(year);
   if (raw?.[mmdd]) {
-    const day = parseCompactYear({ [mmdd]: raw[mmdd] })[mmdd];
+    // The year file keys puzzles by month-day and level, so the id only exists
+    // once the date is back in hand.
+    const parsed = parseCompactYear({ [mmdd]: raw[mmdd] })[mmdd];
+    const day: Record<string, Puzzle> = {};
+    for (const [level, puzzle] of Object.entries(parsed)) {
+      day[level] = { ...puzzle, id: puzzleId(dateStr, Number(level)) };
+    }
     DAY_CACHE.set(key, day);
     return day;
   }
@@ -128,7 +136,7 @@ async function generateDay(dateStr: string): Promise<Record<string, Puzzle> | nu
   const d = Number(dateStr.slice(8, 10));
   const dateKey = y * 10000 + m * 100 + d;
   const day: Record<string, Puzzle> = {};
-  for (let level = 1; level <= 6; level++) {
+  for (const level of LEVELS) {
     const p = generatePuzzle(dateKey, level, puzzleId(dateStr, level));
     if (!p) return null;
     day[String(level)] = p;

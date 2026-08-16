@@ -127,6 +127,21 @@ function buildResting(): CoachMessage {
 }
 
 /**
+ * The `idx`-th line of the intro cycle: the mental model, then the marking
+ * gesture, then where to start — the blank board's first move, the same step
+ * the Hint button surfaces first, pointed at the question it leads with. Never
+ * says why.
+ */
+function buildIntro(puzzle: Puzzle, handle: PuzzleHandle | null, idx: number): CoachMessage {
+  const s = t().coach;
+  if (idx === 0) return { text: s.mentalModel, arrow: null, tone: "calm" };
+  if (idx === 1) return { text: markingGesture(), arrow: null, tone: "calm" };
+  const blank = blankState(puzzle);
+  const step = handle?.nextStep(blank.answers, blank.eliminated);
+  return step ? whereToStart(step) : { text: s.lookGeneric, arrow: null, tone: "calm" };
+}
+
+/**
  * The L1 in-play coach. Ambient teaching that only speaks when the newcomer is
  * stuck or wandering and falls silent the instant they engage; an expert who
  * starts marking never sees past the first intro line. Reuses the solver
@@ -160,17 +175,6 @@ export function useL1Coach(
   }
 
   // ── Message builders (read the handle live; see the deferred callbacks) ──
-
-  function buildIntro(idx: number): CoachMessage {
-    const s = t().coach;
-    if (idx === 0) return { text: s.mentalModel, arrow: null, tone: "calm" };
-    if (idx === 1) return { text: markingGesture(), arrow: null, tone: "calm" };
-    // Where to start: the blank board's first move — the same step the Hint
-    // button surfaces first, pointed at the question it leads with. Never says why.
-    const bs = blankState(puzzle);
-    const step = handleRef.current?.nextStep(bs.answers, bs.eliminated);
-    return step ? whereToStart(step) : { text: s.lookGeneric, arrow: null, tone: "calm" };
-  }
 
   /**
    * Idle ~10s: orient at the question they can work out next. Low commitment
@@ -316,14 +320,13 @@ export function useL1Coach(
     let idx = 0;
     let timer = 0;
     const tick = () => {
-      setMessage(buildIntro(idx));
+      setMessage(buildIntro(puzzle, handleRef.current, idx));
       idx = (idx + 1) % 3;
       timer = window.setTimeout(tick, INTRO_CYCLE_MS);
     };
     tick();
     return () => window.clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enabled, started, completed, puzzle]);
+  }, [enabled, started, completed, puzzle, handleRef]);
 
   // Re-evaluate (and reset the idle/mistake timers) only when the board actually
   // changes — a mark/undo/redo/reset — plus phase/handle. Bare clicks and key
@@ -331,7 +334,6 @@ export function useL1Coach(
   useEffect(() => {
     evaluateRef.current();
     return clearSolvingTimers;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [questions, started, completed, enabled, handleReady]);
 
   return { message: enabled ? message : null };

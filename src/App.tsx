@@ -10,7 +10,9 @@ import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
 // QR components lazy-loaded via dynamic import (no preact dependency in chunks)
 import type { Puzzle } from "./engine/types.ts";
+import { LETTERS } from "./engine/types.ts";
 import {
+  LEVELS,
   fetchDaily,
   dayNumber,
   isValidDate,
@@ -112,12 +114,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
 
   const initialHash = window.location.hash.slice(1) || null;
   const [activeLevel, setActiveLevel] = useState(
-    initialLevel && initialLevel >= 1 && initialLevel <= 6 ? initialLevel : 1,
+    initialLevel && LEVELS.includes(initialLevel) ? initialLevel : 1,
   );
-
-  const activeLevelRef = useRef(activeLevel);
-  activeLevelRef.current = activeLevel;
-  const showKeyboardHelpRef = useRef(false);
 
   const tabsRef = useRef<HTMLDivElement>(null);
 
@@ -142,9 +140,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   useEffect(() => {
     const container = tabsRef.current;
     if (!container) return;
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-    const tab = container.children[activeLevel - 1] as HTMLElement | undefined;
-    if (!tab) return;
+    const tab = container.children[activeLevel - 1];
+    if (!(tab instanceof HTMLElement)) return;
     // Center the tab horizontally without affecting vertical scroll (scrollIntoView would
     // also scroll the page vertically when the tab isn't fully in view).
     const tabRect = tab.getBoundingClientRect();
@@ -158,19 +155,16 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     const g = guarded;
     const unsubscribe = tinykeys(window, {
       "[": g(() => {
-        if (activeLevelRef.current > 1) selectLevel(activeLevelRef.current - 1);
+        if (activeLevel > 1) selectLevel(activeLevel - 1);
       }),
       "]": g(() => {
-        if (activeLevelRef.current < 6) selectLevel(activeLevelRef.current + 1);
+        if (activeLevel < LEVELS.length) selectLevel(activeLevel + 1);
       }),
       Escape: (ev: KeyboardEvent) => {
         // Priority: dialog handled natively > menu > overlay
         const target = ev.target;
         if (target instanceof HTMLElement && target.closest("dialog")) return;
-        if (showKeyboardHelpRef.current) {
-          showKeyboardHelpRef.current = false;
-          setShowKeyboardHelp(false);
-        }
+        setShowKeyboardHelp(false);
       },
     });
 
@@ -188,8 +182,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
           el.tagName === "SELECT")
       )
         return;
-      showKeyboardHelpRef.current = !showKeyboardHelpRef.current;
-      setShowKeyboardHelp(showKeyboardHelpRef.current);
+      setShowKeyboardHelp((shown) => !shown);
     }
     window.addEventListener("keydown", handleQuestion);
 
@@ -197,27 +190,30 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
       unsubscribe();
       window.removeEventListener("keydown", handleQuestion);
     };
-  }, [selectLevel]);
+  }, [activeLevel, selectLevel]);
 
+  // A fast date change can resolve out of order, so only the newest fetch wins.
   useEffect(() => {
+    let canceled = false;
     setLoading(true);
     replayLogoAnimation();
-    fetchDaily(dateStr).then((data) => {
+    void fetchDaily(dateStr).then((data) => {
+      if (canceled) return;
       setPuzzles(data);
       setLoading(false);
     });
+    return () => {
+      canceled = true;
+    };
   }, [dateStr]);
 
   const currentPuzzle = puzzles?.[`${activeLevel}`] ?? null;
   const pid = puzzleId(dateStr, activeLevel);
-  if (currentPuzzle) {
-    currentPuzzle.id = pid;
-  }
 
   const handleChanged = forcePuzzleUpdate;
 
   const handleNextLevel = useCallback(() => {
-    if (activeLevel < 6) selectLevel(activeLevel + 1);
+    if (activeLevel < LEVELS.length) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
   const today = useToday();
@@ -226,10 +222,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   return (
     <>
       <AppHeader
-        onKeyboardHelp={() => {
-          showKeyboardHelpRef.current = true;
-          setShowKeyboardHelp(true);
-        }}
+        onKeyboardHelp={() => setShowKeyboardHelp(true)}
         onPrint={puzzles ? () => window.print() : undefined}
         onBackup={backup.openBackup}
       />
@@ -248,7 +241,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         role="tablist"
         onKeyDown={arrowNavHandler(".difficulty-tab")}
       >
-        {[1, 2, 3, 4, 5, 6].map((level) => {
+        {LEVELS.map((level) => {
           const { started, completed: solved, stale } = hasState(puzzleId(dateStr, level));
           return (
             <button
@@ -306,14 +299,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         />
       )}
 
-      {showKeyboardHelp && (
-        <KeyboardHelp
-          onClose={() => {
-            setShowKeyboardHelp(false);
-            showKeyboardHelpRef.current = false;
-          }}
-        />
-      )}
+      {showKeyboardHelp && <KeyboardHelp onClose={() => setShowKeyboardHelp(false)} />}
 
       <InlineHelp />
 
@@ -322,17 +308,16 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
           <h1>
             {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
           </h1>
-          {[1, 2, 3, 4, 5, 6].map((lvl) => {
-            const p = puzzles[`${lvl}`];
+          {LEVELS.map((level) => {
+            const p = puzzles[`${level}`];
             if (!p) return null;
             return (
-              <div key={lvl} class="print-puzzle">
+              <div key={level} class="print-puzzle">
                 <h2>
-                  {s.difficulty[lvl]} ({p.questions.length} {s.puzzleList.questions})
+                  {s.difficulty[level]} ({p.questions.length} {s.puzzleList.questions})
                 </h2>
                 {p.questions.map((q, qi) => (
-                  // oxlint-disable-next-line react/no-array-index-key
-                  <div key={qi} class="print-question">
+                  <div key={q.text} class="print-question">
                     <div class="print-question-text">
                       {qi + 1}. {q.text}
                     </div>
@@ -343,9 +328,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
                       )}
                     >
                       {q.options.map((label, oi) => (
-                        // oxlint-disable-next-line react/no-array-index-key
-                        <span key={oi} class="print-option">
-                          {String.fromCharCode(65 + oi)}. {label}
+                        <span key={LETTERS[oi]} class="print-option">
+                          {LETTERS[oi]}. {label}
                         </span>
                       ))}
                     </div>
@@ -365,7 +349,9 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
 /** The archive's old slug; kept so bookmarks and shared links survive. */
 function ArchiveRedirect() {
   const { route } = useLocation();
-  useEffect(() => route("/archive", true), [route]);
+  useEffect(() => {
+    route("/archive", true);
+  }, [route]);
   return null;
 }
 

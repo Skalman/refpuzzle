@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useState, useEffect, useCallback, useMemo, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
-import type { Marks, Puzzle } from "../engine/types.ts";
-import { FRESH_MARKS } from "../engine/types.ts";
+import type { Puzzle } from "../engine/types.ts";
+import { FRESH_MARKS, LETTERS } from "../engine/types.ts";
 import { deriveState, isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { findMistake } from "../engine/mistake.ts";
@@ -26,7 +26,46 @@ import { useHintEngine } from "./useHintEngine.ts";
 import { ShareSheet } from "./ShareSheet.tsx";
 import { SplitMenu } from "./SplitMenu.tsx";
 import { IconUndo, IconRedo, IconPin, IconHint, IconShare } from "./Icons.tsx";
-import type { Ref } from "preact";
+import { LEVELS } from "../puzzles/daily.ts";
+
+/** The mark shortcuts, one per option letter. */
+const OPTION_KEYS = LETTERS.map((letter) => letter.toLowerCase());
+
+/** A blank board: every question with every option unmarked. */
+function freshBoard(puzzle: Puzzle): QuestionState[] {
+  return puzzle.questions.map(() => ({ marks: [...FRESH_MARKS] }));
+}
+
+/**
+ * Where this mount picks up: a shared board from the URL, the stored one, or a
+ * blank board with a one-step track. Read once — playground mode never touches
+ * the store, and a different puzzle arrives as a fresh mount, not new props.
+ */
+function initialBoardState(
+  puzzle: Puzzle,
+  initialHash: string | null | undefined,
+  ephemeral: boolean | undefined,
+) {
+  const questionCount = puzzle.questions.length;
+  const saved = initialHash
+    ? decodeShareHash(initialHash, questionCount)
+    : ephemeral
+      ? null
+      : loadState(puzzle.id, questionCount);
+  if (saved && saved.history.length > 0) {
+    return saved;
+  }
+  const blank = freshBoard(puzzle);
+  return {
+    questions: blank,
+    completed: false,
+    stale: false,
+    history: [cloneStates(blank)],
+    historyIdx: 0,
+    hints: new Map<number, number>(),
+    fails: new Map<number, number>(),
+  };
+}
 
 interface PuzzleViewProps {
   puzzle: Puzzle;
@@ -59,31 +98,8 @@ export function PuzzleView({
   // loadMeta all no-op without an existing entry, and loadState returns null,
   // so no other store touchpoint can write.
 
-  // Initialize synchronously to avoid flicker
-  const initState = (() => {
-    const n = puzzle.questions.length;
-    const saved = initialHash
-      ? decodeShareHash(initialHash, n)
-      : ephemeral
-        ? null
-        : loadState(puzzle.id, n);
-    if (saved && saved.history.length > 0) {
-      return saved;
-    }
-    const blank = puzzle.questions.map(() => ({
-      marks: [...FRESH_MARKS] as Marks,
-    }));
-    const blankClone = cloneStates(blank);
-    return {
-      questions: blank,
-      completed: false,
-      stale: false,
-      history: [blankClone],
-      historyIdx: 0,
-      hints: new Map<number, number>(),
-      fails: new Map<number, number>(),
-    };
-  })();
+  // Resolved before the first paint, so the stored board never flickers in.
+  const [initState] = useState(() => initialBoardState(puzzle, initialHash, ephemeral));
 
   const analytics = useAnalytics(puzzle.id, {
     level,
@@ -124,6 +140,9 @@ export function PuzzleView({
       setHandleReady(false);
     };
   }, [puzzle]);
+  // The undo stack lives in refs, not state: `foldMarkers` and `pushHistory`
+  // rewrite it in place, and render reads it directly for the toolbar's enabled
+  // set. `forceHistoryUpdate` is what repaints after a mutation.
   const historyRef = useRef<QuestionState[][]>(initState.history);
   const historyIdxRef = useRef(initState.historyIdx);
   const forceHistoryUpdate = useForceUpdate();
@@ -160,7 +179,12 @@ export function PuzzleView({
   const focusedQuestionRef = useRef<number | null>(null);
   const focusedOptionRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  const nextPuzzleRef = useRef<HTMLElement>(null);
+  const nextPuzzleRef = useRef<HTMLElement | null>(null);
+  // A callback ref types itself against whichever element the banner renders,
+  // where one `useRef` would need casting at each of the two sites.
+  const setNextPuzzleRef = useCallback((el: HTMLElement | null) => {
+    nextPuzzleRef.current = el;
+  }, []);
   const puzzleCompleteRef = useRef<HTMLDivElement>(null);
   const numberBuf = useRef({ digits: "", timer: 0 });
   const controlsRef = useRef<HTMLDivElement>(null);
@@ -301,14 +325,14 @@ export function PuzzleView({
   );
 
   const completed = validity.length > 0 && validity.every(isValid);
-  const completedRef = useRef(completed);
-  completedRef.current = completed;
 
   // L1-only ambient coach: calm intro text, idle nudges, and mistake notes,
   // with reference arrows. Silent the instant the player engages. Replaces the
   // old auto-solve tutorial; higher levels and playground get nothing.
   const coachEnabled = level === 1 && !ephemeral;
   const coachTextRef = useRef<HTMLDivElement>(null);
+  // Held steady between marks so the overlay's geometry effect can depend on it.
+  const coachMarks = useMemo(() => questions.map((q) => q.marks), [questions]);
   const coach = useL1Coach(puzzle, {
     enabled: coachEnabled,
     handleRef,
@@ -508,9 +532,7 @@ export function PuzzleView({
 
   /** Back to a blank board and an empty track — the solve, and its record, go. */
   function handlePlayAgain() {
-    const fresh = puzzle.questions.map(() => ({
-      marks: [...FRESH_MARKS] as Marks,
-    }));
+    const fresh = freshBoard(puzzle);
     historyRef.current = [cloneStates(fresh)];
     historyIdxRef.current = 0;
     // Explicit, or the next mark's foldMarkers would pile them all onto Start.
@@ -600,12 +622,14 @@ export function PuzzleView({
     return undefined;
   }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted]);
 
-  // Init roving tabindex on controls toolbar
+  // Re-seed the toolbar's roving tabindex whenever its enabled set changes;
+  // between those the arrow keys' own position stands.
   useEffect(() => {
     initRovingTabindex(controlsRef.current, "button:not(:disabled)");
-  });
+  }, [completed, canUndo, canRedo, canCheckpoint]);
 
-  // Init roving tabindex on history strip
+  // The strip's buttons come and go with the history and with the range it has
+  // collapsed, neither of which render declares — so this re-seeds every time.
   useEffect(() => {
     initRovingTabindex(historyStripRef.current, "button.history-step:not(:disabled)");
   });
@@ -628,22 +652,22 @@ export function PuzzleView({
 
   const questionCount = puzzle.questions.length;
 
-  function moveFocus(dq: number, _do: number) {
+  function moveFocus(questionDelta: number, optionDelta: number) {
     const qi = focusedQuestionRef.current ?? 0;
     const oi = focusedOptionRef.current ?? 0;
-    const nq = (qi + dq + questionCount) % questionCount;
-    let no = (oi + _do + 5) % 5;
+    const nextQi = (qi + questionDelta + questionCount) % questionCount;
+    let nextOi = (oi + optionDelta + 5) % 5;
     // When moving between questions, snap to the correct option if the
     // target option is disabled (another option is marked correct)
-    if (dq !== 0) {
-      const marks = questionsRef.current[nq]?.marks;
+    if (questionDelta !== 0) {
+      const marks = questionsRef.current[nextQi]?.marks;
       if (marks) {
         const correctIdx = marks.indexOf("correct");
-        if (correctIdx >= 0) no = correctIdx;
+        if (correctIdx >= 0) nextOi = correctIdx;
       }
     }
-    setFocusedQuestion(nq);
-    setFocusedOption(no);
+    setFocusedQuestion(nextQi);
+    setFocusedOption(nextOi);
   }
 
   function navigateToQuestion(num: number) {
@@ -721,87 +745,58 @@ export function PuzzleView({
     }
   }
 
-  // Tinykeys shortcuts
+  // The window shortcuts are bound once and outlive the render that armed them,
+  // so they call the current handlers through a ref rather than re-binding
+  // every one of them on every render.
+  const keyActions = {
+    markOption: handleOptionClick,
+    digit: handleDigit,
+    undo: handleUndo,
+    redo: handleRedo,
+    checkpoint: handleSave,
+    moveFocus,
+    hint: hints.handleHint,
+    completed,
+  };
+  const keyActionsRef = useRef(keyActions);
+  keyActionsRef.current = keyActions;
+
   useEffect(() => {
-    const g = guarded;
-    const unsubscribe = tinykeys(window, {
-      a: g(() => {
-        if (focusedQuestionRef.current != null && !completedRef.current)
-          handleOptionClick(focusedQuestionRef.current, 0);
-      }),
-      b: g(() => {
-        if (focusedQuestionRef.current != null && !completedRef.current)
-          handleOptionClick(focusedQuestionRef.current, 1);
-      }),
-      c: g(() => {
-        if (focusedQuestionRef.current != null && !completedRef.current)
-          handleOptionClick(focusedQuestionRef.current, 2);
-      }),
-      d: g(() => {
-        if (focusedQuestionRef.current != null && !completedRef.current)
-          handleOptionClick(focusedQuestionRef.current, 3);
-      }),
-      e: g(() => {
-        if (focusedQuestionRef.current != null && !completedRef.current)
-          handleOptionClick(focusedQuestionRef.current, 4);
-      }),
-      "0": g(() => {
-        if (!completedRef.current) handleDigit(0);
-      }),
-      "1": g(() => {
-        if (!completedRef.current) handleDigit(1);
-      }),
-      "2": g(() => {
-        if (!completedRef.current) handleDigit(2);
-      }),
-      "3": g(() => {
-        if (!completedRef.current) handleDigit(3);
-      }),
-      "4": g(() => {
-        if (!completedRef.current) handleDigit(4);
-      }),
-      "5": g(() => {
-        if (!completedRef.current) handleDigit(5);
-      }),
-      "6": g(() => {
-        if (!completedRef.current) handleDigit(6);
-      }),
-      "7": g(() => {
-        if (!completedRef.current) handleDigit(7);
-      }),
-      "8": g(() => {
-        if (!completedRef.current) handleDigit(8);
-      }),
-      "9": g(() => {
-        if (!completedRef.current) handleDigit(9);
-      }),
-      "$mod+z": g((ev) => {
+    // Every shortcut is inert once the board is solved.
+    const whileSolving = (fn: (ev: KeyboardEvent) => void) =>
+      guarded((ev) => {
+        if (!keyActionsRef.current.completed) fn(ev);
+      });
+    // The browser's own undo stays out of the way whether or not the board is
+    // still live, so this one preventDefaults ahead of the solved check.
+    const undoRedo = (step: () => void) =>
+      guarded((ev) => {
         ev.preventDefault();
-        if (!completedRef.current) handleUndo();
-      }),
-      "$mod+Shift+z": g((ev) => {
-        ev.preventDefault();
-        if (!completedRef.current) handleRedo();
-      }),
-      "$mod+y": g((ev) => {
-        ev.preventDefault();
-        if (!completedRef.current) handleRedo();
-      }),
-      h: g(() => {
-        if (!completedRef.current) hints.handleHint();
-      }),
-      p: g(() => {
-        if (!completedRef.current) handleSave();
-      }),
-      j: g(() => {
-        if (!completedRef.current) moveFocus(1, 0);
-      }),
-      k: g(() => {
-        if (!completedRef.current) moveFocus(-1, 0);
-      }),
+        if (!keyActionsRef.current.completed) step();
+      });
+
+    const bindings: Record<string, (ev: KeyboardEvent) => void> = {
+      h: whileSolving(() => keyActionsRef.current.hint()),
+      p: whileSolving(() => keyActionsRef.current.checkpoint()),
+      j: whileSolving(() => keyActionsRef.current.moveFocus(1, 0)),
+      k: whileSolving(() => keyActionsRef.current.moveFocus(-1, 0)),
+      "$mod+z": undoRedo(() => keyActionsRef.current.undo()),
+      "$mod+Shift+z": undoRedo(() => keyActionsRef.current.redo()),
+      "$mod+y": undoRedo(() => keyActionsRef.current.redo()),
+    };
+    // An option letter marks that option on the focused question; a digit feeds
+    // the question-number buffer.
+    OPTION_KEYS.forEach((key, oi) => {
+      bindings[key] = whileSolving(() => {
+        const qi = focusedQuestionRef.current;
+        if (qi != null) keyActionsRef.current.markOption(qi, oi);
+      });
     });
-    return unsubscribe;
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    for (let digit = 0; digit <= 9; digit++) {
+      bindings[String(digit)] = whileSolving(() => keyActionsRef.current.digit(digit));
+    }
+    return tinykeys(window, bindings);
+  }, []);
 
   return (
     <>
@@ -844,7 +839,7 @@ export function PuzzleView({
             message={coach.message}
             gridRef={gridRef}
             textRef={coachTextRef}
-            marks={questions.map((q) => q.marks)}
+            marks={coachMarks}
             optionCount={puzzle.optionCount}
           />
         )}
@@ -880,22 +875,12 @@ export function PuzzleView({
         {completed && (
           <div ref={puzzleCompleteRef} class="puzzle-complete">
             <span>{s.puzzle.solved}</span>
-            {level < 6 ? (
-              <button
-                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-                ref={nextPuzzleRef as Ref<HTMLButtonElement>}
-                class="next-puzzle-btn"
-                onClick={onNextPuzzle}
-              >
+            {level < LEVELS.length ? (
+              <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
                 {s.puzzle.nextPuzzle} &rarr;
               </button>
             ) : (
-              <a
-                // oxlint-disable-next-line typescript/no-unsafe-type-assertion
-                ref={nextPuzzleRef as Ref<HTMLAnchorElement>}
-                href="/archive"
-                class="next-puzzle-btn"
-              >
+              <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
                 {s.daily.archive} &rarr;
               </a>
             )}

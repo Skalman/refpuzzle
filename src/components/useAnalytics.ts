@@ -47,7 +47,7 @@ export function useAnalytics(
         saveMeta(puzzleId, m);
       }
     },
-    [meta, puzzleId, wasCompleted],
+    [puzzleId],
   );
 
   useEffect(() => {

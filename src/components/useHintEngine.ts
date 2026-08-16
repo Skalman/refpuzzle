@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from "preact/hooks";
+import { useCallback, useRef, useState, useEffect } from "preact/hooks";
 import type { Answer, Puzzle } from "../engine/types.ts";
 import type { ExplainStep } from "../engine/hint-types.ts";
 import { deriveState } from "../engine/state.ts";
@@ -41,12 +41,19 @@ export function useHintEngine(
   const [hintText, setHintText] = useState<ExplainStep | null>(null);
   const hintRef = useRef<{ steps: ExplainStep[]; step: number } | null>(null);
   const [debugHints, setDebugHints] = useState<ExplainStep[] | null>(null);
+  /** Whether a debug ladder is on screen — the value itself would loop the refresh effect below. */
+  const debugShownRef = useRef(false);
   const solutionRef = useRef<(Answer | null)[] | null>(null);
 
   const optsRef = useRef(opts);
   optsRef.current = opts;
 
-  function getSolution(): (Answer | null)[] {
+  const showDebugHints = useCallback((steps: ExplainStep[] | null) => {
+    debugShownRef.current = steps != null;
+    setDebugHints(steps);
+  }, []);
+
+  const getSolution = useCallback((): (Answer | null)[] => {
     if (!solutionRef.current) {
       const handle = optsRef.current.handleRef.current;
       if (!handle) return new Array<Answer | null>(puzzle.questions.length).fill(null);
@@ -55,14 +62,17 @@ export function useHintEngine(
       console.log(`solve: ${(performance.now() - t0).toFixed(1)}ms`);
     }
     return solutionRef.current;
-  }
+  }, [puzzle]);
 
-  function findError(answers: (Answer | null)[], eliminated: number[]): ExplainStep[] | null {
-    const mistake = findMistake(answers, eliminated, getSolution());
-    return mistake ? mistakeSteps(mistake, t().mistake.vague) : null;
-  }
+  const findError = useCallback(
+    (answers: (Answer | null)[], eliminated: number[]): ExplainStep[] | null => {
+      const mistake = findMistake(answers, eliminated, getSolution());
+      return mistake ? mistakeSteps(mistake, t().mistake.vague) : null;
+    },
+    [getSolution],
+  );
 
-  function computeHint(): { steps: ExplainStep[] } | null {
+  const computeHint = useCallback((): { steps: ExplainStep[] } | null => {
     const handle = optsRef.current.handleRef.current;
     if (!handle) return null;
     const markSets = optsRef.current.questionsRef.current.map((q) => q.marks);
@@ -73,18 +83,18 @@ export function useHintEngine(
 
     const step = handle.nextStep(answers, eliminated);
     return step ? { steps: step.explain } : null;
-  }
+  }, [puzzle, findError]);
 
+  // Debug mode leaves the whole ladder on screen; keep it current as the board
+  // changes, but never conjure one that isn't showing.
   useEffect(() => {
-    if (!opts.debugMode || debugHints === null || opts.completed) return;
+    if (!opts.debugMode || !debugShownRef.current || opts.completed) return;
     try {
-      const result = computeHint();
-      setDebugHints(result?.steps ?? null);
+      showDebugHints(computeHint()?.steps ?? null);
     } catch (e) {
       console.error("Hint error:", e);
     }
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [opts.questions]);
+  }, [opts.questions, opts.debugMode, opts.completed, computeHint, showDebugHints]);
 
   function handleHint() {
     const { debugMode, pushHintMarker } = optsRef.current;
@@ -105,7 +115,7 @@ export function useHintEngine(
       return;
     }
     if (debugMode) {
-      setDebugHints(result.steps);
+      showDebugHints(result.steps);
     } else {
       hintRef.current = { steps: result.steps, step: 0 };
       setHintText(result.steps[0]);
@@ -122,7 +132,7 @@ export function useHintEngine(
   function showMistake(mistake: Mistake, lead: string) {
     const steps = mistakeSteps(mistake, lead);
     if (optsRef.current.debugMode) {
-      setDebugHints(steps);
+      showDebugHints(steps);
       return;
     }
     hintRef.current = { steps, step: 0 };

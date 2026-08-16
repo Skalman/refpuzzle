@@ -17,11 +17,11 @@ export function Logo() {
     const svg = el.querySelector("svg");
     if (!svg) return undefined;
 
-    function replay() {
-      svg!.classList.add("replay");
-      void el!.offsetHeight;
-      svg!.classList.remove("replay");
-    }
+    const replay = () => {
+      svg.classList.add("replay");
+      void el.offsetHeight;
+      svg.classList.remove("replay");
+    };
 
     el.addEventListener("mouseenter", replay);
     el.addEventListener("click", replay);
