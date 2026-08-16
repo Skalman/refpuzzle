@@ -290,17 +290,6 @@ export function AppHeader({
                 {s.daily.archive}
               </a>
               <button
-                class="more-menu-item show-mobile"
-                role="menuitem"
-                aria-label={theme.toggleLabel}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  theme.toggle();
-                }}
-              >
-                {theme.modeIcon} {s.header.theme}
-              </button>
-              <button
                 ref={themeOptionsBtnRef}
                 class="more-menu-item show-mobile"
                 role="menuitem"
@@ -310,7 +299,7 @@ export function AppHeader({
                   setThemeOptions((v) => !v);
                 }}
               >
-                <IconChevronDown size="0.9em" class="disclosure-chevron" /> {s.header.themeOptions}
+                <IconChevronDown size="0.9em" class="disclosure-chevron" /> {s.header.theme}
               </button>
               {themeOptions && (
                 <div class="show-mobile" role="group" aria-label={s.header.themeOptions}>
