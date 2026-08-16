@@ -42,6 +42,11 @@ const MIN_POINTER = 40;
  * Purely presentational and `pointer-events: none`; measures the live board
  * geometry so it tracks layout/scroll. Draw-on + pulse are CSS, gated to
  * `prefers-reduced-motion: no-preference`.
+ *
+ * One origin per message: every arrow leaves either the coach text or one
+ * question's row, never both, so a one-to-many referent reads as a single fan
+ * rather than a diagram. Halos carry "these ones"; arrows carry direction, and
+ * are only drawn where there's a real relationship to show.
  */
 export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: Props) {
   const [svg, setSvg] = useState<SVGSVGElement | null>(null);
@@ -198,14 +203,12 @@ function computeGeometry(ctx: {
   let tally: Tally | null = null;
   const textRect = rel(text);
 
-  // A soft "look here" line from the coach text down to a target row. `frac`
-  // spreads the endpoints across the text/row width so multiple pointers land at
-  // distinct x and never lie on top of one another.
-  const pointerLine = (r: Rect, frac: number) => {
+  // A soft "look here" line from the coach text down to a target row.
+  const pointerLine = (r: Rect) => {
     if (!textRect) return;
-    const x2 = r.x + r.w * frac;
+    const x2 = r.x + r.w / 2;
     const y2 = r.y;
-    let x1 = textRect.x + textRect.w * frac;
+    let x1 = textRect.x + textRect.w / 2;
     let y1 = textRect.y + textRect.h;
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -220,20 +223,34 @@ function computeGeometry(ctx: {
 
   if (arrow.mode === "point") {
     // Halo every question the step reads (or the specific option cell when `oi`
-    // is set). A lone target gets a pointer from the hint text; multiple targets
-    // are linked to each other (#1 → #3) instead.
+    // is set), and point at the topmost one. The step reads them as a set, with
+    // no relationship between them to draw: one pointer into the haloed group,
+    // never a chain, which would imply an order the step doesn't have.
     const targets = arrow.qis
       .map((qi) => (arrow.oi != null ? cell(qi, arrow.oi) : row(qi)))
       .filter((r): r is Rect => r != null)
       .sort((a, b) => a.y - b.y);
     for (const r of targets) shapes.push({ t: "halo", rect: pad(r) });
-    if (targets.length === 1) {
-      pointerLine(targets[0], 0.5);
-    } else {
-      for (let i = 0; i + 1 < targets.length; i++) {
-        shapes.push(edgeConnect(targets[i], targets[i + 1]));
-      }
+    if (targets.length > 0) pointerLine(targets[0]);
+    return { shapes, tally };
+  }
+
+  if (arrow.mode === "settles") {
+    // The step's conclusion: from the row doing the deducing to the cells it
+    // settles. Halo those cells too — the arrows say which row did it, the
+    // halos say which squares it lands on.
+    const from = row(arrow.qi);
+    if (!from) return { shapes, tally };
+    shapes.push({ t: "halo", rect: pad(from) });
+    let settled = false;
+    for (const c of arrow.cells) {
+      const target = cell(c.qi, c.oi);
+      if (!target) continue;
+      shapes.push({ t: "halo", rect: pad(target) });
+      shapes.push(intoCell(from, target));
+      settled = true;
     }
+    if (!settled) pointerLine(from);
     return { shapes, tally };
   }
 
@@ -241,8 +258,12 @@ function computeGeometry(ctx: {
   const anchor = row(arrow.qi);
   if (anchor) {
     shapes.push({ t: "halo", rect: pad(anchor) });
-    pointerLine(anchor, 0.5);
     const ref = arrow.referent;
+    // A referent that sits somewhere on the board is drawn from the asking row
+    // (one edge, or a fan for a one-to-many referent) and the coach text stays
+    // silent; one with nowhere to point — a column, the tally — leaves the
+    // pointer from the text as the message's only arrow.
+    let arrowFromAnchor = false;
     switch (ref.kind) {
       case "column": {
         for (let qi = 0; qi < n; qi++) {
@@ -265,6 +286,7 @@ function computeGeometry(ctx: {
         if (r) {
           shapes.push({ t: "halo", rect: pad(r) });
           shapes.push(connect(anchor, r));
+          arrowFromAnchor = true;
         }
         break;
       }
@@ -273,6 +295,7 @@ function computeGeometry(ctx: {
         if (from) {
           shapes.push({ t: "halo", rect: pad(from) });
           shapes.push(scan(from, ref.dir));
+          arrowFromAnchor = true;
           // Halo the hunted answer's option in the rows the scan covers, so it
           // shows *which* answer it's looking for, not just the direction.
           for (let qi = 0; qi < n; qi++) {
@@ -286,13 +309,16 @@ function computeGeometry(ctx: {
       }
       case "sameRun":
         shapes.push(scan(anchor, ref.dir));
+        arrowFromAnchor = true;
         break;
       case "candidates":
+        // One-to-many: a fan of arrows, all leaving the anchor row.
         for (const cqi of ref.qis) {
           const r = row(cqi);
           if (r) {
             shapes.push({ t: "halo", rect: pad(r) });
             shapes.push(connect(anchor, r));
+            arrowFromAnchor = true;
           }
         }
         break;
@@ -305,6 +331,7 @@ function computeGeometry(ctx: {
         break;
       }
     }
+    if (!arrowFromAnchor) pointerLine(anchor);
   }
 
   return { shapes, tally };
@@ -314,24 +341,29 @@ function pad(r: Rect): Rect {
   return { x: r.x - PAD, y: r.y - PAD, w: r.w + 2 * PAD, h: r.h + 2 * PAD };
 }
 
-/** A connector line between the centers of two rects. */
+/**
+ * An arrow from one row to another, anchored at their left edges so the arc
+ * bows out into the margin (around any rows in between) and the head lands
+ * beside the row rather than across its text.
+ */
 function connect(a: Rect, b: Rect): Shape {
-  return {
-    t: "line",
-    x1: a.x + a.w / 2,
-    y1: a.y + a.h / 2,
-    x2: b.x + b.w / 2,
-    y2: b.y + b.h / 2,
-    head: false,
-  };
+  return { t: "line", x1: a.x, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2, head: true };
 }
 
 /**
- * An arrow from one row to another, anchored at their left edges so the arc
- * bows out into the margin (around any rows in between).
+ * An arrow from a row to one cell, running down the cell's own option column so
+ * it reads as "this row settles that square". Starts at the row's near edge,
+ * pulled back inside the row when the two are close enough that the head would
+ * otherwise be most of the arrow.
  */
-function edgeConnect(a: Rect, b: Rect): Shape {
-  return { t: "line", x1: a.x, y1: a.y + a.h / 2, x2: b.x, y2: b.y + b.h / 2, head: true };
+function intoCell(from: Rect, target: Rect): Shape {
+  const above = target.y + target.h <= from.y;
+  const x = target.x + target.w / 2;
+  const y2 = above ? target.y + target.h : target.y;
+  const edge = above ? from.y : from.y + from.h;
+  const dir = above ? 1 : -1;
+  const y1 = Math.abs(edge - y2) < MIN_POINTER ? y2 + dir * MIN_POINTER : edge;
+  return { t: "line", x1: x, y1, x2: x, y2, head: true };
 }
 
 /** A short vertical arrow leaving a row's near edge in `dir` (−1 up, +1 down). */

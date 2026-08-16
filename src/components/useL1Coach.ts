@@ -5,7 +5,7 @@ import { deriveState } from "../engine/state.ts";
 import type { DeduceAction, ExplainStep, SolveStep } from "../engine/hint-types.ts";
 import { findMistake } from "../engine/mistake.ts";
 import type { Mistake } from "../engine/mistake.ts";
-import type { ArrowReferent, ArrowSpec, CoachMessage } from "../engine/coach-types.ts";
+import type { ArrowCell, ArrowReferent, ArrowSpec, CoachMessage } from "../engine/coach-types.ts";
 import type { QuestionState } from "../lib/store.ts";
 import type { PuzzleHandle } from "../lib/wasm.ts";
 import { pointerKind } from "../lib/pointer.ts";
@@ -46,30 +46,48 @@ interface CoachOpts {
 type EngineState = { answers: (Answer | null)[]; eliminated: number[] };
 
 /**
- * The question a deduce action targets, and whether it pins an answer (force)
- * vs. rules an option out (eliminate) — picks the "pin down" / "eliminate"
- * wording. `eliminateMulti` points at the lowest question in its mask.
+ * The cells a step's mark lands on, question order: one for a force or a single
+ * elimination, one per question × option for a batch one.
  */
-function actionTarget(a: DeduceAction): { qi: number; isForce: boolean } {
-  if (a.type === "force") return { qi: a.qi, isForce: true };
-  if (a.type === "eliminate") return { qi: a.qi, isForce: false };
-  let qi = 0;
-  for (let i = 0; i < 12; i++) {
-    if ((a.questionMask >> i) & 1) {
-      qi = i;
-      break;
+function actionCells(a: DeduceAction): ArrowCell[] {
+  if (a.type === "force") return [{ qi: a.qi, oi: letterIdx(a.answer) }];
+  if (a.type === "eliminate") return [{ qi: a.qi, oi: a.oi }];
+  const cells: ArrowCell[] = [];
+  for (let qi = 0; qi < 12; qi++) {
+    if (!((a.questionMask >> qi) & 1)) continue;
+    for (let oi = 0; oi < 5; oi++) {
+      if ((a.optionMask >> oi) & 1) cells.push({ qi, oi });
     }
   }
-  return { qi, isForce: false };
+  return cells;
+}
+
+/** The question a step marks first — the lowest in a batch elimination's mask. */
+function markedQuestion(a: DeduceAction): number {
+  return actionCells(a)[0]?.qi ?? 0;
 }
 
 /**
  * The questions the coach points/starts at: those the explanation reads (from
  * the engine), which may differ from where the mark lands; falls back to the
- * action's target. Always non-empty.
+ * question marked. Always non-empty.
  */
 function stepFocus(step: SolveStep): number[] {
-  return step.focusQis.length > 0 ? step.focusQis : [actionTarget(step.action).qi];
+  return step.focusQis.length > 0 ? step.focusQis : [markedQuestion(step.action)];
+}
+
+/**
+ * The question the explanation opens on, when it opens on exactly one — the one
+ * whose meaning fires the rule, so its referent is the relationship the step
+ * teaches. A force/elimination opens on the question it marks; a batch
+ * elimination opens on the question doing the constraining, which is *not*
+ * among the questions the mark lands on.
+ */
+function leadQuestion(steps: ExplainStep[]): number | null {
+  for (const step of steps) {
+    if (step.type === "look") return step.qis.length === 1 ? step.qis[0] : null;
+  }
+  return null;
 }
 
 /**
@@ -81,8 +99,7 @@ function whereToStart(step: SolveStep): CoachMessage {
   const s = t().coach;
   const focus = stepFocus(step);
   const list = qList(focus);
-  const { isForce } = actionTarget(step.action);
-  const text = isForce ? s.lookForce(list) : s.lookEliminate(list);
+  const text = step.action.type === "force" ? s.lookForce(list) : s.lookEliminate(list);
   return {
     text,
     arrow: { mode: "point", qis: focus },
@@ -200,14 +217,18 @@ export function useL1Coach(
     if (!step) return null;
     const s = t().coach;
     const focus = stepFocus(step);
-    // Anchor the connector on the question being deduced (not `focus[0]`, the
-    // lowest-indexed question *read*) so its referent is the relationship taught
-    // — e.g. `AnswerOf #2` on #5 draws #5 → #2, not #2 → #2's own referent.
-    const deduced = actionTarget(step.action).qi;
-    const referent = getReferents()?.[deduced] ?? null;
-    const arrow: ArrowSpec = referent
-      ? { mode: "connector", qi: deduced, referent }
-      : { mode: "point", qis: focus };
+    // Anchor on the question the explanation opens on — the one whose meaning
+    // fires the step, not `focus[0]` (the lowest-indexed question read). Where
+    // its conclusion lands decides what the arrow draws: cells on *other*
+    // questions mean it's doing something to them, so draw that; a step that
+    // only marks the asking question is instead explained by what that question
+    // reads, i.e. its referent.
+    const anchorQi = leadQuestion(step.explain) ?? markedQuestion(step.action);
+    const settled = actionCells(step.action).filter((c) => c.qi !== anchorQi);
+    const referent = getReferents()?.[anchorQi] ?? null;
+    let arrow: ArrowSpec = { mode: "point", qis: focus };
+    if (settled.length > 0) arrow = { mode: "settles", qi: anchorQi, cells: settled };
+    else if (referent) arrow = { mode: "connector", qi: anchorQi, referent };
     return { lead: s.guidedLead, text: explainLine(step.explain), arrow, tone: "calm" };
   }
 

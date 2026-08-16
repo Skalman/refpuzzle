@@ -23,14 +23,23 @@ export type ArrowReferent =
   | { kind: "candidates"; qis: number[] }
   | { kind: "tally" };
 
+/** One cell of the grid, `(qi, oi)`. */
+export interface ArrowCell {
+  qi: number;
+  oi: number;
+}
+
 /**
  * How the coach draws attention. `point` says "look here" at one or more
  * questions (or, with `oi`, a specific option cell in each); `connector` shows a
- * question's referent — "this refers to that".
+ * question's referent — "this refers to that"; `settles` runs from the question
+ * whose meaning fires a step to the cells that step marks elsewhere — "this one
+ * rules those out".
  */
 export type ArrowSpec =
   | { mode: "point"; qis: number[]; oi?: number }
-  | { mode: "connector"; qi: number; referent: ArrowReferent };
+  | { mode: "connector"; qi: number; referent: ArrowReferent }
+  | { mode: "settles"; qi: number; cells: ArrowCell[] };
 
 /**
  * One thing the coach is saying right now: a calm line plus an optional arrow.
