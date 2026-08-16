@@ -219,7 +219,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     if (activeLevel < 6) selectLevel(activeLevel + 1);
   }, [activeLevel, selectLevel]);
 
-  const isToday = dateStr === useToday();
+  const today = useToday();
+  const isToday = dateStr === today;
 
   return (
     <>
@@ -247,8 +248,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         onKeyDown={arrowNavHandler(".difficulty-tab")}
       >
         {[1, 2, 3, 4, 5, 6].map((level) => {
-          const state = hasState(puzzleId(dateStr, level));
-          const { started, completed: solved, stale } = state;
+          const { started, completed: solved, stale } = hasState(puzzleId(dateStr, level));
           return (
             <button
               key={level}

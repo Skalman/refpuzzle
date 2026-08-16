@@ -52,10 +52,11 @@ function toBase64Url(bytes: Uint8Array): string {
 }
 
 function fromBase64Url(str: string): Uint8Array {
+  const padLength = (4 - (str.length % 4)) % 4;
   const padded = str
     .replace(/-/g, "+")
     .replace(/_/g, "/")
-    .padEnd(str.length + ((4 - (str.length % 4)) % 4), "=");
+    .padEnd(str.length + padLength, "=");
   const binary = atob(padded);
   return Uint8Array.from({ length: binary.length }, (_, i) => binary.charCodeAt(i));
 }

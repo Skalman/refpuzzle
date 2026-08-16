@@ -81,8 +81,10 @@ function whereToStart(step: SolveStep): CoachMessage {
   const s = t().coach;
   const focus = stepFocus(step);
   const list = qList(focus);
+  const { isForce } = actionTarget(step.action);
+  const text = isForce ? s.lookForce(list) : s.lookEliminate(list);
   return {
-    text: actionTarget(step.action).isForce ? s.lookForce(list) : s.lookEliminate(list),
+    text,
     arrow: { mode: "point", qis: focus },
     tone: "calm",
   };

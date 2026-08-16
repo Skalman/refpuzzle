@@ -135,15 +135,7 @@ export function PuzzleView({
   });
   useEffect(() => {
     if (initCompleted && !initState.completed && !ephemeral) {
-      saveState(puzzle.id, {
-        questions: initState.questions,
-        completed: true,
-        stale: false,
-        history: initState.history,
-        historyIdx: initState.historyIdx,
-        hints: initState.hints,
-        fails: initState.fails,
-      });
+      saveState(puzzle.id, { ...initState, completed: true, stale: false });
       onChanged();
     }
   }, [initCompleted, initState, puzzle.id, onChanged, ephemeral]);
