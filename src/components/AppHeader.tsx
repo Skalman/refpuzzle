@@ -22,9 +22,14 @@ type Appearance = "light" | "dark";
 const DARK_QUERY = "(prefers-color-scheme: dark)";
 const THEME_KEY = "refpuzzle:theme";
 
-function updateThemeColor(dark: boolean) {
+// Reads the resolved --bg rather than repeating the palette here, so the
+// address-bar tint can't drift from the stylesheet. Runs after data-theme is
+// on the root, so the computed value is already the new theme's.
+function updateThemeColor() {
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute("content", dark ? "#0f1117" : "#f8f9fa");
+  if (!meta) return;
+  const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+  if (bg) meta.setAttribute("content", bg);
 }
 
 function themeIcon(mode: ThemeMode) {
@@ -52,7 +57,7 @@ export function useTheme() {
   const resolved: Appearance = mode === "auto" ? system : mode;
 
   useEffect(() => {
-    updateThemeColor(resolved === "dark");
+    updateThemeColor();
   }, [resolved]);
 
   // Every press flips the appearance. It lands on auto whenever auto already

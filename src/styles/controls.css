@@ -4,7 +4,7 @@
 .toolbar-icon-btn {
   background: none;
   border: 1px solid var(--border);
-  border-radius: 50%;
+  border-radius: var(--radius-circle);
   cursor: pointer;
   color: var(--text-muted);
   font-family: inherit;
@@ -26,26 +26,26 @@
 .help-btn {
   width: 1.75rem;
   height: 1.75rem;
-  font-size: 0.9rem;
+  font-size: var(--text-section);
   font-weight: 700;
 }
 
 .toolbar-icon-btn {
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   width: 2rem;
   height: 2rem;
-  font-size: 0.9rem;
+  font-size: var(--text-section);
 }
 
 /* ── Text buttons ── */
 .toolbar-accent-btn {
   background: none;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.3rem 0.6rem;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   font-family: inherit;
   display: flex;
   align-items: center;
@@ -71,10 +71,10 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  margin-top: 0.25rem;
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   box-shadow: var(--dropdown-shadow);
   z-index: 20;
   display: flex;
@@ -92,7 +92,7 @@
   background: none;
   border: none;
   padding: 0.5rem 0.75rem;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   font-family: inherit;
   color: var(--text);
   cursor: pointer;
@@ -104,10 +104,10 @@
     background: var(--bg-hover);
   }
   &:first-child {
-    border-radius: 6px 6px 0 0;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
   }
   &:last-child {
-    border-radius: 0 0 6px 6px;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
   }
 }
 
@@ -118,7 +118,7 @@
 
   & .toolbar-accent-btn,
   & .header-btn {
-    border-radius: 6px 0 0 6px;
+    border-radius: var(--radius-md) 0 0 var(--radius-md);
   }
 }
 
@@ -128,7 +128,7 @@
 }
 
 .split-btn .split-btn-drop {
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
   padding-left: 0.3rem;
   padding-right: 0.3rem;
   border-left: 1px solid var(--border);
@@ -139,12 +139,12 @@
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 4px;
+  margin-top: 0.25rem;
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.25rem 0;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   white-space: nowrap;
   box-shadow: var(--dropdown-shadow);
   z-index: 10;
@@ -215,12 +215,12 @@ button.theme-option {
   position: absolute;
   top: 100%;
   right: 0;
-  margin-top: 2px;
+  margin-top: 0.125rem;
   background: var(--text);
   color: var(--bg);
   padding: 0.3rem 0.6rem;
-  border-radius: 6px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-md);
+  font-size: var(--text-caption);
   font-weight: 600;
   white-space: nowrap;
   z-index: 10;

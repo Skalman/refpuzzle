@@ -76,7 +76,11 @@ export function ImportPreview({
               <button class="primary-btn" onClick={onConfirm}>
                 {s.backup.confirmUpload}
               </button>
-              <button class="help-close" onClick={onCancel} style={{ fontSize: "0.9rem" }}>
+              <button
+                class="help-close"
+                onClick={onCancel}
+                style={{ fontSize: "var(--text-section)" }}
+              >
                 {s.backup.cancel}
               </button>
             </>

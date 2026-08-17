@@ -23,7 +23,11 @@
   }
 }
 
-/* ── Validity bar (colorblind-accessible styles) ── */
+/* ── Validity bar (colorblind-accessible styles) ──
+ * Widths stay in px: the pending and invalid states are dotted and double
+ * borders, which need whole pixels to render as two lines rather than
+ * collapsing to solid at the smaller root font sizes.
+ */
 .validity-bar {
   width: 4px;
   align-self: stretch;
@@ -39,12 +43,12 @@
     position: absolute;
     inset: 0 1px 0 0;
     background: var(--neutral-bar);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
   }
   &.valid,
   &.consistent {
     background: var(--valid);
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
   }
   &.pending {
     border-left: 4px dotted var(--pending);
@@ -63,20 +67,20 @@
 }
 
 .question-num {
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   font-weight: 700;
   color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .question-text {
-  font-size: 0.85rem;
+  font-size: var(--text-body);
 }
 
 /* ── Options ── */
 .question-options {
   display: flex;
-  gap: 4px;
+  gap: 0.25rem;
 
   & > * {
     flex: 1 1 0;
@@ -84,7 +88,7 @@
 
   &.options-vertical {
     flex-direction: column;
-    gap: 3px;
+    gap: 0.2rem;
 
     & .option-btn {
       white-space: normal;
@@ -94,10 +98,10 @@
 
 .option-btn {
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text);
-  font-size: 0.82rem;
+  font-size: var(--text-option);
   font-family: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -215,7 +219,7 @@
 .option-letter {
   font-weight: 700;
   opacity: 0.45;
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
 }
 
 .option-indicator {
@@ -239,8 +243,8 @@
   margin-top: 0.75rem;
   background: var(--accent-soft);
   border: 1px solid var(--accent);
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-body);
   color: var(--accent);
   display: flex;
   align-items: center;
@@ -259,8 +263,8 @@
   margin-top: 0.75rem;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 0.85rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-body);
   color: var(--text-muted);
 }
 
@@ -268,16 +272,16 @@
   background: none;
   border: 1px solid var(--accent);
   color: var(--accent);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   cursor: pointer;
   font-family: inherit;
   flex-shrink: 0;
 
   &:hover {
     background: var(--accent);
-    color: white;
+    color: var(--on-accent);
   }
 }
 
@@ -301,7 +305,7 @@
   margin-top: 1rem;
   background: var(--valid-soft);
   border: 1px solid var(--valid);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   font-weight: 600;
   color: var(--valid);
   animation: glow-pulse 2s ease-in-out infinite;
@@ -312,10 +316,10 @@
   background: var(--valid);
   color: var(--bg);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.4rem 0.85rem;
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   font-family: inherit;
   font-weight: 600;
   white-space: nowrap;

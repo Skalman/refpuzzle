@@ -1,12 +1,12 @@
 /* ── Primary action button ── */
 .primary-btn {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0.35rem 0.75rem;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   font-family: inherit;
   font-weight: 600;
   white-space: nowrap;
@@ -19,14 +19,14 @@
 
 /* ── Help panel (dialog) ── */
 .help-panel::backdrop {
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--backdrop);
 }
 
 .help-panel {
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
   margin: auto;
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 0;
   width: calc(100% - 1rem);
   max-width: 20rem;
@@ -47,7 +47,7 @@
 }
 
 .help-panel-inner h4 {
-  font-size: 0.95rem;
+  font-size: var(--text-section);
   margin: 1rem 0 0.5rem;
   color: var(--text);
 }
@@ -63,7 +63,7 @@
   margin-bottom: 1rem;
 
   & h3 {
-    font-size: 1.1rem;
+    font-size: var(--text-dialog);
     font-weight: 700;
   }
 }
@@ -71,7 +71,7 @@
 .help-close {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: var(--text-title);
   cursor: pointer;
   color: var(--text-muted);
   line-height: 1;
@@ -84,7 +84,7 @@
 
 .help-credit {
   margin-top: 1rem;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   color: var(--text-muted);
   & a {
     color: var(--accent);
@@ -93,16 +93,16 @@
 
 /* ── Inline help ── */
 .inline-help {
-  max-width: 600px;
+  max-width: 37.5rem;
   margin: 2rem auto 0;
   padding: 1rem;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   line-height: 1.5;
 
   & h4 {
     color: var(--text);
-    font-size: 0.85rem;
+    font-size: var(--text-body);
     margin: 0.8rem 0 0.3rem;
   }
   & p {
@@ -116,7 +116,7 @@
 
 .how-to-play {
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 0.5rem 0.75rem;
   margin: 0 -0.75rem;
   transition:
@@ -140,7 +140,7 @@
 
 /* ── Import preview ── */
 .import-preview {
-  max-width: 550px;
+  max-width: 34rem;
 }
 
 .import-summary {
@@ -151,14 +151,14 @@
   margin-bottom: 0.75rem;
 
   & h4 {
-    font-size: 0.85rem;
+    font-size: var(--text-body);
     margin-bottom: 0.25rem;
   }
 }
 
 .import-list {
   margin: 0 0 0 1.25rem;
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   color: var(--text-muted);
   line-height: 1.5;
   max-height: 6rem;
@@ -184,7 +184,7 @@
 .backup-action-btn {
   width: 100%;
   padding: 0.5rem;
-  font-size: 0.9rem;
+  font-size: var(--text-section);
   text-align: center;
   cursor: pointer;
 }
@@ -197,7 +197,7 @@
 .sync-start-btn {
   width: 100%;
   padding: 0.5rem;
-  font-size: 0.9rem;
+  font-size: var(--text-section);
 }
 
 .sync-divider {
@@ -206,7 +206,7 @@
   gap: 0.75rem;
   margin: 1rem 0;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
 
   &::before,
   &::after {
@@ -225,10 +225,10 @@
   flex: 1;
   padding: 0.4rem 0.6rem;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: var(--text-section);
   letter-spacing: 0.15em;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--bg-surface);
   color: var(--text);
   text-align: center;
@@ -240,7 +240,7 @@
 }
 
 .sync-code-display {
-  font-size: 2rem;
+  font-size: var(--text-display);
   font-weight: 700;
   letter-spacing: 0.25em;
   font-variant-numeric: tabular-nums;
@@ -249,7 +249,7 @@
 
 .sync-waiting-text {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--text-body);
 }
 
 .sync-scan-btn {
@@ -258,9 +258,9 @@
   margin-top: 0.25rem;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-family: inherit;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   color: var(--text-muted);
   cursor: pointer;
   display: inline-flex;
@@ -275,7 +275,7 @@
 
 .qr-scanner {
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   margin-bottom: 0.5rem;
 }
@@ -283,15 +283,15 @@
 .qr-scanner-video {
   width: 100%;
   display: block;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
 }
 
 .sync-error {
   color: var(--invalid);
   background: var(--invalid-soft);
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   text-align: center;
   margin-top: 0.5rem;
 }
@@ -304,13 +304,13 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--backdrop);
 }
 
 .keyboard-help-inner {
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 1.25rem;
   max-width: 24rem;
   width: 90%;
@@ -327,12 +327,12 @@
   margin-bottom: 0.75rem;
 
   & strong {
-    font-size: 1rem;
+    font-size: var(--text-dialog);
   }
 }
 
 .keyboard-shortcut-list h4 {
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   margin: 0.75rem 0 0.25rem;
   color: var(--text);
 }
@@ -350,7 +350,7 @@
   align-items: baseline;
   gap: 0.75rem;
   padding: 0.15rem 0;
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
 
   & dt {
     flex-shrink: 0;
@@ -366,11 +366,11 @@
 
 kbd {
   font-family: inherit;
-  font-size: 0.78rem;
+  font-size: var(--text-chrome);
   font-weight: 600;
   background: var(--bg-hover);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   padding: 0.05rem 0.35rem;
 }
 
@@ -388,11 +388,11 @@ kbd {
   margin-top: 0.5rem;
   background: var(--bg-surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   padding: 0.75rem 1rem;
   box-shadow: var(--dropdown-shadow);
   max-width: 20rem;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   color: var(--text);
   z-index: 100;
   display: flex;
@@ -402,7 +402,7 @@ kbd {
 }
 
 .install-domain {
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   color: var(--text-muted);
   margin: -0.25rem 0 0;
 }
@@ -410,7 +410,7 @@ kbd {
 .install-btn {
   width: 100%;
   padding: 0.5rem;
-  font-size: 0.95rem;
+  font-size: var(--text-section);
 }
 
 .install-toast-actions {
@@ -422,8 +422,8 @@ kbd {
   margin-inline: auto;
   width: 7.5rem;
   height: 7.5rem;
-  border-radius: 0.25rem;
-  background: white;
+  border-radius: var(--radius-sm);
+  background: var(--qr-bg);
 }
 
 /* ── Share sheet ── */
@@ -434,11 +434,11 @@ kbd {
   margin: 0.75rem auto;
   width: 8rem;
   height: 8rem;
-  border-radius: 0.25rem;
-  background: white;
+  border-radius: var(--radius-sm);
+  background: var(--qr-bg);
 }
 .share-sheet-url {
-  font-size: 0.75rem;
+  font-size: var(--text-caption);
   color: var(--text-muted);
   word-break: break-all;
   margin-bottom: 0.75rem;
@@ -456,7 +456,7 @@ kbd {
   padding: 0.5rem 1.25rem;
 }
 .share-sheet-note {
-  font-size: 0.8rem;
+  font-size: var(--text-chrome);
   color: var(--text-muted);
   margin: 0 0 0.5rem;
 }
@@ -465,7 +465,7 @@ kbd {
 .error-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--backdrop-strong);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -476,24 +476,24 @@ kbd {
 .error-overlay-card {
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--border), var(--text) 20%);
-  border-radius: 12px;
+  border-radius: var(--radius-xl);
   padding: 1.25rem 1.5rem;
   max-width: 28rem;
   width: 100%;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-modal);
 }
 
 .error-overlay-card h2 {
   margin: 0 0 0.6rem;
-  font-size: 1.1rem;
+  font-size: var(--text-dialog);
 }
 
 .error-overlay-message {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   background: color-mix(in srgb, var(--bg-surface), var(--text) 6%);
   padding: 0.5rem 0.7rem;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   word-break: break-word;
   margin: 0.4rem 0 0.8rem;
 }
@@ -507,9 +507,9 @@ kbd {
 
 .error-overlay-actions button {
   font-family: inherit;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   padding: 0.4rem 0.85rem;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text);
@@ -518,7 +518,7 @@ kbd {
 
 .error-overlay-primary {
   background: var(--accent) !important;
-  color: white !important;
+  color: var(--on-accent) !important;
   border-color: var(--accent) !important;
   font-weight: 600;
 }

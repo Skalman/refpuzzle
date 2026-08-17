@@ -2,8 +2,9 @@
    Motion (fade/pulse/draw-on) is gated to the reduced-motion query below. */
 
 .coach-text {
-  /* Fixed height for three lines (0.85rem × 1.35 line-height × 3 + padding) so
-     messages never shift the board; shorter text stays vertically centered. */
+  /* Fixed height for three lines (--text-body × 1.35 line-height × 3 + padding)
+     so messages never shift the board; shorter text stays vertically centered.
+     Recompute this if --text-body changes. */
   height: 4.25rem;
   display: flex;
   align-items: center;
@@ -15,7 +16,7 @@
 
 .coach-line {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: var(--text-body);
   line-height: 1.35;
   max-width: 32rem;
   color: var(--text-muted);
@@ -85,10 +86,10 @@
   padding: 0.2rem 0.45rem;
   background: var(--bg-surface);
   border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  border-radius: 999px;
-  font-size: 0.75rem;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
   color: var(--text);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-floating);
 }
 
 .coach-tally-item {
