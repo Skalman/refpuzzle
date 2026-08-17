@@ -6,13 +6,13 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#f8f9fa" />
+    <meta name="theme-color" content="#faf9f7" />
     <title>Refpuzzle</title>
     <script>
       var t = localStorage.getItem("refpuzzle:theme");
       if (t) document.documentElement.setAttribute("data-theme", t);
       var dark = t === "dark" || (!t && matchMedia("(prefers-color-scheme: dark)").matches);
-      document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1117" : "#f8f9fa";
+      document.querySelector('meta[name="theme-color"]').content = dark ? "#0f1117" : "#faf9f7";
     </script>
     <!-- Fallback shown when the app never mounts (see main.tsx). Self-contained,
          so it works without the bundle. -->
@@ -56,7 +56,7 @@
       #fatal .fatal-detail {
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         font-size: 0.8rem;
-        background: var(--bg-hover, #f0f1f3);
+        background: var(--bg-hover, #f3f1ee);
         padding: 0.5rem 0.7rem;
         border-radius: 6px;
         word-break: break-word;

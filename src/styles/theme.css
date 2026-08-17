@@ -7,9 +7,9 @@
 :root {
   color-scheme: light dark;
 
-  --bg: #f8f9fa;
+  --bg: #faf9f7;
   --bg-surface: #ffffff;
-  --bg-hover: #f0f1f3;
+  --bg-hover: #f3f1ee;
   --text: #1a1a2e;
   --text-muted: #6b7280;
   --accent: #6366f1;
