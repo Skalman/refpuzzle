@@ -426,11 +426,14 @@ export function saveMeta(puzzleId: string, meta: PuzzleMeta): void {
 
 // ── Stored state ────────────────────────────────────────────────────────────
 
-export function hasState(puzzleId: string): {
+/** What the ledger says about one puzzle, without decoding its history. */
+export interface PuzzleProgress {
   started: boolean;
   completed: boolean;
   stale: boolean;
-} {
+}
+
+export function hasState(puzzleId: string): PuzzleProgress {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return { started: false, completed: false, stale: false };

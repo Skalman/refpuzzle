@@ -102,11 +102,12 @@ export default {
     printAll: "Print all puzzles",
     // One archive day, spoken: the level track carries the same state visually.
     // A stale day's track reports only the levels needing a recheck, so its
-    // label does too.
-    archiveDay: (date: string, solved: number, levels: number) =>
-      `${date} — ${solved} of ${levels} solved`,
-    archiveDayStale: (date: string, stale: number) =>
-      `${date} — ${plural(stale, "level needs", "levels need")} rechecking`,
+    // label does too. The trailing clause names where the day opens, which the
+    // tile shows nowhere else.
+    archiveDay: (date: string, solved: number, levels: number, opens: string) =>
+      `${date} — ${solved} of ${levels} solved — opens ${opens}`,
+    archiveDayStale: (date: string, stale: number, opens: string) =>
+      `${date} — ${plural(stale, "level needs", "levels need")} rechecking — opens ${opens}`,
   },
   backup: {
     button: "Sync and backup",

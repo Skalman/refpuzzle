@@ -19,6 +19,7 @@ import {
   puzzleId,
   parseCompactPuzzle,
 } from "./puzzles/daily.ts";
+import { dayStates, resumeLevel } from "./puzzles/progress.ts";
 import { useToday } from "./lib/today.ts";
 import { classNames } from "./lib/classNames.ts";
 import { decodePlaygroundHash } from "./lib/playground.ts";
@@ -113,8 +114,11 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   useRevalidated();
 
   const initialHash = window.location.hash.slice(1) || null;
-  const [activeLevel, setActiveLevel] = useState(
-    initialLevel && LEVELS.includes(initialLevel) ? initialLevel : 1,
+  // A level in the path is the one asked for; otherwise the day opens wherever
+  // it was left. Only the mount decides — a rollover past midnight keeps the
+  // level on screen rather than moving it out from under the solver.
+  const [activeLevel, setActiveLevel] = useState(() =>
+    initialLevel && LEVELS.includes(initialLevel) ? initialLevel : resumeLevel(dayStates(dateStr)),
   );
 
   const tabsRef = useRef<HTMLDivElement>(null);

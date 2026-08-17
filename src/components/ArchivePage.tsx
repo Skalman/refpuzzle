@@ -1,10 +1,10 @@
 import { AppHeader } from "./AppHeader.tsx";
 import { useBackupFlow, BackupDialogs } from "./BackupFlow.tsx";
-import { hasState } from "../lib/store.ts";
 import { classNames } from "../lib/classNames.ts";
 import { useRevalidated } from "../lib/hooks.ts";
 import { useToday } from "../lib/today.ts";
-import { LEVELS, dateStrFromOffset, isValidDate, puzzleId } from "../puzzles/daily.ts";
+import { LEVELS, dateStrFromOffset, isValidDate } from "../puzzles/daily.ts";
+import { dayStates, isSolved, resumeLevel } from "../puzzles/progress.ts";
 import { t } from "../i18n/index.ts";
 
 interface WeekInfoLocale extends Intl.Locale {
@@ -55,10 +55,11 @@ function formatDay(dateStr: string): string {
 /** One day of the archive: its date, a six-level track, and a done-ness tint. */
 function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; isToday: boolean }) {
   const s = t();
-  const states = LEVELS.map((level) => hasState(puzzleId(dateStr, level)));
-  const solved = states.filter((state) => state.completed && !state.stale).length;
+  const states = dayStates(dateStr);
+  const solved = states.filter(isSolved).length;
   const stale = states.filter((state) => state.stale).length;
   const started = states.some((state) => state.started);
+  const target = resumeLevel(states);
 
   // Stale wins the tint: it needs the alarm, and its track stops reporting the
   // other levels, so the label stops naming them too.
@@ -66,12 +67,12 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
   const dateLabel = isToday ? s.daily.today : formatDay(dateStr);
   const label =
     stale > 0
-      ? s.daily.archiveDayStale(dateLabel, stale)
-      : s.daily.archiveDay(dateLabel, solved, LEVELS.length);
+      ? s.daily.archiveDayStale(dateLabel, stale, s.difficulty[target])
+      : s.daily.archiveDay(dateLabel, solved, LEVELS.length, s.difficulty[target]);
 
   return (
     <a
-      href={`/${dateStr}/1`}
+      href={`/${dateStr}/${target}`}
       class={classNames("archive-day", tint, isToday && "today")}
       aria-label={label}
     >
