@@ -54,16 +54,19 @@
 }
 
 /* ── Base ── */
-body {
+html {
   font-family:
     system-ui,
     -apple-system,
     sans-serif;
   background: var(--bg);
   color: var(--text);
+  line-height: 1.4;
+}
+
+body {
   min-height: 100vh;
   min-height: 100svh;
-  line-height: 1.4;
   font-size: var(--text-body);
 }
 
