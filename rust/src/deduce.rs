@@ -3379,7 +3379,7 @@ mod tests {
         let mut construction_failure: Option<String> = None;
 
         // Most seeds hand `fill_options` a solution that one of its type preconditions
-        // rejects — this builder skips `construct::random_type_params`' gating, and
+        // rejects — this builder skips `fill::random_type_params`' gating, and
         // those asserts are how fill reports the gap. Silence the hook for the loop;
         // it's restored before the assertions, which would otherwise print no message.
         let hook = std::panic::take_hook();

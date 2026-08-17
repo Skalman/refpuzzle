@@ -43,7 +43,7 @@ pub(crate) fn fuzz_base_seed(var: &str) -> u32 {
 
 /// Whether `fp` has a fatal form error — the engine's precondition (see the
 /// `check_answer` module doc). A fuzz builder that assembles rows itself, without
-/// `construct::random_type_params`' pool-size gating, has to skip these.
+/// `fill::random_type_params`' pool-size gating, has to skip these.
 pub(crate) fn form_invalid(fp: &crate::types::FlatPuzzle) -> bool {
     crate::check_form::check_form(fp)
         .iter()

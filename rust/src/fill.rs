@@ -695,7 +695,7 @@ pub fn fill_options(
 /// for a reason other than correctness.
 ///
 /// Needs `option_count` eligible values with `option_count - 1` non-sharers among them —
-/// `construct::random_type_params`'s capacity gate, rearranged. Without it the ≥ 2 repair
+/// `random_type_params`' capacity gate, rearranged. Without it the ≥ 2 repair
 /// runs out of substitutes and leaves a second sharer as an alternate correct answer.
 fn fill_scoped_sameness(
     qi: usize,
