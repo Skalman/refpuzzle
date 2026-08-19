@@ -180,6 +180,9 @@ fn print_help() {
     eprintln!("       refpuzzle reference [--details]   (question type + deduce rule examples)");
     eprintln!("       refpuzzle type-stats -o FILE [--attempts N] [--seed S]");
     eprintln!(
+        "       refpuzzle type-stats --calibration   (fill::none_correct_rate table, paste-ready)"
+    );
+    eprintln!(
         "       refpuzzle gen-stats [-a N] [-n N] [-l 1-6] [--seed S] [--origin URL]   (gen quality: histogram + links)"
     );
     eprintln!();
@@ -289,6 +292,7 @@ fn main() {
             let mut attempts: u32 = 10000;
             let mut seed: u32 = 1;
             let mut output: Option<String> = None;
+            let mut calibration = false;
             let mut i = 2;
             while i < args.len() {
                 match args[i].as_str() {
@@ -297,6 +301,7 @@ fn main() {
                     "--output" | "-o" => {
                         output = Some(flag_value(&args, &mut i, "--output").to_string())
                     }
+                    "--calibration" => calibration = true,
                     other => {
                         eprintln!("Unknown option: {other}");
                         std::process::exit(1);
@@ -304,9 +309,17 @@ fn main() {
                 }
                 i += 1;
             }
+            if calibration {
+                cli::type_stats::calibration(attempts, seed);
+                return;
+            }
             let Some(output) = output else {
                 eprintln!("Usage: refpuzzle type-stats -o FILE [--attempts N] [--seed N]");
-                eprintln!("  -o FILE   output file (required, - for stdout)");
+                eprintln!("       refpuzzle type-stats --calibration [--attempts N] [--seed N]");
+                eprintln!("  -o FILE        output file (required, - for stdout)");
+                eprintln!(
+                    "  --calibration  print fill::none_correct_rate's table body, paste-ready"
+                );
                 std::process::exit(1);
             };
             cli::type_stats::type_stats(attempts, seed, &output);

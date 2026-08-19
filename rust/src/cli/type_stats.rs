@@ -91,6 +91,90 @@ pub fn type_stats(attempts: u32, seed: u32, output: &str) {
     }
 }
 
+/// Print `fill::none_correct_rate`'s table body from a fresh measurement: one
+/// paste-ready match arm per NONE-capable kind, in enum order, then the measured
+/// NONE ratio of every structurally skewed row (`p > 1/option_count`) as the
+/// input for a `KNOWN_SKEW` ceiling (measured value plus headroom).
+pub fn calibration(attempts: u32, seed: u32) {
+    let levels: Vec<LevelData> = (1..=6u8)
+        .map(|l| collect_level(l, attempts, seed))
+        .collect();
+
+    let none_shares = |kind: QuestionTypeKind| -> Vec<f64> {
+        levels
+            .iter()
+            .map(|ld| {
+                ld.per_type.get(&kind).map_or(0.0, |entry| {
+                    let total: u32 = entry.correct_values.values().sum();
+                    let none = entry
+                        .correct_values
+                        .get(&OptionValue::NONE)
+                        .copied()
+                        .unwrap_or(0);
+                    if total == 0 {
+                        0.0
+                    } else {
+                        none as f64 / total as f64
+                    }
+                })
+            })
+            .collect()
+    };
+
+    println!("            //               L1    L2    L3    L4    L5    L6");
+    for &kind in QuestionTypeKind::all() {
+        if !kind.may_be_none() {
+            continue;
+        }
+        let shares = none_shares(kind);
+        let cells: Vec<String> = shares.iter().map(|s| format!("{s:.2}")).collect();
+        println!("            {kind:?} => [{}],", cells.join(", "));
+        for (i, (&share, cell)) in shares.iter().zip(&cells).enumerate() {
+            if share > 0.0 && cell == "0.00" {
+                eprintln!(
+                    "warning: {kind:?} L{} is used but its share rounds to 0.00, which the \
+                     table reads as absent — see the trap note on `none_correct_rate`",
+                    i + 1
+                );
+            }
+        }
+    }
+
+    println!();
+    println!("Structurally skewed rows (NONE-correct share above 1/option_count), measured ratio:");
+    for &kind in QuestionTypeKind::all() {
+        if !kind.may_be_none() {
+            continue;
+        }
+        for ld in &levels {
+            let Some(entry) = ld.per_type.get(&kind) else {
+                continue;
+            };
+            let correct_total: u32 = entry.correct_values.values().sum();
+            let distractor_total: u32 = entry.distractor_values.values().sum();
+            let correct_none = entry
+                .correct_values
+                .get(&OptionValue::NONE)
+                .copied()
+                .unwrap_or(0);
+            let distractor_none = entry
+                .distractor_values
+                .get(&OptionValue::NONE)
+                .copied()
+                .unwrap_or(0);
+            if correct_total == 0 || distractor_none == 0 {
+                continue;
+            }
+            let p = correct_none as f64 / correct_total as f64;
+            if p <= 1.0 / ld.oc as f64 {
+                continue;
+            }
+            let ratio = p / (distractor_none as f64 / distractor_total as f64);
+            println!("  {kind:?} L{}: {ratio:.2}", ld.level);
+        }
+    }
+}
+
 /// Generate up to `attempts` puzzles for one level and tally per-type stats.
 /// Mirrors production: retry with fresh seeds until a generation succeeds, so
 /// `attempts` is the target *puzzle* count, not the generate()-call count.
@@ -989,8 +1073,9 @@ mod tests {
         assert!(
             failures.is_empty(),
             "NONE option is skewed in {} of {checked} rows:\n  {}\n\
-             Re-measure with `type-stats --attempts 10000 --seed 1`; the calibration \
-             lives in `fill::none_correct_rate`.",
+             Re-measure with `cargo run --release -- type-stats --calibration` and paste \
+             the printed table over `fill::none_correct_rate`'s; it also prints each \
+             skewed row's measured ratio, the input for a `KNOWN_SKEW` ceiling.",
             failures.len(),
             failures.join("\n  ")
         );

@@ -1009,8 +1009,8 @@ fn is_counting_type(qt: &QuestionType) -> bool {
 
 /// Share of `kind`'s instances at `level` (0-based, as `recipes::RECIPES` is indexed) whose
 /// answer is NONE, or `None` where the kind isn't used at that level. Measured with
-/// `type-stats --attempts 10000 --seed 1`, to two decimals — a third digit sits below the
-/// measurement's own run-to-run reproducibility.
+/// `type-stats --calibration`, which prints this table's body paste-ready, to two
+/// decimals — a third digit sits below the measurement's own run-to-run reproducibility.
 ///
 /// Only shares up to `1/option_count` (0.2 at oc=5) can be neutralized from the option row;
 /// past that only placement or row sampling can bring one down. `1.0` would be a degenerate
@@ -1553,8 +1553,8 @@ mod tests {
                 if allowed && kind.may_be_none() {
                     assert!(
                         calibrated,
-                        "{kind:?} is allowed at L{} but uncalibrated there — re-run type-stats \
-                         and fill in the column",
+                        "{kind:?} is allowed at L{} but uncalibrated there — re-run \
+                         `type-stats --calibration` and paste the printed table in",
                         level + 1
                     );
                 }
