@@ -56,7 +56,7 @@ const fn error<M>(msg: M) -> Option<(M, Severity)> {
 pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static str, Severity)> {
     use QuestionTypeKind::*;
     match kind {
-        SameAs | SameAsWhich => {
+        OnlySameAmong | OnlySameAsAmong => {
             error("asks which of a candidate list matches, and a statement carries no list")
         }
         TrueStmt => error("cannot nest inside another statement"),
@@ -73,7 +73,7 @@ pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static 
 }
 
 /// Per-qt structural checks (value-independent): question_index references
-/// in range and not self-ref (AnswerOf/LetterDist/SameAsWhich), and answer
+/// in range and not self-ref (AnswerOf/LetterDist/OnlySameAsAmong), and answer
 /// letter within option count for types that carry an `answer` field. `qi` is
 /// the owning question — when checking one of a TrueStmt's per-option statements,
 /// this is the TrueStmt's qi.
@@ -85,10 +85,10 @@ fn check_question_form(
     let n = fp.n;
     let oc = fp.option_count;
 
-    // Reference checks (AnswerOf/LetterDist/SameAsWhich).
+    // Reference checks (AnswerOf/LetterDist/OnlySameAsAmong).
     if let QuestionType::AnswerOf { question_index }
     | QuestionType::LetterDist { question_index }
-    | QuestionType::SameAsWhich { question_index } = qt
+    | QuestionType::OnlySameAsAmong { question_index } = qt
     {
         let ref_qi = *question_index as usize;
         if ref_qi >= n {
@@ -151,7 +151,7 @@ fn check_question_form(
 
 /// Per-(qt, value) wellformedness. Answer-letter and reference checks live in
 /// `check_question_form`; this function focuses on value-level checks (range,
-/// parity, EqualCount self-reference, per-option self-reference for SameAs /
+/// parity, EqualCount self-reference, per-option self-reference for OnlySameAmong /
 /// OnlySame). Returns the first error found.
 fn check_claim_form(
     fp: &FlatPuzzle,
@@ -191,12 +191,12 @@ fn check_claim_form(
         }
         QuestionType::NextSame => (ov <= qi || ov >= n).then(oor),
         QuestionType::PrevSame => (ov >= qi).then(oor),
-        QuestionType::SameAs => {
+        QuestionType::OnlySameAmong => {
             if ov == qi {
-                error(format!("SameAs option {} references itself", opt.oi))
+                error(format!("OnlySameAmong option {} references itself", opt.oi))
             } else if ov >= n {
                 error(format!(
-                    "SameAs option {} references out-of-range question {ov}",
+                    "OnlySameAmong option {} references out-of-range question {ov}",
                     opt.oi
                 ))
             } else {
@@ -212,21 +212,24 @@ fn check_claim_form(
                 None
             }
         }
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index } => {
             // All three read as nonsense, so none can be the intended answer: offering
             // the subject question as a candidate for matching itself, offering this
             // question when picking it is what decides its answer, or naming a question
-            // that doesn't exist. Error, mirroring SameAs.
+            // that doesn't exist. Error, mirroring OnlySameAmong.
             if ov == qi {
-                error(format!("SameAsWhich option {} references itself", opt.oi))
+                error(format!(
+                    "OnlySameAsAmong option {} references itself",
+                    opt.oi
+                ))
             } else if ov == usize::from(*question_index) {
                 error(format!(
-                    "SameAsWhich option {} references its subject question {ov}",
+                    "OnlySameAsAmong option {} references its subject question {ov}",
                     opt.oi
                 ))
             } else if ov >= n {
                 error(format!(
-                    "SameAsWhich option {} references out-of-range question {ov}",
+                    "OnlySameAsAmong option {} references out-of-range question {ov}",
                     opt.oi
                 ))
             } else {

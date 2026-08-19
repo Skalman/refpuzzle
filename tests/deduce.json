@@ -192,8 +192,8 @@
       "expect": "1C"
     },
     {
-      "name": "SameAs reverse: other references this → force",
-      "rule": "SameAsReverse",
+      "name": "OnlySameAmong reverse: other references this → force",
+      "rule": "OnlySameAmongReverse",
       "puzzle": {
         "o": [
           [null, null, null, null, null],
@@ -205,7 +205,7 @@
             "t": "AnswerIsSelf"
           },
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -1380,7 +1380,7 @@
       "expect": "1b"
     },
     {
-      "name": "SameAs: answer eliminated from target → eliminate",
+      "name": "OnlySameAmong: answer eliminated from target → eliminate",
       "rule": "OnlySameRuledOut",
       "puzzle": {
         "o": [
@@ -1391,7 +1391,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -1408,8 +1408,8 @@
       "expect": "1a"
     },
     {
-      "name": "SameAs: answered C (→Q4), so non-selected targets Q2,Q3,Q5,Q6 must not share answer",
-      "rule": "SameAsNegative",
+      "name": "OnlySameAmong: answered C (→Q4), so non-selected targets Q2,Q3,Q5,Q6 must not share answer",
+      "rule": "OnlySameAmongNegative",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, 5],
@@ -1421,7 +1421,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -2709,7 +2709,7 @@
       "expect": "1b"
     },
     {
-      "name": "SameAs: answer eliminated from target → eliminate",
+      "name": "OnlySameAmong: answer eliminated from target → eliminate",
       "rule": "OnlySameRuledOut",
       "puzzle": {
         "o": [
@@ -2720,7 +2720,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -2737,7 +2737,7 @@
       "expect": "1a"
     },
     {
-      "name": "SameAs: answer not eliminated from target → no elimination",
+      "name": "OnlySameAmong: answer not eliminated from target → no elimination",
       "rule": "OnlySameRuledOut",
       "puzzle": {
         "o": [
@@ -2748,7 +2748,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4055,10 +4055,10 @@
       "expect": "1b"
     },
     {
-      "section": "=== SameAs None (scoped to listed candidates) ==="
+      "section": "=== OnlySameAmong None (scoped to listed candidates) ==="
     },
     {
-      "name": "SameAs None: Q1=None(C), listed Q2 open → eliminate C from Q2",
+      "name": "OnlySameAmong None: Q1=None(C), listed Q2 open → eliminate C from Q2",
       "rule": "OnlySameNoneForward",
       "puzzle": {
         "o": [
@@ -4069,7 +4069,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4086,7 +4086,7 @@
       "expect": "2c"
     },
     {
-      "name": "SameAs None: Q1=None(C), only non-listed Q4 open → no deduction (global would strike it)",
+      "name": "OnlySameAmong None: Q1=None(C), only non-listed Q4 open → no deduction (global would strike it)",
       "rule": "OnlySameNoneForward",
       "puzzle": {
         "o": [
@@ -4097,7 +4097,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4114,7 +4114,7 @@
       "expect": null
     },
     {
-      "name": "SameAs None: listed Q3=C → eliminate the None option",
+      "name": "OnlySameAmong None: listed Q3=C → eliminate the None option",
       "rule": "OnlySameNoneMatch",
       "puzzle": {
         "o": [
@@ -4125,7 +4125,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4142,7 +4142,7 @@
       "expect": "1c"
     },
     {
-      "name": "SameAs None: only non-listed Q4=C → keep the None option (global would strike it)",
+      "name": "OnlySameAmong None: only non-listed Q4=C → keep the None option (global would strike it)",
       "rule": "OnlySameNoneMatch",
       "puzzle": {
         "o": [
@@ -4153,7 +4153,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4360,11 +4360,11 @@
       "expect": "3c"
     },
     {
-      "section": "=== SameAsWhichForward ==="
+      "section": "=== OnlySameAsAmongForward ==="
     },
     {
-      "name": "SameAsWhichForward: ref answered, option target has wrong answer → eliminate",
-      "rule": "SameAsWhichForward",
+      "name": "OnlySameAsAmongForward: ref answered, option target has wrong answer → eliminate",
+      "rule": "OnlySameAsAmongForward",
       "puzzle": {
         "o": [
           [1, 3, 4, null, null],
@@ -4375,7 +4375,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 2
           },
           {
@@ -4396,8 +4396,8 @@
       "expect": "1a"
     },
     {
-      "name": "SameAsWhichForward: target unanswered but ref answer eliminated → eliminate",
-      "rule": "SameAsWhichForward",
+      "name": "OnlySameAsAmongForward: target unanswered but ref answer eliminated → eliminate",
+      "rule": "OnlySameAsAmongForward",
       "puzzle": {
         "o": [
           [1, 3, 4, null, null],
@@ -4408,7 +4408,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 2
           },
           {
@@ -4429,11 +4429,11 @@
       "expect": "1b"
     },
     {
-      "section": "=== SameAsOtherMatch ==="
+      "section": "=== OnlySameAmongOtherMatch ==="
     },
     {
-      "name": "SameAsOtherMatch: Q3=A, so Q1 option A (pointing at Q2) can't be the only listed sharer",
-      "rule": "SameAsOtherMatch",
+      "name": "OnlySameAmongOtherMatch: Q3=A, so Q1 option A (pointing at Q2) can't be the only listed sharer",
+      "rule": "OnlySameAmongOtherMatch",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4445,7 +4445,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4468,8 +4468,8 @@
       "expect": "1a"
     },
     {
-      "name": "SameAsOtherMatch: the sharer is not listed, so nothing follows",
-      "rule": "SameAsOtherMatch",
+      "name": "OnlySameAmongOtherMatch: the sharer is not listed, so nothing follows",
+      "rule": "OnlySameAmongOtherMatch",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4481,7 +4481,7 @@
         ],
         "q": [
           {
-            "t": "SameAs"
+            "t": "OnlySameAmong"
           },
           {
             "t": "AnswerIsSelf"
@@ -4504,11 +4504,11 @@
       "expect": null
     },
     {
-      "section": "=== SameAsWhichNegative ==="
+      "section": "=== OnlySameAsAmongNegative ==="
     },
     {
-      "name": "SameAsWhichNegative: Q1=A picks Q2, so the other listed candidates can't be C either",
-      "rule": "SameAsWhichNegative",
+      "name": "OnlySameAsAmongNegative: Q1=A picks Q2, so the other listed candidates can't be C either",
+      "rule": "OnlySameAsAmongNegative",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4520,7 +4520,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 5
           },
           {
@@ -4544,11 +4544,11 @@
       "expect": "qm11100o00100"
     },
     {
-      "section": "=== SameAsWhichNoneForward ==="
+      "section": "=== OnlySameAsAmongNoneForward ==="
     },
     {
-      "name": "SameAsWhichNoneForward: Q1=None denies C to every listed candidate",
-      "rule": "SameAsWhichNoneForward",
+      "name": "OnlySameAsAmongNoneForward: Q1=None denies C to every listed candidate",
+      "rule": "OnlySameAsAmongNoneForward",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4560,7 +4560,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 5
           },
           {
@@ -4584,11 +4584,11 @@
       "expect": "2c"
     },
     {
-      "section": "=== SameAsWhichNoneMatch / SameAsWhichOtherMatch ==="
+      "section": "=== OnlySameAsAmongNoneMatch / OnlySameAsAmongOtherMatch ==="
     },
     {
-      "name": "SameAsWhichNoneMatch: listed Q2 already holds C, so 'none of these' is false",
-      "rule": "SameAsWhichNoneMatch",
+      "name": "OnlySameAsAmongNoneMatch: listed Q2 already holds C, so 'none of these' is false",
+      "rule": "OnlySameAsAmongNoneMatch",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4600,7 +4600,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 5
           },
           {
@@ -4624,8 +4624,8 @@
       "expect": "1e"
     },
     {
-      "name": "SameAsWhichOtherMatch: listed Q2 holds C, so every option pointing elsewhere is out",
-      "rule": "SameAsWhichOtherMatch",
+      "name": "OnlySameAsAmongOtherMatch: listed Q2 holds C, so every option pointing elsewhere is out",
+      "rule": "OnlySameAsAmongOtherMatch",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4637,7 +4637,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 5
           },
           {
@@ -4661,8 +4661,8 @@
       "expect": "1b"
     },
     {
-      "name": "SameAsWhichOtherMatch: two listed candidates hold C, so even option A goes (contradiction)",
-      "rule": "SameAsWhichOtherMatch",
+      "name": "OnlySameAsAmongOtherMatch: two listed candidates hold C, so even option A goes (contradiction)",
+      "rule": "OnlySameAsAmongOtherMatch",
       "puzzle": {
         "o": [
           [1, 2, 3, 4, null],
@@ -4674,7 +4674,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 5
           },
           {
@@ -4698,11 +4698,11 @@
       "expect": "1a"
     },
     {
-      "section": "=== SameAsWhichReverse ==="
+      "section": "=== OnlySameAsAmongReverse ==="
     },
     {
-      "name": "SameAsWhichReverse: answered, ref known → force option target",
-      "rule": "SameAsWhichReverse",
+      "name": "OnlySameAsAmongReverse: answered, ref known → force option target",
+      "rule": "OnlySameAsAmongReverse",
       "puzzle": {
         "o": [
           [1, 3, 4, null, null],
@@ -4713,7 +4713,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 2
           },
           {
@@ -4734,8 +4734,8 @@
       "expect": "5B"
     },
     {
-      "name": "SameAsWhichReverse: answered, option target known → force ref",
-      "rule": "SameAsWhichReverse",
+      "name": "OnlySameAsAmongReverse: answered, option target known → force ref",
+      "rule": "OnlySameAsAmongReverse",
       "puzzle": {
         "o": [
           [1, 3, 4, null, null],
@@ -4746,7 +4746,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 2
           },
           {

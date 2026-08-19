@@ -651,7 +651,7 @@ fn check_claim_impl(
         }
 
         // Scoped sameness — never a claim. Fatal `check_form` error.
-        QuestionType::SameAs | QuestionType::SameAsWhich { .. } => {
+        QuestionType::OnlySameAmong | QuestionType::OnlySameAsAmong { .. } => {
             unreachable!("scoped sameness is checked as a question, never as a claim")
         }
 
@@ -1079,15 +1079,15 @@ pub fn check_claim_with_reason(
     check_claim_impl(fp.n, fp.option_count, state, opt, claim)
 }
 
-/// Check a `SameAs` / `SameAsWhich` answer. Both list a candidate set and ask which
+/// Check a `OnlySameAmong` / `OnlySameAsAmong` answer. Both list a candidate set and ask which
 /// member is the **only** one answered with the matched letter M: a numeric option
 /// asserts that its target holds M *and* that no other listed candidate does; the
 /// "none" option asserts only the latter, over the whole list.
 ///
-/// `source` is the question M is read off — `qi` for `SameAs`, the reference for
-/// `SameAsWhich` — so nothing is decided until it's answered. It is also the one value
+/// `source` is the question M is read off — `qi` for `OnlySameAmong`, the reference for
+/// `OnlySameAsAmong` — so nothing is decided until it's answered. It is also the one value
 /// excluded from the candidate list, holding M by definition. `qi` stays a candidate
-/// for `SameAsWhich`, where matching the reference is an ordinary proposition for it.
+/// for `OnlySameAsAmong`, where matching the reference is an ordinary proposition for it.
 fn check_scoped_sameness(
     fp: &FlatPuzzle,
     state: State,
@@ -1158,7 +1158,7 @@ fn check_scoped_sameness(
 fn affected_by_own_answer(qt: &QuestionType, qi: usize) -> bool {
     match *qt {
         QuestionType::AnswerOf { question_index } => question_index as usize == qi,
-        QuestionType::SameAsWhich { question_index } => question_index as usize == qi,
+        QuestionType::OnlySameAsAmong { question_index } => question_index as usize == qi,
         _ => true,
     }
 }
@@ -1241,16 +1241,16 @@ pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> Val
     }
 
     // The scoped-sameness types are checked here rather than through
-    // `check_claim`, which can't see the candidate list. `SameAs` comes back
+    // `check_claim`, which can't see the candidate list. `OnlySameAmong` comes back
     // `Consistent` (via `maybe_consistent`) because its matched letter *is* qi's
-    // own answer; `SameAsWhich` takes it from another question, so it comes back
+    // own answer; `OnlySameAsAmong` takes it from another question, so it comes back
     // `Valid`.
     match *qt {
-        QuestionType::SameAs => {
+        QuestionType::OnlySameAmong => {
             let verdict = check_scoped_sameness(fp, state, qi, a, qi);
             return maybe_consistent(verdict, qt, qi);
         }
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index } => {
             let verdict = check_scoped_sameness(fp, state, qi, a, usize::from(question_index));
             return maybe_consistent(verdict, qt, qi);
         }

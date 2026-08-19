@@ -235,14 +235,14 @@ fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<Strin
             Some(v) => format!("{} is the only other question with answer {own}", q(v)),
             None => format!("no other question has answer {own}"),
         },
-        SameAs => match value {
+        OnlySameAmong => match value {
             Some(v) => format!(
                 "{} is the only one of these questions with answer {own}",
                 q(v)
             ),
             None => format!("none of these questions has answer {own}"),
         },
-        SameAsWhich { question_index } => {
+        OnlySameAsAmong { question_index } => {
             let k = usize::from(question_index);
             // Nothing is decided until the reference is answered, so a rejected claim
             // always has it.
@@ -750,7 +750,7 @@ fn brief_force_reason(
                 );
             }
         }
-        DeduceRule::SameAsReverse => {
+        DeduceRule::OnlySameAmongReverse => {
             if let Some(other) = source {
                 return (format!("same answer as {}", q(other)), Some(other));
             }
@@ -826,12 +826,12 @@ fn explain_force(
             }
         }
 
-        DeduceRule::SameAsReverse | DeduceRule::PrevNextOnlySameReverse => {
+        DeduceRule::OnlySameAmongReverse | DeduceRule::PrevNextOnlySameReverse => {
             if let Some(other) = source
                 && let Some(other_ans) = answers[other]
             {
                 match fp.question_types[other] {
-                    QuestionType::SameAs => {
+                    QuestionType::OnlySameAmong => {
                         steps.push(try_looking(&[qi, other]));
                         steps.push(simple(format!(
                             "{} says it has the same answer as {}. {} is {other_ans}, so {} must be {other_ans}.",
@@ -857,10 +857,10 @@ fn explain_force(
             }
         }
 
-        DeduceRule::SameAsWhichReverse => {
+        DeduceRule::OnlySameAsAmongReverse => {
             if let Some(other) = source
                 && let Some(other_ans) = answers[other]
-                && let QuestionType::SameAsWhich { question_index } = fp.question_types[other]
+                && let QuestionType::OnlySameAsAmong { question_index } = fp.question_types[other]
                 && let Some(target_q) = option_value_at(fp, other, other_ans)
             {
                 let ref_q = question_index as usize;
@@ -1403,13 +1403,13 @@ fn explain_elimination(
         return steps;
     }
 
-    // Fires for both OnlySame and SameAs (the shared "none = unique" arm);
+    // Fires for both OnlySame and OnlySameAmong (the shared "none = unique" arm);
     // `source` is the question answered "none".
     if matches!(rule, DeduceRule::OnlySameNoneForward)
         && let Some(src) = source
         && answers[src] == Some(letter)
     {
-        let text = if matches!(fp.question_types[src], QuestionType::SameAs) {
+        let text = if matches!(fp.question_types[src], QuestionType::OnlySameAmong) {
             format!(
                 "{} is {letter} and claims none of its listed questions shares that answer, so {} can't be {letter}.",
                 q(src),
@@ -1428,9 +1428,9 @@ fn explain_elimination(
         return steps;
     }
 
-    if matches!(rule, DeduceRule::SameAsWhichNoneForward)
+    if matches!(rule, DeduceRule::OnlySameAsAmongNoneForward)
         && let Some(src) = source
-        && let QuestionType::SameAsWhich { question_index } = fp.question_types[src]
+        && let QuestionType::OnlySameAsAmong { question_index } = fp.question_types[src]
         && answers[usize::from(question_index)] == Some(letter)
     {
         let k = usize::from(question_index);
@@ -1652,7 +1652,7 @@ fn explain_multi_elim(
     let answers = &state.answers;
     let source = reason.source();
 
-    if matches!(rule, DeduceRule::SameAsNegative)
+    if matches!(rule, DeduceRule::OnlySameAmongNegative)
         && let Some(src) = source
     {
         return (
@@ -1664,9 +1664,9 @@ fn explain_multi_elim(
         );
     }
 
-    if matches!(rule, DeduceRule::SameAsWhichNegative)
+    if matches!(rule, DeduceRule::OnlySameAsAmongNegative)
         && let Some(src) = source
-        && let QuestionType::SameAsWhich { question_index } = fp.question_types[src]
+        && let QuestionType::OnlySameAsAmong { question_index } = fp.question_types[src]
         && let Some(src_ans) = answers[src]
         && let Some(target) = option_value_at(fp, src, src_ans)
     {
@@ -2036,7 +2036,7 @@ pub fn explain_lookahead(
                     // inside a chain as on its own — no thinner second path to drift.
                     // It reports whichever questions its own sentence names, and that is
                     // more than the reason's sources: the prose also names what the *kind*
-                    // implies, such as a ConsecIdent pair's other half or a SameAsWhich's
+                    // implies, such as a ConsecIdent pair's other half or a OnlySameAsAmong's
                     // reference question.
                     let (line, named) = elim_chain_line(fp, round_pre, eqi, oi, dr.rule, reason);
                     involved.extend(named);
@@ -2388,7 +2388,7 @@ mod tests {
                 let answer = rng.pick_letter(oc);
                 let before_index = rng.int(0, n as i32) as u8;
                 let after_index = rng.int(0, (n as i32 - 2).max(0)) as u8;
-                // Every kind a claim can carry. `SameAs`/`SameAsWhich` are checked as
+                // Every kind a claim can carry. `OnlySameAmong`/`OnlySameAsAmong` are checked as
                 // questions, not claims (`check_claim_impl` says so with an
                 // `unreachable!`), and their reasons are shared with the kinds here.
                 let kinds = [
@@ -2704,19 +2704,19 @@ mod tests {
         assert_eq!(d.other_qi, None);
     }
 
-    /// Q1 = `SameAs` listing Q2/Q3 plus a "none" option, on a 4-question board.
-    fn same_as_board() -> FlatPuzzle {
+    /// Q1 = `OnlySameAmong` listing Q2/Q3 plus a "none" option, on a 4-question board.
+    fn only_same_among_board() -> FlatPuzzle {
         parse_puzzle(&json!({
-            "q": [{"t": "SameAs"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "q": [{"t": "OnlySameAmong"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
             "o": [[1, 2, null], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
         }))
         .unwrap()
     }
 
-    /// Q1 = `SameAsWhich` referencing Q4, listing Q2/Q3 plus a "none" option.
-    fn same_as_which_board() -> FlatPuzzle {
+    /// Q1 = `OnlySameAsAmong` referencing Q4, listing Q2/Q3 plus a "none" option.
+    fn only_same_as_among_board() -> FlatPuzzle {
         parse_puzzle(&json!({
-            "q": [{"t": "SameAsWhich", "q": 3}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
+            "q": [{"t": "OnlySameAsAmong", "q": 3}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}, {"t": "AnswerIsSelf"}],
             "o": [[1, 2, null], [0, 1, 2], [0, 1, 2], [0, 1, 2]],
         }))
         .unwrap()
@@ -2730,8 +2730,8 @@ mod tests {
     /// §3.6: the target being *answered otherwise* needs its own wording — "ruled
     /// out for #2" is wrong for a question that already has an answer.
     #[test]
-    fn elim_same_as_target_answered_otherwise() {
-        let fp = same_as_board();
+    fn elim_only_same_among_target_answered_otherwise() {
+        let fp = only_same_among_board();
         let state = state_with(&fp, &[None, Some(Answer::B), None, None]);
         let d = elim_text(&fp, &state, 0);
         assert_eq!(
@@ -2742,8 +2742,8 @@ mod tests {
     }
 
     #[test]
-    fn elim_same_as_another_listed_candidate_matches() {
-        let fp = same_as_board();
+    fn elim_only_same_among_another_listed_candidate_matches() {
+        let fp = only_same_among_board();
         // Option A claims #2 is the only listed question with answer A — but #3 has it.
         let state = state_with(&fp, &[None, None, Some(Answer::A), None]);
         let d = elim_text(&fp, &state, 0);
@@ -2755,8 +2755,8 @@ mod tests {
     }
 
     #[test]
-    fn elim_same_as_which_another_listed_candidate_matches() {
-        let fp = same_as_which_board();
+    fn elim_only_same_as_among_another_listed_candidate_matches() {
+        let fp = only_same_as_among_board();
         // #4 = C is the letter to match; both listed #2 and #3 hold it.
         let state = state_with(
             &fp,
@@ -2771,8 +2771,8 @@ mod tests {
     }
 
     #[test]
-    fn elim_same_as_which_none_option_refuted() {
-        let fp = same_as_which_board();
+    fn elim_only_same_as_among_none_option_refuted() {
+        let fp = only_same_as_among_board();
         let state = state_with(&fp, &[None, None, Some(Answer::C), Some(Answer::C)]);
         let d = elim_text(&fp, &state, 2);
         assert_eq!(
@@ -2784,8 +2784,8 @@ mod tests {
 
     /// The answered-question summary, for the verdict §2 newly turns `Invalid`.
     #[test]
-    fn invalid_same_as_only_clause_broken() {
-        let fp = same_as_board();
+    fn invalid_only_same_among_only_clause_broken() {
+        let fp = only_same_among_board();
         // #1 = A points at #2 (also A), but listed #3 is A too.
         let state = state_with(
             &fp,
@@ -2800,8 +2800,8 @@ mod tests {
     }
 
     #[test]
-    fn invalid_same_as_which_only_clause_broken() {
-        let fp = same_as_which_board();
+    fn invalid_only_same_as_among_only_clause_broken() {
+        let fp = only_same_as_among_board();
         // #1 = A points at #2, matching #4's C; but listed #3 matches too.
         let state = state_with(
             &fp,
@@ -2824,8 +2824,8 @@ mod tests {
     /// The two new whole-list rules, whose prose lives in `explain_elimination` /
     /// `explain_multi_elim` rather than the per-type fallback.
     #[test]
-    fn same_as_which_none_forward_and_negative_prose() {
-        let fp = same_as_which_board();
+    fn only_same_as_among_none_forward_and_negative_prose() {
+        let fp = only_same_as_among_board();
         // #1 answered "none" (option C) while #4 = C: nothing listed may be C.
         let state = state_with(&fp, &[Some(Answer::C), None, None, Some(Answer::C)]);
         let steps = explain_elimination(
@@ -2833,7 +2833,7 @@ mod tests {
             &state,
             1,
             2,
-            DeduceRule::SameAsWhichNoneForward,
+            DeduceRule::OnlySameAsAmongNoneForward,
             DeduceReason::Source { source: 0 },
         );
         assert!(
@@ -2851,7 +2851,7 @@ mod tests {
             &state,
             2,
             1 << 2,
-            DeduceRule::SameAsWhichNegative,
+            DeduceRule::OnlySameAsAmongNegative,
             DeduceReason::Source { source: 0 },
         );
         assert_eq!(

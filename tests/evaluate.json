@@ -451,10 +451,10 @@
       "expect": true
     },
     {
-      "section": "=== SameAsWhich ==="
+      "section": "=== OnlySameAsAmong ==="
     },
     {
-      "name": "same_as_which: Q4 has same answer as Q2 → true",
+      "name": "only_same_as_among: Q4 has same answer as Q2 → true",
       "puzzle": {
         "o": [
           [2, 0, 3, 0, 1],
@@ -464,7 +464,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 1
           },
           {
@@ -483,7 +483,7 @@
       "expect": true
     },
     {
-      "name": "same_as_which: Q3 does not have same answer as Q2 → false",
+      "name": "only_same_as_among: Q3 does not have same answer as Q2 → false",
       "puzzle": {
         "o": [
           [2, 0, 3, 0, 1],
@@ -493,7 +493,7 @@
         ],
         "q": [
           {
-            "t": "SameAsWhich",
+            "t": "OnlySameAsAmong",
             "q": 1
           },
           {

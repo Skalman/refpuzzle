@@ -125,7 +125,7 @@ pub struct PuzzleCheckResult {
     pub brute_links: Vec<String>,
     pub hint_brute_match: bool,
     /// Questions without a unique answer for the key — `check_well_posed_given_key`
-    /// (histogram/structural) and `check_well_posed_given_options` (SameAs/SameAsWhich/TrueStmt).
+    /// (histogram/structural) and `check_well_posed_given_options` (OnlySameAmong/OnlySameAsAmong/TrueStmt).
     pub ambiguous: Vec<String>,
 }
 

@@ -8,7 +8,7 @@
 //!   OnlySame/ConsecIdent/OnlyOdd/OnlyEven, NoOtherHasAnswer. Knowable at
 //!   parametrize; `fill_options`/repair never change it.
 //! - [`check_well_posed_given_options`] — types whose answer depends on the
-//!   filled option/claim values: SameAs/SameAsWhich (distractor targets) and
+//!   filled option/claim values: OnlySameAmong/OnlySameAsAmong (distractor targets) and
 //!   TrueStmt (claims). Only knowable once options exist.
 //!
 //! Both return `None` when well-posed, `Some(reason)` when ambiguous or answerless.
@@ -101,8 +101,8 @@ pub fn check_well_posed_given_key(
 }
 
 /// Well-posedness that depends on the filled option/claim values. `None` if `qi`
-/// has a unique answer; `Some(reason)` if a distractor *also* holds (SameAs /
-/// SameAsWhich) or the true-claim count isn't exactly one (TrueStmt). Called at the
+/// has a unique answer; `Some(reason)` if a distractor *also* holds (OnlySameAmong /
+/// OnlySameAsAmong) or the true-claim count isn't exactly one (TrueStmt). Called at the
 /// accept-gate, the repair keep-gate, and `refpuzzle check`.
 pub fn check_well_posed_given_options(
     fp: &FlatPuzzle,
@@ -110,8 +110,8 @@ pub fn check_well_posed_given_options(
     qi: usize,
 ) -> Option<String> {
     match fp.question_types[qi] {
-        QuestionType::SameAs => ambiguating_distractor(fp, qi, sol, sol[qi], qi),
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAmong => ambiguating_distractor(fp, qi, sol, sol[qi], qi),
+        QuestionType::OnlySameAsAmong { question_index } => {
             let ref_q = usize::from(question_index);
             // A malformed puzzle could put the ref out of range, which would panic on
             // sol[ref_q]; reporting a bad index is form validation's job, so here we
@@ -147,7 +147,7 @@ pub fn check_well_posed_given_options(
     }
 }
 
-/// SameAs/SameAsWhich helper: find a distractor that is *also* a valid answer — an
+/// OnlySameAmong/OnlySameAsAmong helper: find a distractor that is *also* a valid answer — an
 /// option (other than `qi` or the reference `ref_q`) pointing to a question whose
 /// answer equals `matched`. Returns the ambiguity reason, else `None`.
 fn ambiguating_distractor(
@@ -253,12 +253,12 @@ mod tests {
     }
 
     #[test]
-    fn same_as_flags_a_distractor_that_shares_the_answer() {
+    fn only_same_among_flags_a_distractor_that_shares_the_answer() {
         // sol: Q0=Q1=Q2=A, Q3=B. Q0 answered A (slot 0). Correct option → Q1; a
         // distractor → Q2, which also answers A → ambiguous.
         let sol = [Answer::A, Answer::A, Answer::A, Answer::B];
         let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
-        qts[0] = QuestionType::SameAs;
+        qts[0] = QuestionType::OnlySameAmong;
         let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
         opts[0][0] = OptionValue::num(1); // answer slot (skipped) → genuine sharer Q1
         opts[0][1] = OptionValue::num(2); // distractor → Q2, ALSO shares A
@@ -268,10 +268,10 @@ mod tests {
     }
 
     #[test]
-    fn same_as_accepts_distractors_that_point_elsewhere() {
+    fn only_same_among_accepts_distractors_that_point_elsewhere() {
         let sol = [Answer::A, Answer::A, Answer::B, Answer::C];
         let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
-        qts[0] = QuestionType::SameAs;
+        qts[0] = QuestionType::OnlySameAmong;
         let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
         opts[0][0] = OptionValue::num(1); // answer slot → genuine sharer Q1
         opts[0][1] = OptionValue::num(2); // distractor → Q2 (B)
@@ -281,10 +281,10 @@ mod tests {
     }
 
     #[test]
-    fn same_as_which_compares_against_the_referenced_question() {
+    fn only_same_as_among_compares_against_the_referenced_question() {
         let sol = [Answer::B, Answer::A, Answer::A, Answer::A];
         let mut qts = [QuestionType::AnswerIsSelf; MAX_N];
-        qts[0] = QuestionType::SameAsWhich { question_index: 1 };
+        qts[0] = QuestionType::OnlySameAsAmong { question_index: 1 };
         let mut opts = [[OptionValue::UNUSED; 5]; MAX_N];
         opts[0][0] = OptionValue::num(2); // distractor → Q2, shares matched answer A
         opts[0][1] = OptionValue::num(3); // answer slot (B → idx 1), skipped

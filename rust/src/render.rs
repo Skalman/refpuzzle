@@ -55,10 +55,10 @@ pub fn question_text(qt: &QuestionType) -> String {
         // Scope-first: the candidate set is the listed options, so "of these
         // questions" has to bind before the "only" — that binding is all that
         // separates these from `OnlySame`'s whole-board claim.
-        SameAs => {
+        OnlySameAmong => {
             "Of these questions, which is the only one with the same answer as this one?".into()
         }
-        SameAsWhich { question_index } => format!(
+        OnlySameAsAmong { question_index } => format!(
             "Of these questions, which is the only one with the same answer as {}?",
             q(*question_index)
         ),
@@ -116,8 +116,8 @@ pub fn option_label(qt: &QuestionType, ov: OptionValue) -> String {
         | PrevSame
         | NextSame
         | OnlySame
-        | SameAs
-        | SameAsWhich { .. }
+        | OnlySameAmong
+        | OnlySameAsAmong { .. }
         | OnlyOdd { .. }
         | OnlyEven { .. } => ov.map_or_else(|| "None".to_string(), |x| (x + 1).to_string()),
         // Raw number (a count, or a LetterDist distance).
@@ -181,7 +181,7 @@ pub struct Boundary {
 
 /// The arrow referent for question `qi` (see [`ArrowReferent`]), or `None` for
 /// kinds outside L1's mix. Mirrors [`question_text`]'s match on the question
-/// type; `SameAs` additionally reads the offered candidate options.
+/// type; `OnlySameAmong` additionally reads the offered candidate options.
 pub fn arrow_referent(fp: &FlatPuzzle, qi: usize) -> Option<ArrowReferent> {
     use QuestionType::*;
     Some(match fp.question_types[qi] {
@@ -239,7 +239,7 @@ pub fn arrow_referent(fp: &FlatPuzzle, qi: usize) -> Option<ArrowReferent> {
         // Group C — this question's own answer.
         PrevSame => ArrowReferent::SameRun { dir: -1 },
         NextSame => ArrowReferent::SameRun { dir: 1 },
-        SameAs => ArrowReferent::Candidates {
+        OnlySameAmong => ArrowReferent::Candidates {
             qis: (0..fp.option_count)
                 .filter_map(|oi| {
                     let ov = fp.options[qi][oi];
@@ -302,9 +302,9 @@ mod tests {
     fn arrow_referent_maps_shapes() {
         use QuestionType::*;
         let (a, b, c) = (Answer::A, Answer::B, Answer::C);
-        // One row per referent shape; qi 0 (SameAs) carries candidate options.
+        // One row per referent shape; qi 0 (OnlySameAmong) carries candidate options.
         let types = [
-            SameAs,                    // 0
+            OnlySameAmong,             // 0
             CountAnswer { answer: a }, // 1
             CountAnswerBefore {
                 answer: a,
@@ -431,7 +431,7 @@ mod tests {
             },
             K::FirstWith => Q::FirstWith { answer: a },
             K::LastWith => Q::LastWith { answer: a },
-            K::SameAs => Q::SameAs,
+            K::OnlySameAmong => Q::OnlySameAmong,
             K::PrevSame => Q::PrevSame,
             K::NextSame => Q::NextSame,
             K::MostCommon => Q::MostCommon,

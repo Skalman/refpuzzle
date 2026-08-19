@@ -91,7 +91,7 @@ fn get_force(
             let ov = ov.value() as usize;
             (ov < fp.n).then_some((ov, answer))
         }
-        QuestionType::SameAs
+        QuestionType::OnlySameAmong
         | QuestionType::OnlySame
         | QuestionType::PrevSame
         | QuestionType::NextSame => {
@@ -102,7 +102,7 @@ fn get_force(
             let ov = ov.value() as usize;
             (ov < fp.n).then_some((ov, letter))
         }
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index } => {
             let ov = fp.options[qi][ai];
             if !ov.is_num() {
                 return None;
@@ -372,7 +372,7 @@ mod tests {
             10 if qi >= 2 => QuestionType::PrevSame,
             11 if qi + 2 < n => QuestionType::NextSame,
             12 => QuestionType::OnlySame,
-            13 => QuestionType::SameAs,
+            13 => QuestionType::OnlySameAmong,
             14 => QuestionType::OnlyOdd {
                 answer: rng.pick_letter(5),
             },
@@ -408,7 +408,7 @@ mod tests {
                 if q as usize == qi {
                     QuestionType::AnswerIsSelf
                 } else {
-                    QuestionType::SameAsWhich { question_index: q }
+                    QuestionType::OnlySameAsAmong { question_index: q }
                 }
             }
             25 if allow_true_stmt => QuestionType::TrueStmt,

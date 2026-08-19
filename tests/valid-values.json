@@ -237,9 +237,9 @@
       "valid": [1, 2, 3, 4, null]
     },
     {
-      "name": "SameAs n=5",
+      "name": "OnlySameAmong n=5",
       "type": {
-        "t": "SameAs"
+        "t": "OnlySameAmong"
       },
       "qi": 0,
       "n": 5,
@@ -247,9 +247,9 @@
       "valid": [1, 2, 3, 4, null]
     },
     {
-      "name": "SameAsWhich n=5",
+      "name": "OnlySameAsAmong n=5",
       "type": {
-        "t": "SameAsWhich",
+        "t": "OnlySameAsAmong",
         "q": 0
       },
       "qi": 1,
@@ -258,9 +258,9 @@
       "valid": [2, 3, 4, null]
     },
     {
-      "name": "SameAsWhich n=6 non-adjacent self/ref",
+      "name": "OnlySameAsAmong n=6 non-adjacent self/ref",
       "type": {
-        "t": "SameAsWhich",
+        "t": "OnlySameAsAmong",
         "q": 4
       },
       "qi": 1,

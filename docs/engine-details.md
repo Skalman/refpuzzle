@@ -76,7 +76,7 @@ Internally delegates to `checkValueValidity`, which handles the per-question-typ
 | FirstWith A (claims Q3)    | Q3 answered ≠ A, or earlier Q has A                                    | Q3 = A and no earlier Q has A and all earlier Qs answered |
 | LastWith A (claims Q3)     | Q3 answered ≠ A, or later Q has A                                      | Q3 = A and no later Q has A and all later Qs answered     |
 | ClosestAfter/ClosestBefore | same pattern as first/last                                             | same                                                      |
-| SameAs (claims Q3)         | Q3 answered ≠ this answer                                              | Q3 = this answer                                          |
+| OnlySameAmong (claims Q3)  | Q3 answered ≠ this answer                                              | Q3 = this answer                                          |
 | OnlySame (claims Q3)       | Q3 answered ≠ this answer                                              | Q3 = this answer and exactly 1 match                      |
 | PrevSame (claims Q3)       | Q3 ≥ self, or Q3 answered ≠ this answer, or closer match exists        | Q3 < self, Q3 = this answer, no closer match              |
 | NextSame (claims Q3)       | Q3 ≤ self or ≥ n, or Q3 answered ≠ this answer, or closer match exists | Q3 > self, Q3 = this answer, no closer match              |
@@ -138,7 +138,7 @@ Rust additionally has `deduce_with_rule_exclude()` as a separate function.
 - LetterDist: distance doesn't match when other is answered
 - Positional (FirstWith, LastWith, ClosestAfter, ClosestBefore): position out of range, position has wrong answer, answer eliminated from target, closer match exists, None but match exists
 - PrevSame/NextSame: position out of range, closer match exists
-- OnlySame/SameAs: self-reference, target answered differently
+- OnlySame/OnlySameAmong: self-reference, target answered differently
 - ConsecIdent: pair has different answers, None but pair exists
 - OnlyOdd: even position, wrong answer at target, answer eliminated from target, None but odd match exists
 

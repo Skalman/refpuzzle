@@ -119,7 +119,7 @@ pub(crate) fn random_type_params(
             Some(QuestionType::NextSame)
         }
         QuestionTypeKind::OnlySame => Some(QuestionType::OnlySame),
-        QuestionTypeKind::SameAs => {
+        QuestionTypeKind::OnlySameAmong => {
             // Feasibility: fill needs oc-1 distinct distractor targets. If qi's answer
             // is unique the pool is the n-1 other questions; if a match exists, the
             // same-answer questions are excluded (they'd be alternate correct answers),
@@ -134,7 +134,7 @@ pub(crate) fn random_type_params(
             if pool < option_count - 1 {
                 return None;
             }
-            Some(QuestionType::SameAs)
+            Some(QuestionType::OnlySameAmong)
         }
         QuestionTypeKind::ConsecIdent => Some(QuestionType::ConsecIdent),
         QuestionTypeKind::OnlyOdd | QuestionTypeKind::OnlyEven => {
@@ -169,7 +169,7 @@ pub(crate) fn random_type_params(
             }
             Some(QuestionType::TrueStmt)
         }
-        QuestionTypeKind::SameAsWhich => {
+        QuestionTypeKind::OnlySameAsAmong => {
             let mut pool = [0u8; MAX_N];
             let mut pool_len = 0;
             for j in 0..n {
@@ -195,7 +195,7 @@ pub(crate) fn random_type_params(
             if distractor_count < option_count - 1 {
                 return None;
             }
-            Some(QuestionType::SameAsWhich {
+            Some(QuestionType::OnlySameAsAmong {
                 question_index: ref_qi as u8,
             })
         }
@@ -295,7 +295,7 @@ pub(crate) fn valid_values(
             out.push(OptionValue::NONE);
         }
         QuestionType::TrueStmt | QuestionType::AnswerIsSelf => {}
-        QuestionType::SameAs | QuestionType::OnlySame => {
+        QuestionType::OnlySameAmong | QuestionType::OnlySame => {
             for v in 0..n {
                 if v != qi {
                     push_num(v);
@@ -303,7 +303,7 @@ pub(crate) fn valid_values(
             }
             out.push(OptionValue::NONE);
         }
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index } => {
             // Structural domain only: any other real question except self (qi) and
             // the referenced question, plus NONE — correct whenever no *listed*
             // candidate shares the reference's answer, which unlisted sharers don't
@@ -375,7 +375,7 @@ pub(crate) fn fill_one_question(
     // candidate list instead of having it fixed by the key, so they return before
     // `correct_option_value` — which no longer implements them.
     match *qt {
-        QuestionType::SameAs => {
+        QuestionType::OnlySameAmong => {
             fill_scoped_sameness(
                 qi,
                 solution[qi],
@@ -389,7 +389,7 @@ pub(crate) fn fill_one_question(
             );
             return;
         }
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index } => {
             let ref_qi = usize::from(question_index);
             fill_scoped_sameness(
                 qi,
@@ -680,7 +680,7 @@ pub fn fill_options(
 /// the row where "none of these" is right *although* unlisted sharers exist.
 ///
 /// Sample `option_count` of the eligible values — every question but `qi` and `exclude`
-/// (the reference, for `SameAsWhich`), plus NONE as an ordinary member — then repair the
+/// (the reference, for `OnlySameAsAmong`), plus NONE as an ordinary member — then repair the
 /// sample to hold exactly one candidate answered `matched`:
 ///
 /// - **1** → that candidate is the correct value;
@@ -909,8 +909,8 @@ fn correct_option_value(
         QuestionType::NoOtherHasAnswer
         | QuestionType::AnswerIsSelf
         | QuestionType::TrueStmt
-        | QuestionType::SameAs
-        | QuestionType::SameAsWhich { .. } => {
+        | QuestionType::OnlySameAmong
+        | QuestionType::OnlySameAsAmong { .. } => {
             unreachable!("{:?} has no correct value fixed by the key", qt.kind())
         }
     }
@@ -959,8 +959,8 @@ fn none_correct_rate(kind: QuestionTypeKind, level: usize) -> Option<f64> {
             PrevSame => [0.50, 0.00, 0.43, 0.32, 0.26, 0.21],
             NextSame => [0.51, 0.00, 0.45, 0.32, 0.25, 0.21],
             OnlySame => [0.00, 0.00, 0.00, 0.09, 0.05, 0.03],
-            SameAs => [0.69, 0.00, 0.52, 0.42, 0.38, 0.36],
-            SameAsWhich => [0.00, 0.00, 0.00, 0.00, 0.43, 0.40],
+            OnlySameAmong => [0.69, 0.00, 0.52, 0.42, 0.38, 0.36],
+            OnlySameAsAmong => [0.00, 0.00, 0.00, 0.00, 0.43, 0.40],
             OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.45, 0.42],
             OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.44, 0.42],
             ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.12, 0.10],
@@ -1167,8 +1167,8 @@ fn stmt_category(claim: &Claim) -> u16 {
         QuestionType::PrevSame
         | QuestionType::NextSame
         | QuestionType::OnlySame
-        | QuestionType::SameAs
-        | QuestionType::SameAsWhich { .. }
+        | QuestionType::OnlySameAmong
+        | QuestionType::OnlySameAsAmong { .. }
         | QuestionType::AnswerIsSelf
         | QuestionType::LetterDist { .. }
         | QuestionType::TrueStmt => {
@@ -1636,8 +1636,8 @@ mod tests {
                 // listed candidate shares it. Unlisted sharers are irrelevant.
                 for qi in 0..n {
                     let (matched, excluded) = match fp.question_types[qi] {
-                        QuestionType::SameAs => (solution[qi], None),
-                        QuestionType::SameAsWhich { question_index } => {
+                        QuestionType::OnlySameAmong => (solution[qi], None),
+                        QuestionType::OnlySameAsAmong { question_index } => {
                             let r = usize::from(question_index);
                             (solution[r], Some(r))
                         }

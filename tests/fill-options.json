@@ -233,12 +233,12 @@
       "expectedCorrect": [3, null, null, 0, null]
     },
     {
-      "name": "n=7 SameAs + SameAsWhich (need n>oc for SameAs; correct value is rng-dependent, pinned by the scoped-sameness invariant instead)",
+      "name": "n=7 OnlySameAmong + OnlySameAsAmong (need n>oc for OnlySameAmong; correct value is rng-dependent, pinned by the scoped-sameness invariant instead)",
       "n": 7,
       "oc": 5,
       "types": [
         {
-          "t": "SameAsWhich",
+          "t": "OnlySameAsAmong",
           "q": 4
         },
         {
@@ -248,7 +248,7 @@
           "t": "AnswerIsSelf"
         },
         {
-          "t": "SameAs"
+          "t": "OnlySameAmong"
         },
         {
           "t": "AnswerIsSelf"

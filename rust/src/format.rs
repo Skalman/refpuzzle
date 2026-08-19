@@ -31,8 +31,8 @@ pub fn format_type_tag(qt: &QuestionType) -> String {
         QuestionType::EqualCount { answer } => format!("EqualCount({})", answer.as_char()),
         QuestionType::AnswerOf { question_index } => format!("AnswerOf(q={})", question_index),
         QuestionType::LetterDist { question_index } => format!("LetterDist(q={})", question_index),
-        QuestionType::SameAsWhich { question_index } => {
-            format!("SameAsWhich(q={})", question_index)
+        QuestionType::OnlySameAsAmong { question_index } => {
+            format!("OnlySameAsAmong(q={})", question_index)
         }
         _ => format!("{:?}", qt),
     }
@@ -64,8 +64,8 @@ pub(crate) fn format_stmt_qt(qt: &QuestionType) -> serde_json::Value {
         QuestionType::PrevSame
         | QuestionType::NextSame
         | QuestionType::OnlySame
-        | QuestionType::SameAs
-        | QuestionType::SameAsWhich { .. }
+        | QuestionType::OnlySameAmong
+        | QuestionType::OnlySameAsAmong { .. }
         | QuestionType::AnswerIsSelf
         | QuestionType::LetterDist { .. }
         | QuestionType::TrueStmt => "Invalid",
@@ -126,7 +126,7 @@ pub(crate) fn format_stmt_qt(qt: &QuestionType) -> serde_json::Value {
         }
         QuestionType::AnswerOf { question_index }
         | QuestionType::LetterDist { question_index }
-        | QuestionType::SameAsWhich { question_index } => {
+        | QuestionType::OnlySameAsAmong { question_index } => {
             obj.insert("questionIndex".into(), serde_json::json!(question_index));
         }
         _ => {}

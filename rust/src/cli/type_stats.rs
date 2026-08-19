@@ -17,7 +17,7 @@ fn is_letter_valued(kind: QuestionTypeKind) -> bool {
 }
 
 /// Candidate-list-vs-key metrics for the types that scope "same answer" to their
-/// listed options (`SameAs`, `SameAsWhich`): how many questions holding the
+/// listed options (`OnlySameAmong`, `OnlySameAsAmong`): how many questions holding the
 /// matched letter are *listed* as candidates and how many sit outside the list.
 /// Nothing else here relates a question's option row to the answer key.
 #[derive(Default)]
@@ -246,15 +246,15 @@ fn tally_puzzle(
 
 /// For a question that scopes "same answer" to its listed options: the matched
 /// letter M, plus the question index excluded from its candidate pool (the
-/// reference, for `SameAsWhich`). `None` for every other kind.
+/// reference, for `OnlySameAsAmong`). `None` for every other kind.
 fn scoped_sameness(
     fp: &FlatPuzzle,
     qi: usize,
     solution: &[Option<Answer>; MAX_N],
 ) -> Option<(Answer, Option<usize>)> {
     match fp.question_types[qi] {
-        QuestionType::SameAs => Some((solution[qi]?, None)),
-        QuestionType::SameAsWhich { question_index } => {
+        QuestionType::OnlySameAmong => Some((solution[qi]?, None)),
+        QuestionType::OnlySameAsAmong { question_index } => {
             let ref_qi = usize::from(question_index);
             Some((solution[ref_qi]?, Some(ref_qi)))
         }
@@ -670,7 +670,7 @@ mod tests {
     ///
     /// So 1.0 is neutral — offered on a row, the value is correct exactly
     /// `1/option_count` of the time — and this band is 14.9%..=25.9% at `oc = 5` against
-    /// a fair 20%. For scale, the pre-calibration `SameAs` L6 ratio of 6.01 was a 60% hit
+    /// a fair 20%. For scale, the pre-calibration `OnlySameAmong` L6 ratio of 6.01 was a 60% hit
     /// rate for "pick None whenever it's offered".
     ///
     /// This is the design target itself, not a loosened version of it: the sample below
@@ -826,37 +826,37 @@ mod tests {
             ceiling: 2.00,
         },
         KnownSkew {
-            kind: Kind::SameAs,
+            kind: Kind::OnlySameAmong,
             level: 1,
             ceiling: 5.75,
         },
         KnownSkew {
-            kind: Kind::SameAs,
+            kind: Kind::OnlySameAmong,
             level: 3,
             ceiling: 5.55,
         },
         KnownSkew {
-            kind: Kind::SameAs,
+            kind: Kind::OnlySameAmong,
             level: 4,
             ceiling: 4.35,
         },
         KnownSkew {
-            kind: Kind::SameAs,
+            kind: Kind::OnlySameAmong,
             level: 5,
             ceiling: 3.65,
         },
         KnownSkew {
-            kind: Kind::SameAs,
+            kind: Kind::OnlySameAmong,
             level: 6,
             ceiling: 3.30,
         },
         KnownSkew {
-            kind: Kind::SameAsWhich,
+            kind: Kind::OnlySameAsAmong,
             level: 5,
             ceiling: 3.90,
         },
         KnownSkew {
-            kind: Kind::SameAsWhich,
+            kind: Kind::OnlySameAsAmong,
             level: 6,
             ceiling: 3.45,
         },

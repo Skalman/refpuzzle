@@ -66,7 +66,7 @@ deduce_rules! {
     OnlyOptionLeft,
     AnswerOfForward,
     AnswerOfReverse,
-    SameAsReverse,
+    OnlySameAmongReverse,
     PrevNextOnlySameReverse,
     LetterDistForward,
     LetterDistReverseForce,
@@ -128,14 +128,14 @@ deduce_rules! {
     NextSameNoneMatch,
     OnlySameNoneMatch,
     OnlySameNoneForward,
-    SameAsNegative,
-    SameAsWhichForward,
-    SameAsWhichReverse,
-    SameAsOtherMatch,
-    SameAsWhichNegative,
-    SameAsWhichNoneForward,
-    SameAsWhichNoneMatch,
-    SameAsWhichOtherMatch,
+    OnlySameAmongNegative,
+    OnlySameAsAmongForward,
+    OnlySameAsAmongReverse,
+    OnlySameAmongOtherMatch,
+    OnlySameAsAmongNegative,
+    OnlySameAsAmongNoneForward,
+    OnlySameAsAmongNoneMatch,
+    OnlySameAsAmongOtherMatch,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1303,17 +1303,17 @@ fn apply_positional_backward(
     }
 }
 
-/// Rules shared by `SameAs` and `OnlySame` arms: reverse force, NoneForward
+/// Rules shared by `OnlySameAmong` and `OnlySame` arms: reverse force, NoneForward
 /// (answered qi), and the common per-option elims (NoneMatch / SelfRef /
 /// RuledOut) for unanswered qi. Only the reverse force is renamed per arm via
-/// `reverse_rule` (SameAsReverse vs PrevNextOnlySameReverse); the others keep
-/// their `OnlySame*` names for both arms (so a SameAs trace shows e.g.
+/// `reverse_rule` (OnlySameAmongReverse vs PrevNextOnlySameReverse); the others keep
+/// their `OnlySame*` names for both arms (so a OnlySameAmong trace shows e.g.
 /// `OnlySameNoneForward`). Renaming them would also touch the explain prose
 /// keyed on those names and the deduce test fixtures.
 ///
 /// `scoped_none` controls what "none" denies. OnlySame ("the only *other*
 /// question") is globally unique, so "none" ranges over every question.
-/// SameAs ("which of *these* questions") is scoped: "none" only denies qi's
+/// OnlySameAmong ("which of *these* questions") is scoped: "none" only denies qi's
 /// letter to the listed candidates (its numeric options).
 fn apply_same_shared(
     fp: &FlatPuzzle,
@@ -1347,7 +1347,7 @@ fn apply_same_shared(
 
         // OnlySameNoneForward: an answered None denies qi's letter to the
         // questions "none" rules out — every other question for OnlySame,
-        // only the listed candidates for SameAs. Sound; not gated on
+        // only the listed candidates for OnlySameAmong. Sound; not gated on
         // assume_unique.
         if ov.is_none() {
             let letter_oi = a.idx();
@@ -1420,7 +1420,7 @@ fn apply_same_shared(
             } else if ov.is_num() {
                 // OnlySameRuledOut: the option's target can't hold qi's letter —
                 // either it's answered otherwise, or the letter is eliminated
-                // there. Both cases, one rule, following `SameAsWhichForward`'s
+                // there. Both cases, one rule, following `OnlySameAsAmongForward`'s
                 // precedent (answering a question doesn't set the other options'
                 // eliminated bits, so the two conditions are independent).
                 let pos = usize::from(ov.value());
@@ -2518,17 +2518,17 @@ fn deduce_impl(
                     ),
                 );
             }
-            QuestionType::SameAsWhich { question_index } => {
+            QuestionType::OnlySameAsAmong { question_index } => {
                 let qi_ref = question_index as usize;
                 let ref_ans = answers[qi_ref];
                 // The matched letter comes from the reference, not from qi's own
-                // slot — so `SameAsWhich` can't reuse the `OnlySame*` none-rules
+                // slot — so `OnlySameAsAmong` can't reuse the `OnlySame*` none-rules
                 // in `apply_same_shared`, and every rule below that reasons about
                 // the letter is gated on the reference being answered.
                 //
                 // A listed candidate: an in-range numeric option other than the
                 // reference, which holds the matched letter by definition. `qi` is
-                // *not* excluded — unlike `SameAs`, matching the reference is an
+                // *not* excluded — unlike `OnlySameAmong`, matching the reference is an
                 // ordinary proposition for it (see `check_scoped_sameness`).
                 let listed = |slot: OptionValue| -> Option<usize> {
                     let j = slot.is_num().then(|| usize::from(slot.value()))?;
@@ -2546,7 +2546,7 @@ fn deduce_impl(
                                 && !is_eliminated(eliminated, ov, ra.idx())
                             {
                                 sink.push(
-                                    DeduceRule::SameAsWhichReverse,
+                                    DeduceRule::OnlySameAsAmongReverse,
                                     DeduceAction::Force { qi: ov, answer: ra },
                                     DeduceReason::Source { source: qi as u8 },
                                 );
@@ -2556,7 +2556,7 @@ fn deduce_impl(
                                 && !is_eliminated(eliminated, qi_ref, ja.idx())
                             {
                                 sink.push(
-                                    DeduceRule::SameAsWhichReverse,
+                                    DeduceRule::OnlySameAsAmongReverse,
                                     DeduceAction::Force {
                                         qi: qi_ref,
                                         answer: ja,
@@ -2565,7 +2565,7 @@ fn deduce_impl(
                                 );
                             }
                         }
-                        // SameAsWhichNegative: the selected target is the *only*
+                        // OnlySameAsAmongNegative: the selected target is the *only*
                         // listed sharer, so every other listed candidate differs
                         // from the matched letter.
                         if let Some(ra) = ref_ans {
@@ -2583,7 +2583,7 @@ fn deduce_impl(
                             }
                             if q_mask != 0 {
                                 sink.push(
-                                    DeduceRule::SameAsWhichNegative,
+                                    DeduceRule::OnlySameAsAmongNegative,
                                     DeduceAction::EliminateMulti {
                                         question_mask: q_mask,
                                         option_mask: 1 << ra.idx(),
@@ -2595,7 +2595,7 @@ fn deduce_impl(
                     } else if selected.is_none()
                         && let Some(ra) = ref_ans
                     {
-                        // SameAsWhichNoneForward: an answered "none" denies the
+                        // OnlySameAsAmongNoneForward: an answered "none" denies the
                         // matched letter to every listed candidate.
                         for oi in 0..fp.option_count {
                             let Some(j) = listed(fp.options[qi][oi]) else {
@@ -2603,7 +2603,7 @@ fn deduce_impl(
                             };
                             if answers[j].is_none() && !is_eliminated(eliminated, j, ra.idx()) {
                                 sink.push(
-                                    DeduceRule::SameAsWhichNoneForward,
+                                    DeduceRule::OnlySameAsAmongNoneForward,
                                     DeduceAction::Eliminate {
                                         qi: j,
                                         oi: ra.idx(),
@@ -2621,13 +2621,13 @@ fn deduce_impl(
                         }
                         let ov = fp.options[qi][oi];
                         if ov.is_none() {
-                            // SameAsWhichNoneMatch: a listed candidate already
+                            // OnlySameAsAmongNoneMatch: a listed candidate already
                             // holds the matched letter, so "none of these" is false.
                             if let Some(sharer) = (0..fp.option_count).find_map(|ci| {
                                 listed(fp.options[qi][ci]).filter(|&j| answers[j] == Some(ra))
                             }) {
                                 sink.push(
-                                    DeduceRule::SameAsWhichNoneMatch,
+                                    DeduceRule::OnlySameAsAmongNoneMatch,
                                     DeduceAction::Eliminate { qi, oi },
                                     DeduceReason::Source {
                                         source: sharer as u8,
@@ -2639,20 +2639,20 @@ fn deduce_impl(
                         let Some(pos) = listed(ov) else {
                             continue;
                         };
-                        // SameAsWhichForward: this option's own target can't match.
+                        // OnlySameAsAmongForward: this option's own target can't match.
                         let wrong = match answers[pos] {
                             Some(ja) => ja != ra,
                             None => is_eliminated(eliminated, pos, ra.idx()),
                         };
                         if wrong {
                             sink.push(
-                                DeduceRule::SameAsWhichForward,
+                                DeduceRule::OnlySameAsAmongForward,
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceReason::Source { source: pos as u8 },
                             );
                             continue;
                         }
-                        // SameAsWhichOtherMatch: some *other* listed candidate
+                        // OnlySameAsAmongOtherMatch: some *other* listed candidate
                         // matches, so this target isn't the only one. Unusually
                         // strong — the test doesn't depend on `oi` except through
                         // `pos`, so one known candidate answer sweeps the whole row:
@@ -2665,7 +2665,7 @@ fn deduce_impl(
                                 .filter(|&j| j != pos && answers[j] == Some(ra))
                         }) {
                             sink.push(
-                                DeduceRule::SameAsWhichOtherMatch,
+                                DeduceRule::OnlySameAsAmongOtherMatch,
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceReason::Source {
                                     source: other_match as u8,
@@ -2675,10 +2675,17 @@ fn deduce_impl(
                     }
                 }
             }
-            QuestionType::SameAs => {
-                apply_same_shared(fp, state, &mut sink, qi, DeduceRule::SameAsReverse, true);
+            QuestionType::OnlySameAmong => {
+                apply_same_shared(
+                    fp,
+                    state,
+                    &mut sink,
+                    qi,
+                    DeduceRule::OnlySameAmongReverse,
+                    true,
+                );
 
-                // SameAsNegative: the selected option asserts its target is the
+                // OnlySameAmongNegative: the selected option asserts its target is the
                 // *only* listed candidate sharing qi's answer, so every other
                 // listed candidate must differ. Plain "the selected claim must be
                 // true" — no uniqueness assumption, hence sound during generation.
@@ -2712,7 +2719,7 @@ fn deduce_impl(
                         }
                         if q_mask != 0 {
                             sink.push(
-                                DeduceRule::SameAsNegative,
+                                DeduceRule::OnlySameAmongNegative,
                                 DeduceAction::EliminateMulti {
                                     question_mask: q_mask,
                                     option_mask: 1 << ai,
@@ -2722,7 +2729,7 @@ fn deduce_impl(
                         }
                     }
                 } else {
-                    // SameAsOtherMatch: option `oi` claims its target is the only
+                    // OnlySameAmongOtherMatch: option `oi` claims its target is the only
                     // listed candidate answered `oi`'s letter, so another listed
                     // candidate already holding that letter refutes it. Scoped
                     // counterpart of `OnlySameOtherMatch`, which reads the
@@ -2752,7 +2759,7 @@ fn deduce_impl(
                         });
                         if let Some(other_match) = other_match {
                             sink.push(
-                                DeduceRule::SameAsOtherMatch,
+                                DeduceRule::OnlySameAmongOtherMatch,
                                 DeduceAction::Eliminate { qi, oi },
                                 DeduceReason::Source {
                                     source: other_match as u8,
@@ -2999,15 +3006,15 @@ mod tests {
     use crate::test_util::{fast_tests, slow_test_duration};
     use serde_json::Value;
 
-    /// A 6-question board whose Q1 is `SameAsWhich` referencing Q6, listing
+    /// A 6-question board whose Q1 is `OnlySameAsAmong` referencing Q6, listing
     /// Q2/Q3/Q4/Q5 plus a "none" option. `answers` is one letter (or `.`) per
     /// question. The other five rows are `AnswerIsSelf` fillers.
-    fn same_as_which_board(answers: &str) -> (FlatPuzzle, State) {
+    fn only_same_as_among_board(answers: &str) -> (FlatPuzzle, State) {
         use serde_json::json;
         let puzzle = json!({
             "o": [[1, 2, 3, 4, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null]],
             "q": [
-                { "t": "SameAsWhich", "q": 5 },
+                { "t": "OnlySameAsAmong", "q": 5 },
                 { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
                 { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
             ],
@@ -3038,14 +3045,14 @@ mod tests {
         out
     }
 
-    /// `SameAsWhichOtherMatch`'s test doesn't depend on the option except through
+    /// `OnlySameAsAmongOtherMatch`'s test doesn't depend on the option except through
     /// its target, so one known candidate answer sweeps the whole row: with exactly
     /// one listed candidate holding the matched letter, every option but the one
-    /// pointing at it goes — including "none", via `SameAsWhichNoneMatch`.
+    /// pointing at it goes — including "none", via `OnlySameAsAmongNoneMatch`.
     #[test]
     fn one_matching_candidate_leaves_a_single_option() {
         // Q6 = C is the matched letter; only listed Q2 holds it.
-        let (fp, state) = same_as_which_board(".C....");
+        let (fp, state) = only_same_as_among_board(".C....");
         let mut state = state;
         state.answers[5] = Some(Answer::C);
         state.eliminated[5] = ALL_OPTIONS_MASK ^ (1 << 2);
@@ -3058,7 +3065,7 @@ mod tests {
     /// can produce, so during generation it only prunes wrong branches.
     #[test]
     fn two_matching_candidates_empty_the_option_row() {
-        let (fp, state) = same_as_which_board(".CC..C");
+        let (fp, state) = only_same_as_among_board(".CC..C");
         assert_eq!(
             eliminated_options(&fp, &state, 0),
             vec!['A', 'B', 'C', 'D', 'E']
@@ -3072,12 +3079,12 @@ mod tests {
     #[test]
     fn only_same_ruled_out_covers_an_answered_target() {
         use serde_json::json;
-        // Q1 = SameAs listing Q2/Q3/Q4; Q2 is answered B, so option A (which claims
+        // Q1 = OnlySameAmong listing Q2/Q3/Q4; Q2 is answered B, so option A (which claims
         // Q2 shares Q1's A) is impossible.
         let puzzle = json!({
             "o": [[1, 2, 3, null, null], [null, null, null, null, null], [null, null, null, null, null], [null, null, null, null, null]],
             "q": [
-                { "t": "SameAs" },
+                { "t": "OnlySameAmong" },
                 { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" }, { "t": "AnswerIsSelf" },
             ],
         });
@@ -3316,7 +3323,7 @@ mod tests {
                 10 if qi >= 2 => QuestionType::PrevSame,
                 11 if qi + 2 < n => QuestionType::NextSame,
                 12 => QuestionType::OnlySame,
-                13 => QuestionType::SameAs,
+                13 => QuestionType::OnlySameAmong,
                 14 => QuestionType::OnlyOdd {
                     answer: rng.pick_letter(5),
                 },
@@ -3352,7 +3359,7 @@ mod tests {
                     if q as usize == qi {
                         QuestionType::AnswerIsSelf
                     } else {
-                        QuestionType::SameAsWhich { question_index: q }
+                        QuestionType::OnlySameAsAmong { question_index: q }
                     }
                 }
                 _ => QuestionType::AnswerIsSelf,
@@ -3770,9 +3777,9 @@ mod tests {
                 | DeduceRule::ConsecIdentReverse
                 | DeduceRule::ConsecIdentForwardElim
                 | DeduceRule::OnlySameNoneForward
-                | DeduceRule::SameAsWhichNoneForward
-                | DeduceRule::SameAsNegative
-                | DeduceRule::SameAsWhichNegative
+                | DeduceRule::OnlySameAsAmongNoneForward
+                | DeduceRule::OnlySameAmongNegative
+                | DeduceRule::OnlySameAsAmongNegative
         )
     }
 

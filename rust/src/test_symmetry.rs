@@ -89,9 +89,9 @@ fn mirror_option_value(qt: &QuestionType, ov: OptionValue, n: usize) -> OptionVa
         | LastWith { .. }
         | PrevSame
         | NextSame
-        | SameAs
+        | OnlySameAmong
         | OnlySame
-        | SameAsWhich { .. }
+        | OnlySameAsAmong { .. }
         | OnlyOdd { .. }
         | OnlyEven { .. }
             if v < n =>
@@ -152,7 +152,7 @@ fn mirror_qtype(qt: QuestionType, n: usize) -> QuestionType {
         LetterDist { question_index } => LetterDist {
             question_index: m(question_index),
         },
-        SameAsWhich { question_index } => SameAsWhich {
+        OnlySameAsAmong { question_index } => OnlySameAsAmong {
             question_index: m(question_index),
         },
         // Parity-preserved OnlyOdd/OnlyEven (n odd), TrueStmt, and kinds with no
@@ -414,7 +414,7 @@ fn push_corpus(out: &mut Vec<(String, FlatPuzzle)>) {
             let Some(fp) = parse_puzzle(puzzle) else {
                 continue;
             };
-            // Many fixtures are deliberately malformed — a `SameAs` option naming its
+            // Many fixtures are deliberately malformed — a `OnlySameAmong` option naming its
             // own question, say, to exercise the self-reference elimination. The engine
             // asserts rather than checking those (see the `check_answer` module doc), and
             // symmetry says nothing about a board that can't be checked.
