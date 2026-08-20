@@ -136,6 +136,12 @@ deduce_rules! {
     OnlySameAsAmongNoneForward,
     OnlySameAsAmongNoneMatch,
     OnlySameAsAmongOtherMatch,
+    OnlySameAsForward,
+    OnlySameAsReverse,
+    OnlySameAsNegative,
+    OnlySameAsNoneForward,
+    OnlySameAsNoneMatch,
+    OnlySameAsOtherMatch,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1441,6 +1447,188 @@ fn apply_same_shared(
     }
 }
 
+/// The rule names one `apply_ref_sameness` arm reports under. Each arm owns a full
+/// set so the explain prose can key on the scope it belongs to.
+struct RefSamenessRules {
+    forward: DeduceRule,
+    reverse: DeduceRule,
+    negative: DeduceRule,
+    none_forward: DeduceRule,
+    none_match: DeduceRule,
+    other_match: DeduceRule,
+}
+
+/// Rules for the two kinds that read their matched letter M off a *reference*
+/// question and ask which single question answers M as well — `OnlySameAsAmong`
+/// (candidates are the listed options) and `OnlySameAs` (candidates are the
+/// whole board). `scoped` picks which.
+///
+/// Every rule below reasons about M, so all of them are gated on the reference
+/// being answered; only the reverse force can run the other way. The reference
+/// itself is never a candidate — it holds M by definition — but `qi` is one, so
+/// its own answer can refute the claim.
+fn apply_ref_sameness(
+    fp: &FlatPuzzle,
+    state: &State,
+    sink: &mut DeduceSink<'_>,
+    qi: usize,
+    qi_ref: usize,
+    scoped: bool,
+    rules: RefSamenessRules,
+) {
+    let n = fp.n;
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let ref_ans = answers[qi_ref];
+
+    let mut candidates: ArrayVec<usize, MAX_N> = ArrayVec::new();
+    if scoped {
+        for oi in 0..fp.option_count {
+            let slot = fp.options[qi][oi];
+            if let Some(j) = slot.is_num().then(|| usize::from(slot.value()))
+                && j < n
+                && j != qi_ref
+            {
+                candidates.push(j);
+            }
+        }
+    } else {
+        candidates.extend((0..n).filter(|&j| j != qi_ref));
+    }
+
+    if let Some(a) = answers[qi] {
+        let selected = fp.options[qi][a.idx()];
+        if selected.is_num() {
+            let ov = usize::from(selected.value());
+            if ov < n {
+                // Reverse: the selected target and the reference share an answer, so
+                // whichever of the two is known forces the other.
+                let j_ans = answers[ov];
+                if let Some(ra) = ref_ans
+                    && j_ans.is_none()
+                    && !is_eliminated(eliminated, ov, ra.idx())
+                {
+                    sink.push(
+                        rules.reverse,
+                        DeduceAction::Force { qi: ov, answer: ra },
+                        DeduceReason::Source { source: qi as u8 },
+                    );
+                }
+                if let Some(ja) = j_ans
+                    && ref_ans.is_none()
+                    && !is_eliminated(eliminated, qi_ref, ja.idx())
+                {
+                    sink.push(
+                        rules.reverse,
+                        DeduceAction::Force {
+                            qi: qi_ref,
+                            answer: ja,
+                        },
+                        DeduceReason::Source { source: qi as u8 },
+                    );
+                }
+            }
+            // Negative: the selected target is the *only* candidate holding M, so
+            // every other candidate differs from it.
+            if let Some(ra) = ref_ans {
+                let mut q_mask = 0u16;
+                for &target in &candidates {
+                    if target != ov
+                        && answers[target].is_none()
+                        && !is_eliminated(eliminated, target, ra.idx())
+                    {
+                        q_mask |= 1 << target;
+                    }
+                }
+                if q_mask != 0 {
+                    sink.push(
+                        rules.negative,
+                        DeduceAction::EliminateMulti {
+                            question_mask: q_mask,
+                            option_mask: 1 << ra.idx(),
+                        },
+                        DeduceReason::Source { source: qi as u8 },
+                    );
+                }
+            }
+        } else if selected.is_none()
+            && let Some(ra) = ref_ans
+        {
+            // NoneForward: an answered "none" denies M to every candidate.
+            for &j in &candidates {
+                if answers[j].is_none() && !is_eliminated(eliminated, j, ra.idx()) {
+                    sink.push(
+                        rules.none_forward,
+                        DeduceAction::Eliminate {
+                            qi: j,
+                            oi: ra.idx(),
+                        },
+                        DeduceReason::Source { source: qi as u8 },
+                    );
+                }
+            }
+        }
+    } else if let Some(ra) = ref_ans {
+        // Per-option elim (qi unanswered, matched letter known).
+        for oi in 0..5usize {
+            if is_eliminated(eliminated, qi, oi) {
+                continue;
+            }
+            let ov = fp.options[qi][oi];
+            if ov.is_none() {
+                // NoneMatch: a candidate already holds M, so "none of them" is false.
+                if let Some(&sharer) = candidates.iter().find(|&&j| answers[j] == Some(ra)) {
+                    sink.push(
+                        rules.none_match,
+                        DeduceAction::Eliminate { qi, oi },
+                        DeduceReason::Source {
+                            source: sharer as u8,
+                        },
+                    );
+                }
+                continue;
+            }
+            let Some(pos) = ov.is_num().then(|| usize::from(ov.value())) else {
+                continue;
+            };
+            if pos >= n || pos == qi_ref {
+                continue;
+            }
+            // Forward: this option's own target can't hold M.
+            let wrong = match answers[pos] {
+                Some(ja) => ja != ra,
+                None => is_eliminated(eliminated, pos, ra.idx()),
+            };
+            if wrong {
+                sink.push(
+                    rules.forward,
+                    DeduceAction::Eliminate { qi, oi },
+                    DeduceReason::Source { source: pos as u8 },
+                );
+                continue;
+            }
+            // OtherMatch: some *other* candidate holds M, so this target isn't the
+            // only one. Unusually strong — the test doesn't depend on `oi` except
+            // through `pos`, so one known candidate answer sweeps the whole row:
+            // exactly one matching candidate leaves a single live option
+            // (OnlyOptionLeft turns it into the answer), two or more empty the row
+            // outright, which is a genuine contradiction no valid key can produce.
+            if let Some(&other_match) = candidates
+                .iter()
+                .find(|&&j| j != pos && answers[j] == Some(ra))
+            {
+                sink.push(
+                    rules.other_match,
+                    DeduceAction::Eliminate { qi, oi },
+                    DeduceReason::Source {
+                        source: other_match as u8,
+                    },
+                );
+            }
+        }
+    }
+}
+
 /// PrevSame / NextSame dispatch. Reverse force (when answered) into the
 /// referenced position, PositionalRangeAnswered over the open interval between
 /// qi and the target, plus per-option elims for unanswered qi.
@@ -2518,162 +2706,41 @@ fn deduce_impl(
                     ),
                 );
             }
+            QuestionType::OnlySameAs { question_index } => {
+                apply_ref_sameness(
+                    fp,
+                    state,
+                    &mut sink,
+                    qi,
+                    question_index as usize,
+                    false,
+                    RefSamenessRules {
+                        forward: DeduceRule::OnlySameAsForward,
+                        reverse: DeduceRule::OnlySameAsReverse,
+                        negative: DeduceRule::OnlySameAsNegative,
+                        none_forward: DeduceRule::OnlySameAsNoneForward,
+                        none_match: DeduceRule::OnlySameAsNoneMatch,
+                        other_match: DeduceRule::OnlySameAsOtherMatch,
+                    },
+                );
+            }
             QuestionType::OnlySameAsAmong { question_index } => {
-                let qi_ref = question_index as usize;
-                let ref_ans = answers[qi_ref];
-                // The matched letter comes from the reference, not from qi's own
-                // slot — so `OnlySameAsAmong` can't reuse the `OnlySame*` none-rules
-                // in `apply_same_shared`, and every rule below that reasons about
-                // the letter is gated on the reference being answered.
-                //
-                // A listed candidate: an in-range numeric option other than the
-                // reference, which holds the matched letter by definition. `qi` is
-                // *not* excluded — unlike `OnlySameAmong`, matching the reference is an
-                // ordinary proposition for it (see `check_scoped_sameness`).
-                let listed = |slot: OptionValue| -> Option<usize> {
-                    let j = slot.is_num().then(|| usize::from(slot.value()))?;
-                    (j < n && j != qi_ref).then_some(j)
-                };
-                if let Some(a) = ans {
-                    let selected = fp.options[qi][a.idx()];
-                    if selected.is_num() {
-                        // Reverse.
-                        let ov = usize::from(selected.value());
-                        if ov < n {
-                            let j_ans = answers[ov];
-                            if let Some(ra) = ref_ans
-                                && j_ans.is_none()
-                                && !is_eliminated(eliminated, ov, ra.idx())
-                            {
-                                sink.push(
-                                    DeduceRule::OnlySameAsAmongReverse,
-                                    DeduceAction::Force { qi: ov, answer: ra },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
-                            }
-                            if let Some(ja) = j_ans
-                                && ref_ans.is_none()
-                                && !is_eliminated(eliminated, qi_ref, ja.idx())
-                            {
-                                sink.push(
-                                    DeduceRule::OnlySameAsAmongReverse,
-                                    DeduceAction::Force {
-                                        qi: qi_ref,
-                                        answer: ja,
-                                    },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
-                            }
-                        }
-                        // OnlySameAsAmongNegative: the selected target is the *only*
-                        // listed sharer, so every other listed candidate differs
-                        // from the matched letter.
-                        if let Some(ra) = ref_ans {
-                            let mut q_mask = 0u16;
-                            for oi in 0..fp.option_count {
-                                let Some(target) = listed(fp.options[qi][oi]) else {
-                                    continue;
-                                };
-                                if target != ov
-                                    && answers[target].is_none()
-                                    && !is_eliminated(eliminated, target, ra.idx())
-                                {
-                                    q_mask |= 1 << target;
-                                }
-                            }
-                            if q_mask != 0 {
-                                sink.push(
-                                    DeduceRule::OnlySameAsAmongNegative,
-                                    DeduceAction::EliminateMulti {
-                                        question_mask: q_mask,
-                                        option_mask: 1 << ra.idx(),
-                                    },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
-                            }
-                        }
-                    } else if selected.is_none()
-                        && let Some(ra) = ref_ans
-                    {
-                        // OnlySameAsAmongNoneForward: an answered "none" denies the
-                        // matched letter to every listed candidate.
-                        for oi in 0..fp.option_count {
-                            let Some(j) = listed(fp.options[qi][oi]) else {
-                                continue;
-                            };
-                            if answers[j].is_none() && !is_eliminated(eliminated, j, ra.idx()) {
-                                sink.push(
-                                    DeduceRule::OnlySameAsAmongNoneForward,
-                                    DeduceAction::Eliminate {
-                                        qi: j,
-                                        oi: ra.idx(),
-                                    },
-                                    DeduceReason::Source { source: qi as u8 },
-                                );
-                            }
-                        }
-                    }
-                } else if let Some(ra) = ref_ans {
-                    // Per-option elim (qi unanswered, matched letter known).
-                    for oi in 0..5usize {
-                        if is_eliminated(eliminated, qi, oi) {
-                            continue;
-                        }
-                        let ov = fp.options[qi][oi];
-                        if ov.is_none() {
-                            // OnlySameAsAmongNoneMatch: a listed candidate already
-                            // holds the matched letter, so "none of these" is false.
-                            if let Some(sharer) = (0..fp.option_count).find_map(|ci| {
-                                listed(fp.options[qi][ci]).filter(|&j| answers[j] == Some(ra))
-                            }) {
-                                sink.push(
-                                    DeduceRule::OnlySameAsAmongNoneMatch,
-                                    DeduceAction::Eliminate { qi, oi },
-                                    DeduceReason::Source {
-                                        source: sharer as u8,
-                                    },
-                                );
-                            }
-                            continue;
-                        }
-                        let Some(pos) = listed(ov) else {
-                            continue;
-                        };
-                        // OnlySameAsAmongForward: this option's own target can't match.
-                        let wrong = match answers[pos] {
-                            Some(ja) => ja != ra,
-                            None => is_eliminated(eliminated, pos, ra.idx()),
-                        };
-                        if wrong {
-                            sink.push(
-                                DeduceRule::OnlySameAsAmongForward,
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceReason::Source { source: pos as u8 },
-                            );
-                            continue;
-                        }
-                        // OnlySameAsAmongOtherMatch: some *other* listed candidate
-                        // matches, so this target isn't the only one. Unusually
-                        // strong — the test doesn't depend on `oi` except through
-                        // `pos`, so one known candidate answer sweeps the whole row:
-                        // exactly one matching candidate leaves a single live option
-                        // (OnlyOptionLeft turns it into the answer), two or more
-                        // empty the row outright, which is a genuine contradiction
-                        // no valid key can produce.
-                        if let Some(other_match) = (0..fp.option_count).find_map(|ci| {
-                            listed(fp.options[qi][ci])
-                                .filter(|&j| j != pos && answers[j] == Some(ra))
-                        }) {
-                            sink.push(
-                                DeduceRule::OnlySameAsAmongOtherMatch,
-                                DeduceAction::Eliminate { qi, oi },
-                                DeduceReason::Source {
-                                    source: other_match as u8,
-                                },
-                            );
-                        }
-                    }
-                }
+                apply_ref_sameness(
+                    fp,
+                    state,
+                    &mut sink,
+                    qi,
+                    question_index as usize,
+                    true,
+                    RefSamenessRules {
+                        forward: DeduceRule::OnlySameAsAmongForward,
+                        reverse: DeduceRule::OnlySameAsAmongReverse,
+                        negative: DeduceRule::OnlySameAsAmongNegative,
+                        none_forward: DeduceRule::OnlySameAsAmongNoneForward,
+                        none_match: DeduceRule::OnlySameAsAmongNoneMatch,
+                        other_match: DeduceRule::OnlySameAsAmongOtherMatch,
+                    },
+                );
             }
             QuestionType::OnlySameAmong => {
                 apply_same_shared(
@@ -3291,7 +3358,7 @@ mod tests {
         use crate::solve_brute::solve;
 
         fn random_question_type(rng: &mut Rng, qi: usize, n: usize) -> QuestionType {
-            match rng.int(0, 24) {
+            match rng.int(0, 25) {
                 0 => QuestionType::CountAnswer {
                     answer: rng.pick_letter(5),
                 },
@@ -3360,6 +3427,14 @@ mod tests {
                         QuestionType::AnswerIsSelf
                     } else {
                         QuestionType::OnlySameAsAmong { question_index: q }
+                    }
+                }
+                25 => {
+                    let q = rng.int(0, n as i32 - 1) as u8;
+                    if q as usize == qi {
+                        QuestionType::AnswerIsSelf
+                    } else {
+                        QuestionType::OnlySameAs { question_index: q }
                     }
                 }
                 _ => QuestionType::AnswerIsSelf,
@@ -3778,8 +3853,10 @@ mod tests {
                 | DeduceRule::ConsecIdentForwardElim
                 | DeduceRule::OnlySameNoneForward
                 | DeduceRule::OnlySameAsAmongNoneForward
+                | DeduceRule::OnlySameAsNoneForward
                 | DeduceRule::OnlySameAmongNegative
                 | DeduceRule::OnlySameAsAmongNegative
+                | DeduceRule::OnlySameAsNegative
         )
     }
 

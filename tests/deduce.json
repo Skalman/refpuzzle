@@ -5020,6 +5020,223 @@
       },
       "state": ["", "", ""],
       "expect": null
+    },
+    {
+      "section": "=== OnlySameAsForward / OnlySameAsReverse ==="
+    },
+    {
+      "name": "OnlySameAsForward: ref answered, option target has wrong answer -> eliminate",
+      "rule": "OnlySameAsForward",
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 2 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["", "A", "B", "", ""],
+      "expect": "1a"
+    },
+    {
+      "name": "OnlySameAsForward: target unanswered but ref answer eliminated -> eliminate",
+      "rule": "OnlySameAsForward",
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 2 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["", "", "B", "b", ""],
+      "expect": "1b"
+    },
+    {
+      "name": "OnlySameAsReverse: answered, ref known -> force option target",
+      "rule": "OnlySameAsReverse",
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 2 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["C", "", "B", "", ""],
+      "expect": "5B"
+    },
+    {
+      "name": "OnlySameAsReverse: answered, option target known -> force ref",
+      "rule": "OnlySameAsReverse",
+      "puzzle": {
+        "o": [
+          [1, 3, 4, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 2 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["C", "", "", "", "A"],
+      "expect": "3A"
+    },
+    {
+      "section": "=== OnlySameAsNegative / OnlySameAsNoneForward ==="
+    },
+    {
+      "name": "OnlySameAsNegative: Q1=A picks Q2, so no other question can be C - unlisted Q5 included",
+      "rule": "OnlySameAsNegative",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 5 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["A", "", "", "", "", "C"],
+      "expect": "qm11100o00100"
+    },
+    {
+      "name": "OnlySameAsNoneForward: Q1=None denies C to every question but the reference",
+      "rule": "OnlySameAsNoneForward",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 5 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["E", "", "", "", "", "C"],
+      "expect": "2c"
+    },
+    {
+      "section": "=== OnlySameAsNoneMatch / OnlySameAsOtherMatch ==="
+    },
+    {
+      "name": "OnlySameAsNoneMatch: unlisted Q5 already holds C, so no-other-question is false",
+      "rule": "OnlySameAsNoneMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 5 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["", "", "", "", "C", "C"],
+      "expect": "1d"
+    },
+    {
+      "name": "OnlySameAsOtherMatch: unlisted Q5 holds C, so every option pointing elsewhere is out",
+      "rule": "OnlySameAsOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 5 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["", "", "", "", "C", "C"],
+      "expect": "1a"
+    },
+    {
+      "name": "OnlySameAsOtherMatch: two questions hold C, so even the option naming one goes (contradiction)",
+      "rule": "OnlySameAsOtherMatch",
+      "puzzle": {
+        "o": [
+          [1, 2, 3, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null],
+          [null, null, null, null, null]
+        ],
+        "q": [
+          { "t": "OnlySameAs", "q": 5 },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" },
+          { "t": "AnswerIsSelf" }
+        ]
+      },
+      "state": ["", "C", "", "", "C", "C"],
+      "expect": "1a"
     }
   ]
 }

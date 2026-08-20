@@ -691,63 +691,19 @@ fn check_claim_impl(
         QuestionType::NextSame => first_in_range(answers, eliminated, self_letter, qi + 1, n, ov),
 
         // ── Only same ──
-        QuestionType::OnlySame => {
-            let amask = 1u8 << self_oi;
+        QuestionType::OnlySame => check_whole_board_sameness(n, state, ov, self_letter, qi),
 
-            if ov.is_none() {
-                let mut other: Option<usize> = None;
-                let mut could_match: u8 = 0;
-                for j in 0..n {
-                    if j == qi {
-                        continue;
-                    }
-                    match answers[j] {
-                        Some(x) if x == self_letter => other = other.or(Some(j)),
-                        None if eliminated[j] & amask == 0 => could_match += 1,
-                        _ => {}
-                    }
-                }
-                if let Some(j) = other {
-                    other_has_letter(j, self_letter)
-                } else if could_match == 0 {
-                    ValidityWithReason::Valid
-                } else {
-                    ValidityWithReason::Pending
-                }
-            } else if !ov.is_num() || ov.value() as usize >= n {
-                MALFORMED
-            } else {
-                let target = ov.value() as usize;
-                if target == qi {
-                    return MALFORMED;
-                }
-
-                if let Some(broken) = target_broken(answers, eliminated, self_letter, target) {
-                    return broken;
-                }
-
-                let mut other: Option<usize> = None;
-                let mut other_remaining: u8 = 0;
-                for j in 0..n {
-                    if j == qi || j == target {
-                        continue;
-                    }
-                    match answers[j] {
-                        Some(x) if x == self_letter => other = other.or(Some(j)),
-                        None if eliminated[j] & amask == 0 => other_remaining += 1,
-                        _ => {}
-                    }
-                }
-
-                if let Some(j) = other {
-                    return other_has_letter(j, self_letter);
-                }
-                if answers[target] == Some(self_letter) && other_remaining == 0 {
-                    ValidityWithReason::Valid
-                } else {
-                    ValidityWithReason::Pending
-                }
-            }
+        QuestionType::OnlySameAs { question_index } => {
+            let source = usize::from(question_index);
+            // Fatal `check_form` error.
+            assert!(
+                source < n && source != qi,
+                "OnlySameAs references {source} (qi={qi})"
+            );
+            let Some(matched) = answers[source] else {
+                return ValidityWithReason::Pending;
+            };
+            check_whole_board_sameness(n, state, ov, matched, source)
         }
 
         // ── Consecutive identical ──
@@ -1077,6 +1033,75 @@ pub fn check_claim_with_reason(
     claim: Claim,
 ) -> ValidityWithReason {
     check_claim_impl(fp.n, fp.option_count, state, opt, claim)
+}
+
+/// Check an `OnlySame` / `OnlySameAs` answer. Both ask which question — over the
+/// whole board, not a candidate list — is the only one *other than* `source` answered
+/// with the matched letter M: a numeric option asserts that its target holds M and that
+/// no other question does, the "none" option asserts only the latter.
+///
+/// `source` is the question M is read off: `qi` for `OnlySame`, the reference for
+/// `OnlySameAs`. It's the one question excluded from the scan, holding M by
+/// definition; `qi` is scanned like any other for `OnlySameAs`, so its own answer
+/// can refute the claim.
+fn check_whole_board_sameness(
+    n: usize,
+    state: State,
+    ov: OptionValue,
+    matched: Answer,
+    source: usize,
+) -> ValidityWithReason {
+    let answers = &state.answers;
+    let eliminated = &state.eliminated;
+    let amask = 1u8 << matched.idx();
+
+    // Whether any question other than `source` (and the claimed `target`, when there
+    // is one) holds M, and how many could still take it.
+    let scan = |target: Option<usize>| {
+        let mut other: Option<usize> = None;
+        let mut could_match: u8 = 0;
+        for j in 0..n {
+            if j == source || target == Some(j) {
+                continue;
+            }
+            match answers[j] {
+                Some(x) if x == matched => other = other.or(Some(j)),
+                None if eliminated[j] & amask == 0 => could_match += 1,
+                _ => {}
+            }
+        }
+        (other, could_match)
+    };
+
+    if ov.is_none() {
+        let (other, could_match) = scan(None);
+        if let Some(j) = other {
+            other_has_letter(j, matched)
+        } else if could_match == 0 {
+            ValidityWithReason::Valid
+        } else {
+            ValidityWithReason::Pending
+        }
+    } else if !ov.is_num() || usize::from(ov.value()) >= n {
+        MALFORMED
+    } else {
+        let target = usize::from(ov.value());
+        if target == source {
+            return MALFORMED;
+        }
+        if let Some(broken) = target_broken(answers, eliminated, matched, target) {
+            return broken;
+        }
+        let (other, other_remaining) = scan(Some(target));
+        if let Some(j) = other {
+            return other_has_letter(j, matched);
+        }
+        if answers[target] == Some(matched) && other_remaining == 0 {
+            ValidityWithReason::Valid
+        } else {
+            ValidityWithReason::Pending
+        }
+    }
 }
 
 /// Check a `OnlySameAmong` / `OnlySameAsAmong` answer. Both list a candidate set and ask which

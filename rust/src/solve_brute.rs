@@ -102,7 +102,8 @@ fn get_force(
             let ov = ov.value() as usize;
             (ov < fp.n).then_some((ov, letter))
         }
-        QuestionType::OnlySameAsAmong { question_index } => {
+        QuestionType::OnlySameAsAmong { question_index }
+        | QuestionType::OnlySameAs { question_index } => {
             let ov = fp.options[qi][ai];
             if !ov.is_num() {
                 return None;
@@ -340,7 +341,7 @@ mod tests {
         n: usize,
         allow_true_stmt: bool,
     ) -> QuestionType {
-        match rng.int(0, 25) {
+        match rng.int(0, 26) {
             0 => QuestionType::CountAnswer {
                 answer: rng.pick_letter(5),
             },
@@ -412,6 +413,14 @@ mod tests {
                 }
             }
             25 if allow_true_stmt => QuestionType::TrueStmt,
+            26 => {
+                let q = rng.int(0, n as i32 - 1) as u8;
+                if q as usize == qi {
+                    QuestionType::AnswerIsSelf
+                } else {
+                    QuestionType::OnlySameAs { question_index: q }
+                }
+            }
             _ => QuestionType::AnswerIsSelf,
         }
     }

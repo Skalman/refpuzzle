@@ -199,6 +199,55 @@ pub(crate) fn random_type_params(
                 question_index: ref_qi as u8,
             })
         }
+        QuestionTypeKind::OnlySameAs => {
+            // Capacity: the domain is every question but qi and the reference, plus
+            // "none" — needs oc distinct values for the row.
+            if n - 1 < option_count {
+                return None;
+            }
+            // Non-structural: rather than seeding a key, take a reference whose letter
+            // the key already places at most twice, so "the only other" holds. `qi`
+            // must not be that sharer — it can't sit in its own option row — so its
+            // own letter is barred outright.
+            //
+            // A letter placed twice gives a real answer, one placed once gives NONE.
+            // Both are wanted, but the two pools are about the same size and taking
+            // them evenly answers NONE far past the share the option row can offset,
+            // so the lone-letter draw is rationed to roughly one question in five.
+            let mut paired = [0u8; MAX_N];
+            let mut paired_len = 0;
+            let mut lone = [0u8; MAX_N];
+            let mut lone_len = 0;
+            for j in 0..n {
+                if j == qi || solution[j] == solution[qi] {
+                    continue;
+                }
+                match count_letter(solution, solution[j], n) {
+                    1 => {
+                        lone[lone_len] = j as u8;
+                        lone_len += 1;
+                    }
+                    2 => {
+                        paired[paired_len] = j as u8;
+                        paired_len += 1;
+                    }
+                    _ => {}
+                }
+            }
+            // No paired letter means every reference here answers NONE, which is the
+            // draw being rationed — let the kind fall through rather than take it.
+            if paired_len == 0 {
+                return None;
+            }
+            let pool = if lone_len > 0 && rng.int(0, 4) == 0 {
+                &lone[..lone_len]
+            } else {
+                &paired[..paired_len]
+            };
+            Some(QuestionType::OnlySameAs {
+                question_index: rng.pick(pool),
+            })
+        }
     }
 }
 
@@ -298,6 +347,18 @@ pub(crate) fn valid_values(
         QuestionType::OnlySameAmong | QuestionType::OnlySame => {
             for v in 0..n {
                 if v != qi {
+                    push_num(v);
+                }
+            }
+            out.push(OptionValue::NONE);
+        }
+        QuestionType::OnlySameAs { question_index } => {
+            // Any other real question except self (qi) and the referenced question,
+            // plus NONE. Unlike the scoped pair, the correct value is fixed by the
+            // key, so every other value is simply wrong — no option-level ambiguity
+            // to rule out downstream.
+            for v in 0..n {
+                if v != qi && v != question_index as usize {
                     push_num(v);
                 }
             }
@@ -532,14 +593,28 @@ pub(crate) fn fill_one_question(
                 rng,
             );
         }
-        QuestionType::OnlySame => {
-            let self_ans = solution[qi];
+        QuestionType::OnlySame | QuestionType::OnlySameAs { .. } => {
+            let source = match *qt {
+                QuestionType::OnlySameAs { question_index } => usize::from(question_index),
+                _ => qi,
+            };
+            let source_ans = solution[source];
             let others = (0..n)
-                .filter(|&j| j != qi && solution[j] == self_ans)
+                .filter(|&j| j != source && solution[j] == source_ans)
                 .count();
             if others > 1 {
                 panic!(
-                    "fill_one_question: OnlySame at qi={qi} but {others} other questions share answer {self_ans:?} — missing upstream guard"
+                    "fill_one_question: {:?} at qi={qi} but {others} questions share Q{}'s answer {source_ans:?} — missing upstream guard",
+                    qt.kind(),
+                    source + 1
+                );
+            }
+            // The lone sharer can't be qi: it would be the correct answer, and no row
+            // may name its own question.
+            if others == 1 && source != qi {
+                assert!(
+                    solution[qi] != source_ans,
+                    "fill_one_question: OnlySameAs at qi={qi} is itself the sharer — missing upstream guard"
                 );
             }
             place_numeric_distractors(
@@ -869,6 +944,10 @@ fn correct_option_value(
         QuestionType::PrevSame => pos_or_none((0..qi).rev().find(|&i| sol[i] == sol[qi])),
         QuestionType::NextSame => pos_or_none(((qi + 1)..n).find(|&i| sol[i] == sol[qi])),
         QuestionType::OnlySame => pos_or_none((0..n).find(|&i| i != qi && sol[i] == sol[qi])),
+        QuestionType::OnlySameAs { question_index } => {
+            let source = question_index as usize;
+            pos_or_none((0..n).find(|&i| i != source && sol[i] == sol[source]))
+        }
         QuestionType::OnlyOdd { answer } | QuestionType::OnlyEven { answer } => {
             let parity = match qt {
                 QuestionType::OnlyOdd { .. } => 1,
@@ -952,19 +1031,20 @@ fn none_correct_rate(kind: QuestionTypeKind, level: usize) -> Option<f64> {
         use QuestionTypeKind::*;
         match kind {
             //               L1    L2    L3    L4    L5    L6
-            ClosestAfter => [0.65, 0.00, 0.41, 0.25, 0.23, 0.18],
-            ClosestBefore => [0.67, 0.00, 0.42, 0.26, 0.22, 0.19],
-            FirstWith => [0.39, 0.31, 0.33, 0.09, 0.07, 0.03],
-            LastWith => [0.40, 0.32, 0.32, 0.10, 0.06, 0.03],
-            PrevSame => [0.50, 0.00, 0.43, 0.32, 0.26, 0.21],
-            NextSame => [0.51, 0.00, 0.45, 0.32, 0.25, 0.21],
-            OnlySame => [0.00, 0.00, 0.00, 0.09, 0.05, 0.03],
-            OnlySameAmong => [0.69, 0.00, 0.52, 0.42, 0.38, 0.36],
-            OnlySameAsAmong => [0.00, 0.00, 0.00, 0.00, 0.43, 0.40],
-            OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.45, 0.42],
-            OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.44, 0.42],
-            ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.12, 0.10],
-            EqualCount => [0.00, 0.00, 0.00, 0.00, 0.49, 0.42],
+            ClosestAfter => [0.66, 0.00, 0.42, 0.25, 0.22, 0.19],
+            ClosestBefore => [0.65, 0.00, 0.41, 0.25, 0.22, 0.20],
+            FirstWith => [0.37, 0.31, 0.33, 0.09, 0.06, 0.03],
+            LastWith => [0.38, 0.32, 0.31, 0.09, 0.06, 0.03],
+            PrevSame => [0.54, 0.00, 0.45, 0.31, 0.26, 0.21],
+            NextSame => [0.52, 0.00, 0.45, 0.33, 0.25, 0.20],
+            OnlySame => [0.00, 0.00, 0.00, 0.09, 0.06, 0.03],
+            OnlySameAmong => [0.00, 0.00, 0.00, 0.00, 0.39, 0.35],
+            OnlySameAsAmong => [0.00, 0.00, 0.00, 0.00, 0.41, 0.39],
+            OnlySameAs => [0.00, 0.00, 0.00, 0.00, 0.16, 0.15],
+            OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.46, 0.43],
+            OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.47, 0.42],
+            ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.11, 0.09],
+            EqualCount => [0.00, 0.00, 0.00, 0.00, 0.51, 0.42],
 
             // No NONE option, so no rate to hold. Listed rather than a catch-all so a
             // new kind has to decide, the way `may_be_none` does.
@@ -1169,6 +1249,7 @@ fn stmt_category(claim: &Claim) -> u16 {
         | QuestionType::OnlySame
         | QuestionType::OnlySameAmong
         | QuestionType::OnlySameAsAmong { .. }
+        | QuestionType::OnlySameAs { .. }
         | QuestionType::AnswerIsSelf
         | QuestionType::LetterDist { .. }
         | QuestionType::TrueStmt => {

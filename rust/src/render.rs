@@ -52,9 +52,13 @@ pub fn question_text(qt: &QuestionType) -> String {
         PrevSame => "Which is the previous question that has the same answer as this one?".into(),
         NextSame => "Which is the next question that has the same answer as this one?".into(),
         OnlySame => "Which is the only other question with the same answer as this one?".into(),
+        OnlySameAs { question_index } => format!(
+            "Which is the only other question with the same answer as {}?",
+            q(*question_index)
+        ),
         // Scope-first: the candidate set is the listed options, so "of these
         // questions" has to bind before the "only" — that binding is all that
-        // separates these from `OnlySame`'s whole-board claim.
+        // separates these two from the whole-board pair above.
         OnlySameAmong => {
             "Of these questions, which is the only one with the same answer as this one?".into()
         }
@@ -118,6 +122,7 @@ pub fn option_label(qt: &QuestionType, ov: OptionValue) -> String {
         | OnlySame
         | OnlySameAmong
         | OnlySameAsAmong { .. }
+        | OnlySameAs { .. }
         | OnlyOdd { .. }
         | OnlyEven { .. } => ov.map_or_else(|| "None".to_string(), |x| (x + 1).to_string()),
         // Raw number (a count, or a LetterDist distance).

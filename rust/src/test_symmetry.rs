@@ -92,6 +92,7 @@ fn mirror_option_value(qt: &QuestionType, ov: OptionValue, n: usize) -> OptionVa
         | OnlySameAmong
         | OnlySame
         | OnlySameAsAmong { .. }
+        | OnlySameAs { .. }
         | OnlyOdd { .. }
         | OnlyEven { .. }
             if v < n =>
@@ -153,6 +154,9 @@ fn mirror_qtype(qt: QuestionType, n: usize) -> QuestionType {
             question_index: m(question_index),
         },
         OnlySameAsAmong { question_index } => OnlySameAsAmong {
+            question_index: m(question_index),
+        },
+        OnlySameAs { question_index } => OnlySameAs {
             question_index: m(question_index),
         },
         // Parity-preserved OnlyOdd/OnlyEven (n odd), TrueStmt, and kinds with no

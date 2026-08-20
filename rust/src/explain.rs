@@ -235,6 +235,23 @@ fn claim_assertion(state: &State, opt: OptionPos, claim: &Claim) -> Option<Strin
             Some(v) => format!("{} is the only other question with answer {own}", q(v)),
             None => format!("no other question has answer {own}"),
         },
+        OnlySameAs { question_index } => {
+            let k = usize::from(question_index);
+            // Nothing is decided until the reference is answered, so a rejected claim
+            // always has it.
+            let matched = state.answers[k]?;
+            match value {
+                Some(v) => format!(
+                    "{} is the only other question with the same answer as {} ({matched})",
+                    q(v),
+                    q(k)
+                ),
+                None => format!(
+                    "no other question has the same answer as {} ({matched})",
+                    q(k)
+                ),
+            }
+        }
         OnlySameAmong => match value {
             Some(v) => format!(
                 "{} is the only one of these questions with answer {own}",
@@ -857,10 +874,11 @@ fn explain_force(
             }
         }
 
-        DeduceRule::OnlySameAsAmongReverse => {
+        DeduceRule::OnlySameAsAmongReverse | DeduceRule::OnlySameAsReverse => {
             if let Some(other) = source
                 && let Some(other_ans) = answers[other]
-                && let QuestionType::OnlySameAsAmong { question_index } = fp.question_types[other]
+                && let QuestionType::OnlySameAsAmong { question_index }
+                | QuestionType::OnlySameAs { question_index } = fp.question_types[other]
                 && let Some(target_q) = option_value_at(fp, other, other_ans)
             {
                 let ref_q = question_index as usize;
@@ -1445,6 +1463,23 @@ fn explain_elimination(
         return steps;
     }
 
+    if matches!(rule, DeduceRule::OnlySameAsNoneForward)
+        && let Some(src) = source
+        && let QuestionType::OnlySameAs { question_index } = fp.question_types[src]
+        && answers[usize::from(question_index)] == Some(letter)
+    {
+        let k = usize::from(question_index);
+        steps.push(try_looking(&[qi, src, k]));
+        steps.push(what_if());
+        steps.push(simple(format!(
+            "{} claims no other question is answered {letter} like {}, so {} can't be {letter}.",
+            q(src),
+            q(k),
+            q(qi)
+        )));
+        return steps;
+    }
+
     if matches!(rule, DeduceRule::ConsecIdentForwardElim)
         && let Some(src) = source
         && let Some(src_ans) = answers[src]
@@ -1680,6 +1715,30 @@ fn explain_multi_elim(
             ),
             None => format!(
                 "{} says {} is the only one of its listed questions matching {}, so the others cannot match it.",
+                q(src),
+                q(target),
+                q(k)
+            ),
+        };
+        return (text, Some(src));
+    }
+
+    if matches!(rule, DeduceRule::OnlySameAsNegative)
+        && let Some(src) = source
+        && let QuestionType::OnlySameAs { question_index } = fp.question_types[src]
+        && let Some(src_ans) = answers[src]
+        && let Some(target) = option_value_at(fp, src, src_ans)
+    {
+        let k = usize::from(question_index);
+        let text = match answers[k] {
+            Some(ref_ans) => format!(
+                "{} says {} is the only other question answered {ref_ans} (the answer to {}), so no one else can be {ref_ans}.",
+                q(src),
+                q(target),
+                q(k)
+            ),
+            None => format!(
+                "{} says {} is the only other question matching {}, so no one else can match it.",
                 q(src),
                 q(target),
                 q(k)

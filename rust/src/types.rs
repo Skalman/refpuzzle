@@ -138,13 +138,14 @@ pub enum QuestionTypeKind {
     AnswerIsSelf,
     LetterDist,
     TrueStmt,
-    /// Must stay last: `QUESTION_KIND_COUNT` derives from `OnlySameAsAmong as usize + 1`.
     OnlySameAsAmong,
+    /// Must stay last: `QUESTION_KIND_COUNT` derives from `OnlySameAs as usize + 1`.
+    OnlySameAs,
 }
 
 /// Number of [`QuestionTypeKind`] variants — the length of a per-kind array
 /// (recipe caps, selection counts). Derives from the last variant.
-pub const QUESTION_KIND_COUNT: usize = QuestionTypeKind::OnlySameAsAmong as usize + 1;
+pub const QUESTION_KIND_COUNT: usize = QuestionTypeKind::OnlySameAs as usize + 1;
 
 /// Coarse "families" of question kinds that read as similar to a solver. Used
 /// only by generation to dampen picking a *second* kind from the same family
@@ -245,6 +246,10 @@ pub enum QuestionType {
         #[serde(rename = "q")]
         question_index: u8,
     },
+    OnlySameAs {
+        #[serde(rename = "q")]
+        question_index: u8,
+    },
 }
 
 impl QuestionTypeKind {
@@ -277,6 +282,7 @@ impl QuestionTypeKind {
             LetterDist,
             TrueStmt,
             OnlySameAsAmong,
+            OnlySameAs,
         ]
     }
 
@@ -291,7 +297,7 @@ impl QuestionTypeKind {
             MostCommonCount | LeastCommon | MostCommon | EqualCount => G::Histogram,
             ClosestAfter | ClosestBefore => G::Closest,
             FirstWith | LastWith => G::FirstLast,
-            PrevSame | NextSame | OnlySame | OnlySameAmong => G::Sameness,
+            PrevSame | NextSame | OnlySame | OnlySameAmong | OnlySameAs => G::Sameness,
             OnlyOdd | OnlyEven => G::Parity,
             AnswerOf => G::AnswerOf,
             // Uncategorized.
@@ -308,8 +314,8 @@ impl QuestionTypeKind {
         use QuestionTypeKind::*;
         match self {
             ClosestAfter | ClosestBefore | FirstWith | LastWith | PrevSame | NextSame
-            | OnlySame | OnlySameAmong | OnlySameAsAmong | OnlyOdd | OnlyEven | ConsecIdent
-            | EqualCount => true,
+            | OnlySame | OnlySameAmong | OnlySameAsAmong | OnlySameAs | OnlyOdd | OnlyEven
+            | ConsecIdent | EqualCount => true,
 
             CountAnswer | CountAnswerBefore | CountAnswerAfter | CountVowel | CountConsonant
             | MostCommonCount | AnswerOf | LeastCommon | MostCommon | NoOtherHasAnswer
@@ -347,6 +353,7 @@ impl QuestionType {
             QuestionType::LetterDist { .. } => QuestionTypeKind::LetterDist,
             QuestionType::TrueStmt => QuestionTypeKind::TrueStmt,
             QuestionType::OnlySameAsAmong { .. } => QuestionTypeKind::OnlySameAsAmong,
+            QuestionType::OnlySameAs { .. } => QuestionTypeKind::OnlySameAs,
         }
     }
 
@@ -379,6 +386,7 @@ impl QuestionType {
                 | QuestionType::LastWith { .. }
                 | QuestionType::OnlySameAmong
                 | QuestionType::OnlySameAsAmong { .. }
+                | QuestionType::OnlySameAs { .. }
         )
     }
 }
@@ -547,7 +555,8 @@ impl FlatPuzzle {
                     | QuestionType::NoOtherHasAnswer
                     | QuestionType::EqualCount { .. }
                     | QuestionType::TrueStmt
-                    | QuestionType::OnlySameAsAmong { .. } => {
+                    | QuestionType::OnlySameAsAmong { .. }
+                    | QuestionType::OnlySameAs { .. } => {
                         unreachable!("whole-board variant handled by affected_by_any_answer")
                     }
                 }

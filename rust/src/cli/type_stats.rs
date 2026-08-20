@@ -692,7 +692,7 @@ mod tests {
 
     /// Ceilings are the value measured by `type-stats --attempts 10000 --seed 1` plus
     /// headroom. They come down only by lowering `p`, which means changing where the type
-    /// is placed or how its row is sampled — not the option row. The other 17 rows with a
+    /// is placed or how its row is sampled — not the option row. The other 16 rows with a
     /// NONE option are inside `BAND` and deliberately absent from this list.
     const KNOWN_SKEW: &[KnownSkew] = &[
         KnownSkew {
@@ -709,6 +709,11 @@ mod tests {
             kind: Kind::ClosestAfter,
             level: 4,
             ceiling: 1.90,
+        },
+        KnownSkew {
+            kind: Kind::ClosestAfter,
+            level: 5,
+            ceiling: 1.60,
         },
         KnownSkew {
             kind: Kind::ClosestBefore,
@@ -877,6 +882,10 @@ mod tests {
         // rows that do, and only the full run is the gate. Both still assert on every row
         // they measure — the difference is how many rows that is.
         let (attempts, min_rows) = if fast_tests() { (300, 3) } else { (1500, 45) };
+        // The fast sample is a fifth of the full run, so its estimates carry ~sqrt(5)x
+        // the noise. Stretch the band by that factor in log space: a smoke bound that
+        // still catches a real skew, while only the full run asserts the design target.
+        let band = if fast_tests() { (0.45, 2.15) } else { BAND };
         // A ratio inside `BAND` says NONE is weighted fairly on the rows that offer it,
         // but says nothing about how many rows those are — drive its correct-rate toward
         // zero and the ratio stays at 1 while NONE disappears from the game. This is the
@@ -942,12 +951,12 @@ mod tests {
                     / (distractor_none as f64 / distractor_total as f64);
                 let ok = match ceiling {
                     Some(c) => ratio <= c,
-                    None => ratio >= BAND.0 && ratio <= BAND.1,
+                    None => ratio >= band.0 && ratio <= band.1,
                 };
                 if !ok {
                     let want = match ceiling {
                         Some(c) => format!("<= {c:.2} (known-skewed row)"),
-                        None => format!("in {:.2}..={:.2}", BAND.0, BAND.1),
+                        None => format!("in {:.2}..={:.2}", band.0, band.1),
                     };
                     failures.push(format!(
                         "{kind:?} L{level}: ratio {ratio:.2}, want {want} \

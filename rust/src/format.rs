@@ -34,6 +34,9 @@ pub fn format_type_tag(qt: &QuestionType) -> String {
         QuestionType::OnlySameAsAmong { question_index } => {
             format!("OnlySameAsAmong(q={})", question_index)
         }
+        QuestionType::OnlySameAs { question_index } => {
+            format!("OnlySameAs(q={})", question_index)
+        }
         _ => format!("{:?}", qt),
     }
 }
@@ -66,6 +69,7 @@ pub(crate) fn format_stmt_qt(qt: &QuestionType) -> serde_json::Value {
         | QuestionType::OnlySame
         | QuestionType::OnlySameAmong
         | QuestionType::OnlySameAsAmong { .. }
+        | QuestionType::OnlySameAs { .. }
         | QuestionType::AnswerIsSelf
         | QuestionType::LetterDist { .. }
         | QuestionType::TrueStmt => "Invalid",

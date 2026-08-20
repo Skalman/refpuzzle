@@ -62,7 +62,7 @@ pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static 
         TrueStmt => error("cannot nest inside another statement"),
         AnswerIsSelf => error("holds whatever value it asserts"),
 
-        PrevSame | NextSame | OnlySame | LetterDist | NoOtherHasAnswer | AnswerOf => {
+        PrevSame | NextSame | OnlySame | OnlySameAs | LetterDist | NoOtherHasAnswer | AnswerOf => {
             warning("is not a generated statement kind")
         }
 
@@ -73,7 +73,7 @@ pub(crate) const fn check_stmt_kind(kind: QuestionTypeKind) -> Option<(&'static 
 }
 
 /// Per-qt structural checks (value-independent): question_index references
-/// in range and not self-ref (AnswerOf/LetterDist/OnlySameAsAmong), and answer
+/// in range and not self-ref (the reference-carrying kinds), and answer
 /// letter within option count for types that carry an `answer` field. `qi` is
 /// the owning question — when checking one of a TrueStmt's per-option statements,
 /// this is the TrueStmt's qi.
@@ -85,10 +85,11 @@ fn check_question_form(
     let n = fp.n;
     let oc = fp.option_count;
 
-    // Reference checks (AnswerOf/LetterDist/OnlySameAsAmong).
+    // Reference checks (AnswerOf/LetterDist/OnlySameAsAmong/OnlySameAs).
     if let QuestionType::AnswerOf { question_index }
     | QuestionType::LetterDist { question_index }
-    | QuestionType::OnlySameAsAmong { question_index } = qt
+    | QuestionType::OnlySameAsAmong { question_index }
+    | QuestionType::OnlySameAs { question_index } = qt
     {
         let ref_qi = *question_index as usize;
         if ref_qi >= n {
@@ -230,6 +231,24 @@ fn check_claim_form(
             } else if ov >= n {
                 error(format!(
                     "OnlySameAsAmong option {} references out-of-range question {ov}",
+                    opt.oi
+                ))
+            } else {
+                None
+            }
+        }
+        QuestionType::OnlySameAs { question_index } => {
+            // Same three nonsense values as OnlySameAsAmong, for the same reasons.
+            if ov == qi {
+                error(format!("OnlySameAs option {} references itself", opt.oi))
+            } else if ov == usize::from(*question_index) {
+                error(format!(
+                    "OnlySameAs option {} references its subject question {ov}",
+                    opt.oi
+                ))
+            } else if ov >= n {
+                error(format!(
+                    "OnlySameAs option {} references out-of-range question {ov}",
                     opt.oi
                 ))
             } else {
