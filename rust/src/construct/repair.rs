@@ -7,7 +7,7 @@
 use arrayvec::ArrayVec;
 
 use super::{LevelRecipe, run_hint_sound, run_hint_standard};
-use crate::check_well_posed::check_well_posed_given_options;
+use crate::check_well_posed::check_well_posed_given_key_and_options;
 use crate::construct::assert_accepted;
 use crate::deduce::deduce_single_question;
 use crate::fill::valid_values;
@@ -182,7 +182,7 @@ fn repair_one_question(
             // Keep the first edit that is well-formed (no duplicate value, no
             // ambiguous match) and gives qi's rules a move.
             if !row_has_duplicate(fp, qi)
-                && check_well_posed_given_options(fp, solution, qi).is_none()
+                && check_well_posed_given_key_and_options(fp, solution, qi).is_none()
                 && !deduce_single_question(fp, state, qi).is_empty()
             {
                 return true;

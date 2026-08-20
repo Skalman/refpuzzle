@@ -7,9 +7,9 @@
 //!   question's own params): MostCommon/LeastCommon/EqualCount (histogram),
 //!   OnlySame/ConsecIdent/OnlyOdd/OnlyEven, NoOtherHasAnswer. Knowable at
 //!   parametrize; `fill_options`/repair never change it.
-//! - [`check_well_posed_given_options`] — types whose answer depends on the
-//!   filled option/claim values: OnlySameAmong/OnlySameAsAmong (distractor targets) and
-//!   TrueStmt (claims). Only knowable once options exist.
+//! - [`check_well_posed_given_key_and_options`] — types whose answer depends on the
+//!   key *and* the filled option/claim values: OnlySameAmong/OnlySameAsAmong
+//!   (distractor targets) and TrueStmt (claims). Only knowable once options exist.
 //!
 //! Both return `None` when well-posed, `Some(reason)` when ambiguous or answerless.
 //! This is *uniqueness only*; feasibility ("can this kind be built for the key at
@@ -100,11 +100,12 @@ pub fn check_well_posed_given_key(
     }
 }
 
-/// Well-posedness that depends on the filled option/claim values. `None` if `qi`
+/// Well-posedness that depends on the key plus the filled option/claim values.
+/// `None` if `qi`
 /// has a unique answer; `Some(reason)` if a distractor *also* holds (OnlySameAmong /
 /// OnlySameAsAmong) or the true-claim count isn't exactly one (TrueStmt). Called at the
 /// accept-gate, the repair keep-gate, and `refpuzzle check`.
-pub fn check_well_posed_given_options(
+pub fn check_well_posed_given_key_and_options(
     fp: &FlatPuzzle,
     sol: &[Answer],
     qi: usize,
@@ -264,7 +265,7 @@ mod tests {
         opts[0][1] = OptionValue::num(2); // distractor → Q2, ALSO shares A
         opts[0][2] = OptionValue::num(3); // distractor → Q3 (B)
         let fp = build_fp(qts, opts, None, 4, 3);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_some());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_some());
     }
 
     #[test]
@@ -277,7 +278,7 @@ mod tests {
         opts[0][1] = OptionValue::num(2); // distractor → Q2 (B)
         opts[0][2] = OptionValue::num(3); // distractor → Q3 (C)
         let fp = build_fp(qts, opts, None, 4, 3);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_none());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_none());
     }
 
     #[test]
@@ -290,7 +291,7 @@ mod tests {
         opts[0][1] = OptionValue::num(3); // answer slot (B → idx 1), skipped
         opts[0][2] = OptionValue::num(0); // distractor → Q0 itself, ignored
         let fp = build_fp(qts, opts, None, 4, 3);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_some());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_some());
     }
 
     /// TrueStmt row with `CountVowel`/`CountConsonant` claims over `sol = [A, B, C]`
@@ -313,13 +314,13 @@ mod tests {
         let sol = [Answer::A, Answer::B, Answer::C];
         // Exactly one true (vowels == 1).
         let fp = true_stmt_fp([CountVowel, CountVowel, CountConsonant], [1, 2, 0]);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_none());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_none());
         // Two true (vowels == 1 and consonants == 2).
         let fp = true_stmt_fp([CountVowel, CountConsonant, CountVowel], [1, 2, 0]);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_some());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_some());
         // Zero true.
         let fp = true_stmt_fp([CountVowel, CountVowel, CountConsonant], [0, 2, 0]);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_some());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_some());
     }
 
     #[test]
@@ -335,6 +336,6 @@ mod tests {
         stmt_types[0] = QuestionType::CountVowel;
         stmt_types[1] = QuestionType::CountVowel;
         let fp = build_fp(qts, opts, Some(stmt_types), 3, 3);
-        assert!(check_well_posed_given_options(&fp, &sol, 0).is_some());
+        assert!(check_well_posed_given_key_and_options(&fp, &sol, 0).is_some());
     }
 }

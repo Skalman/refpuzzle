@@ -370,7 +370,7 @@ pub(crate) fn valid_values(
             // candidate shares the reference's answer, which unlisted sharers don't
             // affect. Whether a candidate is *also* a valid answer (its target is
             // the only listed sharer) is key-dependent and enforced downstream by
-            // check_well_posed_given_options, not here.
+            // check_well_posed_given_key_and_options, not here.
             for v in 0..n {
                 if v != qi && v != question_index as usize {
                     push_num(v);

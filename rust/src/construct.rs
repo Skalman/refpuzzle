@@ -12,7 +12,7 @@ use arrayvec::ArrayVec;
 
 use crate::check_answer::check_answer;
 use crate::check_form::check_form;
-use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given_options};
+use crate::check_well_posed::{check_well_posed_given_key, check_well_posed_given_key_and_options};
 use crate::fill::{fill_options, random_type_params};
 use crate::recipes::LevelRecipe;
 use crate::rng::Rng;
@@ -203,7 +203,7 @@ pub fn generate(
             // an ambiguous puzzle (a silent emit would mask a fill/repair bug).
             let sol = &skeleton.solution[..skeleton.n];
             for qi in 0..skeleton.n {
-                if let Some(reason) = check_well_posed_given_options(&fp, sol, qi) {
+                if let Some(reason) = check_well_posed_given_key_and_options(&fp, sol, qi) {
                     panic!(
                         "[{label}] emitted an ambiguous puzzle at Q{}: {reason}",
                         qi + 1
@@ -1179,11 +1179,11 @@ mod tests {
                         check_well_posed_given_key(n, fp.option_count, sol, qi, qt),
                     );
                     assert!(
-                        check_well_posed_given_options(fp, sol, qi).is_none(),
+                        check_well_posed_given_key_and_options(fp, sol, qi).is_none(),
                         "L{} Q{} options: {:?}",
                         level + 1,
                         qi + 1,
-                        check_well_posed_given_options(fp, sol, qi),
+                        check_well_posed_given_key_and_options(fp, sol, qi),
                     );
                 }
             }

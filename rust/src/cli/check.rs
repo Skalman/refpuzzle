@@ -125,7 +125,7 @@ pub struct PuzzleCheckResult {
     pub brute_links: Vec<String>,
     pub hint_brute_match: bool,
     /// Questions without a unique answer for the key — `check_well_posed_given_key`
-    /// (histogram/structural) and `check_well_posed_given_options` (OnlySameAmong/OnlySameAsAmong/TrueStmt).
+    /// (histogram/structural) and `check_well_posed_given_key_and_options` (OnlySameAmong/OnlySameAsAmong/TrueStmt).
     pub ambiguous: Vec<String>,
 }
 
@@ -385,7 +385,9 @@ fn check_one_puzzle(fp: &FlatPuzzle, key: &str, year: Option<&str>) -> PuzzleChe
                         qi,
                         fp.question_types[qi],
                     )
-                    .or_else(|| check_well_posed::check_well_posed_given_options(fp, sol, qi))
+                    .or_else(|| {
+                        check_well_posed::check_well_posed_given_key_and_options(fp, sol, qi)
+                    })
                     .map(|msg| format!("Q{}: {}", qi + 1, msg))
                 })
                 .collect()
