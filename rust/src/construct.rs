@@ -337,8 +337,28 @@ fn weighted_pick(pairs: &[(u8, u16)], rng: &mut Rng) -> u8 {
     pairs[pairs.len() - 1].0
 }
 
-/// Required types first, then fill remaining slots by a damped random draw from
-/// `allowed`, respecting caps: the first kind from a similarity group is taken
+/// Draw one kind from `eligible`, with its index, picking each with probability
+/// proportional to `weights[kind]`.
+fn draw_kind(
+    eligible: &[QuestionTypeKind],
+    weights: &[f64; QUESTION_KIND_COUNT],
+    rng: &mut Rng,
+) -> (usize, QuestionTypeKind) {
+    let total: f64 = eligible.iter().map(|&k| weights[k as usize]).sum();
+    let mut remaining = rng.next_f64() * total;
+    for (index, &kind) in eligible.iter().enumerate() {
+        remaining -= weights[kind as usize];
+        if remaining < 0.0 {
+            return (index, kind);
+        }
+    }
+    // Float rounding can leave a sliver past the last kind; land on it.
+    (eligible.len() - 1, eligible[eligible.len() - 1])
+}
+
+/// Required types first, then fill remaining slots by a damped, weighted random
+/// draw from `allowed`, respecting caps: each draw picks proportionally to
+/// `recipe.weights[kind]`; the first kind from a similarity group is taken
 /// as-is, later same-group kinds are kept only with `recipe.damping[group]`
 /// probability (see `DEFAULT_DAMPING`). Panics if the pool can't fill `n` slots —
 /// that's a recipe misconfiguration, not a runtime condition.
@@ -404,7 +424,7 @@ fn select_kinds(
         // a weighted draw, bounded against a rejection streak.
         let (index, kind) = 'draw: {
             for _ in 0..DAMPING_MAX_TRIES {
-                let (index, kind) = rng.pick_kv(&eligible);
+                let (index, kind) = draw_kind(&eligible, &recipe.weights, rng);
                 match kind.group() {
                     Some(g) if fired[g as usize] => {
                         if rng.next_f64() < recipe.damping[g as usize] {
@@ -414,7 +434,7 @@ fn select_kinds(
                     _ => break 'draw (index, kind),
                 }
             }
-            rng.pick_kv(&eligible)
+            draw_kind(&eligible, &recipe.weights, rng)
         };
         if let Some(g) = kind.group() {
             fired[g as usize] = true;

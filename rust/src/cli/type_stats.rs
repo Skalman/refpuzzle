@@ -786,6 +786,11 @@ mod tests {
         },
         KnownSkew {
             kind: Kind::ClosestAfter,
+            level: 2,
+            ceiling: 2.60,
+        },
+        KnownSkew {
+            kind: Kind::ClosestAfter,
             level: 3,
             ceiling: 3.60,
         },
@@ -803,6 +808,11 @@ mod tests {
             kind: Kind::ClosestBefore,
             level: 1,
             ceiling: 5.15,
+        },
+        KnownSkew {
+            kind: Kind::ClosestBefore,
+            level: 2,
+            ceiling: 2.70,
         },
         KnownSkew {
             kind: Kind::ClosestBefore,
@@ -861,8 +871,13 @@ mod tests {
         },
         KnownSkew {
             kind: Kind::NextSame,
+            level: 2,
+            ceiling: 4.15,
+        },
+        KnownSkew {
+            kind: Kind::NextSame,
             level: 3,
-            ceiling: 4.25,
+            ceiling: 5.30,
         },
         KnownSkew {
             kind: Kind::NextSame,
@@ -901,8 +916,13 @@ mod tests {
         },
         KnownSkew {
             kind: Kind::PrevSame,
+            level: 2,
+            ceiling: 4.35,
+        },
+        KnownSkew {
+            kind: Kind::PrevSame,
             level: 3,
-            ceiling: 3.95,
+            ceiling: 5.40,
         },
         KnownSkew {
             kind: Kind::PrevSame,
@@ -954,6 +974,13 @@ mod tests {
     /// A kind needs this many instances at a level before its ratio is asserted on —
     /// below it the estimate is too noisy to mean anything. Skips are reported.
     const MIN_INSTANCES: u32 = 150;
+
+    /// The ratio additionally needs this many NONE-correct sightings: a row whose
+    /// NONE-correct rate is near zero clears `MIN_INSTANCES` with a couple dozen NONE
+    /// counts, and a ratio on those is noisier than `BAND` is wide (at 25 sightings one
+    /// standard error is ~25%). Below the floor only the vanishing canary asserts;
+    /// skips are reported.
+    const MIN_NONE_CORRECT: u32 = 30;
 
     /// The None option must not be a tell, and must not vanish either. Regenerates a
     /// sample per level and checks two things per kind: its NONE ratio against `BAND` (or
@@ -1021,6 +1048,13 @@ mod tests {
                         100.0 * shown,
                         100.0 * MIN_SHOWN,
                     ));
+                }
+
+                if correct_none < MIN_NONE_CORRECT {
+                    skipped.push(format!(
+                        "{kind:?} L{level} ratio ({correct_none} NONE-correct sightings)"
+                    ));
+                    continue;
                 }
 
                 if distractor_none == 0 {

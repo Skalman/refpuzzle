@@ -31,6 +31,12 @@ pub struct LevelRecipe {
     /// Per-group damping applied during kind selection (see `DEFAULT_DAMPING`);
     /// indexed by `QuestionGroup as usize`.
     pub damping: [f64; QUESTION_GROUP_COUNT],
+    /// Per-kind draw weight in kind selection (see `weights_with`); indexed by
+    /// `QuestionTypeKind as usize`. A pool draw picks each eligible kind with
+    /// probability proportional to its weight: >1.0 leans toward a kind, <1.0
+    /// away from it, 1.0 (the default) is a plain uniform draw. Only the random
+    /// pool fill is weighted — `required` and `answer_of_counts` are not.
+    pub weights: [f64; QUESTION_KIND_COUNT],
     /// AnswerOf-count distribution as `(count, weight)` pairs: each puzzle samples a
     /// count (probability ∝ weight) and forces exactly that many AnswerOfs — so a
     /// few puzzles are reference-heavy while most have few/none. Counts must be
@@ -152,12 +158,48 @@ const DEFAULT_DAMPING: [f64; QUESTION_GROUP_COUNT] = damping_with(&[
     (QuestionGroup::AnswerOf, 1.0),
 ]);
 
+/// Per-kind draw weights: 1.0 everywhere except the overrides. Weights must be
+/// positive — a zero would starve an allowed kind and can zero out a draw's
+/// total weight.
+const fn weights_with(overrides: &[(QuestionTypeKind, f64)]) -> [f64; QUESTION_KIND_COUNT] {
+    let mut w = [1.0f64; QUESTION_KIND_COUNT];
+    let mut i = 0;
+    while i < overrides.len() {
+        w[overrides[i].0 as usize] = overrides[i].1;
+        i += 1;
+    }
+    w
+}
+
 /// Per-level recipes, tuned via type-stats. Indexed by level-1.
 pub static RECIPES: [LevelRecipe; 6] = [
     LevelRecipe {
         level_index: 0,
         question_count: 3,
         option_count: 3,
+        required: &[],
+        allowed: &[
+            CountAnswer,
+            AnswerOf,
+            ClosestAfter,
+            ClosestBefore,
+            FirstWith,
+            LastWith,
+            PrevSame,
+            NextSame,
+        ],
+        caps: caps_max_answer_of(3),
+        damping: DEFAULT_DAMPING,
+        weights: weights_with(&[(ClosestAfter, 0.3), (ClosestBefore, 0.3)]),
+        answer_of_counts: &[(0, 30), (1, 55), (2, 15)],
+        // L1 is the tutorial level: accept only pure-deduction puzzles (no
+        // lookahead), so the scripted walk never needs "what if" reasoning.
+        lookahead_deduce_until: 0,
+    },
+    LevelRecipe {
+        level_index: 1,
+        question_count: 4,
+        option_count: 4,
         required: &[],
         allowed: &[
             CountAnswer,
@@ -174,21 +216,15 @@ pub static RECIPES: [LevelRecipe; 6] = [
             LeastCommon,
             NoOtherHasAnswer,
         ],
-        caps: caps_max_answer_of(3),
-        damping: DEFAULT_DAMPING,
-        answer_of_counts: &[(0, 50), (1, 40), (2, 10)],
-        // L1 is the tutorial level: accept only pure-deduction puzzles (no
-        // lookahead), so the scripted walk never needs "what if" reasoning.
-        lookahead_deduce_until: 0,
-    },
-    LevelRecipe {
-        level_index: 1,
-        question_count: 4,
-        option_count: 4,
-        required: &[],
-        allowed: &[CountAnswer, AnswerOf, AnswerIsSelf, FirstWith, LastWith],
         caps: caps_max_answer_of(4),
         damping: DEFAULT_DAMPING,
+        weights: weights_with(&[
+            (CountAnswerBefore, 0.5),
+            (CountAnswerAfter, 0.5),
+            (MostCommon, 0.5),
+            (LeastCommon, 0.5),
+            (NoOtherHasAnswer, 0.5),
+        ]),
         answer_of_counts: &[(0, 42), (1, 35), (2, 20), (3, 3)],
         lookahead_deduce_until: 1,
     },
@@ -202,16 +238,25 @@ pub static RECIPES: [LevelRecipe; 6] = [
             CountAnswerBefore,
             CountAnswerAfter,
             AnswerOf,
-            AnswerIsSelf,
             ClosestAfter,
             ClosestBefore,
             FirstWith,
             LastWith,
             NextSame,
             PrevSame,
+            MostCommon,
+            LeastCommon,
+            NoOtherHasAnswer,
         ],
         caps: caps_max_answer_of(5),
         damping: DEFAULT_DAMPING,
+        weights: weights_with(&[
+            (CountAnswerBefore, 0.5),
+            (CountAnswerAfter, 0.5),
+            (MostCommon, 0.5),
+            (LeastCommon, 0.5),
+            (NoOtherHasAnswer, 0.5),
+        ]),
         answer_of_counts: &[(0, 31), (1, 33), (2, 25), (3, 10), (4, 1)],
         lookahead_deduce_until: 6,
     },
@@ -241,6 +286,7 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: caps_max_answer_of(8),
         damping: DEFAULT_DAMPING,
+        weights: weights_with(&[(AnswerIsSelf, 0.4)]),
         answer_of_counts: &[(0, 22), (1, 28), (2, 31), (3, 15), (4, 3), (5, 1)],
         lookahead_deduce_until: 6,
     },
@@ -279,6 +325,11 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: caps_max_answer_of(10),
         damping: DEFAULT_DAMPING,
+        weights: weights_with(&[
+            (ConsecIdent, 2.0),
+            (OnlySameAmong, 0.3),
+            (OnlySameAsAmong, 0.3),
+        ]),
         answer_of_counts: &[(0, 16), (1, 25), (2, 31), (3, 19), (4, 7), (5, 2)],
         lookahead_deduce_until: 6,
     },
@@ -318,6 +369,11 @@ pub static RECIPES: [LevelRecipe; 6] = [
         ],
         caps: caps_max_answer_of(12),
         damping: DEFAULT_DAMPING,
+        weights: weights_with(&[
+            (ConsecIdent, 2.0),
+            (OnlySameAmong, 0.3),
+            (OnlySameAsAmong, 0.3),
+        ]),
         answer_of_counts: &[(0, 13), (1, 24), (2, 24), (3, 26), (4, 9), (5, 3), (6, 1)],
         lookahead_deduce_until: 6,
     },
@@ -366,6 +422,13 @@ mod tests {
                 "L{}: caps disagree with question_count",
                 level + 1,
             );
+            for (kind, &weight) in recipe.weights.iter().enumerate() {
+                assert!(
+                    weight > 0.0,
+                    "L{}: weight for kind #{kind} must be positive",
+                    level + 1,
+                );
+            }
             for &(count, _) in recipe.answer_of_counts {
                 assert!(
                     usize::from(count) < recipe.question_count,

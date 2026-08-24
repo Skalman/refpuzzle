@@ -1031,20 +1031,20 @@ fn none_correct_rate(kind: QuestionTypeKind, level: usize) -> Option<f64> {
         use QuestionTypeKind::*;
         match kind {
             //               L1    L2    L3    L4    L5    L6
-            ClosestAfter => [0.66, 0.00, 0.42, 0.25, 0.22, 0.19],
-            ClosestBefore => [0.65, 0.00, 0.41, 0.25, 0.22, 0.20],
-            FirstWith => [0.37, 0.31, 0.33, 0.09, 0.06, 0.03],
-            LastWith => [0.38, 0.32, 0.31, 0.09, 0.06, 0.03],
-            PrevSame => [0.54, 0.00, 0.45, 0.31, 0.26, 0.21],
-            NextSame => [0.52, 0.00, 0.45, 0.33, 0.25, 0.20],
-            OnlySame => [0.00, 0.00, 0.00, 0.09, 0.06, 0.03],
+            ClosestAfter => [0.63, 0.41, 0.38, 0.25, 0.22, 0.17],
+            ClosestBefore => [0.66, 0.42, 0.39, 0.25, 0.21, 0.18],
+            FirstWith => [0.44, 0.30, 0.25, 0.09, 0.06, 0.03],
+            LastWith => [0.43, 0.28, 0.25, 0.09, 0.06, 0.04],
+            PrevSame => [0.41, 0.54, 0.52, 0.32, 0.26, 0.21],
+            NextSame => [0.42, 0.53, 0.52, 0.31, 0.26, 0.20],
+            OnlySame => [0.00, 0.00, 0.00, 0.06, 0.05, 0.03],
             OnlySameAmong => [0.00, 0.00, 0.00, 0.00, 0.39, 0.35],
-            OnlySameAsAmong => [0.00, 0.00, 0.00, 0.00, 0.41, 0.39],
-            OnlySameAs => [0.00, 0.00, 0.00, 0.00, 0.16, 0.15],
-            OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.46, 0.43],
-            OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.47, 0.42],
-            ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.11, 0.09],
-            EqualCount => [0.00, 0.00, 0.00, 0.00, 0.51, 0.42],
+            OnlySameAsAmong => [0.00, 0.00, 0.00, 0.00, 0.44, 0.40],
+            OnlySameAs => [0.00, 0.00, 0.00, 0.00, 0.18, 0.15],
+            OnlyOdd => [0.00, 0.00, 0.00, 0.00, 0.45, 0.42],
+            OnlyEven => [0.00, 0.00, 0.00, 0.00, 0.45, 0.43],
+            ConsecIdent => [0.00, 0.00, 0.00, 0.00, 0.10, 0.09],
+            EqualCount => [0.00, 0.00, 0.00, 0.00, 0.47, 0.41],
 
             // No NONE option, so no rate to hold. Listed rather than a catch-all so a
             // new kind has to decide, the way `may_be_none` does.
