@@ -33,6 +33,7 @@ import { AppHeader } from "./components/AppHeader.tsx";
 import { ArchivePage } from "./components/ArchivePage.tsx";
 import { useBackupFlow, BackupDialogs } from "./components/BackupFlow.tsx";
 import { ErrorOverlay } from "./components/ErrorOverlay.tsx";
+import { SafeAreaSimulator } from "./components/SafeAreaSimulator.tsx";
 
 if (new URLSearchParams(window.location.search).has("debug")) {
   sessionStorage.setItem("debug", "1");
@@ -504,6 +505,7 @@ export function App() {
           <Route path="/:date/:level" component={DayRoute} />
           <Route default component={NotFound} />
         </Router>
+        {import.meta.env.DEV && <SafeAreaSimulator />}
       </div>
     </LocationProvider>
   );

@@ -36,7 +36,14 @@
 }
 
 .help-panel-inner {
-  padding: 1.5rem;
+  /* The dialog box stays centered in the full viewport and may bleed into the
+     unsafe area; only the content must clear it. Each side pads by the inset
+     minus the guaranteed gap to the viewport edge: (100vw - 100%) / 2 is the
+     actual side gap, 10vh follows from max-height: 80vh. */
+  padding: max(1.5rem, calc(var(--safe-area-inset-top) - 10vh))
+    max(1.5rem, calc(var(--safe-area-inset-right) - (100vw - 100%) / 2))
+    max(1.5rem, calc(var(--safe-area-inset-bottom) - 10vh))
+    max(1.5rem, calc(var(--safe-area-inset-left) - (100vw - 100%) / 2));
   color: var(--text-muted);
   line-height: 1.6;
 }
@@ -305,6 +312,8 @@
   align-items: center;
   justify-content: center;
   background: var(--backdrop);
+  padding: max(var(--safe-area-inset-top), 1rem) max(var(--safe-area-inset-right), 1rem)
+    max(var(--safe-area-inset-bottom), 1rem) max(var(--safe-area-inset-left), 1rem);
 }
 
 .keyboard-help-inner {
@@ -314,7 +323,8 @@
   padding: 1.25rem;
   max-width: 24rem;
   width: 90%;
-  max-height: 80vh;
+  /* 100% = the backdrop's content box, which already excludes safe areas. */
+  max-height: min(80vh, 100%);
   overflow-y: auto;
   color: var(--text);
   box-shadow: var(--dropdown-shadow);
@@ -470,7 +480,8 @@ kbd {
   align-items: center;
   justify-content: center;
   z-index: 9999;
-  padding: 1rem;
+  padding: max(var(--safe-area-inset-top), 1rem) max(var(--safe-area-inset-right), 1rem)
+    max(var(--safe-area-inset-bottom), 1rem) max(var(--safe-area-inset-left), 1rem);
 }
 
 .error-overlay-card {

@@ -7,6 +7,12 @@
 :root {
   color-scheme: light dark;
 
+  /* Indirection over env() so the dev safe-area simulator can override. */
+  --safe-area-inset-top: env(safe-area-inset-top);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom);
+  --safe-area-inset-left: env(safe-area-inset-left);
+  --safe-area-inset-right: env(safe-area-inset-right);
+
   --bg: #faf9f7;
   --bg-surface: #ffffff;
   --bg-hover: #f3f1ee;

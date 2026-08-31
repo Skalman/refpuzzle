@@ -73,7 +73,8 @@ body {
 .page {
   max-width: 68rem;
   margin: 0 auto;
-  padding: 1rem;
+  padding: max(var(--safe-area-inset-top), 1rem) max(var(--safe-area-inset-right), 1rem)
+    max(var(--safe-area-inset-bottom), 1rem) max(var(--safe-area-inset-left), 1rem);
 }
 
 a {
