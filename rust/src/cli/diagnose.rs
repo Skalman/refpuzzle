@@ -7,12 +7,12 @@
 use std::io::IsTerminal;
 
 use crate::cli::link::playground_link;
-use crate::construct::{Verdict, generate_skeleton, validate_and_repair};
-use crate::fill::fill_options;
-use crate::recipes::RECIPES;
-use crate::rng::Rng;
-use crate::solve_brute::solve;
-use crate::stats::Stats;
+use refpuzzle::construct::{Verdict, generate_skeleton, validate_and_repair};
+use refpuzzle::fill::fill_options;
+use refpuzzle::recipes::RECIPES;
+use refpuzzle::rng::Rng;
+use refpuzzle::solve_brute::solve;
+use refpuzzle::stats::Stats;
 
 struct StuckCase {
     level: usize,

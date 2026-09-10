@@ -34,7 +34,7 @@ impl EngineConfig {
     /// assuming rules), lookahead bounded to the recipe depth. Assumes nothing about
     /// the number of solutions, so it may run before brute has confirmed the puzzle
     /// unique.
-    pub fn generation(lookahead_deduce_until: usize) -> Self {
+    pub(crate) fn generation(lookahead_deduce_until: usize) -> Self {
         Self {
             assuming_unique: false,
             lookahead_deduce_until,
@@ -47,7 +47,7 @@ impl EngineConfig {
     /// depth — the engine a player faces at the intended difficulty. Its rules assume
     /// a unique solution, so it is sound only once brute has confirmed uniqueness;
     /// every generation caller runs brute first.
-    pub fn standard(lookahead_deduce_until: usize) -> Self {
+    pub(crate) fn standard(lookahead_deduce_until: usize) -> Self {
         Self {
             assuming_unique: true,
             lookahead_deduce_until,
@@ -87,10 +87,10 @@ impl EngineConfig {
 impl LevelRecipe {
     /// [`EngineConfig::generation`] at this recipe's depth — the sound pre-uniqueness
     /// engine (repair proposals, the working state repair advances).
-    pub fn generation_config(&self) -> EngineConfig {
+    pub(crate) fn generation_config(&self) -> EngineConfig {
         EngineConfig::generation(self.lookahead_deduce_until)
     }
-    /// [`EngineConfig::standard`] at this recipe's depth — the player engine / ship bar.
+    /// `EngineConfig::standard` at this recipe's depth — the player engine / ship bar.
     pub fn standard_config(&self) -> EngineConfig {
         EngineConfig::standard(self.lookahead_deduce_until)
     }

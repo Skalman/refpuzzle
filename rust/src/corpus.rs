@@ -5,8 +5,8 @@
 
 use serde_json::Value;
 
-use crate::serialize;
-use crate::types::FlatPuzzle;
+use refpuzzle::serialize;
+use refpuzzle::types::FlatPuzzle;
 
 /// Every shipped daily puzzle as `(label, FlatPuzzle)`, read from the daily dir
 /// (one file per year). Shared by the generator fuzz tests, the symmetry sweep,
@@ -46,9 +46,9 @@ pub(crate) fn daily_puzzles() -> Vec<(String, FlatPuzzle)> {
 #[cfg(test)]
 mod tests {
     use super::daily_puzzles;
-    use crate::test_util::{fuzz_base_seed, slow_test_duration};
-    use crate::types::*;
-    use crate::{check_answer, check_form, solve_brute, solve_deduce};
+    use refpuzzle::test_util::{fuzz_base_seed, slow_test_duration};
+    use refpuzzle::types::*;
+    use refpuzzle::{check_answer, check_form, solve_brute, solve_deduce};
 
     /// Every chain the hint engine reports has to hold together where the hint renders
     /// it: each entry derivable at the round it lands in, and the blamed question
@@ -58,8 +58,9 @@ mod tests {
     /// where minimization has the most room to overshoot.
     #[test]
     fn lookahead_chains_replay_to_their_contradiction() {
-        use crate::lookahead::{chain_contradiction, hypothesis, lookahead_shortest, replay_chain};
-        use crate::rng::Rng;
+        use refpuzzle::lookahead::lookahead_shortest;
+        use refpuzzle::lookahead::test_hooks::{chain_contradiction, hypothesis, replay_chain};
+        use refpuzzle::rng::Rng;
 
         let puzzles = daily_puzzles();
         assert!(!puzzles.is_empty());

@@ -122,7 +122,8 @@ impl ClaimSubject {
 /// "why is this red" line yet, so today only the tests reach it — but that subject is
 /// one of the three `InvalidReason` must phrase under (see its docs), so this stays
 /// wired rather than becoming a test helper.
-pub fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn explain_invalid(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<String> {
     rejected_answer_text(fp, state, qi, ClaimSubject::Answered).map(|(text, _)| text)
 }
 

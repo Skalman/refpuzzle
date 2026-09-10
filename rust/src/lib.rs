@@ -22,8 +22,8 @@ pub mod serialize;
 pub mod solve_brute;
 pub mod solve_deduce;
 pub mod stats;
-#[cfg(test)]
-mod test_util;
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_util;
 pub mod time;
 pub mod types;
 

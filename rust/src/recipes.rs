@@ -57,7 +57,7 @@ pub struct LevelRecipe {
 /// Only the returned recipe's difficulty knobs apply to such a puzzle — every field on it,
 /// `question_count`/`option_count`/`level_index` included, describes the level it landed on
 /// rather than the puzzle at hand.
-pub fn guess_recipe(n: usize) -> &'static LevelRecipe {
+pub(crate) fn guess_recipe(n: usize) -> &'static LevelRecipe {
     let level_index = match n {
         0..=3 => 0,
         4 => 1,

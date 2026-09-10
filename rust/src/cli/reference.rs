@@ -6,18 +6,18 @@
 
 use std::collections::BTreeMap;
 
-use crate::deduce::{
-    ALL_DEDUCE_RULES, DeduceAction, DeduceReasons, apply_action, deduce_assuming_unique,
-    deduce_assuming_unique_with_reasons,
+use refpuzzle::deduce::{
+    ALL_DEDUCE_RULES, DeduceAction, DeduceReasons, DeduceResult, apply_action,
+    deduce_assuming_unique, deduce_assuming_unique_with_reasons,
 };
-use crate::explain::{
+use refpuzzle::explain::{
     ExplainStep, explain_deduce, explain_lookahead, no_reason_detail, optionless_detail,
 };
-use crate::format;
-use crate::lookahead::{Contradiction, lookahead, lookahead_shortest};
-use crate::render;
-use crate::solve_deduce::{EngineConfig, VERIFY_ITERS_PER_QUESTION};
-use crate::types::{Claim, QuestionType, QuestionTypeKind};
+use refpuzzle::format;
+use refpuzzle::lookahead::{Contradiction, lookahead, lookahead_shortest};
+use refpuzzle::render;
+use refpuzzle::solve_deduce::{EngineConfig, VERIFY_ITERS_PER_QUESTION};
+use refpuzzle::types::{Claim, FlatPuzzle, QuestionType, QuestionTypeKind};
 
 /// The user-facing prose of an explanation: its `Simple` steps joined (`Look` steps
 /// are navigation, carrying no text).
@@ -76,7 +76,7 @@ const ROUTES: [&str; 5] = [
 /// line got phrased, with a shortest example per route, plus every question type still
 /// blamed by a line that can't say *why* the hypothesis failed. Costs most of
 /// `reference`'s runtime.
-fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
+fn hint_audit(puzzles: &[(String, FlatPuzzle)]) {
     let mut hints = 0usize;
     let mut lines = 0usize;
     // Route → (count, shortest example).
@@ -126,7 +126,7 @@ fn hint_audit(puzzles: &[(String, crate::types::FlatPuzzle)]) {
                     _ => match lr.contradiction {
                         Contradiction::Conflict {
                             result:
-                                crate::deduce::DeduceResult {
+                                DeduceResult {
                                     action: DeduceAction::Force { .. },
                                     ..
                                 },

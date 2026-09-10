@@ -4,12 +4,12 @@
 //! pre-state) plus every lookahead refutation — the same paths `reference`
 //! samples, dumped in full instead of one example per rule.
 
-use crate::deduce::{
+use refpuzzle::deduce::{
     DeduceReason, DeduceReasons, DeduceResult, apply_action, deduce_assuming_unique_with_reasons,
 };
-use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
-use crate::lookahead::lookahead_shortest;
-use crate::solve_deduce::VERIFY_ITERS_PER_QUESTION;
+use refpuzzle::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
+use refpuzzle::lookahead::lookahead_shortest;
+use refpuzzle::solve_deduce::VERIFY_ITERS_PER_QUESTION;
 
 /// One hint as a line: first the questions its last `Look` step points at (where
 /// the L1 coach aims its arrows), then the prose from its text steps. The

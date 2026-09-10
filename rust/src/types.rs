@@ -22,7 +22,7 @@ impl OptionValue {
     pub fn is_none(self) -> bool {
         self == Self::NONE
     }
-    pub fn is_unused(self) -> bool {
+    pub(crate) fn is_unused(self) -> bool {
         self == Self::UNUSED
     }
     pub fn is_num(self) -> bool {
@@ -47,7 +47,7 @@ pub enum Answer {
     E = 4,
 }
 
-pub const LETTERS: [Answer; 5] = [Answer::A, Answer::B, Answer::C, Answer::D, Answer::E];
+pub(crate) const LETTERS: [Answer; 5] = [Answer::A, Answer::B, Answer::C, Answer::D, Answer::E];
 
 /// Bitmask of all five option slots (`0b11111`). A puzzle's real options are the
 /// low `option_count` bits; the high `5 - option_count` "phantom" bits are
@@ -59,7 +59,7 @@ impl Answer {
     pub const fn idx(self) -> usize {
         self as usize
     }
-    pub const fn is_vowel(self) -> bool {
+    pub(crate) const fn is_vowel(self) -> bool {
         matches!(self, Answer::A | Answer::E)
     }
     pub const fn as_char(self) -> char {
@@ -145,7 +145,7 @@ pub enum QuestionTypeKind {
 
 /// Number of [`QuestionTypeKind`] variants — the length of a per-kind array
 /// (recipe caps, selection counts). Derives from the last variant.
-pub const QUESTION_KIND_COUNT: usize = QuestionTypeKind::OnlySameAs as usize + 1;
+pub(crate) const QUESTION_KIND_COUNT: usize = QuestionTypeKind::OnlySameAs as usize + 1;
 
 /// Coarse "families" of question kinds that read as similar to a solver. Used
 /// only by generation to dampen picking a *second* kind from the same family
@@ -155,7 +155,7 @@ pub const QUESTION_KIND_COUNT: usize = QuestionTypeKind::OnlySameAs as usize + 1
 /// damped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u8)]
-pub enum QuestionGroup {
+pub(crate) enum QuestionGroup {
     AnswerCount,
     LetterClass,
     Histogram,
@@ -168,7 +168,7 @@ pub enum QuestionGroup {
 }
 
 /// Number of [`QuestionGroup`] variants — the length of a per-group array.
-pub const QUESTION_GROUP_COUNT: usize = QuestionGroup::AnswerOf as usize + 1;
+pub(crate) const QUESTION_GROUP_COUNT: usize = QuestionGroup::AnswerOf as usize + 1;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[serde(tag = "t")]
@@ -288,7 +288,7 @@ impl QuestionTypeKind {
 
     /// The similarity family this kind belongs to, or `None` if it stands
     /// alone (never damped during generation). See [`QuestionGroup`].
-    pub fn group(self) -> Option<QuestionGroup> {
+    pub(crate) fn group(self) -> Option<QuestionGroup> {
         use QuestionGroup as G;
         use QuestionTypeKind::*;
         Some(match self {
@@ -366,7 +366,7 @@ impl QuestionType {
 
     /// True when the answer depends on the whole board — a change to *any* other
     /// answer can flip it — rather than on a fixed set of positions.
-    pub fn affected_by_any_answer(&self) -> bool {
+    pub(crate) fn affected_by_any_answer(&self) -> bool {
         matches!(
             self,
             QuestionType::CountAnswer { .. }
@@ -412,19 +412,19 @@ impl State {
     }
 
     #[inline]
-    pub fn is_live(&self, qi: usize, oi: usize) -> bool {
+    pub(crate) fn is_live(&self, qi: usize, oi: usize) -> bool {
         !self.is_eliminated(qi, oi)
     }
 }
 
 /// Whether option `oi` is eliminated for question `qi` in an `eliminated` mask.
 #[inline(always)]
-pub fn is_eliminated(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
+pub(crate) fn is_eliminated(eliminated: &[u8; MAX_N], qi: usize, oi: usize) -> bool {
     (eliminated[qi] >> oi) & 1 == 1
 }
 
 #[derive(Clone, Copy)]
-pub struct OptionPos {
+pub(crate) struct OptionPos {
     pub qi: usize,
     pub oi: usize,
 }
@@ -442,25 +442,25 @@ pub struct SmallList {
 }
 
 impl SmallList {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         SmallList {
             data: [0; MAX_N],
             len: 0,
         }
     }
 
-    pub fn push(&mut self, val: u8) {
+    pub(crate) fn push(&mut self, val: u8) {
         self.data[self.len as usize] = val;
         self.len += 1;
     }
 
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.len as usize
     }
 
     /// Iterate stored values as usize (the typical use is as a question
     /// index). Storage is still u8 internally; this widens at the boundary.
-    pub fn iter(&self) -> impl Iterator<Item = usize> + '_ {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = usize> + '_ {
         self.data[..self.len()].iter().map(|&i| i as usize)
     }
 }

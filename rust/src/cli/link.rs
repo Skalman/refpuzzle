@@ -1,8 +1,8 @@
 //! Shareable `/playground` links for the CLI's diagnostics. Bin-only: the deflate
 //! and base64 encoders it needs aren't pulled into the wasm build.
 
-use crate::serialize::puzzle_to_compact_value;
-use crate::types::{Answer, FlatPuzzle, State};
+use refpuzzle::serialize::puzzle_to_compact_value;
+use refpuzzle::types::{Answer, FlatPuzzle, State};
 
 /// A self-contained `/playground` link that renders this exact puzzle, opened on
 /// `state`'s resolved cells (so e.g. a stuck case shows where the engine got).

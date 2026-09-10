@@ -1,40 +1,15 @@
 #![allow(clippy::needless_range_loop)]
 
-mod check_answer;
-mod check_form;
-mod check_well_posed;
 mod cli;
-mod construct;
 mod corpus;
-mod counts;
-mod deduce;
-mod fill;
-// Consumers (wasm exposure, flip of the TS explain.ts) arrive in later increments.
-#[allow(dead_code)]
-mod explain;
-mod format;
-mod lookahead;
-mod recipes;
-// Consumers (wasm exposure, explain) arrive in later migration increments.
-#[allow(dead_code)]
-mod render;
-mod rng;
-mod serialize;
-mod solve_brute;
-#[allow(dead_code)]
-mod solve_deduce;
-mod stats;
 #[cfg(test)]
 mod test_symmetry;
-#[cfg(test)]
-mod test_util;
-mod time;
-mod types;
 
-use rng::Rng;
+use refpuzzle::rng::Rng;
+use refpuzzle::types::FlatPuzzle;
+use refpuzzle::{construct, recipes, rng, serialize, stats};
 use serde_json::Value;
 use std::time::Instant;
-use types::FlatPuzzle;
 
 // RefPuzzle's public launch date. No puzzles exist before it, so a 2026 range
 // with no explicit start defaults here, and an explicit pre-launch start in 2026

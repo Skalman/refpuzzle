@@ -7,16 +7,16 @@ use serde_json::Value;
 use std::io::Write;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use crate::check_form;
-use crate::check_well_posed;
 use crate::cli::link;
-use crate::deduce;
-use crate::format;
-use crate::recipes;
-use crate::serialize;
-use crate::solve_brute;
-use crate::solve_deduce;
-use crate::types::*;
+use refpuzzle::check_form;
+use refpuzzle::check_well_posed;
+use refpuzzle::deduce;
+use refpuzzle::format;
+use refpuzzle::recipes;
+use refpuzzle::serialize;
+use refpuzzle::solve_brute;
+use refpuzzle::solve_deduce;
+use refpuzzle::types::*;
 
 // ── Color ──
 

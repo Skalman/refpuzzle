@@ -216,6 +216,7 @@ dependencies = [
  "flate2",
  "lol_alloc",
  "rayon",
+ "refpuzzle",
  "serde",
  "serde-wasm-bindgen",
  "serde_json",

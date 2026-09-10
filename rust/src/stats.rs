@@ -80,7 +80,7 @@ impl Stats {
     }
 
     /// Fold one `run_engine` invocation's loop telemetry into the running stats.
-    pub fn merge_engine(&mut self, tel: &crate::solve_deduce::EngineTelemetry) {
+    pub(crate) fn merge_engine(&mut self, tel: &crate::solve_deduce::EngineTelemetry) {
         self.deduce_calls += tel.deduce_calls;
         self.deduce_results += tel.deduce_results;
         self.lookahead_calls += tel.lookahead_calls;

@@ -17,11 +17,11 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use crate::corpus::daily_puzzles;
-use crate::deduce::{apply_action, deduce};
-use crate::serialize::parse_puzzle;
-use crate::solve_brute::solve;
-use crate::test_util::{fast_tests, form_invalid};
-use crate::types::*;
+use refpuzzle::deduce::{apply_action, deduce};
+use refpuzzle::serialize::parse_puzzle;
+use refpuzzle::solve_brute::solve;
+use refpuzzle::test_util::{fast_tests, form_invalid};
+use refpuzzle::types::*;
 
 /// Test-corpus files whose `tests[].puzzle` entries are well-formed puzzles.
 const CORPUS: &[&str] = &[

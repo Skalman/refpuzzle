@@ -12,10 +12,19 @@ path = "src/lib.rs"
 # (hot paths; bundling into structs hurts clarity and adds indirection). Off globally.
 too_many_arguments = "allow"
 
+[features]
+# Exposes `test_util` to the bin's tests. Never on in normal or wasm builds —
+# only the self-dev-dependency below activates it, and only for test targets.
+test-util = []
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 arrayvec = "0.7"
+
+[dev-dependencies]
+# Self-dependency: enables `test-util` on the lib for test targets only.
+refpuzzle = { path = ".", features = ["test-util"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rayon = "1.10"

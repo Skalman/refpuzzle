@@ -7,7 +7,7 @@ use serde::Serialize;
 
 /// A 1-based question reference for prose, e.g. `#3` for index 2. Mirrors the
 /// `Q()` helper the explain layer uses pervasively.
-pub fn q(index: impl Into<usize>) -> String {
+pub(crate) fn q(index: impl Into<usize>) -> String {
     format!("#{}", index.into() + 1)
 }
 
@@ -152,7 +152,7 @@ pub fn claim_label(claim: &Claim) -> String {
 /// itself. `None` for the kinds L1 never uses — arrows are an L1-only aid.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
-pub enum ArrowReferent {
+pub(crate) enum ArrowReferent {
     /// An option column: the `oi`-th option of every row. `boundary` clips it to
     /// the rows on one side of a question (before/after kinds).
     Column {
@@ -179,7 +179,7 @@ pub enum ArrowReferent {
 /// `qi`, which itself is drawn as the boundary.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Boundary {
+pub(crate) struct Boundary {
     pub qi: usize,
     pub side: i8,
 }
@@ -187,7 +187,9 @@ pub struct Boundary {
 /// The arrow referent for question `qi` (see [`ArrowReferent`]), or `None` for
 /// kinds outside L1's mix. Mirrors [`question_text`]'s match on the question
 /// type; `OnlySameAmong` additionally reads the offered candidate options.
-pub fn arrow_referent(fp: &FlatPuzzle, qi: usize) -> Option<ArrowReferent> {
+// Consumed by the wasm API only.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub(crate) fn arrow_referent(fp: &FlatPuzzle, qi: usize) -> Option<ArrowReferent> {
     use QuestionType::*;
     Some(match fp.question_types[qi] {
         // Group A — an option column (optionally clipped by a boundary row).

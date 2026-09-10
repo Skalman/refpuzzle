@@ -247,13 +247,13 @@ pub enum Verdict {
 /// caller never has to re-author the key.
 ///
 /// Gate: assert the key is self-consistent, then accept iff brute confirms a unique
-/// solution *and* the player engine ([`EngineConfig::standard`], recipe depth) solves
+/// solution *and* the player engine (`EngineConfig::standard`, recipe depth) solves
 /// it — the bar the player must clear. If the gate fails, distractor repair runs
-/// ([`repair::repair_distractors`]): it mutates a stuck question's distractors to
+/// (`repair::repair_distractors`): it mutates a stuck question's distractors to
 /// values its own rules can refute (gated by a cheap single-question `deduce` probe),
 /// then re-applies the same brute+standard gate. The key stays valid by construction
 /// (the correct option is never touched). A puzzle repair can't crack is `Stuck`.
-pub(crate) fn validate_and_repair(
+pub fn validate_and_repair(
     fp: &mut FlatPuzzle,
     solution: &[Answer; MAX_N],
     n: usize,

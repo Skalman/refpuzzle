@@ -22,7 +22,7 @@ impl Rng {
         t ^ (t >> 14)
     }
 
-    pub fn next_f64(&mut self) -> f64 {
+    pub(crate) fn next_f64(&mut self) -> f64 {
         self.next_u32() as f64 / 4294967296.0
     }
 
@@ -30,7 +30,7 @@ impl Rng {
         min + (self.next_f64() * (max - min + 1) as f64) as i32
     }
 
-    pub fn pick<T: Copy>(&mut self, arr: &[T]) -> T {
+    pub(crate) fn pick<T: Copy>(&mut self, arr: &[T]) -> T {
         debug_assert!(!arr.is_empty(), "pick from empty slice");
         arr[self.int(0, arr.len() as i32 - 1) as usize]
     }
@@ -47,11 +47,11 @@ impl Rng {
         Answer::from(self.int(start as i32, end as i32 - 1) as u8)
     }
 
-    pub fn state(&self) -> u32 {
+    pub(crate) fn state(&self) -> u32 {
         self.s
     }
 
-    pub fn shuffle<T>(&mut self, arr: &mut [T]) {
+    pub(crate) fn shuffle<T>(&mut self, arr: &mut [T]) {
         for i in (1..arr.len()).rev() {
             let j = self.int(0, i as i32) as usize;
             arr.swap(i, j);

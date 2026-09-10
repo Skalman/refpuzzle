@@ -80,7 +80,7 @@ macro_rules! invalid_reasons {
         ),+ $(,)?
     ) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum InvalidReason {
+        pub(crate) enum InvalidReason {
             $(
                 $(#[$meta])*
                 $variant $({ $($field : $ty),* })?,
@@ -89,7 +89,7 @@ macro_rules! invalid_reasons {
 
         /// Every `InvalidReason` variant's name, in declaration order.
         #[cfg(test)]
-        pub const ALL_INVALID_REASON_NAMES: &[&str] = &[$(stringify!($variant)),+];
+        pub(crate) const ALL_INVALID_REASON_NAMES: &[&str] = &[$(stringify!($variant)),+];
     };
 }
 
@@ -204,7 +204,7 @@ impl InvalidReason {
     /// A pair reason names two questions, `at` and `at + 1`, and returns both.
     /// Exhaustive: a new variant has to say which questions it argues from, if
     /// any.
-    pub fn sources(self) -> ArrayVec<usize, 2> {
+    pub(crate) fn sources(self) -> ArrayVec<usize, 2> {
         use InvalidReason::*;
         let mut out = ArrayVec::new();
         match self {
@@ -246,7 +246,7 @@ impl InvalidReason {
 /// describes. Callers that only want the verdict take [`Validity`] through
 /// [`check_claim`] / [`check_answer`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ValidityWithReason {
+pub(crate) enum ValidityWithReason {
     Neutral,
     Valid,
     Consistent,
@@ -255,7 +255,7 @@ pub enum ValidityWithReason {
 }
 
 impl ValidityWithReason {
-    pub fn validity(self) -> Validity {
+    pub(crate) fn validity(self) -> Validity {
         match self {
             ValidityWithReason::Neutral => Validity::Neutral,
             ValidityWithReason::Valid => Validity::Valid,
@@ -266,7 +266,7 @@ impl ValidityWithReason {
     }
 
     /// Why this claim is invalid, or `None` if it isn't.
-    pub fn reason(self) -> Option<InvalidReason> {
+    pub(crate) fn reason(self) -> Option<InvalidReason> {
         match self {
             ValidityWithReason::Invalid(reason) => Some(reason),
             _ => None,
@@ -1020,13 +1020,13 @@ fn check_claim_impl(
 /// Evaluate the **semantic truth** of a claim against the current puzzle state.
 /// Returns `Valid`/`Invalid`/`Pending` analogous to `check_answer`. See
 /// `check_claim_impl` for the implementation and its caveats.
-pub fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
+pub(crate) fn check_claim(fp: &FlatPuzzle, state: State, opt: OptionPos, claim: Claim) -> Validity {
     check_claim_with_reason(fp, state, opt, claim).validity()
 }
 
 /// [`check_claim`] with the reason attached — see [`ValidityWithReason`]. `explain` renders the
 /// reason; everything else wants the bare verdict.
-pub fn check_claim_with_reason(
+pub(crate) fn check_claim_with_reason(
     fp: &FlatPuzzle,
     state: State,
     opt: OptionPos,
@@ -1212,7 +1212,7 @@ fn claim_value(fp: &FlatPuzzle, qi: usize, ai: usize) -> OptionValue {
 /// `TrueStmt`, its own type and selected option value otherwise. `None` if `qi` is
 /// unanswered (or the picked slot carries no statement). [`check_answer_with_reason`] checks exactly
 /// this claim, so `explain` can render exactly it without guessing.
-pub fn answered_claim(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Claim> {
+pub(crate) fn answered_claim(fp: &FlatPuzzle, state: &State, qi: usize) -> Option<Claim> {
     let ai = state.answers[qi]?.idx();
     let qt = fp.question_types[qi];
     if matches!(qt, QuestionType::TrueStmt) {
@@ -1231,7 +1231,11 @@ pub fn check_answer(fp: &FlatPuzzle, state: State, qi: usize) -> Validity {
 /// [`check_answer`] with the reason attached — see [`ValidityWithReason`]. The reason describes
 /// [`answered_claim`]'s claim, which for a `TrueStmt` is the statement it picked rather
 /// than the question's own type.
-pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> ValidityWithReason {
+pub(crate) fn check_answer_with_reason(
+    fp: &FlatPuzzle,
+    state: State,
+    qi: usize,
+) -> ValidityWithReason {
     let Some(a) = state.answers[qi] else {
         let oc = fp.option_count;
         if (!state.eliminated[qi] & ((1 << oc) - 1)) == 0 {
@@ -1290,7 +1294,7 @@ pub fn check_answer_with_reason(fp: &FlatPuzzle, state: State, qi: usize) -> Val
     maybe_consistent(verdict, qt, qi)
 }
 
-pub fn check_all_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
+pub(crate) fn check_all_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> bool {
     let state = State {
         answers: *answers,
         eliminated: [fp.initial_eliminated_mask(); MAX_N],
@@ -1311,7 +1315,12 @@ pub fn check_all_answers(fp: &FlatPuzzle, answers: &[Option<Answer>; MAX_N]) -> 
 // Inlined on native for the generator's inner loop; outlined on wasm
 // where every duplicated body shows up in the download.
 #[cfg_attr(not(target_arch = "wasm32"), inline(always))]
-pub fn check_claim_fast(option_count: usize, answers: &[Answer], qi: usize, claim: &Claim) -> bool {
+pub(crate) fn check_claim_fast(
+    option_count: usize,
+    answers: &[Answer],
+    qi: usize,
+    claim: &Claim,
+) -> bool {
     let n = answers.len();
     let mut state = State::initial(option_count);
     state.answers[..n]

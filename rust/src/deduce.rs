@@ -28,20 +28,18 @@ use crate::types::*;
 macro_rules! deduce_rules {
     ($($variant:ident),+ $(,)?) => {
         #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        #[allow(dead_code)]
         pub enum DeduceRule {
             All,
             $($variant),+
         }
 
-        #[allow(dead_code)]
         pub const ALL_DEDUCE_RULES: &[DeduceRule] = &[
             $(DeduceRule::$variant),+
         ];
 
-        #[allow(dead_code)]
         impl DeduceRule {
-            pub fn from_str(s: &str) -> Option<DeduceRule> {
+            #[cfg(test)]
+            pub(crate) fn from_str(s: &str) -> Option<DeduceRule> {
                 match s {
                     "All" => Some(DeduceRule::All),
                     $(stringify!($variant) => Some(DeduceRule::$variant),)+
@@ -154,14 +152,13 @@ pub enum DeduceAction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeduceResult {
     pub action: DeduceAction,
-    #[allow(dead_code)] // used by tests
     pub rule: DeduceRule,
 }
 
 /// Why a rule fired: the justification `deduce` had in hand at the emit site,
 /// carried out so `explain` renders it instead of re-deriving (and possibly
 /// mis-attributing) it. Paired positionally with a rule's `DeduceResult` by
-/// [`deduce_with_reasons`]; the rule picks the phrasing, the reason names what it
+/// `deduce_with_reasons`; the rule picks the phrasing, the reason names what it
 /// leans on. `explain` may still read `fp`/`State` to *describe* — quote an
 /// answer, a tally, a label — never to work out why.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -201,7 +198,7 @@ impl DeduceReason {
     /// so a new shape has to decide whether it names one — `LetterBound`'s
     /// source deliberately stays inside its own rules' arms, which match the
     /// full shape for the bound values.
-    pub fn source(self) -> Option<usize> {
+    pub(crate) fn source(self) -> Option<usize> {
         match self {
             DeduceReason::Source { source } | DeduceReason::SourceCell { source, .. } => {
                 Some(usize::from(source))
@@ -214,7 +211,7 @@ impl DeduceReason {
 }
 
 /// Reasons paired positionally with a [`DeduceResults`]: `reasons[i]` justifies
-/// `results[i]`. Collected only on the explain path ([`deduce_with_reasons`]);
+/// `results[i]`. Collected only on the explain path (`deduce_with_reasons`);
 /// generation and solving pass `None` and pay nothing.
 pub type DeduceReasons = ArrayVec<DeduceReason, 80>;
 
@@ -272,7 +269,7 @@ fn leaves_no_answer(state: &State, qi: usize, option_mask: u8) -> bool {
 /// Apply a `DeduceAction` to `state`: `Force` collapses the question to the answer,
 /// `Eliminate`/`EliminateMulti` set the eliminated bits. Shared by `run_engine`
 /// and `lookahead`.
-pub(crate) fn apply_action(action: &DeduceAction, state: &mut State) {
+pub fn apply_action(action: &DeduceAction, state: &mut State) {
     match *action {
         DeduceAction::Force { qi, answer } => {
             state.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
@@ -1986,7 +1983,7 @@ pub fn deduce(fp: &FlatPuzzle, state: &State) -> DeduceResults {
 /// [`deduce`] collecting one [`DeduceReason`] per result, paired by index. The
 /// explain layer's entry point — everything that only needs the conclusions
 /// calls [`deduce`] and skips the collection.
-pub fn deduce_with_reasons(
+pub(crate) fn deduce_with_reasons(
     fp: &FlatPuzzle,
     state: &State,
     reasons: &mut DeduceReasons,
@@ -1994,7 +1991,7 @@ pub fn deduce_with_reasons(
     deduce_impl(fp, state, RuleFilter::All, false, None, Some(reasons))
 }
 
-/// [`deduce_assuming_unique`] collecting reasons, as [`deduce_with_reasons`].
+/// [`deduce_assuming_unique`] collecting reasons, as `deduce_with_reasons`.
 pub fn deduce_assuming_unique_with_reasons(
     fp: &FlatPuzzle,
     state: &State,
@@ -2007,7 +2004,7 @@ pub fn deduce_assuming_unique_with_reasons(
 /// again with collection on — for explaining a result that was recorded without
 /// one (a solve log; reasons never ride along, see the module doc). `state` must
 /// be the state the result was derived from.
-pub fn reason_for(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> DeduceReason {
+pub(crate) fn reason_for(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> DeduceReason {
     let mut reasons = DeduceReasons::new();
     let results = deduce_assuming_unique_with_reasons(fp, state, &mut reasons);
     results
@@ -2027,7 +2024,7 @@ pub fn reason_for(fp: &FlatPuzzle, state: &State, result: &DeduceResult) -> Dedu
 /// repair, never soundness: the accepting path still runs the full engine +
 /// brute-force uniqueness check. Used as repair's per-question gate (see
 /// `construct::repair`).
-pub fn deduce_single_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
+pub(crate) fn deduce_single_question(fp: &FlatPuzzle, state: &State, qi: usize) -> DeduceResults {
     deduce_impl(fp, state, RuleFilter::All, false, Some(qi), None)
 }
 

@@ -76,7 +76,6 @@ pub enum Contradiction {
 }
 
 // Everything past the elimination is read only by the explain layer.
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct LookaheadResult {
     pub eliminate_qi: usize,
@@ -205,7 +204,7 @@ fn drop_step_unless_needed(
 /// applied, and the question it blames has to still be broken at the end. Returns how that
 /// question is broken, or `None` if either check fails.
 ///
-/// Every chain this module reports passes this, and [`minimize_chain`] uses it to decide
+/// Every chain this module reports passes this, and `minimize_chain` uses it to decide
 /// whether a step can go.
 pub(crate) fn chain_contradiction(
     fp: &FlatPuzzle,
@@ -340,6 +339,37 @@ pub(crate) fn hypothesis(state: &State, qi: usize, answer: Answer) -> State {
     hyp.answers[qi] = Some(answer);
     hyp.eliminated[qi] = ALL_OPTIONS_MASK ^ (1 << answer.idx());
     hyp
+}
+
+/// Chain-replay internals for the bin's corpus replay test. Test builds only.
+#[cfg(any(test, feature = "test-util"))]
+pub mod test_hooks {
+    use super::{Contradiction, LookaheadResult};
+    use crate::deduce::{DeduceReason, DeduceResult};
+    use crate::types::*;
+
+    pub fn chain_contradiction(
+        fp: &FlatPuzzle,
+        state: &State,
+        result: &LookaheadResult,
+        deduce_calls: &mut u32,
+    ) -> Option<Contradiction> {
+        super::chain_contradiction(fp, state, result, deduce_calls)
+    }
+
+    pub fn replay_chain(
+        fp: &FlatPuzzle,
+        hyp: &mut State,
+        chain: &[DeduceResult],
+        deduce_calls: &mut u32,
+        on_step: impl FnMut(&State, &DeduceResult, DeduceReason),
+    ) -> bool {
+        super::replay_chain(fp, hyp, chain, deduce_calls, on_step)
+    }
+
+    pub fn hypothesis(state: &State, qi: usize, answer: Answer) -> State {
+        super::hypothesis(state, qi, answer)
+    }
 }
 
 /// Assume `oi` is the answer to `qi` and deduce forward, stopping once the chain
