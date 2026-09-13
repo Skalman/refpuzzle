@@ -158,44 +158,52 @@
   cursor: not-allowed;
 }
 
-/* The checkpointed sweep, in the pin's green: run across cells a checkpoint
-   just settled, and replayed on one cell when a click is refused. The overlay
-   is a pseudo-element, so it rides over whatever background the mark already
-   has. The band travels as a background-position rather than a transform, so
-   it stays within the padding box and the cell needs no clipping: overflow
-   would make the button a scroll container and zero its flex minimum size,
-   resizing the cell mid-animation, and clip-path eats the border edge.
-   `forwards` parks it off the right — without it the band snaps back to
-   center and blinks. The band is half the cell wide, so -100%/200% are the
-   positions that sit it just off either edge. */
+/* The checkpointed sweep, in the pin's green: one diagonal wave over the
+   cells a checkpoint just settled, or the one cell a click bounced off. Each
+   cell's overlay paints its window onto a shared gradient: a square three
+   times the board's span (width plus height), shifted left by the cell's
+   diagonal distance from the sweep's origin (`--sweep-d`, set from script —
+   `background-attachment: fixed` would do this alone, but not on iOS). On a
+   45° wave only x + y matters, so one shift covers both axes.
+   The wave moves as a background-position, not a transform, so it stays in
+   the padding box unclipped: overflow would make the button a scroll container
+   and zero its flex minimum size, and clip-path eats the border edge. `both`
+   parks it past the far corner — without it the wave snaps back and blinks. */
 .option-btn.sweep {
   position: relative;
   border-color: var(--valid);
 }
 
+/* Profile along the gradient line (x + y over twice the image side): ramp up
+   to 50%, 1.4-span plateau, 0.4-span tail. One span per 0.3s, so a cell rises
+   fast, holds ~0.4s, fades. */
 .option-btn.sweep::after {
+  --tint: color-mix(in srgb, var(--valid) 35%, transparent);
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
   background: linear-gradient(
-    90deg,
-    transparent,
-    color-mix(in srgb, var(--valid) 45%, transparent),
-    transparent
+    135deg,
+    transparent 20%,
+    var(--tint) 26.67%,
+    var(--tint) 45%,
+    transparent 50%
   );
   background-repeat: no-repeat;
-  background-size: 50% 100%;
-  animation: checkpoint-sweep 0.45s ease-out forwards;
+  background-size: calc(3 * var(--sweep-span)) calc(3 * var(--sweep-span));
+  animation: checkpoint-sweep 0.85s linear both;
 }
 
+/* Image left edge at t puts the leading edge at x + y = 3 span + t: the origin
+   corner at t = -3 span; the tail clears x + y = span at t = -0.2 span. */
 @keyframes checkpoint-sweep {
   from {
-    background-position: -100% 0;
+    background-position-x: calc(-3 * var(--sweep-span) - var(--sweep-d, 0px));
   }
   to {
-    background-position: 200% 0;
+    background-position-x: calc(-0.2 * var(--sweep-span) - var(--sweep-d, 0px));
   }
 }
 

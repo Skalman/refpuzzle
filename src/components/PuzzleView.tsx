@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "preact/hooks";
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from "preact/hooks";
 import { tinykeys } from "tinykeys";
 import type { Puzzle } from "../engine/types.ts";
 import { FRESH_MARKS, LETTERS } from "../engine/types.ts";
@@ -30,6 +30,27 @@ import { LEVELS } from "../puzzles/daily.ts";
 
 /** The mark shortcuts, one per option letter. */
 const OPTION_KEYS = LETTERS.map((letter) => letter.toLowerCase());
+
+/** How long `.option-btn.sweep` stays on: the CSS duration plus slack. */
+const SWEEP_MS = 1000;
+
+/**
+ * Geometry for `.option-btn.sweep`: the board's span, and each sweeping
+ * cell's diagonal distance (x + y) past the first sweeping cell. Board-sized
+ * so the wave's speed doesn't depend on how many cells light; anchored on the
+ * cells so a lone refused click is hit at once.
+ */
+function placeSweep(grid: HTMLElement) {
+  const cells = Array.from(grid.querySelectorAll<HTMLElement>(".option-btn.sweep"));
+  const diagonals = cells.map((cell) => {
+    const { left, top } = cell.getBoundingClientRect();
+    return left + top;
+  });
+  const first = Math.min(...diagonals);
+  const { width, height } = grid.getBoundingClientRect();
+  grid.style.setProperty("--sweep-span", `${width + height}px`);
+  cells.forEach((cell, i) => cell.style.setProperty("--sweep-d", `${diagonals[i] - first}px`));
+}
 
 /** A blank board: every question with every option unmarked. */
 function freshBoard(puzzle: Puzzle): QuestionState[] {
@@ -398,9 +419,13 @@ export function PuzzleView({
   function playSweep(masks: number[]) {
     clearTimeout(sweepTimer.current);
     setSweepMasks(masks);
-    sweepTimer.current = window.setTimeout(() => setSweepMasks(null), 600);
+    sweepTimer.current = window.setTimeout(() => setSweepMasks(null), SWEEP_MS);
   }
   useEffect(() => () => clearTimeout(sweepTimer.current), []);
+  // Layout effect: cells must be placed before the first frame paints.
+  useLayoutEffect(() => {
+    if (sweepMasks !== null && gridRef.current) placeSweep(gridRef.current);
+  }, [sweepMasks]);
 
   /**
    * What the checkpoint at the cursor settled that the one before it hadn't.
