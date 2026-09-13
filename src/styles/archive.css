@@ -6,7 +6,7 @@
 .archive-page {
   max-width: 37.5rem;
   margin: 0 auto;
-  padding: 1rem;
+  padding: 0.5rem;
 
   & h2 {
     margin-bottom: 1rem;
@@ -28,7 +28,7 @@
 .archive-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 0.4rem;
+  gap: 0.25rem;
 }
 
 .archive-weekdays {
@@ -102,20 +102,21 @@ a.archive-day {
   /* Wide enough that even the thickest segment stays wider than it is tall —
      a square segment reads as a tile, not a rail. */
   width: 90%;
-  height: var(--track-solved, 7px);
+  height: var(--track-solved);
+  /* Small days step the scale down so a solved segment stays a line rather
+     than a block, and mix the colors toward the day bg. */
+  --track-started: 3px;
+  --track-solved: 5px;
+  --level-strength: 75%;
 }
 
 /* Six fixed slots in tab order, each in its level's tab color, so a missing
    level reads by position. Thickness carries done-ness without color and
    survives a low-density display, where a 1px step is still exact: hairline
-   untouched, 3px started, 7px solved. Whole pixels only — rem would land on
-   fractions at the font-size breakpoints. */
+   untouched, 3px started, 5px or 7px solved. Whole pixels only — rem would land
+   on fractions at the font-size breakpoints. */
 .archive-level {
-  --level-ink: color-mix(
-    in srgb,
-    var(--level-color) var(--level-strength, 100%),
-    var(--bg-surface)
-  );
+  --level-ink: color-mix(in srgb, var(--level-color) var(--level-strength), var(--bg-surface));
 
   flex: 1;
   /* A hairline is exact at every density, so it doesn't scale with the rest. */
@@ -151,12 +152,12 @@ a.archive-day {
   }
 
   &.started {
-    height: var(--track-started, 3px);
+    height: var(--track-started);
     background: var(--level-ink);
   }
   &.solved,
   &.stale {
-    height: var(--track-solved, 7px);
+    height: var(--track-solved);
     background: var(--level-ink);
   }
 }
@@ -170,21 +171,16 @@ a.archive-day {
   --level-color: var(--invalid);
 }
 
-/* Small days: keep all six segments, step the scale down so a solved segment
-   stays a line rather than a block, and mix the colors toward the day bg. */
-@media (max-width: 480px) {
+@media (width > 480px) {
   .archive-page {
-    padding: 0.5rem;
+    padding: 1rem;
   }
   .archive-weekdays,
   .archive-grid {
-    gap: 0.25rem;
+    gap: 0.4rem;
   }
   .archive-track {
-    --track-started: 3px;
-    --track-solved: 5px;
-  }
-  .archive-level {
-    --level-strength: 75%;
+    --track-solved: 7px;
+    --level-strength: 100%;
   }
 }

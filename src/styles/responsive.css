@@ -1,65 +1,53 @@
 /* ── Responsive breakpoints ──
- * This file is imported last to ensure overrides work correctly.
+ * Mobile-first: bare rules are the narrow layout, queries widen it. Imported
+ * last so the widening overrides win. Component-specific steps sit nested in
+ * their own rules (layout.css, archive.css); this file holds the root font
+ * ladder and the show/hide utilities.
  *
- * ≤360px  :root 13px
- * ≤390px  :root 14px
- * ≤420px  :root 15px
- * ≤768px  mobile layout (single-column, show/hide)
- * ≥1200px :root 18px
+ * > 360px   :root 14px
+ * > 390px   :root 15px
+ * > 420px   :root browser default (16px)
+ * > 768px   wide layout: two-column grid, header controls out of the ⋯ menu
+ * ≥ 1200px  :root 18px
  */
 
-.show-mobile {
-  display: none !important;
+:root {
+  font-size: 13px;
 }
 
-@media (max-width: 768px) {
-  .hide-mobile {
-    display: none !important;
-  }
-  .show-mobile {
-    display: block !important;
-  }
-
-  .difficulty-tabs {
-    scrollbar-width: none;
-    &::-webkit-scrollbar {
-      display: none;
-    }
-  }
-  .difficulty-tab {
-    flex: 1 0 auto;
-    padding: 0.4rem 0.7rem;
-  }
-
-  .questions-grid {
-    display: block;
-  }
-  .questions-grid .question-row {
-    grid-row: auto;
-    grid-template-rows: auto auto;
-  }
-}
-
-@media (max-width: 420px) {
-  :root {
-    font-size: 15px;
-  }
-}
-
-@media (max-width: 390px) {
+@media (width > 360px) {
   :root {
     font-size: 14px;
   }
 }
 
-@media (max-width: 360px) {
+@media (width > 390px) {
   :root {
-    font-size: 13px;
+    font-size: 15px;
   }
 }
 
-@media (min-width: 1200px) {
+@media (width > 420px) {
+  :root {
+    font-size: medium;
+  }
+}
+
+@media (width >= 1200px) {
   :root {
     font-size: 18px;
+  }
+}
+
+/* Two-sided by nature, so one query each side rather than a base + override. */
+@media (width <= 768px) {
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
+@media (width > 768px) {
+  .show-mobile {
+    display: none !important;
   }
 }
