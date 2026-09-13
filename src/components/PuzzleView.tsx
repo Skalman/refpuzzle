@@ -877,136 +877,138 @@ export function PuzzleView({
           />
         )}
 
-        {/* Hint display */}
-        {!completed && debugMode && hints.debugHints && (
-          <div class="puzzle-hint">
-            <ol>
-              {hints.debugHints.map((step, i) => (
-                // oxlint-disable-next-line react/no-array-index-key
-                <li key={i}>
-                  <HintStep step={step} />
-                </li>
-              ))}
-            </ol>
-          </div>
-        )}
-        {!completed && !debugMode && hints.hintText && (
-          <div class="puzzle-hint">
-            <HintStep step={hints.hintText} />
-            {hints.hasMore && (
-              <button class="hint-more" onClick={hints.handleHint}>
-                {s.puzzle.more}
-              </button>
-            )}
-          </div>
-        )}
+        <div class="puzzle-dock">
+          {/* Hint display */}
+          {!completed && debugMode && hints.debugHints && (
+            <div class="puzzle-hint">
+              <ol>
+                {hints.debugHints.map((step, i) => (
+                  // oxlint-disable-next-line react/no-array-index-key
+                  <li key={i}>
+                    <HintStep step={step} />
+                  </li>
+                ))}
+              </ol>
+            </div>
+          )}
+          {!completed && !debugMode && hints.hintText && (
+            <div class="puzzle-hint">
+              <HintStep step={hints.hintText} />
+              {hints.hasMore && (
+                <button class="hint-more" onClick={hints.handleHint}>
+                  {s.puzzle.more}
+                </button>
+              )}
+            </div>
+          )}
 
-        {/* Checkpoint verdict */}
-        {!completed && checkpointNote && <div class="puzzle-note">{checkpointNote}</div>}
+          {/* Checkpoint verdict */}
+          {!completed && checkpointNote && <div class="puzzle-note">{checkpointNote}</div>}
 
-        {/* Completion banner */}
-        {completed && (
-          <div ref={puzzleCompleteRef} class="puzzle-complete">
-            <span>{s.puzzle.solved}</span>
-            {level < LEVELS.length ? (
-              <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
-                {s.puzzle.nextPuzzle} &rarr;
-              </button>
-            ) : (
-              <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
-                {s.daily.archive} &rarr;
-              </a>
-            )}
-          </div>
-        )}
+          {/* Completion banner */}
+          {completed && (
+            <div ref={puzzleCompleteRef} class="puzzle-complete">
+              <span>{s.puzzle.solved}</span>
+              {level < LEVELS.length ? (
+                <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
+                  {s.puzzle.nextPuzzle} &rarr;
+                </button>
+              ) : (
+                <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
+                  {s.daily.archive} &rarr;
+                </a>
+              )}
+            </div>
+          )}
 
-        {/* Controls */}
-        <div
-          ref={controlsRef}
-          class="puzzle-controls"
-          role="toolbar"
-          onKeyDown={arrowNavHandler("button:not(:disabled)")}
-        >
-          <button
-            class="toolbar-icon-btn"
-            onClick={handleUndo}
-            disabled={completed || !canUndo}
-            title={s.puzzle.undo}
+          {/* Controls */}
+          <div
+            ref={controlsRef}
+            class="puzzle-controls"
+            role="toolbar"
+            onKeyDown={arrowNavHandler("button:not(:disabled)")}
           >
-            <IconUndo />
-          </button>
-          <button
-            class="toolbar-icon-btn"
-            onClick={handleRedo}
-            disabled={completed || !canRedo}
-            title={s.puzzle.redo}
-          >
-            <IconRedo />
-          </button>
-          <button
-            class="toolbar-accent-btn"
-            onClick={handleSave}
-            disabled={completed || !canCheckpoint}
-          >
-            <IconPin size="0.9em" /> {s.puzzle.checkpoint}
-          </button>
-          <button
-            class="toolbar-accent-btn"
-            onClick={hints.handleHint}
-            onMouseEnter={hints.getSolution}
-            onFocus={hints.getSolution}
-            onTouchStart={hints.getSolution}
-            disabled={completed}
-            title={s.puzzle.hint}
-          >
-            <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
-          </button>
-          <span class="controls-spacer"></span>
-          <span class="split-btn">
-            <button class="toolbar-accent-btn" onClick={openSharePuzzle}>
-              <IconShare size="0.9em" /> {s.puzzle.share}
+            <button
+              class="toolbar-icon-btn"
+              onClick={handleUndo}
+              disabled={completed || !canUndo}
+              title={s.puzzle.undo}
+            >
+              <IconUndo />
             </button>
-            <SplitMenu buttonClass="toolbar-accent-btn" label={s.puzzle.shareOptions}>
-              {(close) => (
-                <>
-                  <button
-                    role="menuitem"
-                    onClick={() => {
-                      close();
-                      openShareApp();
-                    }}
-                  >
-                    {s.puzzle.shareApp}
-                  </button>
-                  {hasProgress && (
+            <button
+              class="toolbar-icon-btn"
+              onClick={handleRedo}
+              disabled={completed || !canRedo}
+              title={s.puzzle.redo}
+            >
+              <IconRedo />
+            </button>
+            <button
+              class="toolbar-accent-btn"
+              onClick={handleSave}
+              disabled={completed || !canCheckpoint}
+            >
+              <IconPin size="0.9em" /> {s.puzzle.checkpoint}
+            </button>
+            <button
+              class="toolbar-accent-btn"
+              onClick={hints.handleHint}
+              onMouseEnter={hints.getSolution}
+              onFocus={hints.getSolution}
+              onTouchStart={hints.getSolution}
+              disabled={completed}
+              title={s.puzzle.hint}
+            >
+              <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
+            </button>
+            <span class="controls-spacer"></span>
+            <span class="split-btn">
+              <button class="toolbar-accent-btn" onClick={openSharePuzzle}>
+                <IconShare size="0.9em" /> {s.puzzle.share}
+              </button>
+              <SplitMenu buttonClass="toolbar-accent-btn" label={s.puzzle.shareOptions}>
+                {(close) => (
+                  <>
                     <button
                       role="menuitem"
                       onClick={() => {
                         close();
-                        openShareProgress();
+                        openShareApp();
                       }}
                     >
-                      {s.puzzle.shareWithProgress}
+                      {s.puzzle.shareApp}
                     </button>
-                  )}
-                </>
-              )}
-            </SplitMenu>
-          </span>
-        </div>
+                    {hasProgress && (
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          close();
+                          openShareProgress();
+                        }}
+                      >
+                        {s.puzzle.shareWithProgress}
+                      </button>
+                    )}
+                  </>
+                )}
+              </SplitMenu>
+            </span>
+          </div>
 
-        {historyRef.current.length > 1 && (
-          <HistoryStrip
-            history={historyRef.current}
-            currentIdx={historyIdxRef.current}
-            hints={hintMarkers.current}
-            fails={failMarkers.current}
-            completed={completed}
-            onJump={handleJumpTo}
-            onPlayAgain={handlePlayAgain}
-            containerRef={historyStripRef}
-          />
-        )}
+          {historyRef.current.length > 1 && (
+            <HistoryStrip
+              history={historyRef.current}
+              currentIdx={historyIdxRef.current}
+              hints={hintMarkers.current}
+              fails={failMarkers.current}
+              completed={completed}
+              onJump={handleJumpTo}
+              onPlayAgain={handlePlayAgain}
+              containerRef={historyStripRef}
+            />
+          )}
+        </div>
       </div>
       {shareSheet && (
         <ShareSheet

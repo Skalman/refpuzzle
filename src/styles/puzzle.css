@@ -3,6 +3,21 @@
   position: relative;
 }
 
+/* Hint, verdict, banner, controls and track, stuck to the viewport's bottom
+   while the board's tail is below it. z-index clears the coach overlay. The
+   negative top margin lays the border over the last rows' own; the bottom
+   padding covers the safe-area inset only while stuck. */
+.puzzle-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 6;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  margin-top: -1px;
+  padding-bottom: var(--safe-area-inset-bottom);
+  margin-bottom: calc(-1 * var(--safe-area-inset-bottom));
+}
+
 /* ── Question rows ── */
 .question-row {
   display: grid;
@@ -10,6 +25,8 @@
   grid-template-rows: auto auto;
   border-bottom: 1px solid var(--border);
   padding: 0.5rem 0;
+  /* Clears the stuck dock on scrollIntoView; an estimate of its usual height. */
+  scroll-margin-bottom: 5rem;
 
   & > .validity-bar {
     grid-row: 1 / -1;
