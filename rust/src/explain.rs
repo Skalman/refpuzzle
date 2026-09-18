@@ -1878,7 +1878,10 @@ pub fn explain_deduce(
                         simple(format!("{q_list} can't be {opt_str}: {text}")),
                     ]
                 } else {
-                    vec![simple(unexplained_multi_elim(&q_list, &opt_str))]
+                    vec![
+                        try_looking(&qis),
+                        simple(unexplained_multi_elim(&q_list, &opt_str)),
+                    ]
                 }
             } else {
                 let (text, other_qi) =
