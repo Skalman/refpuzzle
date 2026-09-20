@@ -5,7 +5,7 @@
 //!
 //! - [`check_well_posed_given_key`] — types whose answer is fixed by the key (+ the
 //!   question's own params): MostCommon/LeastCommon/EqualCount (histogram),
-//!   OnlySame/ConsecIdent/OnlyOdd/OnlyEven, NoOtherHasAnswer. Knowable at
+//!   OnlySame/OnlySameAs/ConsecIdent/OnlyOdd/OnlyEven, NoOtherHasAnswer. Knowable at
 //!   parametrize; `fill_options`/repair never change it.
 //! - [`check_well_posed_given_key_and_options`] — types whose answer depends on the
 //!   key *and* the filled option/claim values: OnlySameAmong/OnlySameAsAmong
@@ -63,6 +63,21 @@ pub fn check_well_posed_given_key(
             let matches = (0..n).filter(|&i| i != qi && sol[i] == sol[qi]).count();
             (matches > 1)
                 .then(|| "OnlySame: more than one other question shares the answer".to_string())
+        }
+        QuestionType::OnlySameAs { question_index } => {
+            // Counted around the reference, not the asking question: `qi` itself is a
+            // candidate. An out-of-range reference is form validation's job — skip it
+            // here rather than panicking on `sol[source]`.
+            let source = usize::from(question_index);
+            if source >= n {
+                return None;
+            }
+            let matches = (0..n)
+                .filter(|&i| i != source && sol[i] == sol[source])
+                .count();
+            (matches > 1).then(|| {
+                "OnlySameAs: more than one other question shares the referenced answer".to_string()
+            })
         }
         QuestionType::ConsecIdent => {
             let pairs = (0..n.saturating_sub(1))
@@ -219,6 +234,19 @@ mod tests {
         assert!(key(QuestionType::OnlySame, "AAB", 3).is_none());
         // Q0=A; two other A → ambiguous.
         assert!(key(QuestionType::OnlySame, "AAA", 3).is_some());
+    }
+
+    #[test]
+    fn only_same_as_counts_sharers_of_the_referenced_answer() {
+        // Q0 asks about Q1. sol = A,B,B: only Q2 shares Q1's B → well-posed.
+        let x = QuestionType::OnlySameAs { question_index: 1 };
+        assert!(key(x, "ABB", 3).is_none());
+        // sol = B,B,B: Q0 and Q2 both share Q1's B → answerless.
+        assert!(key(x, "BBB", 3).is_some());
+        // sol = A,B,C: nobody shares Q1's B → the answer is "None".
+        assert!(key(x, "ABC", 3).is_none());
+        // The asking question counts as a sharer: sol = B,B,C → Q0 itself is the answer.
+        assert!(key(x, "BBC", 3).is_none());
     }
 
     #[test]
