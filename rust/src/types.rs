@@ -297,12 +297,13 @@ impl QuestionTypeKind {
             MostCommonCount | LeastCommon | MostCommon | EqualCount => G::Histogram,
             ClosestAfter | ClosestBefore => G::Closest,
             FirstWith | LastWith => G::FirstLast,
-            PrevSame | NextSame | OnlySame | OnlySameAmong | OnlySameAs => G::Sameness,
+            PrevSame | NextSame | OnlySame | OnlySameAmong | OnlySameAs | OnlySameAsAmong => {
+                G::Sameness
+            }
             OnlyOdd | OnlyEven => G::Parity,
             AnswerOf => G::AnswerOf,
             // Uncategorized.
-            ConsecIdent | NoOtherHasAnswer | AnswerIsSelf | LetterDist | TrueStmt
-            | OnlySameAsAmong => {
+            ConsecIdent | NoOtherHasAnswer | AnswerIsSelf | LetterDist | TrueStmt => {
                 return None;
             }
         })
