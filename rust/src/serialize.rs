@@ -78,18 +78,18 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
         None
     };
 
+    // Every row must be an array of the same length, and that length is the
+    // board's option count. `check_form` rejects counts outside 3..=5; bound it
+    // here too, since the option arrays are fixed at five wide.
+    if option_count > 5 {
+        return None;
+    }
+
     for (qi, opts) in opts_arr.iter().enumerate() {
-        let qt = &question_types[qi];
-        // Identity-option rows carry the canonical letter indices `[0, 1, 2, ...]`
-        // on wire, but their values are fixed by position — rebuild them here
-        // rather than reading the row.
-        if qt.has_identity_options() {
-            for oi in 0..option_count {
-                options[qi][oi] = OptionValue::num(oi as u8);
-            }
-            continue;
-        }
         let row = opts.as_array()?;
+        if row.len() != option_count {
+            return None;
+        }
         for (oi, o) in row.iter().enumerate() {
             options[qi][oi] = if o.is_null() {
                 OptionValue::NONE

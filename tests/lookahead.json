@@ -9,9 +9,9 @@
       "puzzle": {
         "o": [
           [2, 2, 2, 2, 2],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -38,9 +38,9 @@
       "puzzle": {
         "o": [
           [4, 2, 3, 3, 3],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -71,9 +71,9 @@
         "o": [
           [0, 1, 2, 3, 4],
           [2, 2, 2, 2, 2],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -105,8 +105,8 @@
         "o": [
           [0, 1, 2, 3, 4],
           [0, 1, 2, 3, 4],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -135,9 +135,9 @@
       "name": "All answer_is_self → no contradiction possible",
       "puzzle": {
         "o": [
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -159,8 +159,8 @@
       "puzzle": {
         "o": [
           [2, 2, 2, 2, 2],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {
@@ -186,10 +186,10 @@
       "description": "Q1 answer_is_self has no contradictions. Q2=A duplicates Q3's unique_answer.",
       "puzzle": {
         "o": [
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null],
-          [null, null, null, null, null]
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4],
+          [0, 1, 2, 3, 4]
         ],
         "q": [
           {

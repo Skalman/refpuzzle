@@ -377,6 +377,28 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
                     });
                 }
             }
+        } else if qt.has_identity_options() {
+            // Identity-option kinds offer the letters in order: option `oi` holds `oi`.
+            for oi in 0..oc {
+                let ov = fp.options[qi][oi];
+                if !ov.is_num() || ov.value() as usize != oi {
+                    let held = if ov.is_num() {
+                        ov.value().to_string()
+                    } else if ov.is_none() {
+                        "null".to_string()
+                    } else {
+                        "UNUSED".to_string()
+                    };
+                    errors.push(FormError {
+                        qi,
+                        message: format!(
+                            "Option {oi} holds {held} but {:?} offers the letters in order",
+                            qt.kind()
+                        ),
+                        severity: Severity::Error,
+                    });
+                }
+            }
         } else {
             // Per-qi: duplicate option values — the same choice offered twice, so
             // two options are equally right. TrueStmt is excluded, above: distinct
@@ -481,6 +503,36 @@ mod tests {
                 .any(|e| e.severity == Severity::Error && e.message.contains("option count 2")),
             "oc=2 should be a fatal form error: {errs:?}"
         );
+    }
+
+    #[test]
+    fn identity_options_must_be_in_order() {
+        let ident = [
+            OptionValue::num(0),
+            OptionValue::num(1),
+            OptionValue::num(2),
+            OptionValue::UNUSED,
+            OptionValue::UNUSED,
+        ];
+        for qt in [QuestionType::AnswerIsSelf, QuestionType::NoOtherHasAnswer] {
+            let errs = check_form(&flat(&[qt], &[ident], None, 3));
+            assert!(
+                !errs.iter().any(|e| e.message.contains("letters in order")),
+                "canonical row should pass for {qt:?}: {errs:?}"
+            );
+
+            // A permutation offers every letter exactly once, so the duplicate
+            // check cannot see it.
+            let mut swapped = ident;
+            swapped.swap(0, 2);
+            let errs = check_form(&flat(&[qt], &[swapped], None, 3));
+            assert!(
+                errs.iter().any(
+                    |e| e.severity == Severity::Error && e.message.contains("letters in order")
+                ),
+                "permuted row should be a form error for {qt:?}: {errs:?}"
+            );
+        }
     }
 
     #[test]

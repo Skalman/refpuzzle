@@ -361,8 +361,9 @@ Values in `optionValues` (TS) / `option_nums` (Rust) depend on question type:
 - Counting: claimed count (integer)
 - Positional: claimed question index (0-based), NONE_VAL for "None"
 - LetterDist: claimed distance
-- AnswerOf/LeastCommon/MostCommon: letter index (in `optionValues` for TS, `option_answers` for Rust)
-- Identity options (NoOtherHasAnswer, EqualCount, AnswerIsSelf): letter index
+- AnswerOf/LeastCommon/MostCommon/EqualCount: letter index (in `optionValues` for TS, `option_answers` for Rust)
+- Identity options (NoOtherHasAnswer, AnswerIsSelf): letter index, and option `oi`
+  must hold `oi` — the row offers the letters in order
 - TrueStmt: in `optionClaims`
 - NAN_VAL: not applicable
 
