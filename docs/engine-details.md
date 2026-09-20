@@ -65,26 +65,28 @@ Returns one of five values:
 
 Internally delegates to `checkValueValidity`, which handles the per-question-type logic.
 
-| Question type              | Invalid when                                                           | Valid when                                                |
-| -------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
-| CountAnswer (value=V)      | count > V                                                              | count = V and no remaining unknowns can match             |
-| CountAnswerBefore/After    | same, within range                                                     | same, within range                                        |
-| CountVowel/CountConsonant  | same                                                                   | same                                                      |
-| AnswerOf (claims Q2=B)     | Q2 answered and ≠ B                                                    | Q2 = B                                                    |
-| LetterDist (claims dist=D) | other answered and actual dist ≠ D                                     | other answered and dist = D                               |
-| NoOtherHasAnswer           | same letter appears elsewhere                                          | no other question has this letter                         |
-| FirstWith A (claims Q3)    | Q3 answered ≠ A, or earlier Q has A                                    | Q3 = A and no earlier Q has A and all earlier Qs answered |
-| LastWith A (claims Q3)     | Q3 answered ≠ A, or later Q has A                                      | Q3 = A and no later Q has A and all later Qs answered     |
-| ClosestAfter/ClosestBefore | same pattern as first/last                                             | same                                                      |
-| OnlySameAmong (claims Q3)         | Q3 answered ≠ this answer                                              | Q3 = this answer                                          |
-| OnlySame (claims Q3)       | Q3 answered ≠ this answer                                              | Q3 = this answer and exactly 1 match                      |
-| PrevSame (claims Q3)       | Q3 ≥ self, or Q3 answered ≠ this answer, or closer match exists        | Q3 < self, Q3 = this answer, no closer match              |
-| NextSame (claims Q3)       | Q3 ≤ self or ≥ n, or Q3 answered ≠ this answer, or closer match exists | Q3 > self, Q3 = this answer, no closer match              |
-| ConsecIdent (claims Q3&Q4) | Q3 and Q4 both answered and differ                                     | Q3 = Q4 and exactly one such pair                         |
-| ConsecIdent (None)         | any consecutive pair has same answer                                   | all consecutive pairs answered and none match             |
-| OnlyOdd A (claims Q3)      | Q3 is even, or Q3 ≠ A, or another odd Q has A                          | Q3 is odd, Q3 = A, no other odd Q has A                   |
-| TrueStmt                   | selected claim evaluates false (needs all answered)                    | selected claim is true and all others false               |
-| AnswerIsSelf               | never invalid                                                          | always valid                                              |
+| Question type               | Invalid when                                                           | Valid when                                                   |
+| --------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------ |
+| CountAnswer (value=V)       | count > V                                                              | count = V and no remaining unknowns can match                |
+| CountAnswerBefore/After     | same, within range                                                     | same, within range                                           |
+| CountVowel/CountConsonant   | same                                                                   | same                                                         |
+| AnswerOf (claims Q2=B)      | Q2 answered and ≠ B                                                    | Q2 = B                                                       |
+| LetterDist (claims dist=D)  | other answered and actual dist ≠ D                                     | other answered and dist = D                                  |
+| NoOtherHasAnswer            | same letter appears elsewhere                                          | no other question has this letter                            |
+| FirstWith A (claims Q3)     | Q3 answered ≠ A, or earlier Q has A                                    | Q3 = A and no earlier Q has A and all earlier Qs answered    |
+| LastWith A (claims Q3)      | Q3 answered ≠ A, or later Q has A                                      | Q3 = A and no later Q has A and all later Qs answered        |
+| ClosestAfter/ClosestBefore  | same pattern as first/last                                             | same                                                         |
+| OnlySameAmong (claims Q3)   | Q3 answered ≠ this answer, or another listed Q has this answer         | Q3 = this answer and every other listed Q differs            |
+| OnlySameAsAmong (claims Q3) | Q3 answered ≠ the reference's answer, or another listed Q has it       | Q3 = the reference's answer and every other listed Q differs |
+| OnlySame (claims Q3)        | Q3 answered ≠ this answer                                              | Q3 = this answer and exactly 1 match                         |
+| OnlySameAs (claims Q3)      | Q3 answered ≠ the reference's answer                                   | Q3 = the reference's answer and exactly 1 match              |
+| PrevSame (claims Q3)        | Q3 ≥ self, or Q3 answered ≠ this answer, or closer match exists        | Q3 < self, Q3 = this answer, no closer match                 |
+| NextSame (claims Q3)        | Q3 ≤ self or ≥ n, or Q3 answered ≠ this answer, or closer match exists | Q3 > self, Q3 = this answer, no closer match                 |
+| ConsecIdent (claims Q3&Q4)  | Q3 and Q4 both answered and differ                                     | Q3 = Q4 and exactly one such pair                            |
+| ConsecIdent (None)          | any consecutive pair has same answer                                   | all consecutive pairs answered and none match                |
+| OnlyOdd A (claims Q3)       | Q3 is even, or Q3 ≠ A, or another odd Q has A                          | Q3 is odd, Q3 = A, no other odd Q has A                      |
+| TrueStmt                    | selected claim evaluates false (needs all answered)                    | selected claim is true and all others false                  |
+| AnswerIsSelf                | never invalid                                                          | always valid                                                 |
 
 **Key property**: checkAnswerValidity never modifies state. It's a pure read-only check.
 
@@ -139,6 +141,7 @@ Rust additionally has `deduce_with_rule_exclude()` as a separate function.
 - Positional (FirstWith, LastWith, ClosestAfter, ClosestBefore): position out of range, position has wrong answer, answer eliminated from target, closer match exists, None but match exists
 - PrevSame/NextSame: position out of range, closer match exists
 - OnlySame/OnlySameAmong: self-reference, target answered differently
+- OnlySameAs/OnlySameAsAmong (all gated on the reference being answered): target is the reference itself, target answers differently, or another candidate already holds the matched letter
 - ConsecIdent: pair has different answers, None but pair exists
 - OnlyOdd: even position, wrong answer at target, answer eliminated from target, None but odd match exists
 
