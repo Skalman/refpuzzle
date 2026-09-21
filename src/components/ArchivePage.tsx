@@ -1,4 +1,5 @@
 import { AppHeader } from "./AppHeader.tsx";
+import { LevelRail } from "./LevelRail.tsx";
 import { useBackupFlow, BackupDialogs } from "./BackupFlow.tsx";
 import { classNames } from "../lib/classNames.ts";
 import { useRevalidated } from "../lib/hooks.ts";
@@ -52,7 +53,7 @@ function formatDay(dateStr: string): string {
   });
 }
 
-/** One day of the archive: its date, a six-level track, and a done-ness tint. */
+/** One day of the archive: its date, a six-level rail, and a done-ness tint. */
 function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; isToday: boolean }) {
   const s = t();
   const states = dayStates(dateStr);
@@ -77,19 +78,7 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
       aria-label={label}
     >
       <span class="archive-daynum">{day}</span>
-      <span class="archive-track" aria-hidden="true">
-        {LEVELS.map((level, i) => {
-          const state = states[i];
-          const levelTint = state.stale
-            ? "stale"
-            : state.completed
-              ? "solved"
-              : state.started
-                ? "started"
-                : "";
-          return <span key={level} class={classNames("archive-level", levelTint)} />;
-        })}
-      </span>
+      <LevelRail states={states} />
     </a>
   );
 }
