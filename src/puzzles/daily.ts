@@ -1,5 +1,6 @@
 import type { Puzzle } from "../engine/types.ts";
 import { wasmReady, generatePuzzle, createPuzzleHandle } from "../lib/wasm.ts";
+import { debugEnabled } from "../lib/debug.ts";
 
 const START_DATE = "2026-04-19";
 /** The difficulty levels every day carries, in tab order. */
@@ -62,13 +63,7 @@ export function dayNumber(dateStr: string): number {
 
 export function isValidDate(dateStr: string): boolean {
   if (dayNumber(dateStr) < 1) return false;
-  if (
-    typeof window !== "undefined" &&
-    (new URLSearchParams(window.location.search).has("debug") ||
-      sessionStorage.getItem("debug") === "1")
-  ) {
-    return true;
-  }
+  if (debugEnabled()) return true;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const date = new Date(dateStr + "T00:00:00");
