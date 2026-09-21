@@ -1,7 +1,7 @@
 /* ── Theme variables ──
  * Colors are redefined per theme below; sizes are theme-independent and live
  * only in :root. Sizes are in rem so they follow the root font-size ladder in
- * responsive.css — the exceptions are borders and the archive track, which need
+ * responsive.css — the exceptions are borders and the level rail, which need
  * whole pixels to stay exact at every breakpoint.
  */
 :root {
@@ -29,6 +29,14 @@
   --invalid: #ef4444;
   --invalid-soft: rgba(239, 68, 68, 0.05);
   --pending: #f59e0b;
+  /* The result card's perfect row, red to purple. It stands in for the emoji
+     squares a shared result prints, so it holds in both themes. */
+  --rainbow-0: oklch(62% 0.2 25);
+  --rainbow-1: oklch(72% 0.18 55);
+  --rainbow-2: oklch(85% 0.17 95);
+  --rainbow-3: oklch(68% 0.19 145);
+  --rainbow-4: oklch(62% 0.18 255);
+  --rainbow-5: oklch(60% 0.2 310);
   --coach-arrow: #d97706;
   --coach-outline: #fff;
   --coach-glow: none;
@@ -142,12 +150,18 @@
 .icon-neutral {
   color: var(--neutral-bar);
 }
+.icon-checkpoint {
+  color: var(--valid);
+}
 .icon-hint {
   color: var(--pending);
 }
-.icon-stale {
-  color: var(--invalid);
-}
 .icon-error {
   color: var(--invalid);
+}
+
+/* A disabled icon goes with its label, except where the icon is the mark. */
+button:disabled:not(.option-btn, .history-step)
+  :is(.icon-correct, .icon-incorrect, .icon-neutral, .icon-checkpoint, .icon-hint, .icon-error) {
+  color: inherit;
 }
