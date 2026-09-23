@@ -53,8 +53,8 @@ A puzzle is a grid: `n` **questions** down, `option_count` **options** across.
   no help), *hinted* (a hint named it), or *caught* (a refused checkpoint named it).
   Read off the markers' questions, so a question no marker named stays clean.
   A catch outranks a hint on the same question.
-- **perfect** — every question clean. The result card then runs the rainbow instead
-  of reading square by square. *Clean* is about one question, *perfect* the board.
+- **perfect** — every question clean. The result card then adds the all-green
+  caption under the squares. *Clean* is about one question, *perfect* the board.
 - **nudge** — an idle callout pointing at Checkpoint or Hint for a solver who is
   active but stuck. L2 and up; L1 has the coach instead.
 - **result card** — the shareable picture of a solve: level, day, time, and one

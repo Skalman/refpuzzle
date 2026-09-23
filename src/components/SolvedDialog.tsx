@@ -11,24 +11,6 @@ import type { QuestionOutcome, SolveStats } from "../lib/solve-summary.ts";
 import { IconAlert, IconClock, IconHint, IconPin, IconShare, IconUndo } from "./Icons.tsx";
 import { Brand } from "./Brand.tsx";
 
-/** Colors in the rainbow, red to purple; matches the `.rainbow-N` rules and the emoji row. */
-const RAINBOW_COLORS = 6;
-
-/**
- * Rainbow color indices for a perfect row of `count` squares: a hand-picked
- * subset up to five, the full cycle from six.
- */
-function rainbowIndices(count: number): number[] {
-  const subsets: Record<number, number[]> = {
-    1: [3],
-    2: [0, 4],
-    3: [0, 2, 4],
-    4: [0, 2, 3, 4],
-    5: [0, 2, 3, 4, 5],
-  };
-  return subsets[count] ?? Array.from({ length: count }, (_x, qi) => qi % RAINBOW_COLORS);
-}
-
 type TimeBand = "hot" | "speedy" | "smooth" | "deliberate";
 
 /**
@@ -62,6 +44,18 @@ function formatDuration(totalS: number | null): string | null {
   return `${hours ? `${hours}:` : ""}${mm}:${String(seconds).padStart(2, "0")}`;
 }
 
+/** The most squares on one line of the result. */
+const SQUARES_PER_LINE = 6;
+
+/** The result's squares split into as few lines as fit, evened out: 8 → 4 + 4. */
+function splitSquareLines(outcomes: QuestionOutcome[]): QuestionOutcome[][] {
+  const lineCount = Math.ceil(outcomes.length / SQUARES_PER_LINE);
+  const perLine = Math.ceil(outcomes.length / lineCount);
+  return Array.from({ length: lineCount }, (_x, li) =>
+    outcomes.slice(li * perLine, (li + 1) * perLine),
+  );
+}
+
 /**
  * The shareable picture of a solve: level, day, time, and one square per
  * question colored by how it went.
@@ -70,17 +64,17 @@ function ResultCard({
   dateStr,
   level,
   time,
-  outcomes,
-  rainbow,
+  squareLines,
+  perfect,
   host,
 }: {
   dateStr: string;
   level: number;
   /** Null when the solve was never timed here; the card then skips it. */
   time: string | null;
-  outcomes: QuestionOutcome[];
-  /** The colors a perfect row runs, or null when the row reads square by square. */
-  rainbow: number[] | null;
+  squareLines: QuestionOutcome[][];
+  /** Every square clean; the squares then carry their caption. */
+  perfect: boolean;
   host: string;
 }) {
   const s = t();
@@ -99,16 +93,17 @@ function ResultCard({
           <div class="result-card-time">{time}</div>
         </>
       )}
-      {/* A perfect row runs the rainbow instead, led by its emoji. */}
       <div class="result-card-squares">
-        {rainbow && <span class="result-card-rainbow">{s.share.perfectEmoji}</span>}
-        {outcomes.map((outcome, qi) => (
-          <span
-            // oxlint-disable-next-line react/no-array-index-key
-            key={qi}
-            class={classNames("result-card-square", rainbow ? `rainbow-${rainbow[qi]}` : outcome)}
-          />
+        {squareLines.map((line, li) => (
+          // oxlint-disable-next-line react/no-array-index-key
+          <div key={li} class="result-card-line">
+            {line.map((outcome, oi) => (
+              // oxlint-disable-next-line react/no-array-index-key
+              <span key={oi} class={classNames("result-card-square", outcome)} />
+            ))}
+          </div>
         ))}
+        {perfect && <div class="result-card-perfect">{s.share.perfectCaption}</div>}
       </div>
       <div class="result-card-host">{host}</div>
     </div>
@@ -152,14 +147,15 @@ export function SolvedDialog({
 
   const time = formatDuration(stats.elapsedS);
   const perfect = outcomes.every((outcome) => outcome === "clean");
-  const rainbow = perfect ? rainbowIndices(outcomes.length) : null;
-  const squares = rainbow
-    ? `${s.share.perfectEmoji} ${rainbow.map((index) => s.share.rainbowEmoji[index]).join("")}`
-    : outcomes.map((outcome) => s.share.outcomeEmoji[outcome]).join("");
+  const squareLines = splitSquareLines(outcomes);
+  const emojiLines = squareLines.map((line) =>
+    line.map((outcome) => s.share.outcomeEmoji[outcome]).join(""),
+  );
   const shareable = useShareable({
     text: [
       s.share.resultHeadline(dayNumber(dateStr), s.difficulty[level], time),
-      squares,
+      ...emojiLines,
+      ...(perfect ? [s.share.perfectCaption] : []),
       shareUrl,
     ].join("\n"),
   });
@@ -222,8 +218,8 @@ export function SolvedDialog({
         dateStr={dateStr}
         level={level}
         time={time}
-        outcomes={outcomes}
-        rainbow={rainbow}
+        squareLines={squareLines}
+        perfect={perfect}
         host={hostOf(shareUrl)}
       />
       <div class="solved-share">

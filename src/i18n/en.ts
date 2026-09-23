@@ -56,7 +56,7 @@ export default {
     checkpointFailsTitle: (n: number) => plural(n, "refused checkpoint", "refused checkpoints"),
     solved: "Puzzle solved!",
     // The dialog's title when every question went clean.
-    solvedPerfect: "🌈 Puzzle solved!",
+    solvedPerfect: "✨ Puzzle solved!",
     nextPuzzle: "Next puzzle",
     // Reopens the solved dialog from the banner, without the celebration.
     summary: "Summary",
@@ -193,10 +193,8 @@ export default {
     resultHeadline: (day: number, level: string, time: string | null) =>
       [`Refpuzzle Day #${day}`, level, ...(time ? [time] : [])].join(" · "),
     outcomeEmoji: { clean: "🟩", hinted: "🟨", caught: "🟥" },
-    // Leads a perfect row, on the card and in the pasted text.
-    perfectEmoji: "🌈",
-    // Every square clean: the row is drawn from these instead, red to purple.
-    rainbowEmoji: ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪"],
+    // Its own line under perfect squares, on the card and in the pasted text.
+    perfectCaption: "↑ all green ✨",
   },
   install: {
     button: "Install app",

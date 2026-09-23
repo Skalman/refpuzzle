@@ -521,14 +521,19 @@ kbd {
   margin-bottom: 0.6rem;
 }
 
-/* One square per question, in question order, colored by how it went. */
+/* One square per question, in question order, colored by how it went, in
+   evened-out lines. */
 .result-card-squares {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
   gap: 0.2rem;
   margin-bottom: 0.75rem;
+}
+
+.result-card-line {
+  display: flex;
+  gap: 0.2rem;
 }
 
 .result-card-square {
@@ -548,30 +553,10 @@ kbd {
   }
 }
 
-/* Every square clean: the row runs red, orange, yellow, green, blue, purple —
-   the emoji squares' colors — behind a leading rainbow. */
-.result-card-rainbow {
-  font-size: var(--text-body);
-  line-height: 1;
-  margin-right: 0.15rem;
-}
-.result-card-square.rainbow-0 {
-  background: var(--rainbow-0);
-}
-.result-card-square.rainbow-1 {
-  background: var(--rainbow-1);
-}
-.result-card-square.rainbow-2 {
-  background: var(--rainbow-2);
-}
-.result-card-square.rainbow-3 {
-  background: var(--rainbow-3);
-}
-.result-card-square.rainbow-4 {
-  background: var(--rainbow-4);
-}
-.result-card-square.rainbow-5 {
-  background: var(--rainbow-5);
+/* Under perfect squares, describing them. */
+.result-card-perfect {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
 }
 
 .solved-actions a {
