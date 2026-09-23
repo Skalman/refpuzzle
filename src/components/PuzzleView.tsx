@@ -6,7 +6,7 @@ import { deriveState, isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { findMistake } from "../engine/mistake.ts";
 import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts";
-import { loadState, saveState, saveMeta, loadMeta, cloneStates } from "../lib/store.ts";
+import { loadState, saveState, loadMeta, cloneStates } from "../lib/store.ts";
 import type { FailMarker, HintMarker, QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
@@ -141,6 +141,8 @@ export function PuzzleView({
     initStarted: initState.history.length > 1,
     initCompleted: initState.completed,
   });
+  // Stable, so the callbacks below can depend on them rather than the whole hook.
+  const { persist: persistMeta, finish: finishClock } = analytics;
 
   const [questions, setQuestionsRaw] = useState<QuestionState[]>(initState.questions);
   const questionsRef = useRef<QuestionState[]>(initState.questions);
@@ -211,8 +213,7 @@ export function PuzzleView({
   function trackHistoryBurst() {
     const now = Date.now();
     if (now - historyBurstRef.current.lastTime > 15_000) {
-      analytics.meta.current.historyBursts++;
-      saveMeta(puzzle.id, analytics.meta.current);
+      analytics.update((m) => m.historyBursts++);
     }
     historyBurstRef.current.lastTime = now;
   }
@@ -363,8 +364,7 @@ export function PuzzleView({
       count: (at?.count ?? 0) + 1,
       qis: [...new Set([...(at?.qis ?? []), qi])],
     });
-    analytics.meta.current.checkpointFails++;
-    saveMeta(puzzle.id, analytics.meta.current);
+    analytics.update((m) => m.checkpointFails++);
     saveMarkers();
     forceHistoryUpdate();
   }
@@ -380,8 +380,7 @@ export function PuzzleView({
       level: Math.max(at?.level ?? 0, hintLevel),
       qi: at?.qi ?? qi,
     });
-    analytics.meta.current.hints++;
-    saveMeta(puzzle.id, analytics.meta.current);
+    analytics.update((m) => m.hints++);
     saveMarkers();
     forceHistoryUpdate();
   }
@@ -412,8 +411,7 @@ export function PuzzleView({
           fails: failMarkers.current,
         });
       }
-      if (analytics.wasStarted.current && !analytics.wasCompleted.current)
-        saveMeta(puzzle.id, analytics.meta.current);
+      persistMeta();
       const nowStarted = historyRef.current.length > 1;
       if (
         nowStarted !== tabStateRef.current.started ||
@@ -424,7 +422,7 @@ export function PuzzleView({
         onChanged();
       }
     },
-    [puzzle, onChanged, analytics.meta, analytics.wasStarted, analytics.wasCompleted, ephemeral],
+    [puzzle, onChanged, persistMeta, ephemeral],
   );
 
   const completed = validity.length > 0 && validity.every(isValid);
@@ -637,8 +635,7 @@ export function PuzzleView({
     }
 
     nudge.used("checkpoint");
-    analytics.meta.current.checkpoints++;
-    saveMeta(puzzle.id, analytics.meta.current);
+    analytics.update((m) => m.checkpoints++);
     pushHistory(cloneStates(current));
     // The pin is only in the history ref until something else persists — commit
     // it now so a granted checkpoint survives a reload.
@@ -698,15 +695,16 @@ export function PuzzleView({
   // Reports the solve and opens its summary.
   useEffect(() => {
     if (!completed || analytics.wasCompleted.current) return undefined;
-    analytics.wasCompleted.current = true;
     // Completion that predates any local change arrived via a share URL or
     // storage — someone else's solve. Acknowledge it, celebrate nothing.
-    if (!interactedRef.current) return undefined;
-    const m = analytics.meta.current;
-    if (m.sessionStart != null) {
-      m.elapsedS += Math.round((Date.now() - m.sessionStart) / 1000);
-      m.sessionStart = null;
+    if (!interactedRef.current) {
+      analytics.wasCompleted.current = true;
+      return undefined;
     }
+    // The counters stay on the ledger past the solve, for the summary; this
+    // lands the last stretch of time.
+    finishClock();
+    const m = analytics.meta.current;
     track("puzzle_completed", {
       puzzleId: puzzle.id,
       level,
@@ -720,12 +718,9 @@ export function PuzzleView({
       fromShared: m.fromShared || undefined,
       ...getClientInfo(),
     });
-    // The counters stay on the ledger past the solve, for the summary; this
-    // write lands the flushed time.
-    if (!ephemeral) saveMeta(puzzle.id, m);
     setSolvedDialog("celebrate");
     return undefined;
-  }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted, ephemeral]);
+  }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted, finishClock]);
 
   // Re-seed the toolbar's roving tabindex whenever its enabled set changes;
   // between those the arrow keys' own position stands.

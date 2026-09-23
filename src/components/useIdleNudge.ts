@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import { onActivity } from "../lib/activity.ts";
 import { nudgeSeconds } from "../lib/debug.ts";
 
 export type NudgeKind = "checkpoint" | "hint";
@@ -7,8 +8,6 @@ export type NudgeKind = "checkpoint" | "hint";
 const IDLE_MS = 90_000;
 /** How long a nudge stays up unanswered. */
 const SHOW_MS = 12_000;
-
-const ACTIVITY_EVENTS = ["pointerdown", "pointermove", "keydown", "wheel", "touchstart", "scroll"];
 
 /** The wait, or the shorter one the debug dialog asked for. */
 function idleWait(): number {
@@ -88,7 +87,7 @@ export function useIdleNudge({
       armedAt = Date.now();
       timer = window.setTimeout(fire, wait);
     }
-    function onActivity() {
+    function noteActivity() {
       // `arm` clears the flag, so the event that reopened the window counts in it.
       if (waiting) arm();
       active = true;
@@ -99,9 +98,7 @@ export function useIdleNudge({
       if (present()) arm();
     }
 
-    for (const eventName of ACTIVITY_EVENTS) {
-      window.addEventListener(eventName, onActivity, { passive: true, capture: true });
-    }
+    const stopListening = onActivity(noteActivity);
     document.addEventListener("visibilitychange", onPresence);
     window.addEventListener("focus", onPresence);
     window.addEventListener("blur", onPresence);
@@ -111,9 +108,7 @@ export function useIdleNudge({
       reopen.current = () => {};
       clearTimeout(timer);
       clearTimeout(hideTimer.current);
-      for (const eventName of ACTIVITY_EVENTS) {
-        window.removeEventListener(eventName, onActivity, { capture: true });
-      }
+      stopListening();
       document.removeEventListener("visibilitychange", onPresence);
       window.removeEventListener("focus", onPresence);
       window.removeEventListener("blur", onPresence);

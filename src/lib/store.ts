@@ -402,8 +402,9 @@ export function migrateLocalStorage(): void {
 // `saveState` sets the flags when it writes a completed state.
 
 export interface PuzzleMeta {
-  /** Stretches of the puzzle being on screen; their durations sum to elapsedS. */
+  /** Sittings at the puzzle: a mount, or a return after a break past the idle cutoff. */
   sessions: number;
+  /** Time on screen and active, stopping at the last activity once idle past the cutoff. */
   elapsedS: number;
   /** Episodes of history navigation, not presses — see `trackHistoryBurst`. */
   historyBursts: number;
