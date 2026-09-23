@@ -63,10 +63,16 @@ export default {
     // The result card's caption under the time.
     solvedIn: "solved in",
     // The solved dialog's lines, one per measure: a label, and the numbers
-    // behind it; the time's line is the label alone. The history pair is
-    // neutral; hints and oopsies are where the teasing is allowed.
+    // behind it. The time bands, fastest first, and the history pair are
+    // neutral — a slow solve reads as a style, not a rank; hints and oopsies
+    // are where the teasing is allowed.
     solvedLines: {
-      solvedIn: (time: string) => ({ label: `Solved in ${time}` }),
+      solvedIn: {
+        hot: (time: string) => ({ label: "Hot!", detail: `solved in ${time}` }),
+        speedy: (time: string) => ({ label: "Speedy", detail: `solved in ${time}` }),
+        smooth: (time: string) => ({ label: "Smooth", detail: `solved in ${time}` }),
+        deliberate: (time: string) => ({ label: "Deliberate", detail: `solved in ${time}` }),
+      },
       pathfinder: { label: "Pathfinder", detail: "no hints needed" },
       peeker: (n: number) => ({ label: "Peeker", detail: plural(n, "hint", "hints") }),
       freeSpirit: { label: "Free spirit", detail: "no checkpoints" },

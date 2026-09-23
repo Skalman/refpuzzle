@@ -29,6 +29,29 @@ function rainbowIndices(count: number): number[] {
   return subsets[count] ?? Array.from({ length: count }, (_x, qi) => qi % RAINBOW_COLORS);
 }
 
+type TimeBand = "hot" | "speedy" | "smooth" | "deliberate";
+
+/**
+ * Per level, in seconds: a solve under the first is Hot!, under the second
+ * Speedy, under the third Smooth, else Deliberate.
+ */
+const TIME_BANDS: Record<number, [number, number, number]> = {
+  1: [5, 15, 60],
+  2: [25, 50, 120],
+  3: [90, 150, 240],
+  4: [240, 420, 600],
+  5: [360, 510, 840],
+  6: [480, 720, 1200],
+};
+
+function timeBand(level: number, elapsedS: number): TimeBand {
+  const [hot, speedy, smooth] = TIME_BANDS[level] ?? TIME_BANDS[6];
+  if (elapsedS < hot) return "hot";
+  if (elapsedS < speedy) return "speedy";
+  if (elapsedS < smooth) return "smooth";
+  return "deliberate";
+}
+
 /** `m:ss`, or `h:mm:ss` past the hour; null passes through. */
 function formatDuration(totalS: number | null): string | null {
   if (totalS === null) return null;
@@ -146,7 +169,12 @@ export function SolvedDialog({
   const { solvedLines } = s.puzzle;
   const pressed = stats.checkpoints + stats.checkpointFails;
   const lines: SolvedLine[] = [];
-  if (time) lines.push({ icon: <IconClock />, ...solvedLines.solvedIn(time) });
+  if (time !== null && stats.elapsedS !== null) {
+    lines.push({
+      icon: <IconClock />,
+      ...solvedLines.solvedIn[timeBand(level, stats.elapsedS)](time),
+    });
+  }
   lines.push({
     icon: <IconHint class="icon-hint" />,
     ...(stats.hints ? solvedLines.peeker(stats.hints) : solvedLines.pathfinder),
