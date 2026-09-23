@@ -16,7 +16,7 @@ export function CoachText({
   return (
     <div ref={boxRef} class="coach-text" aria-live="polite">
       {message && (
-        <p key={message.text} class={`coach-line coach-${message.tone}`}>
+        <p key={message.text} class={`coach-message coach-${message.tone}`}>
           {message.lead && <span class="coach-lead">{message.lead}</span>}
           {message.text}
         </p>

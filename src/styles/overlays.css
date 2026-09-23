@@ -1,22 +1,3 @@
-/* ── Primary action button ── */
-.primary-btn {
-  background: var(--accent);
-  color: var(--on-accent);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0.35rem 0.75rem;
-  cursor: pointer;
-  font-size: var(--text-chrome);
-  font-family: inherit;
-  font-weight: 600;
-  white-space: nowrap;
-  flex-shrink: 0;
-
-  &:hover {
-    opacity: 0.9;
-  }
-}
-
 /* ── Help panel (dialog) ── */
 .help-panel::backdrop {
   background: var(--backdrop);
@@ -29,7 +10,7 @@
   border-radius: var(--radius-xl);
   padding: 0;
   width: calc(100% - 1rem);
-  max-width: 20rem;
+  max-width: 24rem;
   max-height: 80vh;
   overflow-y: auto;
   color: var(--text);
@@ -86,15 +67,6 @@
 
   &:hover {
     color: var(--text);
-  }
-}
-
-.help-credit {
-  margin-top: 1rem;
-  font-size: var(--text-chrome);
-  color: var(--text-muted);
-  & a {
-    color: var(--accent);
   }
 }
 
@@ -384,50 +356,6 @@ kbd {
   padding: 0.05rem 0.35rem;
 }
 
-/* ── Install toast ── */
-.install-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 99;
-}
-
-.install-toast {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  margin-top: 0.5rem;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 0.75rem 1rem;
-  box-shadow: var(--dropdown-shadow);
-  max-width: 20rem;
-  font-size: var(--text-body);
-  color: var(--text);
-  z-index: 100;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.install-domain {
-  font-size: var(--text-caption);
-  color: var(--text-muted);
-  margin: -0.25rem 0 0;
-}
-
-.install-btn {
-  width: 100%;
-  padding: 0.5rem;
-  font-size: var(--text-section);
-}
-
-.install-toast-actions {
-  display: flex;
-  gap: 0.5rem;
-}
-
 .qr-image {
   margin-inline: auto;
   width: 7.5rem;
@@ -436,39 +364,255 @@ kbd {
   background: var(--qr-bg);
 }
 
-/* ── Share sheet ── */
-.share-sheet .help-panel-inner {
+/* ── Share dialog ── */
+.share-dialog .help-panel-inner {
   text-align: center;
 }
-.share-sheet-qr {
+.share-dialog-qr {
   margin: 0.75rem auto;
   width: 8rem;
   height: 8rem;
   border-radius: var(--radius-sm);
   background: var(--qr-bg);
 }
-.share-sheet-url {
+.share-dialog-url {
   font-size: var(--text-caption);
   color: var(--text-muted);
   word-break: break-all;
   margin-bottom: 0.75rem;
 }
-.share-sheet-actions {
+.share-dialog-actions {
   display: flex;
   justify-content: center;
   gap: 0.5rem;
 }
-.share-sheet-btn {
+.share-dialog-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 0.3em;
   padding: 0.5rem 1.25rem;
 }
-.share-sheet-note {
+.share-dialog-note {
   font-size: var(--text-chrome);
   color: var(--text-muted);
   margin: 0 0 0.5rem;
+}
+
+/* What the link opens: a pill radio row above the QR code. Native radios,
+   covering their pill, so the group comes with arrow keys and one tab stop. */
+.share-modes {
+  display: flex;
+  justify-content: center;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+.share-mode {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 0.25rem 0.75rem;
+  font-size: var(--text-chrome);
+  color: var(--text-muted);
+  cursor: pointer;
+
+  & input {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+
+    &:focus-visible {
+      outline: none;
+    }
+  }
+  &:hover {
+    background: var(--bg-hover);
+  }
+  &:has(:checked) {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  &:has(:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+}
+
+/* ── Solved dialog ── */
+.solved-dialog .help-panel-header h3 {
+  color: var(--valid);
+}
+
+/* One line per measure: symbol, then the label and its numbers. */
+.solved-lines {
+  list-style: none;
+  margin: 0 0 1.25rem;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  font-size: var(--text-body);
+  color: var(--text-muted);
+  text-align: left;
+
+  & li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+  }
+  & strong {
+    color: var(--text);
+  }
+  /* As tall as one line, so a wrapped line keeps the icon beside its first. */
+  & .solved-line-icon {
+    display: inline-flex;
+    align-items: center;
+    flex: none;
+    height: 1lh;
+    font-size: var(--text-section);
+  }
+}
+
+/* The result card: what a shared image of the solve would show. */
+.result-card {
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--accent-soft), var(--bg-surface) 55%, var(--valid-soft));
+  color: var(--text);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.result-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.result-card-brand {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.result-card-level {
+  font-size: var(--text-section);
+  font-weight: 700;
+}
+
+.result-card-caption {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+.result-card-time {
+  font-size: var(--text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.6rem;
+}
+
+/* One square per question, in question order, colored by how it went. */
+.result-card-squares {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+}
+
+.result-card-square {
+  display: inline-block;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: var(--radius-sm);
+
+  &.clean {
+    background: var(--valid);
+  }
+  &.hinted {
+    background: var(--pending);
+  }
+  &.caught {
+    background: var(--invalid);
+  }
+}
+
+/* Every square clean: the row runs red, orange, yellow, green, blue, purple —
+   the emoji squares' colors — behind a leading rainbow. */
+.result-card-rainbow {
+  font-size: var(--text-body);
+  line-height: 1;
+  margin-right: 0.15rem;
+}
+.result-card-square.rainbow-0 {
+  background: var(--rainbow-0);
+}
+.result-card-square.rainbow-1 {
+  background: var(--rainbow-1);
+}
+.result-card-square.rainbow-2 {
+  background: var(--rainbow-2);
+}
+.result-card-square.rainbow-3 {
+  background: var(--rainbow-3);
+}
+.result-card-square.rainbow-4 {
+  background: var(--rainbow-4);
+}
+.result-card-square.rainbow-5 {
+  background: var(--rainbow-5);
+}
+
+.solved-actions a {
+  text-decoration: none;
+}
+
+.result-card-host {
+  font-size: var(--text-caption);
+  color: var(--text-muted);
+}
+
+.solved-share {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1.25rem;
+}
+
+.solved-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* The dialog's lead button, a size up: Next puzzle in the bar's green, or
+   Archive in the accent once the last level is solved. */
+.solved-primary {
+  display: inline-block;
+  width: 100%;
+  padding: 0.65rem 1.25rem;
+  font-size: var(--text-section);
+  text-align: center;
+  text-decoration: none;
+}
+.next-puzzle-btn.solved-primary {
+  box-shadow: 0 0 12px var(--valid-soft);
+}
+.primary-btn.solved-primary {
+  box-shadow: 0 0 12px var(--accent-soft);
 }
 
 /* ── Error overlay ── */
@@ -532,4 +676,49 @@ kbd {
   color: var(--on-accent) !important;
   border-color: var(--accent) !important;
   font-weight: 600;
+}
+
+/* ── Debug dialog (development builds only) ── */
+.debug-hint {
+  color: var(--text-muted);
+  font-size: var(--text-caption);
+}
+
+.debug-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin: 0;
+  padding: 0.6rem 0;
+  border: none;
+  border-top: 1px solid var(--border);
+  font-size: var(--text-chrome);
+
+  & small {
+    display: block;
+    color: var(--text-muted);
+    font-size: var(--text-caption);
+  }
+}
+
+.debug-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-inline-start: auto;
+}
+
+.debug-choice {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  white-space: nowrap;
+}
+
+.debug-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
 }

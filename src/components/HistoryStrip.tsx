@@ -2,7 +2,7 @@ import { useEffect, useState } from "preact/hooks";
 import { LETTERS } from "../engine/types.ts";
 import { arrowNavHandler } from "../lib/keyboard.ts";
 import { classNames } from "../lib/classNames.ts";
-import type { QuestionState } from "../lib/store.ts";
+import type { FailMarker, HintMarker, QuestionState } from "../lib/store.ts";
 import { t } from "../i18n/index.ts";
 import {
   IconUndo,
@@ -18,7 +18,7 @@ import {
 
 interface MoveInfo {
   text: string;
-  icon: string;
+  icon: "ok" | "no" | "un" | "pin";
   qi: number;
   oi: number;
 }
@@ -34,7 +34,7 @@ export function describeDiff(prev: QuestionState[], next: QuestionState[]): Move
       const letter = LETTERS[oi];
       let priority: number;
       let text: string;
-      let icon: string;
+      let icon: MoveInfo["icon"];
       if (n === "correct") {
         text = `#${qi + 1}=${letter}`;
         icon = "ok";
@@ -151,9 +151,9 @@ export function HistoryStrip({
 }: {
   history: QuestionState[][];
   currentIdx: number;
-  hints: Map<number, number>;
+  hints: Map<number, HintMarker>;
   /** Refused checkpoint presses, keyed by history step. */
-  fails: Map<number, number>;
+  fails: Map<number, FailMarker>;
   completed: boolean;
   onJump: (idx: number) => void;
   onPlayAgain: () => void;
@@ -201,8 +201,8 @@ export function HistoryStrip({
     if (key < foldTo) hiddenHints++;
   }
   let hiddenFails = 0;
-  for (const [key, count] of fails) {
-    if (key < foldTo) hiddenFails += count;
+  for (const [key, fail] of fails) {
+    if (key < foldTo) hiddenFails += fail.count;
   }
   const answered = answeredCount(history[Math.min(foldTo, history.length - 1)]);
 
@@ -254,14 +254,14 @@ export function HistoryStrip({
             </span>{" "}
             {s.puzzle.start}
           </button>
-          <HintBadge value={hints.get(0)} />
-          <FailBadge count={fails.get(0) ?? 0} />
+          <HintBadge value={hints.get(0)?.level} />
+          <FailBadge count={fails.get(0)?.count ?? 0} />
         </span>
       )}
       {moves.map((move, i) => {
         const stepIdx = i + 1;
         if (!showAll && stepIdx < foldTo) return null;
-        const hintLevel = hints.get(stepIdx);
+        const hintLevel = hints.get(stepIdx)?.level;
         const isCheckpoint = move.qi < 0;
         const isLastCp = stepIdx === activeCpIdx;
         // Butt up against the collapsed pill, so the pair reads as one control.
@@ -282,7 +282,7 @@ export function HistoryStrip({
               title={move.text}
             >
               {move.icon === "pin" && (
-                <span class="history-icon">
+                <span class="history-icon icon-checkpoint">
                   <IconPin size="1.1em" />{" "}
                 </span>
               )}
@@ -304,7 +304,7 @@ export function HistoryStrip({
               {move.text}
             </button>
             <HintBadge value={hintLevel} />
-            <FailBadge count={fails.get(stepIdx) ?? 0} />
+            <FailBadge count={fails.get(stepIdx)?.count ?? 0} />
           </span>
         );
       })}

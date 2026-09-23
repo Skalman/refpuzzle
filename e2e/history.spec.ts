@@ -45,3 +45,19 @@ test("marks survive a reload", async ({ page }) => {
   await expect(cell(page, 0, 0)).toHaveClass(/correct/);
   await expect(cell(page, 1, 1)).toHaveClass(/incorrect/);
 });
+
+test("a hint marker survives a reload with no further marks", async ({ page }) => {
+  await page.goto(DAY_ONE_L1);
+
+  // The strip appears only once a mark exists; that mark's save is what the
+  // later hint has to outlive.
+  await markCorrect(page, 0, 0);
+  await page.getByRole("button", { name: s.puzzle.hint }).click();
+  await expect(page.locator(".history-hint")).toBeVisible();
+
+  // No mark after the hint: the board never moves again, so only the marker's
+  // own save can carry it across the reload.
+  await page.reload();
+
+  await expect(page.locator(".history-hint")).toBeVisible();
+});

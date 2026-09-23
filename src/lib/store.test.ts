@@ -36,16 +36,32 @@ test("v1 keeps annotations that lead the string, on step 0", () => {
   // A refusal before the first mark — recorded against Start.
   const encoded = "v1.cpx1.3b.4E";
   const state = decodeHistory(encoded, 4);
-  assert.equal(state?.fails.get(0), 1);
+  assert.deepEqual(state?.fails.get(0), { count: 1, qis: [] });
   assert.equal(roundTrip(encoded, 4), encoded);
 });
 
 test("v1 emits h before cpx on the same step", () => {
   const encoded = "v1.3b.h2.cpx3";
   const state = decodeHistory(encoded, 3);
-  assert.equal(state?.hints.get(1), 2);
-  assert.equal(state?.fails.get(1), 3);
+  assert.deepEqual(state?.hints.get(1), { level: 2, qi: null });
+  assert.deepEqual(state?.fails.get(1), { count: 3, qis: [] });
   assert.equal(roundTrip(encoded, 3), encoded);
+});
+
+test("v1 round-trips the questions a marker names", () => {
+  // `q` marks and separates: one question on the hint, two on the refusals.
+  const encoded = "v1.3b.h2q4.cpx2q1q4";
+  const state = decodeHistory(encoded, 4);
+  assert.deepEqual(state?.hints.get(1), { level: 2, qi: 3 });
+  assert.deepEqual(state?.fails.get(1), { count: 2, qis: [0, 3] });
+  assert.equal(roundTrip(encoded, 4), encoded);
+});
+
+test("v1 reads a marker with no question as naming none", () => {
+  // Pre-suffix strings stay valid; they simply name no question.
+  const state = decodeHistory("v1.3b.h1.cpx1", 4);
+  assert.equal(state?.hints.get(1)?.qi, null);
+  assert.deepEqual(state?.fails.get(1)?.qis, []);
 });
 
 test("v1 skips an unknown token without pushing a step", () => {
@@ -107,9 +123,8 @@ test("migration converts x/! into the outcome ledger", () => {
   assert.equal(migrateValue("3b.4E.x.!"), "v1.3b.4E|s.st");
 });
 
-test("migration drops live counters once the puzzle is solved", () => {
-  // The two ledger families never coexist.
-  assert.equal(migrateValue("3b.x|s2e743"), "v1.3b|s");
+test("migration keeps the counters behind the solved flag", () => {
+  assert.equal(migrateValue("3b.x|s2e743"), "v1.3b|s.se2.e743");
 });
 
 test("migration never emits st without s", () => {
@@ -133,6 +148,7 @@ test("the solved check reads the ledger exactly, not by substring", () => {
   // `se2` opens with an `s`; only a discrete token counts.
   assert.equal(isSolvedValue("v1.3b|s"), true);
   assert.equal(isSolvedValue("v1.3b|s.st"), true);
+  assert.equal(isSolvedValue("v1.3b|s.se2.e743.n1"), true);
   assert.equal(isSolvedValue("v1.3b|se2.e743"), false);
   assert.equal(isSolvedValue("v1.3b"), false);
 });

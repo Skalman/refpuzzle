@@ -3,7 +3,7 @@
   position: relative;
 }
 
-/* Hint, verdict, banner, controls and track, stuck to the viewport's bottom
+/* Hint, verdict, completion bar, controls and track, stuck to the viewport's bottom
    while the board's tail is below it. z-index clears the coach overlay. The
    negative top margin lays the border over the last rows' own; the bottom
    padding covers the safe-area inset only while stuck. */
@@ -282,8 +282,12 @@
   margin: 0.3rem 0 0;
 }
 
-/* Checkpoint verdict — the hint's slot, muted so it never reads as a hint. */
+/* Checkpoint verdict — the hint's slot, muted so it never reads as a hint.
+   A click anywhere on it dismisses it, and the × takes the keyboard. */
 .puzzle-note {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
   padding: 0.6rem 1rem;
   margin-top: 0.75rem;
   background: var(--bg-surface);
@@ -291,6 +295,7 @@
   border-radius: var(--radius-lg);
   font-size: var(--text-body);
   color: var(--text-muted);
+  cursor: pointer;
 }
 
 .hint-more {
@@ -311,45 +316,25 @@
 }
 
 /* ── Completion ── */
-@keyframes glow-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 8px var(--valid-soft);
-  }
-  50% {
-    box-shadow: 0 0 20px var(--valid-soft);
-  }
-}
-
+/* The end of the dock row, past the track: Summary in the toolbar's quiet
+   style, Next puzzle the one filled button. The auto margin holds it to the
+   right whether it shares the track's line or wraps below it. While the
+   dialog is up it carries the loud copy of these, so this one goes quiet. */
 .puzzle-complete {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  padding: 1rem;
-  margin-top: 1rem;
-  background: var(--valid-soft);
-  border: 1px solid var(--valid);
-  border-radius: var(--radius-lg);
-  font-weight: 600;
-  color: var(--valid);
-  animation: glow-pulse 2s ease-in-out infinite;
-  flex-wrap: wrap;
-}
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  flex: none;
+  margin-inline-start: auto;
+  /* An expanded track is rows deep; sit with its first one rather than float
+     against the middle of it. */
+  align-self: flex-start;
 
-.next-puzzle-btn {
-  background: var(--valid);
-  color: var(--bg);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0.4rem 0.85rem;
-  cursor: pointer;
-  font-size: var(--text-body);
-  font-family: inherit;
-  font-weight: 600;
-  white-space: nowrap;
-
-  &:hover {
-    opacity: 0.9;
+  /* Only the colors change, so going quiet doesn't resize the button. */
+  &.quiet .next-puzzle-btn {
+    --btn-fill: var(--bg-surface);
+    --btn-ink: var(--text-muted);
+    border-color: var(--border);
   }
 }

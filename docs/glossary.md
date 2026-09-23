@@ -42,7 +42,25 @@ A puzzle is a grid: `n` **questions** down, `option_count` **options** across.
   Frontend-only.
 - **marker** — a hint or refused-checkpoint record attached to a history step. Sits
   where the event happened; when a rewrite discards its step it folds onto the last
-  surviving step instead of vanishing, so rewinding never erases the record.
+  surviving step instead of vanishing, so rewinding never erases the record. A hint
+  marker carries the deepest hint level reached and the question the hint named; a
+  fail marker carries the count of refusals and the questions they caught.
+  Either may name no question.
+- **flags** / **counters** — the two halves of the stored ledger. The flags (`s`
+  solved, `st` stale) lead it and say where the puzzle stands; the counters follow
+  and accumulate while solving. `docs/encoding.md` has the tokens.
+- **outcome** — how one question went, for the shared result: *clean* (answered with
+  no help), *hinted* (a hint named it), or *caught* (a refused checkpoint named it).
+  Read off the markers' questions, so a question no marker named stays clean.
+  A catch outranks a hint on the same question.
+- **perfect** — every question clean. The result card then runs the rainbow instead
+  of reading square by square. *Clean* is about one question, *perfect* the board.
+- **nudge** — an idle callout pointing at Checkpoint or Hint for a solver who is
+  active but stuck. L2 and up; L1 has the coach instead.
+- **result card** — the shareable picture of a solve: level, day, time, and one
+  square per question in its outcome's color.
+- **completion bar** — the row of ways onward that replaces the controls in the dock
+  once the board is solved: Summary, and Next puzzle or Archive.
 
 ## Related
 

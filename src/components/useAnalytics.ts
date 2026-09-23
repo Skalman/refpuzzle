@@ -1,5 +1,5 @@
-import { useRef, useEffect, useCallback } from "preact/hooks";
-import { loadMeta, saveMeta } from "../lib/store.ts";
+import { useRef, useState, useEffect, useCallback } from "preact/hooks";
+import { emptyMeta, loadMeta, saveMeta } from "../lib/store.ts";
 import type { PuzzleMeta } from "../lib/store.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 
@@ -18,10 +18,12 @@ export function useAnalytics(
 ) {
   const wasStarted = useRef(opts.initStarted);
   const wasCompleted = useRef(opts.initCompleted);
-  const meta = useRef<MetaWithSession>({
+  // `useRef`'s argument is evaluated on every render, so the load runs here.
+  const [initialMeta] = useState<MetaWithSession>(() => ({
     ...loadMeta(puzzleId),
     sessionStart: null,
-  });
+  }));
+  const meta = useRef<MetaWithSession>(initialMeta);
 
   function markStarted() {
     if (wasStarted.current) return;
@@ -35,6 +37,17 @@ export function useAnalytics(
       level: opts.level,
       ...getClientInfo(),
     });
+  }
+
+  /**
+   * A second run at a solved puzzle: fresh counters and a session open from
+   * now, written straight away so a reload picks up the new run's.
+   */
+  function restart() {
+    wasStarted.current = true;
+    wasCompleted.current = false;
+    meta.current = { ...emptyMeta(), sessions: 1, sessionStart: Date.now() };
+    saveMeta(puzzleId, meta.current);
   }
 
   const flushElapsed = useCallback(
@@ -74,5 +87,5 @@ export function useAnalytics(
     };
   }, [puzzleId, flushElapsed]);
 
-  return { meta, wasStarted, wasCompleted, markStarted };
+  return { meta, wasStarted, wasCompleted, markStarted, restart };
 }

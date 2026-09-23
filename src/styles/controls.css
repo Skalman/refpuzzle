@@ -37,6 +37,61 @@
   font-size: var(--text-section);
 }
 
+/* ── Filled and outlined buttons ──
+ * Shared base rules; each variant sets --btn-fill, --btn-ink and its own size. */
+.primary-btn,
+.next-puzzle-btn,
+.outline-btn {
+  background: var(--btn-fill);
+  color: var(--btn-ink);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.primary-btn:hover,
+.next-puzzle-btn:hover {
+  opacity: 0.9;
+}
+
+.primary-btn {
+  --btn-fill: var(--accent);
+  --btn-ink: var(--on-accent);
+  padding: 0.35rem 0.75rem;
+  font-size: var(--text-chrome);
+  flex-shrink: 0;
+}
+
+/* The solved green reads at full strength on the edge; the label sits on a
+   wash of it in the page's own ink. */
+.next-puzzle-btn {
+  --btn-fill: var(--valid-fill);
+  --btn-ink: var(--text);
+  border: 2px solid var(--valid);
+  padding: 0.3rem 0.75rem;
+  font-size: var(--text-body);
+}
+
+/* Secondary actions: the accent as an outline, filled on hover. */
+.outline-btn {
+  --btn-fill: transparent;
+  --btn-ink: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  border: 1px solid var(--accent);
+  padding: 0.4rem 0.9rem;
+  font-size: var(--text-chrome);
+
+  &:hover {
+    --btn-fill: var(--accent);
+    --btn-ink: var(--on-accent);
+  }
+}
+
 /* ── Text buttons ── */
 .toolbar-accent-btn {
   background: none;
@@ -116,7 +171,6 @@
   display: inline-flex;
   align-items: stretch;
 
-  & .toolbar-accent-btn,
   & .header-btn {
     border-radius: var(--radius-md) 0 0 var(--radius-md);
   }
@@ -238,15 +292,56 @@ button.theme-option {
   }
 }
 
-/* ── Puzzle controls bar ── */
+/* ── Puzzle dock: controls + history track ──
+ * One wrapping row; the track's flex-basis decides when it wraps to its own line. */
+.puzzle-dock-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 0.75rem;
+}
+
 .puzzle-controls {
   display: flex;
   align-items: center;
   gap: 0.25rem;
   padding: 0.5rem 0;
-  flex-wrap: wrap;
+  flex: none;
 }
 
-.controls-spacer {
-  flex: 1;
+/* ── Idle nudge ──
+ * Spans the whole view, above the dock's own layer, and is inert: an
+ * interruption never moves the board under the hand it is interrupting, nor
+ * takes a press meant for a cell. The line inside is placed from script. */
+.nudge-callout {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  pointer-events: none;
+}
+
+.nudge-text {
+  position: absolute;
+  transform: translateX(-50%);
+  text-align: center;
+  margin: 0;
+}
+
+/* The × inside a checkpoint note; the region around it takes a click too. */
+.note-dismiss {
+  flex: none;
+  margin-inline-start: auto;
+  padding: 0;
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: 1.1em;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
 }

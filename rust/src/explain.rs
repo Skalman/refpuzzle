@@ -31,7 +31,7 @@ pub enum ExplainStep {
         lines: Vec<String>,
     },
     /// A "look at these questions" pointer (0-based). The frontend renders the
-    /// prose; `leading_questions` reads these for the coach's focus/arrows.
+    /// prose; `focus_questions` reads these for the coach's focus/arrows.
     Look {
         qis: Vec<usize>,
     },
@@ -49,7 +49,7 @@ fn complex(header: String, lines: Vec<String>) -> ExplainStep {
 /// the full set from its last `Look` step: every question the deduction reads,
 /// not just where the mark lands. Empty if it has no `Look`. The L1 coach names
 /// and points its arrows at these.
-pub fn leading_questions(steps: &[ExplainStep]) -> Vec<usize> {
+pub fn focus_questions(steps: &[ExplainStep]) -> Vec<usize> {
     let mut refs = steps
         .iter()
         .rev()
@@ -1960,7 +1960,7 @@ fn elim_chain_line(
         })
         .collect::<Vec<_>>()
         .join(" ");
-    (reason, leading_questions(&steps))
+    (reason, focus_questions(&steps))
 }
 
 /// The bare line an elimination falls back to when it can't say *why* — every arm that
@@ -2148,10 +2148,10 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn leading_questions_reads_last_look_step() {
+    fn focus_questions_reads_last_look_step() {
         // The last Look step wins (names the full set), sorted; non-Look ignored.
         assert_eq!(
-            leading_questions(&[
+            focus_questions(&[
                 try_looking(&[1]),
                 try_looking(&[1, 0]),
                 simple("#1 can't be A.".into()),
@@ -2159,13 +2159,13 @@ mod tests {
             vec![0, 1]
         );
         // Single Look step.
-        assert_eq!(leading_questions(&[try_looking(&[2])]), vec![2]);
+        assert_eq!(focus_questions(&[try_looking(&[2])]), vec![2]);
         // No Look step → empty (the coach falls back to the action's target).
         assert_eq!(
-            leading_questions(&[simple("#3 must be A.".into())]),
+            focus_questions(&[simple("#3 must be A.".into())]),
             Vec::<usize>::new()
         );
-        assert_eq!(leading_questions(&[]), Vec::<usize>::new());
+        assert_eq!(focus_questions(&[]), Vec::<usize>::new());
     }
 
     /// An elimination is explained on a board that *assumes* the option, so whatever rests on
@@ -2944,7 +2944,7 @@ mod tests {
              and even if the question outside that range were C, that's at most 1 in all — \
              so C appears too rarely to be the most common."
         );
-        assert_eq!(leading_questions(&steps), vec![0, 1]);
+        assert_eq!(focus_questions(&steps), vec![0, 1]);
 
         // Same shape with two questions outside the range, for the "both" phrasing.
         let fp = parse_puzzle(&json!({

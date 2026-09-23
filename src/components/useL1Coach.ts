@@ -38,9 +38,9 @@ interface CoachOpts {
   /**
    * Called when a solving hint is revealed, so it lands on the history track and
    * the hint count — as if the same info came from the Hint button. `level` is
-   * the depth (1 = nudge, 2 = the sharpened/revealing follow-up).
+   * the depth (1 = the opening line, 2 = the sharpened/revealing follow-up).
    */
-  onHint?: (level: number) => void;
+  onHint?: (level: number, qi: number | null) => void;
 }
 
 type EngineState = { answers: (Answer | null)[]; eliminated: number[] };
@@ -68,12 +68,15 @@ function markedQuestion(a: DeduceAction): number {
 }
 
 /**
- * The questions the coach points/starts at: those the explanation reads (from
- * the engine), which may differ from where the mark lands; falls back to the
- * question marked. Always non-empty.
+ * The question a message's arrow anchors on — what its hint marker records,
+ * and null for a message that draws none. `settles` and `connector` arrows run
+ * *from* the question whose meaning fires the step, so that end anchors them,
+ * not what the arrow reaches.
  */
-function stepFocus(step: SolveStep): number[] {
-  return step.focusQis.length > 0 ? step.focusQis : [markedQuestion(step.action)];
+function anchorQuestion(message: CoachMessage): number | null {
+  const { arrow } = message;
+  if (!arrow) return null;
+  return arrow.mode === "point" ? (arrow.qis[0] ?? null) : arrow.qi;
 }
 
 /**
@@ -81,7 +84,8 @@ function stepFocus(step: SolveStep): number[] {
  * whose meaning fires the rule, so its referent is the relationship the step
  * teaches. A force/elimination opens on the question it marks; a batch
  * elimination opens on the question doing the constraining, which is *not*
- * among the questions the mark lands on.
+ * among the questions the mark lands on. Null when several open it — an arrow
+ * anchors on one question or on none.
  */
 function leadQuestion(steps: ExplainStep[]): number | null {
   for (const step of steps) {
@@ -91,9 +95,18 @@ function leadQuestion(steps: ExplainStep[]): number | null {
 }
 
 /**
+ * The questions the coach points/starts at: those the explanation reads (from
+ * the engine), which may differ from where the mark lands; falls back to the
+ * question marked. Always non-empty.
+ */
+function stepFocus(step: SolveStep): number[] {
+  return step.focusQis.length > 0 ? step.focusQis : [markedQuestion(step.action)];
+}
+
+/**
  * The gentle "start here" pointer for a step — names and points at every
  * question it reads, wording the available move as pin-down (force) vs.
- * eliminate. Shared by the intro where-to-start and the ~10s orient nudge.
+ * eliminate. Shared by the intro where-to-start and the ~10s orient line.
  */
 function whereToStart(step: SolveStep): CoachMessage {
   const s = t().coach;
@@ -125,7 +138,7 @@ function deriveMarks(questions: QuestionState[], optionCount: number): EngineSta
 
 /**
  * The one-line gist of a step — its concrete conclusion (the last explain
- * line), the move the guided nudge offers to walk.
+ * line), the move the guided line offers to walk.
  */
 function explainLine(steps: ExplainStep[]): string {
   if (steps.length === 0) return "";
@@ -162,7 +175,7 @@ function buildIntro(puzzle: Puzzle, handle: PuzzleHandle | null, idx: number): C
  * The L1 in-play coach. Ambient teaching that only speaks when the newcomer is
  * stuck or wandering and falls silent the instant they engage; an expert who
  * starts marking never sees past the first intro line. Reuses the solver
- * (`solve` for the answer key, `nextStep` for where-to-start / nudges) — nothing
+ * (`solve` for the answer key, `nextStep` for where-to-start / guidance) — nothing
  * new in the engine. Returns the single message to render, or null.
  */
 export function useL1Coach(
@@ -279,7 +292,7 @@ export function useL1Coach(
   }
 
   // Re-armed on every interaction and on every mark. While engaged the coach
-  // drops back to the resting line; specific nudges/mistakes replace it only
+  // drops back to the resting line; specific lines/mistakes replace it only
   // after their threshold elapses.
   const evaluateRef = useRef<() => void>(() => {});
   evaluateRef.current = () => {
@@ -300,8 +313,9 @@ export function useL1Coach(
         const now = deriveMarks(stateRef.current.questions, optionCount);
         const still = findMistake(now.answers, now.eliminated, solution);
         if (still && !stateRef.current.completed) {
-          setMessage(buildMistake(still));
-          onHintRef.current?.(1);
+          const note = buildMistake(still);
+          setMessage(note);
+          onHintRef.current?.(1, anchorQuestion(note));
         }
       }, MISTAKE_MS);
       // Still stuck on an elimination a while later → sharpen the halo to the
@@ -311,8 +325,9 @@ export function useL1Coach(
           const now = deriveMarks(stateRef.current.questions, optionCount);
           const still = findMistake(now.answers, now.eliminated, solution);
           if (still && still.kind === "elim" && !stateRef.current.completed) {
-            setMessage(buildMistakePoint(still));
-            onHintRef.current?.(2);
+            const note = buildMistakePoint(still);
+            setMessage(note);
+            onHintRef.current?.(2, anchorQuestion(note));
           }
         }, MISTAKE_MS + MISTAKE_POINT_MS);
       }
@@ -321,14 +336,14 @@ export function useL1Coach(
         const msg = stateRef.current.completed ? null : buildOrient();
         if (msg) {
           setMessage(msg);
-          onHintRef.current?.(1);
+          onHintRef.current?.(1, anchorQuestion(msg));
         }
       }, IDLE_ORIENT_MS);
       timers.current.guide = window.setTimeout(() => {
         const msg = stateRef.current.completed ? null : buildGuide();
         if (msg) {
           setMessage(msg);
-          onHintRef.current?.(2);
+          onHintRef.current?.(2, anchorQuestion(msg));
         }
       }, IDLE_GUIDE_MS);
     }

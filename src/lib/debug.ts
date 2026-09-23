@@ -1,7 +1,7 @@
 /**
  * Development switches, kept in sessionStorage so they survive a reload but
  * never a new tab. `?debug` is the one URL entry point, and sets the flag for
- * the session; everything else is set from the footer's Debug panel.
+ * the session; everything else is set from the footer's Debug dialog.
  */
 
 const DEBUG_KEY = "debug";
@@ -28,7 +28,7 @@ export function adoptDebugParam(): void {
   if (new URLSearchParams(window.location.search).has("debug")) write(DEBUG_KEY, "1");
 }
 
-/** Debug mode: the whole hint ladder at once, and any date opens. */
+/** Debug mode: every hint step at once, and any date opens. */
 export function debugEnabled(): boolean {
   return read(DEBUG_KEY) === "1";
 }

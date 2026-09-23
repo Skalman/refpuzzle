@@ -4,6 +4,9 @@ function plural(n: number, one: string, other: string): string {
   return n === 1 ? `${n} ${one}` : `${n} ${other}`;
 }
 
+/** The icon a How-to-play step is illustrated with. */
+export type HelpIcon = "incorrect" | "correct" | "checkpoint";
+
 /** Marking verb for the primary pointer: touch → "Tap", mouse → "Click". */
 function tapVerb(p: PointerKind): string {
   return p === "coarse" ? "Tap" : "Click";
@@ -38,14 +41,8 @@ export default {
   puzzle: {
     undo: "Undo",
     redo: "Redo",
-    share: "Share puzzle",
-    shareOptions: "More share options",
-    copyLink: "Copy puzzle link",
-    shareApp: "Share app",
-    copyApp: "Copy app link",
-    shareWithProgress: "Share puzzle progress",
-    copyWithProgress: "Copy puzzle progress",
     hint: "Hint",
+    noNextStep: "No obvious next step. Try making an assumption.",
     checkpoint: "Checkpoint",
     // Checkpoint verdicts. The button doesn't warn that the press can be refused,
     // so the two refusals carry the gentle framing instead.
@@ -58,8 +55,40 @@ export default {
       `Verified: ${answered} of ${questions} questions answered`,
     checkpointFailsTitle: (n: number) => plural(n, "refused checkpoint", "refused checkpoints"),
     solved: "Puzzle solved!",
+    // The dialog's title when every question went clean.
+    solvedPerfect: "🌈 Puzzle solved!",
     nextPuzzle: "Next puzzle",
-    linkCopied: "Link copied!",
+    // Reopens the solved dialog from the banner, without the celebration.
+    summary: "Summary",
+    // The result card's caption under the time.
+    solvedIn: "solved in",
+    // The solved dialog's lines, one per measure: a label, and the numbers
+    // behind it; the time's line is the label alone. The history pair is
+    // neutral; hints and oopsies are where the teasing is allowed.
+    solvedLines: {
+      solvedIn: (time: string) => ({ label: `Solved in ${time}` }),
+      pathfinder: { label: "Pathfinder", detail: "no hints needed" },
+      peeker: (n: number) => ({ label: "Peeker", detail: plural(n, "hint", "hints") }),
+      freeSpirit: { label: "Free spirit", detail: "no checkpoints" },
+      doubleChecker: (n: number) => ({
+        label: "Double-checker",
+        detail: plural(n, "checkpoint", "checkpoints"),
+      }),
+      oopsie: (refused: number, pressed: number) => ({
+        label: "Oopsie",
+        detail: `${refused} of ${plural(pressed, "checkpoint", "checkpoints")} refused`,
+      }),
+      straightSolver: { label: "Straight solver", detail: "nothing undone" },
+      timeTraveler: (n: number) => ({
+        label: "Time traveler",
+        detail: `reversed course ${n === 1 ? "once" : `${n} times`}`,
+      }),
+    },
+    // Idle nudges (L2+): a callout on the button it names.
+    nudge: {
+      checkpoint: "Use the checkpoint to check your work!",
+      hint: "Want a hint?",
+    },
     start: "Start",
     solvedBadge: "Solved",
     playAgain: "Play again",
@@ -100,8 +129,8 @@ export default {
     today: "Today",
     archive: "Archive",
     printAll: "Print all puzzles",
-    // One archive day, spoken: the level track carries the same state visually.
-    // A stale day's track reports only the levels needing a recheck, so its
+    // One archive day, spoken: the level rail carries the same state visually.
+    // A stale day's rail reports only the levels needing a recheck, so its
     // label does too. The trailing clause names where the day opens, which the
     // tile shows nowhere else.
     archiveDay: (date: string, solved: number, levels: number, opens: string) =>
@@ -130,6 +159,7 @@ export default {
   },
   aria: {
     close: "Close",
+    dismiss: "Dismiss",
     more: "More",
     logo: "Refpuzzle logo",
   },
@@ -148,6 +178,19 @@ export default {
     share: "Share",
     copyLink: "Copy link",
     copied: "Copied!",
+    // What the link opens: the app, this puzzle blank, or this puzzle with the board so far.
+    opens: "What the link opens",
+    modes: { app: "App", puzzle: "Puzzle", progress: "Puzzle progress" },
+    copyText: "Copy text",
+    // The pasteable result: headline, one square per question, then the link.
+    // `time` is null for a solve that was never timed on this device.
+    resultHeadline: (day: number, level: string, time: string | null) =>
+      [`Refpuzzle Day #${day}`, level, ...(time ? [time] : [])].join(" · "),
+    outcomeEmoji: { clean: "🟩", hinted: "🟨", caught: "🟥" },
+    // Leads a perfect row, on the card and in the pasted text.
+    perfectEmoji: "🌈",
+    // Every square clean: the row is drawn from these instead, red to purple.
+    rainbowEmoji: ["🟥", "🟧", "🟨", "🟩", "🟦", "🟪"],
   },
   install: {
     button: "Install app",
@@ -159,11 +202,13 @@ export default {
   help: {
     title: "How to play",
     goal: "Every question is about this grid's own answers — fill it so every statement comes out true.",
-    howToPlaySteps: (p: PointerKind) => [
-      `${tapVerb(p)} an option to eliminate it`,
-      `${tapVerb(p)} again to mark it your answer`,
-      `${tapVerb(p)} once more to clear it`,
-      "The bar beside each question shows the answer's validity",
+    // `icon` names the illustration the step carries.
+    howToPlaySteps: (p: PointerKind): { text: string; icon?: HelpIcon }[] => [
+      { text: `${tapVerb(p)} an option to eliminate it`, icon: "incorrect" },
+      { text: `${tapVerb(p)} again to mark it your answer`, icon: "correct" },
+      { text: `${tapVerb(p)} once more to clear it` },
+      { text: "The bar beside each question shows the answer's validity" },
+      { text: "Set a checkpoint to check and lock in your marks so far", icon: "checkpoint" },
     ],
     whatIs: "What is a self-referential puzzle?",
     descriptionParagraphs: [
@@ -184,6 +229,23 @@ export default {
     expired: "Code expired or not found",
     tooBusy: "Too busy, try again later",
     error: "Sync failed",
+  },
+  privacy: {
+    link: "Privacy",
+    title: "Privacy",
+    paragraphs: [
+      "Your progress and settings are stored in your browser and stay on your device.",
+      "When you solve a puzzle, anonymous stats (puzzle, time, hints used, browser type) are sent to this site. There are no cookies, no user identifiers, and no third-party trackers.",
+      "The web server keeps standard access logs, including IP addresses, for about 30 days.",
+    ],
+    // Followed by the contact address, derived from the site's hostname.
+    contactPrompt: "Questions:",
+  },
+  contact: {
+    link: "Made with ♥ by Dan",
+    title: "Hello!",
+    // Followed by the contact address.
+    body: "Found a bug or have other feedback? Feel free to say hello!",
   },
   notFound: {
     noPuzzle: "No puzzle",

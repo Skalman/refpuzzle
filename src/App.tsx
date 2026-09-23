@@ -4,7 +4,9 @@ import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
 import { KeyboardHelp } from "./components/KeyboardHelp.tsx";
-import { IconCheck, IconX, IconDot, IconWarning } from "./components/Icons.tsx";
+import type { ComponentChildren } from "preact";
+import { IconCheck, IconX, IconDot, IconWarning, IconPin } from "./components/Icons.tsx";
+import type { HelpIcon } from "./i18n/en.ts";
 import { planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
@@ -34,10 +36,18 @@ import { ArchivePage } from "./components/ArchivePage.tsx";
 import { useBackupFlow, BackupDialogs } from "./components/BackupFlow.tsx";
 import { ErrorOverlay } from "./components/ErrorOverlay.tsx";
 import { SafeAreaSimulator } from "./components/SafeAreaSimulator.tsx";
+import { Modal } from "./components/Modal.tsx";
+import { DebugDialog } from "./components/DebugDialog.tsx";
+import { contactAddress } from "./lib/contact.ts";
+import { adoptDebugParam } from "./lib/debug.ts";
 
-if (new URLSearchParams(window.location.search).has("debug")) {
-  sessionStorage.setItem("debug", "1");
-}
+adoptDebugParam();
+
+const HELP_ICONS: Record<HelpIcon, ComponentChildren> = {
+  incorrect: <IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />,
+  correct: <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />,
+  checkpoint: <IconPin size="0.9em" class="icon-checkpoint" />,
+};
 
 function InlineHelp({ highlight }: { highlight?: boolean }) {
   const s = t();
@@ -68,23 +78,13 @@ function InlineHelp({ highlight }: { highlight?: boolean }) {
         <h4>{s.help.title}</h4>
         <p class="how-to-goal">{s.help.goal}</p>
         <ol>
-          {s.help.howToPlaySteps(pointerKind()).map((step, i) => (
-            <li key={step}>
-              {step}
-              {i === 0 && (
+          {s.help.howToPlaySteps(pointerKind()).map((step) => (
+            <li key={step.text}>
+              {step.text}
+              {step.icon && (
                 <>
                   {" "}
-                  <span class="nowrap">
-                    (<IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />)
-                  </span>
-                </>
-              )}
-              {i === 1 && (
-                <>
-                  {" "}
-                  <span class="nowrap">
-                    (<IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />)
-                  </span>
+                  <span class="nowrap">({HELP_ICONS[step.icon]})</span>
                 </>
               )}
             </li>
@@ -108,6 +108,8 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
   const s = t();
   const { route } = useLocation();
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false);
+  // Filled by the puzzle view; the header's Share row opens its sheet through it.
+  const shareRef = useRef<{ open: () => void } | null>(null);
   const [puzzles, setPuzzles] = useState<Record<string, Puzzle> | null>(null);
   const [loading, setLoading] = useState(true);
   const forcePuzzleUpdate = useForceUpdate();
@@ -229,6 +231,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
       <AppHeader
         onKeyboardHelp={() => setShowKeyboardHelp(true)}
         onPrint={puzzles ? () => window.print() : undefined}
+        onShare={currentPuzzle ? () => shareRef.current?.open() : undefined}
         onBackup={backup.openBackup}
       />
       <div class="daily-header">
@@ -299,6 +302,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
           dateStr={dateStr}
           level={activeLevel}
           initialHash={activeLevel === initialLevel ? initialHash : null}
+          shareRef={shareRef}
           onNextPuzzle={handleNextLevel}
           onChanged={handleChanged}
         />
@@ -491,6 +495,65 @@ function NotFound() {
   );
 }
 
+function PageFooter() {
+  const s = t();
+  const [openNote, setOpenNote] = useState<"privacy" | "contact" | "debug" | null>(null);
+  const contact = contactAddress();
+  const close = () => setOpenNote(null);
+  return (
+    <footer class="page-footer">
+      <button class="footer-link" onClick={() => setOpenNote("privacy")}>
+        {s.privacy.link}
+      </button>
+      {/* No address configured for this build: nothing to offer. */}
+      {contact && (
+        <>
+          <span class="footer-separator" aria-hidden="true">
+            ·
+          </span>
+          <button class="footer-link" onClick={() => setOpenNote("contact")}>
+            {s.contact.link}
+          </button>
+        </>
+      )}
+      {import.meta.env.DEV && (
+        <>
+          <span class="footer-separator" aria-hidden="true">
+            ·
+          </span>
+          <button class="footer-link" onClick={() => setOpenNote("debug")}>
+            Debug
+          </button>
+          {openNote === "debug" && <DebugDialog onClose={close} />}
+        </>
+      )}
+      {(openNote === "privacy" || openNote === "contact") && (
+        <Modal title={s[openNote].title} onClose={close}>
+          {openNote === "privacy" ? (
+            <>
+              {s.privacy.paragraphs.map((x) => (
+                <p key={x}>{x}</p>
+              ))}
+              {contact && (
+                <p>
+                  {s.privacy.contactPrompt} <a href={`mailto:${contact}`}>{contact}</a>
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p>{s.contact.body}</p>
+              <p>
+                <a href={`mailto:${contact}`}>{contact}</a>
+              </p>
+            </>
+          )}
+        </Modal>
+      )}
+    </footer>
+  );
+}
+
 export function App() {
   return (
     <LocationProvider>
@@ -505,6 +568,7 @@ export function App() {
           <Route path="/:date/:level" component={DayRoute} />
           <Route default component={NotFound} />
         </Router>
+        <PageFooter />
         {import.meta.env.DEV && <SafeAreaSimulator />}
       </div>
     </LocationProvider>

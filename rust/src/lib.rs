@@ -43,7 +43,7 @@ mod wasm_api {
         DeduceAction, DeduceReason, DeduceReasons, DeduceResult, apply_action,
         deduce_assuming_unique_with_reasons, reason_for,
     };
-    use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
+    use crate::explain::{ExplainStep, explain_deduce, explain_lookahead, focus_questions};
     use crate::lookahead::lookahead_shortest;
     use crate::recipes;
     use crate::render;
@@ -218,7 +218,7 @@ mod wasm_api {
                 };
                 return Some(StepApi {
                     action: action_to_api(action),
-                    focus_qis: leading_questions(&explain),
+                    focus_qis: focus_questions(&explain),
                     explain,
                 });
             }
@@ -333,7 +333,7 @@ mod wasm_api {
                 let explain = explain_deduce(&self.fp, &s, dr, *reason);
                 StepApi {
                     action: action_to_api(dr.action),
-                    focus_qis: leading_questions(&explain),
+                    focus_qis: focus_questions(&explain),
                     explain,
                 }
             } else if let Some(lr) = lookahead_shortest(&self.fp, &s, usize::MAX, &mut 0) {
@@ -343,7 +343,7 @@ mod wasm_api {
                         qi: lr.eliminate_qi,
                         oi: lr.eliminate_oi,
                     },
-                    focus_qis: leading_questions(&explain),
+                    focus_qis: focus_questions(&explain),
                     explain,
                 }
             } else if let Some(step) = fallback_step(&self.fp, &s) {

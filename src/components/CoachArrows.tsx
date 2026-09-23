@@ -138,8 +138,8 @@ function renderShape(s: Shape, i: number, seq: number) {
   const d = arcPath(s.x1, s.y1, s.x2, s.y2, s.head);
   return (
     <g key={key}>
-      <path class="coach-line-outline" d={d} pathLength={100} fill="none" />
-      <path class="coach-line-arrow" d={d} pathLength={100} fill="none" />
+      <path class="coach-arrow-outline" d={d} pathLength={100} fill="none" />
+      <path class="coach-arrow" d={d} pathLength={100} fill="none" />
     </g>
   );
 }

@@ -7,7 +7,7 @@
 use refpuzzle::deduce::{
     DeduceReason, DeduceReasons, DeduceResult, apply_action, deduce_assuming_unique_with_reasons,
 };
-use refpuzzle::explain::{ExplainStep, explain_deduce, explain_lookahead, leading_questions};
+use refpuzzle::explain::{ExplainStep, explain_deduce, explain_lookahead, focus_questions};
 use refpuzzle::lookahead::lookahead_shortest;
 use refpuzzle::solve_deduce::VERIFY_ITERS_PER_QUESTION;
 
@@ -15,7 +15,7 @@ use refpuzzle::solve_deduce::VERIFY_ITERS_PER_QUESTION;
 /// the L1 coach aims its arrows), then the prose from its text steps. The
 /// highlight can move while the wording holds still, so the line carries both.
 fn render_hint(steps: &[ExplainStep]) -> String {
-    let look = leading_questions(steps)
+    let look = focus_questions(steps)
         .iter()
         .map(|qi| format!("#{}", qi + 1))
         .collect::<Vec<_>>()

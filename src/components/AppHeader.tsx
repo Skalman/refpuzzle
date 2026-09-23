@@ -7,8 +7,9 @@ import {
   IconSun,
   IconSunMoon,
 } from "./Icons.tsx";
+import { Brand } from "./Brand.tsx";
 import { Logo } from "./Logo.tsx";
-import { ShareSheet } from "./ShareSheet.tsx";
+import { ShareDialog } from "./ShareDialog.tsx";
 import { SplitMenu } from "./SplitMenu.tsx";
 import { t } from "../i18n/index.ts";
 import { arrowNavHandler, menuNavHandler } from "../lib/keyboard.ts";
@@ -179,10 +180,12 @@ export function useInstall(): InstallState {
 export function AppHeader({
   onKeyboardHelp,
   onPrint,
+  onShare,
   onBackup,
 }: {
   onKeyboardHelp?: () => void;
   onPrint?: () => void;
+  onShare?: () => void;
   onBackup: () => void;
 }) {
   const s = t();
@@ -235,7 +238,7 @@ export function AppHeader({
         <Logo />
         <a href="/" class="app-title-link">
           <span class="app-title">
-            <span class="app-title-ref">Ref</span>puzzle
+            <Brand />
             {import.meta.env.DEV && <span class="dev-badge"> (dev)</span>}
           </span>
           <span class="app-tagline hide-mobile">{s.puzzleList.subtitle}</span>
@@ -276,16 +279,31 @@ export function AppHeader({
           </button>
           {moreMenu && (
             <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
-              <button
-                class="more-menu-item"
-                role="menuitem"
-                onClick={() => {
-                  setMoreMenu(false);
-                  setShowInstallInfo(true);
-                }}
-              >
-                {isInstalled ? s.install.shareApp : s.install.button}
-              </button>
+              {/* Installed, the share dialog's App mode offers this link. */}
+              {!(isInstalled && onShare) && (
+                <button
+                  class="more-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreMenu(false);
+                    setShowInstallInfo(true);
+                  }}
+                >
+                  {isInstalled ? s.install.shareApp : s.install.button}
+                </button>
+              )}
+              {onShare && (
+                <button
+                  class="more-menu-item"
+                  role="menuitem"
+                  onClick={() => {
+                    setMoreMenu(false);
+                    onShare();
+                  }}
+                >
+                  {s.share.share}
+                </button>
+              )}
               <a
                 href="/archive"
                 class="more-menu-item show-mobile"
@@ -351,7 +369,7 @@ export function AppHeader({
         </span>
       </div>
       {showInstallInfo && (
-        <ShareSheet
+        <ShareDialog
           url={`${window.location.origin}/`}
           title={isInstalled ? s.install.shareApp : s.install.button}
           onClose={() => setShowInstallInfo(false)}

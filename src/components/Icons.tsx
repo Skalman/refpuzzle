@@ -245,6 +245,11 @@ export function IconHelp(p: Props) {
   );
 }
 
+// Clock (elapsed time)
+export function IconClock(p: Props) {
+  return <IM {...p} paths={["M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 6v6l4 2"]} />;
+}
+
 // Share
 export function IconShare(p: Props) {
   return (

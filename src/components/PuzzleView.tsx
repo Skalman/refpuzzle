@@ -6,26 +6,29 @@ import { deriveState, isValid, V_NEUTRAL } from "../engine/state.ts";
 import type { Validity } from "../engine/state.ts";
 import { findMistake } from "../engine/mistake.ts";
 import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts";
-import { loadState, saveState, saveMeta, cloneStates } from "../lib/store.ts";
-import type { QuestionState } from "../lib/store.ts";
-import { decodeShareHash, getShareUrl, getPuzzleUrl } from "../lib/share.ts";
+import { loadState, saveState, saveMeta, loadMeta, cloneStates } from "../lib/store.ts";
+import type { FailMarker, HintMarker, QuestionState } from "../lib/store.ts";
+import { decodeShareHash, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
 import { classNames } from "../lib/classNames.ts";
-import { confetti } from "../lib/confetti.ts";
+import { debugEnabled } from "../lib/debug.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
 import { HistoryStrip, describeDiff, lastCheckpointIdx } from "./HistoryStrip.tsx";
+import { questionOutcomes, storedSolveStats } from "../lib/solve-summary.ts";
 import { HintStep } from "./HintStep.tsx";
 import { CoachText } from "./CoachText.tsx";
 import { CoachArrows } from "./CoachArrows.tsx";
+import { NudgeCallout } from "./NudgeCallout.tsx";
 import { useL1Coach } from "./useL1Coach.ts";
-import { useForceUpdate } from "../lib/hooks.ts";
+import { useForceUpdate, useVisibleTimeout } from "../lib/hooks.ts";
 import { useAnalytics } from "./useAnalytics.ts";
 import { useHintEngine } from "./useHintEngine.ts";
-import { ShareSheet } from "./ShareSheet.tsx";
-import { SplitMenu } from "./SplitMenu.tsx";
-import { IconUndo, IconRedo, IconPin, IconHint, IconShare } from "./Icons.tsx";
+import { PuzzleShareDialog, type ShareMode } from "./PuzzleShareDialog.tsx";
+import { SolvedDialog } from "./SolvedDialog.tsx";
+import { useIdleNudge } from "./useIdleNudge.ts";
+import { IconUndo, IconRedo, IconPin, IconHint } from "./Icons.tsx";
 import { LEVELS } from "../puzzles/daily.ts";
 
 /** The mark shortcuts, one per option letter. */
@@ -33,6 +36,9 @@ const OPTION_KEYS = LETTERS.map((letter) => letter.toLowerCase());
 
 /** How long `.option-btn.sweep` stays on: the CSS duration plus slack. */
 const SWEEP_MS = 1000;
+
+/** How long a granted checkpoint's note stays up while the tab is visible. */
+const NOTE_MS = 25_000;
 
 /**
  * Geometry for `.option-btn.sweep`: the board's span, and each sweeping
@@ -61,6 +67,11 @@ function freshBoard(puzzle: Puzzle): QuestionState[] {
  * Where this mount picks up: a shared board from the URL, the stored one, or a
  * blank board with a one-step track. Read once — playground mode never touches
  * the store, and a different puzzle arrives as a fresh mount, not new props.
+ *
+ * A link brings the sharer's markers along with the board. They record someone
+ * else's hints and refusals, so the board is adopted and the markers dropped —
+ * every later save and summary on this device then counts only what's earned
+ * here.
  */
 function initialBoardState(
   puzzle: Puzzle,
@@ -74,7 +85,9 @@ function initialBoardState(
       ? null
       : loadState(puzzle.id, questionCount);
   if (saved && saved.history.length > 0) {
-    return saved;
+    return initialHash
+      ? { ...saved, hints: new Map<number, HintMarker>(), fails: new Map<number, FailMarker>() }
+      : saved;
   }
   const blank = freshBoard(puzzle);
   return {
@@ -83,8 +96,8 @@ function initialBoardState(
     stale: false,
     history: [cloneStates(blank)],
     historyIdx: 0,
-    hints: new Map<number, number>(),
-    fails: new Map<number, number>(),
+    hints: new Map<number, HintMarker>(),
+    fails: new Map<number, FailMarker>(),
   };
 }
 
@@ -95,6 +108,8 @@ interface PuzzleViewProps {
   initialHash?: string | null;
   /** Playground mode: render from the URL only, never touch localStorage. */
   ephemeral?: boolean;
+  /** Filled with the view's share dialog, for the page's Share menu item to open. */
+  shareRef?: { current: { open: () => void } | null };
   onNextPuzzle: () => void;
   onChanged: () => void;
 }
@@ -105,19 +120,17 @@ export function PuzzleView({
   level,
   initialHash,
   ephemeral,
+  shareRef,
   onNextPuzzle,
   onChanged,
 }: PuzzleViewProps) {
   const s = t();
-  const debugMode =
-    typeof window !== "undefined" &&
-    (new URLSearchParams(window.location.search).has("debug") ||
-      sessionStorage.getItem("debug") === "1");
+  const debugMode = debugEnabled();
 
   // Ephemeral (playground) mode persists nothing: the puzzle is fully described
-  // by the URL. Gating the two saveState calls is sufficient — saveMeta /
-  // loadMeta all no-op without an existing entry, and loadState returns null,
-  // so no other store touchpoint can write.
+  // by the URL. Gating the saveState calls is sufficient — saveMeta / loadMeta
+  // all no-op without an existing entry, and loadState returns null, so no
+  // other store touchpoint can write.
 
   // Resolved before the first paint, so the stored board never flickers in.
   const [initState] = useState(() => initialBoardState(puzzle, initialHash, ephemeral));
@@ -204,9 +217,30 @@ export function PuzzleView({
     historyBurstRef.current.lastTime = now;
   }
 
-  /** The Checkpoint button's verdict. Shares the hint's slot; only one speaks. */
+  /**
+   * The Checkpoint button's verdict. Shares the hint's slot; only one speaks.
+   * Goes on the next board change, a click, or after a stretch on screen.
+   */
   const [checkpointNote, setCheckpointNote] = useState<string | null>(null);
-  const [shareSheet, setShareSheet] = useState<{ url: string; title: string } | null>(null);
+  useVisibleTimeout(checkpointNote, NOTE_MS, () => setCheckpointNote(null));
+
+  const [shareMode, setShareMode] = useState<ShareMode | null>(null);
+  // Remounts the sheet, so a press while it is open returns it to Puzzle.
+  const [sharePress, setSharePress] = useState(0);
+  useEffect(() => {
+    if (!shareRef) return undefined;
+    shareRef.current = {
+      open: () => {
+        setShareMode("puzzle");
+        setSharePress((n) => n + 1);
+      },
+    };
+    return () => {
+      shareRef.current = null;
+    };
+  }, [shareRef]);
+  // Celebrating the solve just made, or summarizing a stored one from the bar.
+  const [solvedDialog, setSolvedDialog] = useState<"celebrate" | "summary" | null>(null);
 
   const [focusedQuestion, setFocusedQuestionRaw] = useState<number | null>(null);
   const [focusedOption, setFocusedOptionRaw] = useState<number | null>(null);
@@ -214,12 +248,15 @@ export function PuzzleView({
   const focusedOptionRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<HTMLElement | null>(null);
-  // A callback ref types itself against whichever element the banner renders,
+  // A callback ref types itself against whichever element the bar renders,
   // where one `useRef` would need casting at each of the two sites.
   const setNextPuzzleRef = useCallback((el: HTMLElement | null) => {
     nextPuzzleRef.current = el;
   }, []);
   const puzzleCompleteRef = useRef<HTMLDivElement>(null);
+  // The two buttons a nudge can point at.
+  const checkpointBtnRef = useRef<HTMLButtonElement>(null);
+  const hintBtnRef = useRef<HTMLButtonElement>(null);
   const numberBuf = useRef({ digits: "", timer: 0 });
   const controlsRef = useRef<HTMLDivElement>(null);
   const historyStripRef = useRef<HTMLDivElement>(null);
@@ -236,23 +273,28 @@ export function PuzzleView({
   /**
    * Markers on steps a history rewrite discards fold onto the branch point —
    * the step just before the newly added one — rather than being deleted, so
-   * no rewind can erase the record. Refusal counts add up; hint markers keep
-   * the deepest level reached, since that's what the value means (and the wire
-   * format caps at `h4`).
+   * no rewind can erase the record. Refusal counts add up and their questions
+   * union; hint markers keep the deepest level reached, since that's what the
+   * value means, and the earlier marker's question stands.
    */
   function foldMarkers(branchIdx: number) {
-    for (const [key, hintLevel] of [...hintMarkers.current]) {
+    for (const [key, hint] of [...hintMarkers.current]) {
       if (key <= branchIdx) continue;
       hintMarkers.current.delete(key);
-      hintMarkers.current.set(
-        branchIdx,
-        Math.max(hintMarkers.current.get(branchIdx) ?? 0, hintLevel),
-      );
+      const onto = hintMarkers.current.get(branchIdx);
+      hintMarkers.current.set(branchIdx, {
+        level: Math.max(onto?.level ?? 0, hint.level),
+        qi: onto?.qi ?? hint.qi,
+      });
     }
-    for (const [key, count] of [...failMarkers.current]) {
+    for (const [key, fail] of [...failMarkers.current]) {
       if (key <= branchIdx) continue;
       failMarkers.current.delete(key);
-      failMarkers.current.set(branchIdx, (failMarkers.current.get(branchIdx) ?? 0) + count);
+      const onto = failMarkers.current.get(branchIdx);
+      failMarkers.current.set(branchIdx, {
+        count: (onto?.count ?? 0) + fail.count,
+        qis: [...new Set([...(onto?.qis ?? []), ...fail.qis])],
+      });
     }
   }
 
@@ -288,32 +330,59 @@ export function PuzzleView({
     forceHistoryUpdate();
   }
 
-  const hintMarkers = useRef<Map<number, number>>(initState.hints);
+  const hintMarkers = useRef<Map<number, HintMarker>>(initState.hints);
   /**
    * Refused checkpoint presses, keyed by the step the press landed on. History
    * rewrites can't shake them off — `foldMarkers` slides them onto the branch
    * point instead of deleting them. `meta.checkpointFails` tallies the same
    * presses monotonically for scoring.
    */
-  const failMarkers = useRef<Map<number, number>>(initState.fails);
+  const failMarkers = useRef<Map<number, FailMarker>>(initState.fails);
 
-  function pushFailMarker() {
+  // Markers move while the board stands still, so `revalidate` never runs for
+  // them — they save here instead. Completion and staleness are the board's, so
+  // they carry over from the last sweep.
+  function saveMarkers() {
+    if (ephemeral) return;
+    saveState(puzzle.id, {
+      questions: questionsRef.current,
+      completed: tabStateRef.current.completed,
+      stale: tabStateRef.current.stale,
+      history: historyRef.current,
+      historyIdx: historyIdxRef.current,
+      hints: hintMarkers.current,
+      fails: failMarkers.current,
+    });
+  }
+
+  function pushFailMarker(qi: number) {
     const map = failMarkers.current;
     const idx = historyIdxRef.current;
-    map.set(idx, (map.get(idx) ?? 0) + 1);
+    const at = map.get(idx);
+    map.set(idx, {
+      count: (at?.count ?? 0) + 1,
+      qis: [...new Set([...(at?.qis ?? []), qi])],
+    });
     analytics.meta.current.checkpointFails++;
     saveMeta(puzzle.id, analytics.meta.current);
+    saveMarkers();
     forceHistoryUpdate();
   }
 
-  function pushHintMarker(hintLevel: number) {
+  function pushHintMarker(hintLevel: number, qi: number | null) {
     const map = hintMarkers.current;
     const idx = historyIdxRef.current;
     // Deepest level reached at this step — a fresh press never lowers a level
-    // that folded here from rewritten history.
-    map.set(idx, Math.max(map.get(idx) ?? 0, hintLevel));
+    // that folded here from rewritten history. The question is whichever a
+    // step named first and stays put once set.
+    const at = map.get(idx);
+    map.set(idx, {
+      level: Math.max(at?.level ?? 0, hintLevel),
+      qi: at?.qi ?? qi,
+    });
     analytics.meta.current.hints++;
     saveMeta(puzzle.id, analytics.meta.current);
+    saveMarkers();
     forceHistoryUpdate();
   }
 
@@ -530,11 +599,27 @@ export function PuzzleView({
     forceHistoryUpdate();
   }
 
+  const hasProgress = historyRef.current.length > 1;
+  // Nothing to verify on a blank board, and a checkpoint can't checkpoint itself.
+  const canCheckpoint =
+    historyIdxRef.current > 0 &&
+    describeDiff(
+      historyRef.current[historyIdxRef.current - 1],
+      historyRef.current[historyIdxRef.current],
+    ).qi >= 0;
+
+  // L2+ only: the playground is level 1, and L1 has the coach instead.
+  const nudge = useIdleNudge({
+    enabled: level > 1 && hasProgress && !completed,
+    canCheckpoint,
+    progressKey: questions,
+  });
+
   /**
    * Grant a checkpoint if nothing on the board contradicts the key. Marks the
    * last checkpoint verified are locked against editing, so a re-verified
    * range can only have grown — the one way to fail is a wrong new mark, which
-   * lands a refusal marker and opens the hint panel's escalation ladder.
+   * lands a refusal marker and opens the mistake steps in the hint panel.
    */
   function handleSave() {
     const idx = historyIdxRef.current;
@@ -546,11 +631,12 @@ export function PuzzleView({
     const mistake = findMistake(answers, eliminated, hints.getSolution());
     if (mistake) {
       setCheckpointNote(null);
-      pushFailMarker();
+      pushFailMarker(mistake.qi);
       hints.showMistake(mistake, s.puzzle.checkpointWrong);
       return;
     }
 
+    nudge.used("checkpoint");
     analytics.meta.current.checkpoints++;
     saveMeta(puzzle.id, analytics.meta.current);
     pushHistory(cloneStates(current));
@@ -575,7 +661,8 @@ export function PuzzleView({
     revalidate(fresh);
     hints.clear();
     setCheckpointNote(null);
-    analytics.wasCompleted.current = false;
+    historyBurstRef.current.lastTime = 0;
+    analytics.restart();
   }
 
   // Per-question bitmask of the cells the last checkpoint verified.
@@ -589,37 +676,26 @@ export function PuzzleView({
     return mask;
   });
 
-  const hasProgress = historyRef.current.length > 1;
-  // Nothing to verify on a blank board, and a checkpoint can't checkpoint itself.
-  const canCheckpoint =
-    historyIdxRef.current > 0 &&
-    describeDiff(
-      historyRef.current[historyIdxRef.current - 1],
-      historyRef.current[historyIdxRef.current],
-    ).qi >= 0;
-
-  function openSharePuzzle() {
-    setShareSheet({ url: getPuzzleUrl(dateStr, level), title: s.puzzle.share });
-  }
-  function openShareApp() {
-    setShareSheet({ url: `${window.location.origin}/`, title: s.puzzle.shareApp });
-  }
-  function openShareProgress() {
-    setShareSheet({
-      url: getShareUrl(dateStr, level, {
-        questions,
-        completed,
-        stale: false,
-        history: historyRef.current,
-        historyIdx: historyIdxRef.current,
-        hints: hintMarkers.current,
-        fails: failMarkers.current,
-      }),
-      title: s.puzzle.shareWithProgress,
-    });
+  function handleHint() {
+    nudge.used("hint");
+    hints.handleHint();
   }
 
-  // Confetti + scroll to next puzzle on completion
+  /** The board as it stands, for a progress link; null before the first mark. */
+  function progressState() {
+    if (!hasProgress) return null;
+    return {
+      questions,
+      completed,
+      stale: false,
+      history: historyRef.current,
+      historyIdx: historyIdxRef.current,
+      hints: hintMarkers.current,
+      fails: failMarkers.current,
+    };
+  }
+
+  // Reports the solve and opens its summary.
   useEffect(() => {
     if (!completed || analytics.wasCompleted.current) return undefined;
     analytics.wasCompleted.current = true;
@@ -644,16 +720,12 @@ export function PuzzleView({
       fromShared: m.fromShared || undefined,
       ...getClientInfo(),
     });
-    // No clearMeta: saveState already swapped the ledger to the outcome
-    // family when the completing mark was saved; the event above reads the
-    // in-memory copy.
-    confetti();
-    // Scroll the whole completion banner into view right as the confetti starts — the
-    // celebration overlay masks the viewport motion, so it reads smoother than scrolling after.
-    puzzleCompleteRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    nextPuzzleRef.current?.focus({ preventScroll: true });
+    // The counters stay on the ledger past the solve, for the summary; this
+    // write lands the flushed time.
+    if (!ephemeral) saveMeta(puzzle.id, m);
+    setSolvedDialog("celebrate");
     return undefined;
-  }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted]);
+  }, [completed, level, puzzle.id, analytics.meta, analytics.wasCompleted, ephemeral]);
 
   // Re-seed the toolbar's roving tabindex whenever its enabled set changes;
   // between those the arrow keys' own position stands.
@@ -788,7 +860,7 @@ export function PuzzleView({
     redo: handleRedo,
     checkpoint: handleSave,
     moveFocus,
-    hint: hints.handleHint,
+    hint: handleHint,
     completed,
   };
   const keyActionsRef = useRef(keyActions);
@@ -877,6 +949,16 @@ export function PuzzleView({
           />
         )}
 
+        {/* Idle nudge: a coach message and arrow. Any press takes it away. */}
+        {!completed && nudge.kind && (
+          <NudgeCallout
+            text={s.puzzle.nudge[nudge.kind]}
+            targetRef={nudge.kind === "checkpoint" ? checkpointBtnRef : hintBtnRef}
+            kind={nudge.kind}
+            showMs={nudge.showMs}
+          />
+        )}
+
         <div class="puzzle-dock">
           {/* Hint display */}
           {!completed && debugMode && hints.debugHints && (
@@ -903,118 +985,148 @@ export function PuzzleView({
           )}
 
           {/* Checkpoint verdict */}
-          {!completed && checkpointNote && <div class="puzzle-note">{checkpointNote}</div>}
-
-          {/* Completion banner */}
-          {completed && (
-            <div ref={puzzleCompleteRef} class="puzzle-complete">
-              <span>{s.puzzle.solved}</span>
-              {level < LEVELS.length ? (
-                <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
-                  {s.puzzle.nextPuzzle} &rarr;
-                </button>
-              ) : (
-                <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
-                  {s.daily.archive} &rarr;
-                </a>
-              )}
+          {!completed && checkpointNote && (
+            <div class="puzzle-note" role="status" onClick={() => setCheckpointNote(null)}>
+              <span>{checkpointNote}</span>
+              <button
+                class="note-dismiss"
+                aria-label={s.aria.dismiss}
+                onClick={() => setCheckpointNote(null)}
+              >
+                &times;
+              </button>
             </div>
           )}
 
-          {/* Controls */}
-          <div
-            ref={controlsRef}
-            class="puzzle-controls"
-            role="toolbar"
-            onKeyDown={arrowNavHandler("button:not(:disabled)")}
-          >
-            <button
-              class="toolbar-icon-btn"
-              onClick={handleUndo}
-              disabled={completed || !canUndo}
-              title={s.puzzle.undo}
-            >
-              <IconUndo />
-            </button>
-            <button
-              class="toolbar-icon-btn"
-              onClick={handleRedo}
-              disabled={completed || !canRedo}
-              title={s.puzzle.redo}
-            >
-              <IconRedo />
-            </button>
-            <button
-              class="toolbar-accent-btn"
-              onClick={handleSave}
-              disabled={completed || !canCheckpoint}
-            >
-              <IconPin size="0.9em" /> {s.puzzle.checkpoint}
-            </button>
-            <button
-              class="toolbar-accent-btn"
-              onClick={hints.handleHint}
-              onMouseEnter={hints.getSolution}
-              onFocus={hints.getSolution}
-              onTouchStart={hints.getSolution}
-              disabled={completed}
-              title={s.puzzle.hint}
-            >
-              <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
-            </button>
-            <span class="controls-spacer"></span>
-            <span class="split-btn">
-              <button class="toolbar-accent-btn" onClick={openSharePuzzle}>
-                <IconShare size="0.9em" /> {s.puzzle.share}
-              </button>
-              <SplitMenu buttonClass="toolbar-accent-btn" label={s.puzzle.shareOptions}>
-                {(close) => (
-                  <>
-                    <button
-                      role="menuitem"
-                      onClick={() => {
-                        close();
-                        openShareApp();
-                      }}
-                    >
-                      {s.puzzle.shareApp}
-                    </button>
-                    {hasProgress && (
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          close();
-                          openShareProgress();
-                        }}
-                      >
-                        {s.puzzle.shareWithProgress}
-                      </button>
-                    )}
-                  </>
-                )}
-              </SplitMenu>
-            </span>
-          </div>
+          {/* Controls and the history track share a line while the track is
+              short; a long track wraps onto its own. Solved, the controls go
+              and the completion bar stands at the row's end instead. */}
+          <div class="puzzle-dock-row">
+            {!completed && (
+              <div
+                ref={controlsRef}
+                class="puzzle-controls"
+                role="toolbar"
+                onKeyDown={arrowNavHandler("button:not(:disabled)")}
+              >
+                <button
+                  class="toolbar-icon-btn"
+                  onClick={handleUndo}
+                  disabled={!canUndo}
+                  title={s.puzzle.undo}
+                >
+                  <IconUndo />
+                </button>
+                <button
+                  class="toolbar-icon-btn"
+                  onClick={handleRedo}
+                  disabled={!canRedo}
+                  title={s.puzzle.redo}
+                >
+                  <IconRedo />
+                </button>
+                <button
+                  ref={checkpointBtnRef}
+                  class="toolbar-accent-btn"
+                  onClick={handleSave}
+                  disabled={!canCheckpoint}
+                >
+                  <IconPin size="0.9em" class="icon-checkpoint" /> {s.puzzle.checkpoint}
+                </button>
+                <button
+                  ref={hintBtnRef}
+                  class="toolbar-accent-btn"
+                  onClick={handleHint}
+                  onMouseEnter={hints.getSolution}
+                  onFocus={hints.getSolution}
+                  onTouchStart={hints.getSolution}
+                  title={s.puzzle.hint}
+                >
+                  <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
+                </button>
+              </div>
+            )}
 
-          {historyRef.current.length > 1 && (
-            <HistoryStrip
-              history={historyRef.current}
-              currentIdx={historyIdxRef.current}
-              hints={hintMarkers.current}
-              fails={failMarkers.current}
-              completed={completed}
-              onJump={handleJumpTo}
-              onPlayAgain={handlePlayAgain}
-              containerRef={historyStripRef}
-            />
-          )}
+            {historyRef.current.length > 1 && (
+              <HistoryStrip
+                history={historyRef.current}
+                currentIdx={historyIdxRef.current}
+                hints={hintMarkers.current}
+                fails={failMarkers.current}
+                completed={completed}
+                onJump={handleJumpTo}
+                onPlayAgain={handlePlayAgain}
+                containerRef={historyStripRef}
+              />
+            )}
+
+            {/* The completion bar: the ways onward, at the end of the row.
+                The dialog carries the same two while it is up. */}
+            {completed && (
+              <div
+                ref={puzzleCompleteRef}
+                class={classNames("puzzle-complete", solvedDialog && "quiet")}
+                aria-label={s.puzzle.solved}
+              >
+                <button class="toolbar-accent-btn" onClick={() => setSolvedDialog("summary")}>
+                  {s.puzzle.summary}
+                </button>
+                {level < LEVELS.length ? (
+                  <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
+                    {s.puzzle.nextPuzzle} &rarr;
+                  </button>
+                ) : (
+                  <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
+                    {s.daily.archive} &rarr;
+                  </a>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
-      {shareSheet && (
-        <ShareSheet
-          url={shareSheet.url}
-          title={shareSheet.title}
-          onClose={() => setShareSheet(null)}
+      {shareMode && (
+        <PuzzleShareDialog
+          key={sharePress}
+          dateStr={dateStr}
+          level={level}
+          initialMode={shareMode}
+          getProgress={progressState}
+          onClose={() => setShareMode(null)}
+        />
+      )}
+      {solvedDialog && (
+        <SolvedDialog
+          stats={
+            solvedDialog === "celebrate"
+              ? analytics.meta.current
+              : storedSolveStats(
+                  ephemeral ? null : loadMeta(puzzle.id),
+                  historyRef.current,
+                  hintMarkers.current,
+                  failMarkers.current,
+                )
+          }
+          dateStr={dateStr}
+          level={level}
+          outcomes={questionOutcomes(
+            puzzle.questions.length,
+            hintMarkers.current,
+            failMarkers.current,
+          )}
+          hasNext={level < LEVELS.length}
+          shareUrl={getPuzzleUrl(dateStr, level)}
+          celebrate={solvedDialog === "celebrate"}
+          onNext={onNextPuzzle}
+          onClose={() => {
+            setSolvedDialog(null);
+            // The bar takes the loud copy back on this render; bring it into
+            // view and focus its button once it has.
+            requestAnimationFrame(() => {
+              puzzleCompleteRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              nextPuzzleRef.current?.focus({ preventScroll: true });
+            });
+          }}
         />
       )}
     </>

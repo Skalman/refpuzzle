@@ -11,15 +11,30 @@ export interface QuestionState {
   marks: Marks;
 }
 
+/**
+ * A hint press at one step: the deepest level reached, and the question the
+ * hint named. `qi` is null until a press names one, and never moves after.
+ */
+export interface HintMarker {
+  level: number;
+  qi: number | null;
+}
+
+/** Refused checkpoint presses at one step: how many, and the questions refused. */
+export interface FailMarker {
+  count: number;
+  qis: number[];
+}
+
 export interface SavedState {
   questions: QuestionState[];
   completed: boolean;
   stale: boolean;
   history: QuestionState[][];
   historyIdx: number;
-  hints: Map<number, number>;
+  hints: Map<number, HintMarker>;
   /** Refused checkpoint presses, keyed by history step. */
-  fails: Map<number, number>;
+  fails: Map<number, FailMarker>;
 }
 
 export const PUZZLE_VERSION = 3;
@@ -75,14 +90,39 @@ function isV1Value(raw: string): boolean {
   return /^v\d+$/.test(first);
 }
 
-/** The ledger's outcome state: exactly `s`, or `s.st`. */
-function isSolvedLedger(ledger: string): boolean {
-  return ledger === "s" || ledger.startsWith("s.");
+/** The ledger's flags; stale is only meaningful beside solved. */
+interface LedgerFlags {
+  solved: boolean;
+  stale: boolean;
+}
+
+/** The flags lead the ledger, so both reads are of its first tokens. */
+function ledgerFlags(ledger: string): LedgerFlags {
+  const tokens = ledger.split(".");
+  return { solved: tokens[0] === "s", stale: tokens[1] === "st" };
+}
+
+/** The ledger's counter tokens, the leading flags dropped. */
+function counterTokens(ledger: string): string[] {
+  const tokens = ledger.split(".").filter((token) => token !== "");
+  const flags = ledgerFlags(ledger);
+  return tokens.slice((flags.solved ? 1 : 0) + (flags.stale ? 1 : 0));
+}
+
+/** Flags lead, `s` then `st`, and the counters follow in their own order. */
+function composeLedger(flags: LedgerFlags, counters: string[]): string {
+  const tokens: string[] = [];
+  if (flags.solved) {
+    tokens.push("s");
+    if (flags.stale) tokens.push("st");
+  }
+  tokens.push(...counters);
+  return tokens.join(".");
 }
 
 /** Whether a stored value records a solved puzzle. Assumes v1 (post-sweep). */
 export function isSolvedValue(raw: string): boolean {
-  return isSolvedLedger(ledgerPart(raw));
+  return ledgerFlags(ledgerPart(raw)).solved;
 }
 
 // ── v1 history codec ────────────────────────────────────────────────────────
@@ -112,14 +152,20 @@ function diffAction(prev: QuestionState[], next: QuestionState[]): string {
   return "cp";
 }
 
-/** Encode the history segment (v1). The ledger is composed by `saveState`. */
+/**
+ * Encode the history segment (v1). The ledger is composed by `saveState`.
+ * Marker questions are written 1-based, like the action tokens, each behind
+ * its own `q`; a marker that named no question carries no suffix.
+ */
 export function encodeHistory(state: SavedState): string {
   const tokens = ["v1"];
   const annotate = (idx: number) => {
-    const hintLevel = state.hints.get(idx);
-    if (hintLevel != null) tokens.push(`h${hintLevel}`);
-    const failCount = state.fails.get(idx);
-    if (failCount) tokens.push(`cpx${failCount}`);
+    const hint = state.hints.get(idx);
+    if (hint) tokens.push(`h${hint.level}${hint.qi === null ? "" : `q${hint.qi + 1}`}`);
+    const fail = state.fails.get(idx);
+    if (fail?.count) {
+      tokens.push(`cpx${fail.count}${fail.qis.map((qi) => `q${qi + 1}`).join("")}`);
+    }
   };
 
   annotate(0);
@@ -145,24 +191,34 @@ export function decodeHistory(encoded: string, n: number): SavedState | null {
 function decodeV1(tokens: string[], n: number): SavedState {
   const current = blankStates(n);
   const history = [cloneStates(current)];
-  const hints = new Map<number, number>();
-  const fails = new Map<number, number>();
+  const hints = new Map<number, HintMarker>();
+  const fails = new Map<number, FailMarker>();
   // -1 = no cursor token seen → cursor at the last step.
   let historyIdx = -1;
+
+  /** The `q`-prefixed tail of a marker token, as 0-based questions. */
+  const questions = (tail: string | undefined): number[] =>
+    tail
+      ? tail
+          .split("q")
+          .filter(Boolean)
+          .map((digits) => Number(digits) - 1)
+      : [];
 
   for (const token of tokens) {
     if (token === "_") {
       historyIdx = history.length - 1;
       continue;
     }
-    const hint = /^h(\d+)$/.exec(token);
+    const hint = /^h(\d+)((?:q\d+)*)$/.exec(token);
     if (hint) {
-      hints.set(history.length - 1, Number(hint[1]));
+      const [qi] = questions(hint[2]);
+      hints.set(history.length - 1, { level: Number(hint[1]), qi: qi ?? null });
       continue;
     }
-    const fail = /^cpx(\d+)$/.exec(token);
+    const fail = /^cpx(\d+)((?:q\d+)*)$/.exec(token);
     if (fail) {
-      fails.set(history.length - 1, Number(fail[1]));
+      fails.set(history.length - 1, { count: Number(fail[1]), qis: questions(fail[2]) });
       continue;
     }
     if (token === "cp") {
@@ -228,7 +284,7 @@ function decodeV0(tokens: string[], n: number): SavedState {
 
   const current = blankStates(n);
   const history = [cloneStates(current)];
-  const hints = new Map<number, number>();
+  const hints = new Map<number, HintMarker>();
 
   let historyIdx = 0;
 
@@ -239,7 +295,7 @@ function decodeV0(tokens: string[], n: number): SavedState {
     }
     const hintMatch = /^h([1-4])$/.exec(token);
     if (hintMatch) {
-      hints.set(history.length - 1, Number(hintMatch[1]));
+      hints.set(history.length - 1, { level: Number(hintMatch[1]), qi: null });
       continue;
     }
     const isCurrent = token.startsWith("_");
@@ -316,10 +372,8 @@ export function migrateValue(raw: string): string {
     }
   }
 
-  // Completion swaps in the outcome family, dropping any lingering counters;
-  // stale is only meaningful beside solved.
-  const ledger = completed ? ["s", ...(stale ? ["st"] : [])] : migrateMetaV0(metaStr);
-  return out.join(".") + (ledger.length > 0 ? META_SEP + ledger.join(".") : "");
+  const ledger = composeLedger({ solved: completed, stale }, migrateMetaV0(metaStr));
+  return out.join(".") + (ledger ? META_SEP + ledger : "");
 }
 
 /**
@@ -343,9 +397,9 @@ export function migrateLocalStorage(): void {
 }
 
 // ── Meta: the local ledger ──────────────────────────────────────────────────
-// Two states that never coexist: the live family (counters + f) while
-// solving, the outcome family (s, st) after completion. `saveState` performs
-// the swap when it writes a completed state.
+// The flags (s, st) lead and the counters follow. Counters accumulate while
+// solving and stay put once solved, so the summary can read the solve back;
+// `saveState` sets the flags when it writes a completed state.
 
 export interface PuzzleMeta {
   /** Stretches of the puzzle being on screen; their durations sum to elapsedS. */
@@ -360,7 +414,7 @@ export interface PuzzleMeta {
   fromShared?: boolean;
 }
 
-function emptyMeta(): PuzzleMeta {
+export function emptyMeta(): PuzzleMeta {
   return {
     sessions: 0,
     elapsedS: 0,
@@ -371,14 +425,15 @@ function emptyMeta(): PuzzleMeta {
   };
 }
 
-function encodeMeta(meta: PuzzleMeta): string {
+/** The counter tokens a meta records, in the ledger's order. */
+function metaTokens(meta: PuzzleMeta): string[] {
   const out = [`se${meta.sessions}`, `e${meta.elapsedS}`];
   if (meta.historyBursts) out.push(`n${meta.historyBursts}`);
   if (meta.hints) out.push(`h${meta.hints}`);
   if (meta.checkpoints) out.push(`cp${meta.checkpoints}`);
   if (meta.checkpointFails) out.push(`cpx${meta.checkpointFails}`);
   if (meta.fromShared) out.push("f");
-  return out.join(".");
+  return out;
 }
 
 function parseMeta(ledger: string): PuzzleMeta {
@@ -401,26 +456,23 @@ function parseMeta(ledger: string): PuzzleMeta {
   return meta;
 }
 
+/** The stored counters; all zero for a puzzle never played on this device. */
 export function loadMeta(puzzleId: string): PuzzleMeta {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
-    if (!raw) return emptyMeta();
-    const ledger = ledgerPart(raw);
-    // The outcome family carries no counters.
-    if (!ledger || isSolvedLedger(ledger)) return emptyMeta();
-    return parseMeta(ledger);
+    return raw ? parseMeta(ledgerPart(raw)) : emptyMeta();
   } catch {
     return emptyMeta();
   }
 }
 
+/** Replaces the counters; the flags stay as they are. */
 export function saveMeta(puzzleId: string, meta: PuzzleMeta): void {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return;
-    // The outcome is permanent; counters never come back after completion.
-    if (isSolvedLedger(ledgerPart(raw))) return;
-    localStorage.setItem(PREFIX + puzzleId, historyPart(raw) + META_SEP + encodeMeta(meta));
+    const ledger = composeLedger(ledgerFlags(ledgerPart(raw)), metaTokens(meta));
+    localStorage.setItem(PREFIX + puzzleId, historyPart(raw) + META_SEP + ledger);
   } catch {}
 }
 
@@ -437,12 +489,8 @@ export function hasState(puzzleId: string): PuzzleProgress {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return { started: false, completed: false, stale: false };
-    const ledger = ledgerPart(raw);
-    return {
-      started: true,
-      completed: isSolvedLedger(ledger),
-      stale: ledger.split(".").includes("st"),
-    };
+    const flags = ledgerFlags(ledgerPart(raw));
+    return { started: true, completed: flags.solved, stale: flags.stale };
   } catch {
     return { started: false, completed: false, stale: false };
   }
@@ -459,9 +507,9 @@ export function loadState(puzzleId: string, n: number): SavedState | null {
     }
     const state = decodeHistory(historyPart(raw), n);
     if (!state) return null;
-    const ledger = ledgerPart(raw);
-    state.completed = isSolvedLedger(ledger);
-    state.stale = ledger.split(".").includes("st");
+    const flags = ledgerFlags(ledgerPart(raw));
+    state.completed = flags.solved;
+    state.stale = flags.stale;
     return state;
   } catch {
     return null;
@@ -476,11 +524,12 @@ export function saveState(puzzleId: string, state: SavedState) {
     }
     const existing = localStorage.getItem(PREFIX + puzzleId);
     const existingLedger = existing ? ledgerPart(existing) : "";
-    // Completion swaps the ledger to the outcome family (the analytics event
-    // reads the in-memory copy, so the swap can't outrun the report), and the
-    // caller's `stale` settles `st` — a completed save carries a fresh
-    // check_answer verdict. Live counters are preserved verbatim while solving.
-    const ledger = state.completed ? (state.stale ? "s.st" : "s") : existingLedger;
+    // Completion raises the solved flag, and the caller's `stale` settles `st`
+    // — a completed save carries a fresh check_answer verdict. The counters
+    // are preserved verbatim either way.
+    const ledger = state.completed
+      ? composeLedger({ solved: true, stale: state.stale }, counterTokens(existingLedger))
+      : existingLedger;
     localStorage.setItem(
       PREFIX + puzzleId,
       encodeHistory(state) + (ledger ? META_SEP + ledger : ""),
@@ -503,20 +552,24 @@ export function getCompletedPuzzleIds(): string[] {
   return ids;
 }
 
-export function markStale(puzzleId: string): void {
+/** Stale is only meaningful beside solved; the counters ride along. */
+function setStale(puzzleId: string, stale: boolean): void {
   try {
     const raw = localStorage.getItem(PREFIX + puzzleId);
     if (!raw) return;
-    // Stale is only meaningful beside solved.
-    if (ledgerPart(raw) !== "s") return;
-    localStorage.setItem(PREFIX + puzzleId, raw + ".st");
+    const ledger = ledgerPart(raw);
+    if (!ledgerFlags(ledger).solved) return;
+    localStorage.setItem(
+      PREFIX + puzzleId,
+      historyPart(raw) + META_SEP + composeLedger({ solved: true, stale }, counterTokens(ledger)),
+    );
   } catch {}
 }
 
+export function markStale(puzzleId: string): void {
+  setStale(puzzleId, true);
+}
+
 export function unmarkStale(puzzleId: string): void {
-  try {
-    const raw = localStorage.getItem(PREFIX + puzzleId);
-    if (!raw || ledgerPart(raw) !== "s.st") return;
-    localStorage.setItem(PREFIX + puzzleId, raw.slice(0, -3));
-  } catch {}
+  setStale(puzzleId, false);
 }

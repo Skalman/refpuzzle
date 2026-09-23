@@ -232,9 +232,14 @@
 
 /* ── Questions grid (one column, two on wide screens) ── */
 .questions-grid {
+  /* Short boards get air on both ends; the dock's own border closes the grid. */
   &.single-col {
     margin-inline: auto;
     padding-block: 1rem;
+
+    & > .question-row:last-child {
+      border-bottom: none;
+    }
   }
 
   /* Wider than the header's switch: a column must fit five nowrap option cells. */
@@ -255,6 +260,33 @@
       grid-row: span 2;
       grid-template-rows: subgrid;
     }
+  }
+}
+
+/* ── Page footer ── */
+/* Flex rather than text-align, so the privacy dialog it hosts keeps its text left-aligned. */
+.page-footer {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin-top: 2rem;
+  font-size: var(--text-chrome);
+}
+
+.footer-separator {
+  color: var(--text-muted);
+}
+
+.footer-link {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  font: inherit;
+  color: var(--text-muted);
+  cursor: pointer;
+  &:hover {
+    color: var(--text);
+    text-decoration: underline;
   }
 }
 

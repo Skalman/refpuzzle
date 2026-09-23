@@ -5,23 +5,38 @@ function storedEntry(page: import("@playwright/test").Page) {
   return page.evaluate(() => localStorage.getItem("refpuzzle:puzzle:/2026-04-19/1"));
 }
 
-test("solving the board shows the completion banner", async ({ page }) => {
+/**
+ * The completion bar. The celebration dialog carries the same two buttons while
+ * it is up, so the tests below say which they mean.
+ */
+function completionBar(page: import("@playwright/test").Page) {
+  return page.locator(".puzzle-complete");
+}
+
+test("solving the board shows the completion bar", async ({ page }) => {
   await page.goto(DAY_ONE_L1);
 
-  await expect(page.getByText(s.puzzle.solved)).toBeHidden();
+  await expect(completionBar(page)).toBeHidden();
 
   await solveDayOneL1(page);
 
-  await expect(page.getByText(s.puzzle.solved)).toBeVisible();
-  // Level 1 of 6, so the banner offers the next level rather than the archive.
-  await expect(page.getByRole("button", { name: new RegExp(s.puzzle.nextPuzzle) })).toBeVisible();
+  await expect(completionBar(page)).toBeVisible();
+  // Level 1 of 6, so the bar offers the next level rather than the archive.
+  await expect(
+    completionBar(page).getByRole("button", { name: new RegExp(s.puzzle.nextPuzzle) }),
+  ).toBeVisible();
 });
 
 test("the next-puzzle button moves to level 2", async ({ page }) => {
   await page.goto(DAY_ONE_L1);
   await solveDayOneL1(page);
 
-  await page.getByRole("button", { name: new RegExp(s.puzzle.nextPuzzle) }).click();
+  // The celebration dialog is up and carries the same button; it is the one a
+  // player reaches first.
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: new RegExp(s.puzzle.nextPuzzle) })
+    .click();
 
   await expect(page.getByRole("tab", { name: s.difficulty[2] })).toHaveAttribute(
     "aria-selected",
@@ -33,11 +48,11 @@ test("the next-puzzle button moves to level 2", async ({ page }) => {
 test("a solved board is still solved after a reload", async ({ page }) => {
   await page.goto(DAY_ONE_L1);
   await solveDayOneL1(page);
-  await expect(page.getByText(s.puzzle.solved)).toBeVisible();
+  await expect(completionBar(page)).toBeVisible();
 
   await page.reload();
 
-  await expect(page.getByText(s.puzzle.solved)).toBeVisible();
+  await expect(completionBar(page)).toBeVisible();
   // The level tab reports the solve too.
   await expect(page.getByRole("tab", { name: s.difficulty[1] })).toHaveClass(/tab-solved/);
 });
@@ -45,10 +60,11 @@ test("a solved board is still solved after a reload", async ({ page }) => {
 test("solving keeps the history the player built", async ({ page }) => {
   await page.goto(DAY_ONE_L1);
   await solveDayOneL1(page);
-  await expect(page.getByText(s.puzzle.solved)).toBeVisible();
+  await expect(completionBar(page)).toBeVisible();
 
-  // Every mark still in the segment, and the ledger swapped to solved.
-  expect(await storedEntry(page)).toBe("v1.1A.2A.3A|s");
+  // Every mark still in the segment, and the ledger's solved flag set. The
+  // counters follow the flags, so match the flags rather than the tail.
+  expect(await storedEntry(page)).toMatch(/^v1\.1A\.2A\.3A\|s(\.|$)/);
 });
 
 test("a board that arrives already solved is recorded as solved", async ({ page }) => {
@@ -56,8 +72,8 @@ test("a board that arrives already solved is recorded as solved", async ({ page 
   // doing — this is the arrival the completion check exists to catch.
   await page.goto(`/${DAY_ONE}/1#1A.2A.3A`);
 
-  await expect(page.getByText(s.puzzle.solved)).toBeVisible();
+  await expect(completionBar(page)).toBeVisible();
   await expect(async () => {
-    expect(await storedEntry(page)).toMatch(/\|s$/);
+    expect(await storedEntry(page)).toMatch(/\|s(\.|$)/);
   }).toPass();
 });

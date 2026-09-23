@@ -10,9 +10,11 @@ export type DeduceAction =
  * rendered by `HintStep`: a single line, a headed block of lines, or a "look at
  * these questions" pointer. For `look`, Rust sends only the 0-based question
  * indices; the frontend builds the "Try looking at …" sentence (`hint.tryLooking`).
+ * `simple.qi` is the question a frontend-authored line is about; Rust never
+ * sets it.
  */
 export type ExplainStep =
-  | { type: "simple"; text: string }
+  | { type: "simple"; text: string; qi?: number }
   | { type: "complex"; header: string; lines: string[] }
   | { type: "look"; qis: number[] };
 

@@ -9,8 +9,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.125rem;
-  margin-top: 0.5rem;
-  padding: 0.4rem 0;
+  align-self: flex-start;
+  /* 3rem: the dock buttons' height, so the first row centers on them. */
+  padding: calc((3rem - var(--strip-line) - 0.2rem) / 2) 0 0.4rem;
+  flex: 1 1 auto;
 }
 
 .history-entry {
@@ -19,7 +21,13 @@
   gap: 0.125rem;
 }
 
+/* A flex container, so the icon is an item rather than an inline box: aligned
+   middle in a line box it would push the step half a pixel taller than the
+   pills, and the whole line stretches to the tallest step. */
 .history-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -56,9 +64,6 @@
 
   /* Settled ground before the last checkpoint, folded into one pill. */
   &.history-collapsed {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25em;
     padding: 0.1rem 0.5rem;
     border-radius: var(--radius-pill);
     background: var(--bg-hover);
@@ -94,9 +99,6 @@
      quieter of the two — Next puzzle stays the way forward. Armed, it borrows
      the refusal color to say the next press throws the solve away. */
   &.history-replay {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25em;
     padding: 0.1rem 0.5rem;
     border-radius: var(--radius-pill);
 
@@ -113,7 +115,6 @@
   display: inline-flex;
   align-items: center;
   height: var(--strip-line);
-  vertical-align: middle;
 }
 
 .history-hint,
