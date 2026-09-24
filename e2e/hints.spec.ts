@@ -3,7 +3,7 @@ import { test, expect, markCorrect, s, DAY_ONE_L1 } from "./fixtures.ts";
 test("the hint button reveals a step", async ({ page }) => {
   await page.goto(DAY_ONE_L1);
 
-  const hintPanel = page.locator(".puzzle-hint");
+  const hintPanel = page.getByTestId("hint-panel");
   await expect(hintPanel).toBeHidden();
 
   await page.getByRole("button", { name: s.puzzle.hint }).click();
@@ -20,7 +20,7 @@ test("More walks the mistake steps from vague to the specific option", async ({ 
   // the hint through the mistake steps, all three of which are frontend copy.
   await markCorrect(page, 0, 1);
 
-  const hintPanel = page.locator(".puzzle-hint");
+  const hintPanel = page.getByTestId("hint-panel");
   // The header menu and the share split-button both also spell "More".
   const more = hintPanel.getByRole("button", { name: s.puzzle.more });
 

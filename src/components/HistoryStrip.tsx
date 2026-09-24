@@ -62,14 +62,14 @@ export function describeDiff(prev: QuestionState[], next: QuestionState[]): Move
 }
 
 /** The strip's pills a press can land on, for its arrow keys and tab stop. */
-export const ENABLED_HISTORY_STEP = "button.history-step:not(:disabled)";
+export const ENABLED_HISTORY_STEP = "[data-history-step]:not(:disabled)";
 
 /** One pill of the strip: a step, Start, the folded range, or Replay. */
 function HistoryStepButton({
   class: extraClass,
   ...rest
 }: Omit<ButtonHTMLAttributes, "class" | "className"> & { class?: string }) {
-  return <button class={classNames("history-step", extraClass)} {...rest} />;
+  return <button data-history-step class={classNames("history-step", extraClass)} {...rest} />;
 }
 
 /** The icon slot leading a history pill. */
@@ -98,7 +98,7 @@ const MOVE_ICONS: Record<MoveInfo["icon"], { class?: string; icon: ComponentChil
 function HintBadge({ value }: { value: number | undefined }) {
   if (!value) return null;
   return (
-    <span class="history-hint">
+    <span class="history-hint" data-testid="history-hint">
       <IconHint size="1.5em" strokeWidth={3} class="icon-hint" />
       {value}
     </span>

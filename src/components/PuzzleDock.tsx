@@ -8,7 +8,11 @@ import { IconUndo, IconRedo, IconPin, IconHint } from "./Icons.tsx";
 import { Button, ButtonLink } from "./ui/Button.tsx";
 
 function HintBox({ children }: { children: ComponentChildren }) {
-  return <div class="puzzle-hint">{children}</div>;
+  return (
+    <div class="puzzle-hint" data-testid="hint-panel">
+      {children}
+    </div>
+  );
 }
 
 /** The hint so far, with a button for its next step while there is one. */
@@ -142,6 +146,7 @@ export function CompletionBar({
     <div
       ref={barRef}
       class={classNames("puzzle-complete", quiet && "quiet")}
+      data-testid="completion-bar"
       aria-label={s.puzzle.solved}
     >
       <Button variant="text" onClick={onSummary}>

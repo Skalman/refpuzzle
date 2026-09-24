@@ -95,15 +95,18 @@ export function useTheme() {
 /**
  * The explicit Auto / Light / Dark choice, revealed by a disclosure: the
  * header's split-button popup and the ⋯ menu's expanded block both render it.
- * `itemClass` enrolls the rows in whichever host's arrow-key walk surrounds them.
+ * `itemClass` styles the rows to match whichever host they sit in.
  */
 function ThemeOptions({
   theme,
   itemClass,
+  menuItem,
   onPick,
 }: {
   theme: ReturnType<typeof useTheme>;
   itemClass: string;
+  /** Rows of the ⋯ menu, walked by its arrow keys. */
+  menuItem?: boolean;
   onPick?: () => void;
 }) {
   const s = t();
@@ -114,6 +117,7 @@ function ThemeOptions({
           key={choice}
           class={itemClass}
           role="menuitemradio"
+          data-menu-item={menuItem || undefined}
           aria-checked={theme.mode === choice}
           onClick={(e) => {
             e.stopPropagation();
@@ -142,7 +146,7 @@ function MenuItem({
   children: ComponentChildren;
 }) {
   return (
-    <button class={classNames(MENU_ITEM, extra)} role="menuitem" onClick={onClick}>
+    <button class={classNames(MENU_ITEM, extra)} role="menuitem" onClick={onClick} data-menu-item>
       {children}
     </button>
   );
@@ -223,7 +227,7 @@ export function AppHeader({
   // Rows the viewport breakpoint hides have no offsetParent; skip those.
   function visibleMenuItems(): HTMLElement[] {
     const items: HTMLElement[] = [];
-    for (const el of moreMenuRef.current?.querySelectorAll(`.${MENU_ITEM}`) ?? []) {
+    for (const el of moreMenuRef.current?.querySelectorAll("[data-menu-item]") ?? []) {
       if (el instanceof HTMLElement && el.offsetParent !== null) items.push(el);
     }
     return items;
@@ -271,12 +275,13 @@ export function AppHeader({
           <span class="app-tagline hide-mobile">{s.puzzleList.subtitle}</span>
         </a>
       </h1>
-      <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler(".header-btn")}>
-        <a href="/archive" class="header-btn hide-mobile" tabIndex={0}>
+      <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler("[data-toolbar-item]")}>
+        <a href="/archive" class="header-btn hide-mobile" tabIndex={0} data-toolbar-item>
           <IconCalendar /> {s.daily.archive}
         </a>
         <span class="split-btn hide-mobile">
           <button
+            data-toolbar-item
             class="header-btn"
             tabIndex={-1}
             onClick={theme.toggle}
@@ -285,13 +290,19 @@ export function AppHeader({
           >
             {theme.modeIcon} {s.header.theme}
           </button>
-          <SplitMenu buttonClass="header-btn" tabIndex={-1} label={s.header.themeOptions}>
+          <SplitMenu
+            buttonClass="header-btn"
+            tabIndex={-1}
+            toolbarItem
+            label={s.header.themeOptions}
+          >
             {(close) => <ThemeOptions theme={theme} itemClass="theme-option" onPick={close} />}
           </SplitMenu>
         </span>
         <span class="more-menu-wrapper">
           <button
             ref={moreBtnRef}
+            data-toolbar-item
             class="header-btn more-btn"
             tabIndex={-1}
             onClick={(e) => {
@@ -317,6 +328,7 @@ export function AppHeader({
                 href="/archive"
                 class={classNames(MENU_ITEM, "show-mobile")}
                 role="menuitem"
+                data-menu-item
                 onClick={() => setMoreMenu(false)}
               >
                 {s.daily.archive}
@@ -325,6 +337,7 @@ export function AppHeader({
                 ref={themeOptionsBtnRef}
                 class={classNames(MENU_ITEM, "show-mobile")}
                 role="menuitem"
+                data-menu-item
                 aria-expanded={themeOptions}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -335,7 +348,11 @@ export function AppHeader({
               </button>
               {themeOptions && (
                 <div class="show-mobile" role="group" aria-label={s.header.themeOptions}>
-                  <ThemeOptions theme={theme} itemClass={classNames(MENU_ITEM, "theme-option")} />
+                  <ThemeOptions
+                    theme={theme}
+                    itemClass={classNames(MENU_ITEM, "theme-option")}
+                    menuItem
+                  />
                 </div>
               )}
               <hr class="more-menu-divider show-mobile" />

@@ -52,6 +52,8 @@ export function OptionButton({
       tabIndex={focused ? 0 : -1}
       data-qi={questionIndex}
       data-oi={index}
+      data-mark={mark}
+      data-sweep={sweep || undefined}
     >
       <span class="option-indicator">
         {showIcon ? (

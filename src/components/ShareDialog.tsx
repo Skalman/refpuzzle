@@ -35,7 +35,9 @@ export function ShareDialog({
     <Modal title={shareTitle} class="share-dialog" onClose={onClose}>
       {controls}
       <QrImage value={url} class="share-dialog-qr" />
-      <div class="share-dialog-url">{prettyUrl(url)}</div>
+      <div class="share-dialog-url" data-testid="share-url">
+        {prettyUrl(url)}
+      </div>
       {installAction && (
         <Button variant="primary" class="share-dialog-btn" onClick={installAction}>
           {s.install.button}

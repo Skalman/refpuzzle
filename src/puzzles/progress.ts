@@ -12,6 +12,17 @@ export function isSolved(state: PuzzleProgress): boolean {
   return state.completed && !state.stale;
 }
 
+/** How far along one level is, as its tab and rail show it; null when untouched. */
+export type LevelProgress = "stale" | "solved" | "started" | null;
+
+/** A stale level reads as stale whatever else it is; a solved one outranks begun. */
+export function levelProgress(state: PuzzleProgress): LevelProgress {
+  if (state.stale) return "stale";
+  if (state.completed) return "solved";
+  if (state.started) return "started";
+  return null;
+}
+
 /**
  * Where a day opens: the first level holding unfinished work — in progress, or
  * solved and since invalidated — then the first untouched one, and on a day

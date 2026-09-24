@@ -58,7 +58,7 @@ const NOTE_MS = 25_000;
  * cells so a lone refused click is hit at once.
  */
 function placeSweep(grid: HTMLElement) {
-  const cells = Array.from(grid.querySelectorAll<HTMLElement>(".option-btn.sweep"));
+  const cells = Array.from(grid.querySelectorAll<HTMLElement>("[data-sweep]"));
   const diagonals = cells.map((cell) => {
     const { left, top } = cell.getBoundingClientRect();
     return left + top;
@@ -746,7 +746,7 @@ export function PuzzleView({
   // Scroll focused question into view
   useEffect(() => {
     if (focusedQuestion == null) return;
-    const row = gridRef.current?.querySelector(`[data-qi="${focusedQuestion}"]`);
+    const row = gridRef.current?.querySelector(`[data-row="${focusedQuestion}"]`);
     if (row instanceof HTMLElement) row.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }, [focusedQuestion]);
 

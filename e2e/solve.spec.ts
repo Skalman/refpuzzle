@@ -10,7 +10,7 @@ function storedEntry(page: import("@playwright/test").Page) {
  * it is up, so the tests below say which they mean.
  */
 function completionBar(page: import("@playwright/test").Page) {
-  return page.locator(".puzzle-complete");
+  return page.getByTestId("completion-bar");
 }
 
 test("solving the board shows the completion bar", async ({ page }) => {
@@ -54,7 +54,10 @@ test("a solved board is still solved after a reload", async ({ page }) => {
 
   await expect(completionBar(page)).toBeVisible();
   // The level tab reports the solve too.
-  await expect(page.getByRole("tab", { name: s.difficulty[1] })).toHaveClass(/tab-solved/);
+  await expect(page.getByRole("tab", { name: s.difficulty[1] })).toHaveAttribute(
+    "data-progress",
+    "solved",
+  );
 });
 
 test("solving keeps the history the player built", async ({ page }) => {

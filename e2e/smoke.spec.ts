@@ -12,5 +12,5 @@ test("the day-one board loads and its cells are markable", async ({ page }) => {
   await expect(firstCell).toBeVisible();
 
   await firstCell.click();
-  await expect(firstCell).toHaveClass(/incorrect/);
+  await expect(firstCell).toHaveAttribute("data-mark", "incorrect");
 });

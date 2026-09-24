@@ -161,7 +161,7 @@ function computeGeometry(ctx: {
     const r = el.getBoundingClientRect();
     return { x: r.left - origin.left, y: r.top - origin.top, w: r.width, h: r.height };
   };
-  const row = (qi: number) => rel(grid.querySelector(`.question-row[data-qi="${qi}"]`));
+  const row = (qi: number) => rel(grid.querySelector(`[data-row="${qi}"]`));
   const cell = (qi: number, oi: number) =>
     rel(grid.querySelector(`[data-qi="${qi}"][data-oi="${oi}"]`));
   const n = marks.length;

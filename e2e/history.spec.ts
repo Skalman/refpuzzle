@@ -5,13 +5,13 @@ test("undo and redo walk the mark back and forward", async ({ page }) => {
 
   const target = cell(page, 0, 0);
   await target.click();
-  await expect(target).toHaveClass(/incorrect/);
+  await expect(target).toHaveAttribute("data-mark", "incorrect");
 
   await page.getByRole("button", { name: s.puzzle.undo }).click();
-  await expect(target).not.toHaveClass(/incorrect/);
+  await expect(target).toHaveAttribute("data-mark", "unmarked");
 
   await page.getByRole("button", { name: s.puzzle.redo }).click();
-  await expect(target).toHaveClass(/incorrect/);
+  await expect(target).toHaveAttribute("data-mark", "incorrect");
 });
 
 test("undo is unavailable on a fresh board", async ({ page }) => {
@@ -26,12 +26,11 @@ test("the history strip jumps back to the start", async ({ page }) => {
 
   await markCorrect(page, 0, 0);
   const target = cell(page, 0, 0);
-  await expect(target).toHaveClass(/correct/);
+  await expect(target).toHaveAttribute("data-mark", "correct");
 
   await page.getByRole("button", { name: s.puzzle.start }).click();
 
-  await expect(target).not.toHaveClass(/correct/);
-  await expect(target).not.toHaveClass(/incorrect/);
+  await expect(target).toHaveAttribute("data-mark", "unmarked");
 });
 
 test("marks survive a reload", async ({ page }) => {
@@ -42,8 +41,8 @@ test("marks survive a reload", async ({ page }) => {
 
   await page.reload();
 
-  await expect(cell(page, 0, 0)).toHaveClass(/correct/);
-  await expect(cell(page, 1, 1)).toHaveClass(/incorrect/);
+  await expect(cell(page, 0, 0)).toHaveAttribute("data-mark", "correct");
+  await expect(cell(page, 1, 1)).toHaveAttribute("data-mark", "incorrect");
 });
 
 test("a hint marker survives a reload with no further marks", async ({ page }) => {
@@ -53,11 +52,11 @@ test("a hint marker survives a reload with no further marks", async ({ page }) =
   // later hint has to outlive.
   await markCorrect(page, 0, 0);
   await page.getByRole("button", { name: s.puzzle.hint }).click();
-  await expect(page.locator(".history-hint")).toBeVisible();
+  await expect(page.getByTestId("history-hint")).toBeVisible();
 
   // No mark after the hint: the board never moves again, so only the marker's
   // own save can carry it across the reload.
   await page.reload();
 
-  await expect(page.locator(".history-hint")).toBeVisible();
+  await expect(page.getByTestId("history-hint")).toBeVisible();
 });

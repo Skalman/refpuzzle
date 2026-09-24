@@ -49,6 +49,10 @@ A puzzle is a grid: `n` **questions** down, `option_count` **options** across.
 - **flags** / **counters** — the two halves of the stored ledger. The flags (`s`
   solved, `st` stale) lead it and say where the puzzle stands; the counters follow
   and accumulate while solving. `docs/encoding.md` has the tokens.
+- **level progress** — how far along one level of a day is, as its tab and archive rail
+  show it: *stale* (solved, but the puzzle has since changed), *solved*, *started*, or
+  untouched. Stale outranks solved, solved outranks started. `levelProgress()` in
+  `src/puzzles/progress.ts`; the tabs expose it as `data-progress`. Frontend-only.
 - **outcome** — how one question went, for the shared result: *clean* (answered with
   no help), *hinted* (a hint named it), or *caught* (a refused checkpoint named it).
   Read off the markers' questions, so a question no marker named stays clean.

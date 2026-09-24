@@ -14,11 +14,14 @@ import { menuNavHandler } from "../lib/keyboard.ts";
 export function SplitMenu({
   buttonClass,
   tabIndex,
+  toolbarItem,
   label,
   children,
 }: {
   buttonClass: string;
   tabIndex?: number;
+  /** Enrolls the chevron in the arrow-key walk of the toolbar around it. */
+  toolbarItem?: boolean;
   label: string;
   children: (close: () => void) => ComponentChildren;
 }) {
@@ -60,6 +63,7 @@ export function SplitMenu({
       <button
         ref={dropRef}
         class={`${buttonClass} split-btn-drop`}
+        data-toolbar-item={toolbarItem || undefined}
         tabIndex={tabIndex}
         aria-label={label}
         aria-haspopup="true"

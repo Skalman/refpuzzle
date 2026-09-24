@@ -2,7 +2,7 @@ import { test, expect, cell, markCorrect, s, DAY_ONE, DAY_ONE_L1 } from "./fixtu
 
 /** The dialog prints the URL with the protocol stripped and no trailing slash. */
 async function dialogUrl(page: import("@playwright/test").Page): Promise<string> {
-  const shown = await page.locator(".share-dialog-url").innerText();
+  const shown = await page.getByTestId("share-url").innerText();
   return `http://${shown}`;
 }
 
@@ -40,8 +40,14 @@ test("a shared progress URL restores the board on a clean device", async ({ page
   });
   await freshPage.goto(url);
 
-  await expect(freshPage.locator('[data-qi="0"][data-oi="0"]')).toHaveClass(/correct/);
-  await expect(freshPage.locator('[data-qi="1"][data-oi="1"]')).toHaveClass(/incorrect/);
+  await expect(freshPage.locator('[data-qi="0"][data-oi="0"]')).toHaveAttribute(
+    "data-mark",
+    "correct",
+  );
+  await expect(freshPage.locator('[data-qi="1"][data-oi="1"]')).toHaveAttribute(
+    "data-mark",
+    "incorrect",
+  );
 
   await fresh.close();
 });
@@ -58,8 +64,8 @@ test("a shared solved board is recorded without the sharer's markers", async ({ 
 
   // The marker rides the link, but it records someone else's hint, so the board
   // is adopted without it.
-  await expect(page.locator('[data-qi="0"][data-oi="0"]')).toHaveClass(/correct/);
-  await expect(page.locator(".history-hint")).toHaveCount(0);
+  await expect(page.locator('[data-qi="0"][data-oi="0"]')).toHaveAttribute("data-mark", "correct");
+  await expect(page.getByTestId("history-hint")).toHaveCount(0);
 
   // Arrival records the solve. Read the entry rather than the board, which
   // would re-decode the hash the reload carries along.
@@ -71,8 +77,8 @@ test("a shared solved board is recorded without the sharer's markers", async ({ 
 test("playing on from a shared progress link keeps the sharer's markers out", async ({ page }) => {
   await page.goto(STARTED_WITH_HINT);
 
-  await expect(page.locator('[data-qi="0"][data-oi="0"]')).toHaveClass(/correct/);
-  await expect(page.locator(".history-hint")).toHaveCount(0);
+  await expect(page.locator('[data-qi="0"][data-oi="0"]')).toHaveAttribute("data-mark", "correct");
+  await expect(page.getByTestId("history-hint")).toHaveCount(0);
 
   // The first mark of this device's own is what writes the entry.
   await markCorrect(page, 1, 1);

@@ -45,7 +45,7 @@ export const QuestionRow = memo(
     const hasCorrect = marks.indexOf("correct") >= 0;
 
     return (
-      <div class="question-row" data-qi={index}>
+      <div class="question-row" data-row={index}>
         <div class={`validity-bar ${validity}`} />
         <div class="question-header">
           <span class="question-num">{index + 1}.</span>
