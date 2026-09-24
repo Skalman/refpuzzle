@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import type { ButtonHTMLAttributes, ComponentChildren } from "preact";
 import { LETTERS } from "../engine/types.ts";
 import { arrowNavHandler } from "../lib/keyboard.ts";
 import { classNames } from "../lib/classNames.ts";
@@ -60,6 +61,36 @@ export function describeDiff(prev: QuestionState[], next: QuestionState[]): Move
   return best;
 }
 
+/** The strip's pills a press can land on, for its arrow keys and tab stop. */
+export const ENABLED_HISTORY_STEP = "button.history-step:not(:disabled)";
+
+/** One pill of the strip: a step, Start, the folded range, or Replay. */
+function HistoryStepButton({
+  class: extraClass,
+  ...rest
+}: Omit<ButtonHTMLAttributes, "class" | "className"> & { class?: string }) {
+  return <button class={classNames("history-step", extraClass)} {...rest} />;
+}
+
+/** The icon slot leading a history pill. */
+function HistoryIcon({
+  class: extraClass,
+  children,
+}: {
+  class?: string;
+  children: ComponentChildren;
+}) {
+  return <span class={classNames("history-icon", extraClass)}>{children}</span>;
+}
+
+/** Each kind of step's icon: an answer, an elimination, a cleared cell, a checkpoint. */
+const MOVE_ICONS: Record<MoveInfo["icon"], { class?: string; icon: ComponentChildren }> = {
+  ok: { class: "icon-correct", icon: <IconCheck size="1.5em" strokeWidth={3} /> },
+  no: { class: "icon-incorrect", icon: <IconX size="1.5em" strokeWidth={3} /> },
+  un: { icon: <IconUndo size="1.5em" strokeWidth={3} /> },
+  pin: { class: "icon-checkpoint", icon: <IconPin size="1.1em" /> },
+};
+
 /**
  * Hint marker: the escalation level reached at one step, or the number of markers
  * folded into the pill. Same badge either way. Renders nothing at zero or absent.
@@ -100,8 +131,8 @@ function ReplayButton({ onPlayAgain }: { onPlayAgain: () => void }) {
     return () => clearTimeout(timer);
   }, [armed]);
   return (
-    <button
-      class={classNames("history-step history-replay", armed && "armed")}
+    <HistoryStepButton
+      class={classNames("history-replay", armed && "armed")}
       onClick={() => {
         if (!armed) {
           setArmed(true);
@@ -111,11 +142,11 @@ function ReplayButton({ onPlayAgain }: { onPlayAgain: () => void }) {
         onPlayAgain();
       }}
     >
-      <span class="history-icon">
+      <HistoryIcon>
         <IconReplay size="1em" />
-      </span>
+      </HistoryIcon>
       {armed ? s.puzzle.playAgainConfirm : s.puzzle.playAgain}
-    </button>
+    </HistoryStepButton>
   );
 }
 
@@ -211,15 +242,15 @@ export function HistoryStrip({
       ref={containerRef}
       class="history-strip"
       role="toolbar"
-      onKeyDown={arrowNavHandler("button.history-step:not(:disabled)")}
+      onKeyDown={arrowNavHandler(ENABLED_HISTORY_STEP)}
     >
       {/* Leads the row: expanding the Solved pill pushes the whole track out to
           the right, and the way out shouldn't travel with it. */}
       {completed && <ReplayButton onPlayAgain={onPlayAgain} />}
       {collapsible && (
-        <button
+        <HistoryStepButton
           class={classNames(
-            "history-step history-collapsed",
+            "history-collapsed",
             showAll && "expanded",
             !showAll && !completed && "joined",
             completed && "solved",
@@ -228,9 +259,9 @@ export function HistoryStrip({
           title={s.puzzle.verifiedTitle(answered, history[0].length)}
           onClick={() => setExpandedFold(expanded ? null : foldId)}
         >
-          <span class="history-icon">
+          <HistoryIcon>
             <IconChevronDown size="1.2em" />
-          </span>
+          </HistoryIcon>
           {completed ? s.puzzle.solvedBadge : s.puzzle.verifiedMarks(verifiedCount)}
           {/* Aggregates summarize the folded range; expanded, the steps show
               their own markers in place and the summary would double them. */}
@@ -240,20 +271,20 @@ export function HistoryStrip({
               <FailBadge count={hiddenFails} />
             </>
           )}
-        </button>
+        </HistoryStepButton>
       )}
       {showAll && (
         <span class="history-entry">
-          <button
-            class={classNames("history-step", currentIdx === 0 && "current")}
+          <HistoryStepButton
+            class={classNames(currentIdx === 0 && "current")}
             onClick={completed ? undefined : () => onJump(0)}
             disabled={completed}
           >
-            <span class="history-icon">
+            <HistoryIcon>
               <IconPlay size="1em" />
-            </span>{" "}
+            </HistoryIcon>{" "}
             {s.puzzle.start}
-          </button>
+          </HistoryStepButton>
           <HintBadge value={hints.get(0)?.level} />
           <FailBadge count={fails.get(0)?.count ?? 0} />
         </span>
@@ -269,9 +300,8 @@ export function HistoryStrip({
         return (
           // oxlint-disable-next-line react/no-array-index-key
           <span key={i} class="history-entry">
-            <button
+            <HistoryStepButton
               class={classNames(
-                "history-step",
                 joined && "joined",
                 !completed && stepIdx === currentIdx && "current",
                 stepIdx > currentIdx && "future",
@@ -281,28 +311,11 @@ export function HistoryStrip({
               disabled={completed}
               title={move.text}
             >
-              {move.icon === "pin" && (
-                <span class="history-icon icon-checkpoint">
-                  <IconPin size="1.1em" />{" "}
-                </span>
-              )}
-              {move.icon === "ok" && (
-                <span class="history-icon icon-correct">
-                  <IconCheck size="1.5em" strokeWidth={3} />{" "}
-                </span>
-              )}
-              {move.icon === "no" && (
-                <span class="history-icon icon-incorrect">
-                  <IconX size="1.5em" strokeWidth={3} />{" "}
-                </span>
-              )}
-              {move.icon === "un" && (
-                <span class="history-icon">
-                  <IconUndo size="1.5em" strokeWidth={3} />{" "}
-                </span>
-              )}
+              <HistoryIcon class={MOVE_ICONS[move.icon].class}>
+                {MOVE_ICONS[move.icon].icon}{" "}
+              </HistoryIcon>
               {move.text}
-            </button>
+            </HistoryStepButton>
             <HintBadge value={hintLevel} />
             <FailBadge count={fails.get(stepIdx)?.count ?? 0} />
           </span>

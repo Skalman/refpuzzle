@@ -1,5 +1,6 @@
 import { Fragment } from "preact";
 import { t } from "../i18n/index.ts";
+import { CloseButton } from "./ui/CloseButton.tsx";
 
 const IS_MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.userAgent);
 const MOD = IS_MAC ? "⌘" : "Ctrl";
@@ -74,9 +75,7 @@ export function KeyboardHelp({ onClose }: { onClose: () => void }) {
       <div class="keyboard-help-inner" onClick={(e) => e.stopPropagation()}>
         <div class="keyboard-help-header">
           <strong>{s.keyboard.title}</strong>
-          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
-            &times;
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
         <KeyboardShortcutList />
       </div>

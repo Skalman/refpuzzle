@@ -9,15 +9,19 @@ import { wasmReady, createPuzzleHandle, type PuzzleHandle } from "../lib/wasm.ts
 import { loadState, saveState, loadMeta, cloneStates } from "../lib/store.ts";
 import type { FailMarker, HintMarker, QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getPuzzleUrl } from "../lib/share.ts";
-import { guarded, arrowNavHandler, initRovingTabindex } from "../lib/keyboard.ts";
+import { guarded, initRovingTabindex } from "../lib/keyboard.ts";
 import { classNames } from "../lib/classNames.ts";
 import { debugEnabled } from "../lib/debug.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
 import { QuestionRow } from "./QuestionRow.tsx";
-import { HistoryStrip, describeDiff, lastCheckpointIdx } from "./HistoryStrip.tsx";
+import {
+  HistoryStrip,
+  ENABLED_HISTORY_STEP,
+  describeDiff,
+  lastCheckpointIdx,
+} from "./HistoryStrip.tsx";
 import { questionOutcomes, storedSolveStats } from "../lib/solve-summary.ts";
-import { HintStep } from "./HintStep.tsx";
 import { CoachText } from "./CoachText.tsx";
 import { CoachArrows } from "./CoachArrows.tsx";
 import { NudgeCallout } from "./NudgeCallout.tsx";
@@ -28,7 +32,14 @@ import { useHintEngine } from "./useHintEngine.ts";
 import { PuzzleShareDialog, type ShareMode } from "./PuzzleShareDialog.tsx";
 import { SolvedDialog } from "./SolvedDialog.tsx";
 import { useIdleNudge } from "./useIdleNudge.ts";
-import { IconUndo, IconRedo, IconPin, IconHint } from "./Icons.tsx";
+import {
+  CheckpointNote,
+  CompletionBar,
+  DebugHintPanel,
+  HintPanel,
+  ENABLED_CONTROL,
+  PuzzleControls,
+} from "./PuzzleDock.tsx";
 import { LEVELS } from "../puzzles/daily.ts";
 
 /** The mark shortcuts, one per option letter. */
@@ -249,8 +260,6 @@ export function PuzzleView({
   const focusedOptionRef = useRef<number | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const nextPuzzleRef = useRef<HTMLElement | null>(null);
-  // A callback ref types itself against whichever element the bar renders,
-  // where one `useRef` would need casting at each of the two sites.
   const setNextPuzzleRef = useCallback((el: HTMLElement | null) => {
     nextPuzzleRef.current = el;
   }, []);
@@ -725,13 +734,13 @@ export function PuzzleView({
   // Re-seed the toolbar's roving tabindex whenever its enabled set changes;
   // between those the arrow keys' own position stands.
   useEffect(() => {
-    initRovingTabindex(controlsRef.current, "button:not(:disabled)");
+    initRovingTabindex(controlsRef.current, ENABLED_CONTROL);
   }, [completed, canUndo, canRedo, canCheckpoint]);
 
   // The strip's buttons come and go with the history and with the range it has
   // collapsed, neither of which render declares — so this re-seeds every time.
   useEffect(() => {
-    initRovingTabindex(historyStripRef.current, "button.history-step:not(:disabled)");
+    initRovingTabindex(historyStripRef.current, ENABLED_HISTORY_STEP);
   });
 
   // Scroll focused question into view
@@ -957,40 +966,17 @@ export function PuzzleView({
         <div class="puzzle-dock">
           {/* Hint display */}
           {!completed && debugMode && hints.debugHints && (
-            <div class="puzzle-hint">
-              <ol>
-                {hints.debugHints.map((step, i) => (
-                  // oxlint-disable-next-line react/no-array-index-key
-                  <li key={i}>
-                    <HintStep step={step} />
-                  </li>
-                ))}
-              </ol>
-            </div>
+            <DebugHintPanel steps={hints.debugHints} />
           )}
           {!completed && !debugMode && hints.hintText && (
-            <div class="puzzle-hint">
-              <HintStep step={hints.hintText} />
-              {hints.hasMore && (
-                <button class="hint-more" onClick={hints.handleHint}>
-                  {s.puzzle.more}
-                </button>
-              )}
-            </div>
+            <HintPanel
+              step={hints.hintText}
+              onMore={hints.hasMore ? hints.handleHint : undefined}
+            />
           )}
 
-          {/* Checkpoint verdict */}
           {!completed && checkpointNote && (
-            <div class="puzzle-note" role="status" onClick={() => setCheckpointNote(null)}>
-              <span>{checkpointNote}</span>
-              <button
-                class="note-dismiss"
-                aria-label={s.aria.dismiss}
-                onClick={() => setCheckpointNote(null)}
-              >
-                &times;
-              </button>
-            </div>
+            <CheckpointNote text={checkpointNote} onDismiss={() => setCheckpointNote(null)} />
           )}
 
           {/* Controls and the history track share a line while the track is
@@ -998,48 +984,19 @@ export function PuzzleView({
               and the completion bar stands at the row's end instead. */}
           <div class="puzzle-dock-row">
             {!completed && (
-              <div
-                ref={controlsRef}
-                class="puzzle-controls"
-                role="toolbar"
-                onKeyDown={arrowNavHandler("button:not(:disabled)")}
-              >
-                <button
-                  class="toolbar-icon-btn"
-                  onClick={handleUndo}
-                  disabled={!canUndo}
-                  title={s.puzzle.undo}
-                >
-                  <IconUndo />
-                </button>
-                <button
-                  class="toolbar-icon-btn"
-                  onClick={handleRedo}
-                  disabled={!canRedo}
-                  title={s.puzzle.redo}
-                >
-                  <IconRedo />
-                </button>
-                <button
-                  ref={checkpointBtnRef}
-                  class="toolbar-accent-btn"
-                  onClick={handleSave}
-                  disabled={!canCheckpoint}
-                >
-                  <IconPin size="0.9em" class="icon-checkpoint" /> {s.puzzle.checkpoint}
-                </button>
-                <button
-                  ref={hintBtnRef}
-                  class="toolbar-accent-btn"
-                  onClick={handleHint}
-                  onMouseEnter={hints.getSolution}
-                  onFocus={hints.getSolution}
-                  onTouchStart={hints.getSolution}
-                  title={s.puzzle.hint}
-                >
-                  <IconHint size="0.9em" class="icon-hint" /> {s.puzzle.hint}
-                </button>
-              </div>
+              <PuzzleControls
+                toolbarRef={controlsRef}
+                checkpointRef={checkpointBtnRef}
+                hintRef={hintBtnRef}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                canCheckpoint={canCheckpoint}
+                onUndo={handleUndo}
+                onRedo={handleRedo}
+                onCheckpoint={handleSave}
+                onHint={handleHint}
+                onHintIntent={hints.getSolution}
+              />
             )}
 
             {historyRef.current.length > 1 && (
@@ -1058,24 +1015,14 @@ export function PuzzleView({
             {/* The completion bar: the ways onward, at the end of the row.
                 The dialog carries the same two while it is up. */}
             {completed && (
-              <div
-                ref={puzzleCompleteRef}
-                class={classNames("puzzle-complete", solvedDialog && "quiet")}
-                aria-label={s.puzzle.solved}
-              >
-                <button class="toolbar-accent-btn" onClick={() => setSolvedDialog("summary")}>
-                  {s.puzzle.summary}
-                </button>
-                {level < LEVELS.length ? (
-                  <button ref={setNextPuzzleRef} class="next-puzzle-btn" onClick={onNextPuzzle}>
-                    {s.puzzle.nextPuzzle} &rarr;
-                  </button>
-                ) : (
-                  <a ref={setNextPuzzleRef} href="/archive" class="next-puzzle-btn">
-                    {s.daily.archive} &rarr;
-                  </a>
-                )}
-              </div>
+              <CompletionBar
+                barRef={puzzleCompleteRef}
+                nextRef={setNextPuzzleRef}
+                quiet={solvedDialog !== null}
+                hasNext={level < LEVELS.length}
+                onSummary={() => setSolvedDialog("summary")}
+                onNext={onNextPuzzle}
+              />
             )}
           </div>
         </div>

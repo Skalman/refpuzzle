@@ -1,7 +1,7 @@
 import { useRef, useEffect, useId } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { t } from "../i18n/index.ts";
-import { classNames } from "../lib/classNames.ts";
+import { classNames } from "../../lib/classNames.ts";
+import { CloseButton } from "./CloseButton.tsx";
 
 /**
  * The help-panel shell: title, close button, body, dismissed from the backdrop,
@@ -18,7 +18,6 @@ export function Modal({
   onClose: () => void;
   children: ComponentChildren;
 }) {
-  const s = t();
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   useEffect(() => {
@@ -38,9 +37,7 @@ export function Modal({
       <div class="help-panel-inner">
         <div class="help-panel-header">
           <h3 id={titleId}>{title}</h3>
-          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
-            &times;
-          </button>
+          <CloseButton onClick={onClose} />
         </div>
         {children}
       </div>

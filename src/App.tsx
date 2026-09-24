@@ -4,15 +4,11 @@ import { LocationProvider, Router, Route, useLocation } from "preact-iso";
 import { tinykeys } from "tinykeys";
 import { PuzzleView } from "./components/PuzzleView.tsx";
 import { KeyboardHelp } from "./components/KeyboardHelp.tsx";
-import type { ComponentChildren } from "preact";
-import { IconCheck, IconX, IconDot, IconWarning, IconPin } from "./components/Icons.tsx";
-import type { HelpIcon } from "./i18n/en.ts";
 import { planImport, applyImport } from "./lib/backup.ts";
 import type { ImportPlan } from "./lib/backup.ts";
 import { joinSync } from "./lib/sync.ts";
 // QR components lazy-loaded via dynamic import (no preact dependency in chunks)
 import type { Puzzle } from "./engine/types.ts";
-import { LETTERS } from "./engine/types.ts";
 import {
   LEVELS,
   fetchDaily,
@@ -23,11 +19,8 @@ import {
 } from "./puzzles/daily.ts";
 import { dayStates, resumeLevel } from "./puzzles/progress.ts";
 import { useToday } from "./lib/today.ts";
-import { classNames } from "./lib/classNames.ts";
 import { decodePlaygroundHash } from "./lib/playground.ts";
-import { hasState } from "./lib/store.ts";
-import { guarded, arrowNavHandler } from "./lib/keyboard.ts";
-import { pointerKind } from "./lib/pointer.ts";
+import { guarded } from "./lib/keyboard.ts";
 import { t } from "./i18n/index.ts";
 import { replayLogoAnimation } from "./components/Logo.tsx";
 import { ImportPreview } from "./components/ImportPreview.tsx";
@@ -36,68 +29,15 @@ import { ArchivePage } from "./components/ArchivePage.tsx";
 import { useBackupFlow, BackupDialogs } from "./components/BackupFlow.tsx";
 import { ErrorOverlay } from "./components/ErrorOverlay.tsx";
 import { SafeAreaSimulator } from "./components/SafeAreaSimulator.tsx";
-import { Modal } from "./components/Modal.tsx";
-import { DebugDialog } from "./components/DebugDialog.tsx";
-import { contactAddress } from "./lib/contact.ts";
+import { InlineHelp } from "./components/InlineHelp.tsx";
+import { DifficultyTabs } from "./components/DifficultyTabs.tsx";
+import { PrintSheet } from "./components/PrintSheet.tsx";
+import { PageFooter } from "./components/PageFooter.tsx";
+import { Loading } from "./components/ui/Loading.tsx";
+import { NoticePage } from "./components/ui/NoticePage.tsx";
 import { adoptDebugParam } from "./lib/debug.ts";
 
 adoptDebugParam();
-
-const HELP_ICONS: Record<HelpIcon, ComponentChildren> = {
-  incorrect: <IconX size="0.9em" strokeWidth={3} class="icon-incorrect" />,
-  correct: <IconCheck size="0.9em" strokeWidth={3} class="icon-correct" />,
-  checkpoint: <IconPin size="0.9em" class="icon-checkpoint" />,
-};
-
-function InlineHelp({ highlight }: { highlight?: boolean }) {
-  const s = t();
-  const [firstVisit, setFirstVisit] = useState(() => {
-    try {
-      return !localStorage.getItem("refpuzzle:onboarded");
-    } catch {
-      return false;
-    }
-  });
-
-  useEffect(() => {
-    if (!firstVisit) return undefined;
-    try {
-      localStorage.setItem("refpuzzle:onboarded", "1");
-    } catch {
-      // ignore
-    }
-    const timer = setTimeout(() => setFirstVisit(false), 15000);
-    return () => clearTimeout(timer);
-  }, [firstVisit]);
-
-  const show = highlight || firstVisit;
-
-  return (
-    <div class="inline-help">
-      <div class={classNames("how-to-play", show && "how-to-play--first-visit")}>
-        <h4>{s.help.title}</h4>
-        <p class="how-to-goal">{s.help.goal}</p>
-        <ol>
-          {s.help.howToPlaySteps(pointerKind()).map((step) => (
-            <li key={step.text}>
-              {step.text}
-              {step.icon && (
-                <>
-                  {" "}
-                  <span class="nowrap">({HELP_ICONS[step.icon]})</span>
-                </>
-              )}
-            </li>
-          ))}
-        </ol>
-      </div>
-      <h4>{s.help.whatIs}</h4>
-      {s.help.descriptionParagraphs.map((p) => (
-        <p key={p}>{p}</p>
-      ))}
-    </div>
-  );
-}
 
 function DailyPage() {
   const dateStr = useToday();
@@ -124,8 +64,6 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     initialLevel && LEVELS.includes(initialLevel) ? initialLevel : resumeLevel(dayStates(dateStr)),
   );
 
-  const tabsRef = useRef<HTMLDivElement>(null);
-
   const selectLevel = useCallback(
     (level: number) => {
       setActiveLevel(level);
@@ -134,28 +72,6 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
     },
     [dateStr, route],
   );
-
-  const activeTabState = hasState(puzzleId(dateStr, activeLevel));
-  const activeTabIcon = activeTabState.stale
-    ? "stale"
-    : activeTabState.completed
-      ? "solved"
-      : activeTabState.started
-        ? "started"
-        : "";
-
-  useEffect(() => {
-    const container = tabsRef.current;
-    if (!container) return;
-    const tab = container.children[activeLevel - 1];
-    if (!(tab instanceof HTMLElement)) return;
-    // Center the tab horizontally without affecting vertical scroll (scrollIntoView would
-    // also scroll the page vertically when the tab isn't fully in view).
-    const tabRect = tab.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const delta = tabRect.left + tabRect.width / 2 - (containerRect.left + containerRect.width / 2);
-    container.scrollTo({ left: container.scrollLeft + delta, behavior: "smooth" });
-  }, [activeLevel, activeTabIcon]);
 
   // Page-level keyboard shortcuts
   useEffect(() => {
@@ -243,57 +159,11 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
       </div>
 
-      <div
-        ref={tabsRef}
-        class="difficulty-tabs"
-        role="tablist"
-        onKeyDown={arrowNavHandler(".difficulty-tab")}
-      >
-        {LEVELS.map((level) => {
-          const { started, completed: solved, stale } = hasState(puzzleId(dateStr, level));
-          return (
-            <button
-              key={level}
-              role="tab"
-              aria-selected={activeLevel === level}
-              tabIndex={activeLevel === level ? 0 : -1}
-              class={classNames(
-                "difficulty-tab",
-                activeLevel === level && "active",
-                solved && !stale && "tab-solved",
-                stale && "tab-stale",
-                started && "tab-started",
-              )}
-              onClick={() => selectLevel(level)}
-            >
-              {solved && !stale && (
-                <span class="tab-check">
-                  <IconCheck size="0.9em" />{" "}
-                </span>
-              )}
-              {stale && (
-                <span class="tab-stale-icon">
-                  <IconWarning size="0.9em" />{" "}
-                </span>
-              )}
-              {started && !solved && !stale && (
-                <span class="tab-started-dot">
-                  <IconDot size="0.9em" />{" "}
-                </span>
-              )}
-              <span class="tab-label">{s.difficulty[level]}</span>
-            </button>
-          );
-        })}
-      </div>
+      <DifficultyTabs dateStr={dateStr} activeLevel={activeLevel} onSelect={selectLevel} />
 
-      {loading && (
-        <div class="loading">
-          <span class="spinner" />
-        </div>
-      )}
+      {loading && <Loading />}
 
-      {!loading && !currentPuzzle && <div class="loading">{s.app.noPuzzle}</div>}
+      {!loading && !currentPuzzle && <Loading>{s.app.noPuzzle}</Loading>}
 
       {!loading && currentPuzzle && (
         <PuzzleView
@@ -312,43 +182,7 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
 
       <InlineHelp />
 
-      {puzzles && (
-        <div class="print-only">
-          <h1>
-            {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
-          </h1>
-          {LEVELS.map((level) => {
-            const p = puzzles[`${level}`];
-            if (!p) return null;
-            return (
-              <div key={level} class="print-puzzle">
-                <h2>
-                  {s.difficulty[level]} ({p.questions.length} {s.puzzleList.questions})
-                </h2>
-                {p.questions.map((q, qi) => (
-                  <div key={q.text} class="print-question">
-                    <div class="print-question-text">
-                      {qi + 1}. {q.text}
-                    </div>
-                    <div
-                      class={classNames(
-                        "print-options",
-                        q.options.some((l) => l.length > 12) && "print-options-long",
-                      )}
-                    >
-                      {q.options.map((label, oi) => (
-                        <span key={LETTERS[oi]} class="print-option">
-                          {LETTERS[oi]}. {label}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {puzzles && <PrintSheet dateStr={dateStr} puzzles={puzzles} />}
 
       <BackupDialogs backup={backup} exportFilename={`refpuzzle-backup-${dateStr}.json`} />
     </>
@@ -372,11 +206,11 @@ function DayRoute() {
   const level = Number(parts[1]) || undefined;
   if (!dateStr || !isValidDate(dateStr)) {
     return (
-      <div class="not-found">
+      <NoticePage>
         <h1>{s.notFound.noPuzzle}</h1>
         <p>{s.app.noPuzzle}</p>
         <a href="/">{s.notFound.backToToday}</a>
-      </div>
+      </NoticePage>
     );
   }
   return <DayView dateStr={dateStr} initialLevel={level} />;
@@ -406,12 +240,8 @@ function SyncRoute() {
   }, [code]);
 
   return (
-    <div class="not-found">
-      {status === "joining" && (
-        <div class="loading">
-          <span class="spinner" />
-        </div>
-      )}
+    <NoticePage>
+      {status === "joining" && <Loading />}
       {status === "error" && (
         <>
           <h1>{s.sync.expired}</h1>
@@ -431,7 +261,7 @@ function SyncRoute() {
           }}
         />
       )}
-    </div>
+    </NoticePage>
   );
 }
 
@@ -463,13 +293,8 @@ function PlaygroundRoute() {
       .catch(() => setState({ status: "error" }));
   }, [hash]);
 
-  if (state.status === "loading")
-    return (
-      <div class="loading">
-        <span class="spinner" />
-      </div>
-    );
-  if (state.status === "error") return <div class="loading">Invalid puzzle hash.</div>;
+  if (state.status === "loading") return <Loading />;
+  if (state.status === "error") return <Loading>Invalid puzzle hash.</Loading>;
   return (
     <PuzzleView
       key={hash}
@@ -487,70 +312,11 @@ function PlaygroundRoute() {
 function NotFound() {
   const s = t();
   return (
-    <div class="not-found">
+    <NoticePage>
       <h1>{s.notFound.title}</h1>
       <p>{s.notFound.pageNotFound}</p>
       <a href="/">{s.notFound.backToPuzzles}</a>
-    </div>
-  );
-}
-
-function PageFooter() {
-  const s = t();
-  const [openNote, setOpenNote] = useState<"privacy" | "contact" | "debug" | null>(null);
-  const contact = contactAddress();
-  const close = () => setOpenNote(null);
-  return (
-    <footer class="page-footer">
-      <button class="footer-link" onClick={() => setOpenNote("privacy")}>
-        {s.privacy.link}
-      </button>
-      {/* No address configured for this build: nothing to offer. */}
-      {contact && (
-        <>
-          <span class="footer-separator" aria-hidden="true">
-            ·
-          </span>
-          <button class="footer-link" onClick={() => setOpenNote("contact")}>
-            {s.contact.link}
-          </button>
-        </>
-      )}
-      {import.meta.env.DEV && (
-        <>
-          <span class="footer-separator" aria-hidden="true">
-            ·
-          </span>
-          <button class="footer-link" onClick={() => setOpenNote("debug")}>
-            Debug
-          </button>
-          {openNote === "debug" && <DebugDialog onClose={close} />}
-        </>
-      )}
-      {(openNote === "privacy" || openNote === "contact") && (
-        <Modal title={s[openNote].title} onClose={close}>
-          {openNote === "privacy" ? (
-            <>
-              {s.privacy.paragraphs.map((x) => (
-                <p key={x}>{x}</p>
-              ))}
-              {contact && (
-                <p>
-                  {s.privacy.contactPrompt} <a href={`mailto:${contact}`}>{contact}</a>
-                </p>
-              )}
-            </>
-          ) : (
-            <>
-              <p>{s.contact.body}</p>
-              <p>
-                <a href={`mailto:${contact}`}>{contact}</a>
-              </p>
-            </>
-          )}
-        </Modal>
-      )}
-    </footer>
+    </NoticePage>
   );
 }
 

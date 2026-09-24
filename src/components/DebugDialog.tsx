@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
-import { Modal } from "./Modal.tsx";
+import { Modal } from "./ui/Modal.tsx";
+import { Button } from "./ui/Button.tsx";
 import { debugEnabled, nudgeSeconds, setDebugEnabled, setNudgeSeconds } from "../lib/debug.ts";
 
 /** Offered waits for the idle nudge, in seconds; null is the shipped one. */
@@ -56,9 +57,9 @@ export function DebugDialog({ onClose }: { onClose: () => void }) {
       </fieldset>
 
       <div class="debug-actions">
-        <button class="primary-btn" onClick={saveAndReload}>
+        <Button variant="primary" onClick={saveAndReload}>
           Save and reload
-        </button>
+        </Button>
       </div>
     </Modal>
   );

@@ -4,7 +4,8 @@ import { t } from "../i18n/index.ts";
 import { confetti } from "../lib/confetti.ts";
 import { useShareable } from "../lib/hooks.ts";
 import { hostOf } from "../lib/share.ts";
-import { Modal } from "./Modal.tsx";
+import { Modal } from "./ui/Modal.tsx";
+import { Button, ButtonLink } from "./ui/Button.tsx";
 import { dayNumber } from "../puzzles/daily.ts";
 import { classNames } from "../lib/classNames.ts";
 import type { QuestionOutcome, SolveStats } from "../lib/solve-summary.ts";
@@ -224,28 +225,28 @@ export function SolvedDialog({
       />
       <div class="solved-share">
         {shareable.canShare && (
-          <button class="outline-btn" onClick={shareable.share}>
+          <Button variant="outline" onClick={shareable.share}>
             <IconShare size="0.9em" /> {s.share.share}
-          </button>
+          </Button>
         )}
-        <button class="outline-btn" onClick={shareable.copy}>
+        <Button variant="outline" onClick={shareable.copy}>
           {shareable.copied ? s.share.copied : s.share.copyText}
-        </button>
+        </Button>
       </div>
       <div class="solved-actions">
         {hasNext && (
-          <button class="next-puzzle-btn solved-primary" onClick={onNext} autofocus>
+          <Button variant="next" class="solved-primary" onClick={onNext} autofocus>
             {s.puzzle.nextPuzzle} &rarr;
-          </button>
+          </Button>
         )}
         {hasNext ? (
-          <a href="/archive" class="toolbar-accent-btn">
+          <ButtonLink variant="text" href="/archive">
             {s.daily.archive}
-          </a>
+          </ButtonLink>
         ) : (
-          <a href="/archive" class="primary-btn solved-primary" autofocus>
+          <ButtonLink variant="primary" class="solved-primary" href="/archive" autofocus>
             {s.daily.archive} &rarr;
-          </a>
+          </ButtonLink>
         )}
       </div>
     </Modal>

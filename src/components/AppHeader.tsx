@@ -13,6 +13,8 @@ import { ShareDialog } from "./ShareDialog.tsx";
 import { SplitMenu } from "./SplitMenu.tsx";
 import { t } from "../i18n/index.ts";
 import { arrowNavHandler, menuNavHandler } from "../lib/keyboard.ts";
+import { classNames } from "../lib/classNames.ts";
+import type { ComponentChildren } from "preact";
 
 if (import.meta.env.DEV) document.title = `(dev) ${document.title}`;
 
@@ -127,6 +129,25 @@ function ThemeOptions({
   );
 }
 
+/** A row of the ⋯ menu. */
+const MENU_ITEM = "more-menu-item";
+
+function MenuItem({
+  class: extra,
+  onClick,
+  children,
+}: {
+  class?: string;
+  onClick: () => void;
+  children: ComponentChildren;
+}) {
+  return (
+    <button class={classNames(MENU_ITEM, extra)} role="menuitem" onClick={onClick}>
+      {children}
+    </button>
+  );
+}
+
 type InstallState =
   | { type: "native"; fire: () => void }
   | { type: "instructions"; message: string }
@@ -202,7 +223,7 @@ export function AppHeader({
   // Rows the viewport breakpoint hides have no offsetParent; skip those.
   function visibleMenuItems(): HTMLElement[] {
     const items: HTMLElement[] = [];
-    for (const el of moreMenuRef.current?.querySelectorAll(".more-menu-item") ?? []) {
+    for (const el of moreMenuRef.current?.querySelectorAll(`.${MENU_ITEM}`) ?? []) {
       if (el instanceof HTMLElement && el.offsetParent !== null) items.push(el);
     }
     return items;
@@ -231,6 +252,12 @@ export function AppHeader({
     setMoreMenu(false);
     moreBtnRef.current?.focus();
   });
+
+  /** A menu row's click: the menu closes, then `action` runs. */
+  const pick = (action: () => void) => () => {
+    setMoreMenu(false);
+    action();
+  };
 
   return (
     <header class="app-header">
@@ -281,32 +308,14 @@ export function AppHeader({
             <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
               {/* Installed, the share dialog's App mode offers this link. */}
               {!(isInstalled && onShare) && (
-                <button
-                  class="more-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenu(false);
-                    setShowInstallInfo(true);
-                  }}
-                >
+                <MenuItem onClick={pick(() => setShowInstallInfo(true))}>
                   {isInstalled ? s.install.shareApp : s.install.button}
-                </button>
+                </MenuItem>
               )}
-              {onShare && (
-                <button
-                  class="more-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenu(false);
-                    onShare();
-                  }}
-                >
-                  {s.share.share}
-                </button>
-              )}
+              {onShare && <MenuItem onClick={pick(onShare)}>{s.share.share}</MenuItem>}
               <a
                 href="/archive"
-                class="more-menu-item show-mobile"
+                class={classNames(MENU_ITEM, "show-mobile")}
                 role="menuitem"
                 onClick={() => setMoreMenu(false)}
               >
@@ -314,7 +323,7 @@ export function AppHeader({
               </a>
               <button
                 ref={themeOptionsBtnRef}
-                class="more-menu-item show-mobile"
+                class={classNames(MENU_ITEM, "show-mobile")}
                 role="menuitem"
                 aria-expanded={themeOptions}
                 onClick={(e) => {
@@ -326,44 +335,17 @@ export function AppHeader({
               </button>
               {themeOptions && (
                 <div class="show-mobile" role="group" aria-label={s.header.themeOptions}>
-                  <ThemeOptions theme={theme} itemClass="more-menu-item theme-option" />
+                  <ThemeOptions theme={theme} itemClass={classNames(MENU_ITEM, "theme-option")} />
                 </div>
               )}
               <hr class="more-menu-divider show-mobile" />
               {onKeyboardHelp && (
-                <button
-                  class="more-menu-item hide-mobile"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenu(false);
-                    onKeyboardHelp();
-                  }}
-                >
+                <MenuItem class="hide-mobile" onClick={pick(onKeyboardHelp)}>
                   {s.keyboard.title}
-                </button>
+                </MenuItem>
               )}
-              {onPrint && (
-                <button
-                  class="more-menu-item"
-                  role="menuitem"
-                  onClick={() => {
-                    setMoreMenu(false);
-                    onPrint();
-                  }}
-                >
-                  {s.daily.printAll}
-                </button>
-              )}
-              <button
-                class="more-menu-item"
-                role="menuitem"
-                onClick={() => {
-                  setMoreMenu(false);
-                  onBackup();
-                }}
-              >
-                {s.backup.button}
-              </button>
+              {onPrint && <MenuItem onClick={pick(onPrint)}>{s.daily.printAll}</MenuItem>}
+              <MenuItem onClick={pick(onBackup)}>{s.backup.button}</MenuItem>
             </div>
           )}
         </span>

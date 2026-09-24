@@ -1,5 +1,6 @@
-import { useRef, useEffect } from "preact/hooks";
 import { t } from "../i18n/index.ts";
+import { Modal } from "./ui/Modal.tsx";
+import { Button, buttonClass } from "./ui/Button.tsx";
 
 export function BackupDialog({
   onExport,
@@ -13,46 +14,27 @@ export function BackupDialog({
   onClose: () => void;
 }) {
   const s = t();
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
-
   return (
-    <dialog
-      ref={ref}
-      class="help-panel sync-dialog"
-      onClose={onClose}
-      onClick={(e) => {
-        if (e.target === ref.current) onClose();
-      }}
-    >
-      <div class="help-panel-inner">
-        <div class="help-panel-header">
-          <h3>{s.backup.button}</h3>
-          <button class="help-close" onClick={onClose} aria-label={s.aria.close}>
-            &times;
-          </button>
-        </div>
-        <div class="backup-actions">
-          <button class="primary-btn backup-action-btn" onClick={onSync}>
-            {s.sync.title}
-          </button>
-          <button
-            class="primary-btn backup-action-btn"
-            onClick={() => {
-              onClose();
-              onExport();
-            }}
-          >
-            {s.backup.downloadBackup}
-          </button>
-          <label class="primary-btn backup-action-btn">
-            {s.backup.uploadBackup}
-            <input type="file" accept=".json" class="file-input" onChange={(e) => onImport(e)} />
-          </label>
-        </div>
+    <Modal title={s.backup.button} class="sync-dialog" onClose={onClose}>
+      <div class="backup-actions">
+        <Button variant="primary" class="backup-action-btn" onClick={onSync}>
+          {s.sync.title}
+        </Button>
+        <Button
+          variant="primary"
+          class="backup-action-btn"
+          onClick={() => {
+            onClose();
+            onExport();
+          }}
+        >
+          {s.backup.downloadBackup}
+        </Button>
+        <label class={buttonClass("primary", "backup-action-btn")}>
+          {s.backup.uploadBackup}
+          <input type="file" accept=".json" class="file-input" onChange={(e) => onImport(e)} />
+        </label>
       </div>
-    </dialog>
+    </Modal>
   );
 }
