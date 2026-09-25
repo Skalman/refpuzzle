@@ -102,11 +102,11 @@ export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: P
       </svg>
       {geom?.tally && (
         <div
-          class="absolute flex gap-[0.4rem] rounded-full border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-surface px-[0.45rem] py-[0.2rem] text-caption text-default shadow-floating"
+          class="absolute flex gap-1.5 rounded-full border border-accent-line bg-surface px-2 py-1 text-caption text-default shadow-floating"
           style={{ left: `${geom.tally.x}px`, top: `${geom.tally.y}px` }}
         >
           {geom.tally.counts.map((c) => (
-            <span key={c.letter} class="inline-flex items-baseline gap-[0.2rem]">
+            <span key={c.letter} class="inline-flex items-baseline gap-1">
               <span class="font-bold text-accent">{c.letter}</span>
               {c.n}
             </span>
@@ -126,7 +126,7 @@ function renderShape(s: Shape, i: number, seq: number) {
     return (
       <rect
         key={key}
-        class="fill-accent-soft stroke-[color-mix(in_srgb,var(--accent)_45%,transparent)] stroke-1 motion-safe:origin-center motion-safe:animate-coach-pulse motion-safe:transition-[x,y,width,height] motion-safe:duration-400 motion-safe:transform-fill"
+        class="fill-accent-soft stroke-accent-line stroke-1 motion-safe:origin-center motion-safe:animate-coach-pulse motion-safe:transition-[x,y,width,height] motion-safe:duration-400 motion-safe:transform-fill"
         x={s.rect.x}
         y={s.rect.y}
         width={s.rect.w}
@@ -153,8 +153,22 @@ function renderShape(s: Shape, i: number, seq: number) {
   const d = arcPath(s.x1, s.y1, s.x2, s.y2, s.head);
   return (
     <g key={key}>
-      <path class={COACH_ARROW_OUTLINE} d={d} pathLength={100} fill="none" />
-      <path class={COACH_ARROW} d={d} pathLength={100} fill="none" />
+      <path
+        class={COACH_ARROW_OUTLINE}
+        d={d}
+        pathLength={100}
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+      <path
+        class={COACH_ARROW}
+        d={d}
+        pathLength={100}
+        fill="none"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
     </g>
   );
 }

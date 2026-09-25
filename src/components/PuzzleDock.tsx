@@ -9,7 +9,7 @@ import { Button, ButtonLink } from "./ui/Button.tsx";
 function HintBox({ children }: { children: ComponentChildren }) {
   return (
     <div
-      class="mt-3 flex items-center justify-between gap-2 rounded-lg border border-accent bg-accent-soft px-4 py-[0.6rem] text-body text-accent"
+      class="mt-3 flex items-center justify-between gap-2 rounded-lg border border-accent bg-accent-soft px-4 py-2.5 text-body text-accent"
       data-testid="hint-panel"
     >
       {children}
@@ -53,7 +53,7 @@ export function CheckpointNote({ text, onDismiss }: { text: string; onDismiss: (
   const s = t();
   return (
     <div
-      class="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border bg-surface px-4 py-[0.6rem] text-body text-muted"
+      class="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border bg-surface px-4 py-2.5 text-body text-muted"
       role="status"
       onClick={onDismiss}
     >

@@ -163,6 +163,8 @@
 @theme inline {
   --color-accent: var(--accent);
   --color-accent-soft: var(--accent-soft);
+  /* A thin accent edge over any surface: the coach's tally and halo. */
+  --color-accent-line: color-mix(in srgb, var(--accent) 45%, transparent);
   --color-on-accent: var(--on-accent);
   --color-valid: var(--valid);
   --color-valid-soft: var(--valid-soft);

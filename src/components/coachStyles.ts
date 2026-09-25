@@ -10,6 +10,6 @@ export const COACH_SVG = tw`absolute inset-0 size-full overflow-visible`;
 const ARROW_MOTION = tw`motion-safe:animate-coach-draw motion-safe:transition-[d] motion-safe:duration-400 motion-safe:[stroke-dasharray:100] motion-safe:[stroke-dashoffset:100]`;
 
 /** The wider under-stroke that gives the arrow a crisp outline in the light theme. */
-export const COACH_ARROW_OUTLINE = tw`fill-none stroke-(--coach-outline) stroke-6 [stroke-linecap:round] [stroke-linejoin:round] ${ARROW_MOTION}`;
+export const COACH_ARROW_OUTLINE = tw`fill-none stroke-(--coach-outline) stroke-6 ${ARROW_MOTION}`;
 
-export const COACH_ARROW = tw`fill-none stroke-(--coach-arrow) stroke-2 filter-(--coach-glow) [stroke-linecap:round] [stroke-linejoin:round] ${ARROW_MOTION}`;
+export const COACH_ARROW = tw`fill-none stroke-(--coach-arrow) stroke-2 filter-(--coach-glow) ${ARROW_MOTION}`;

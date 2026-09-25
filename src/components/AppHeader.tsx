@@ -251,12 +251,12 @@ export function AppHeader({
     <header class="relative mb-4 flex items-center justify-between">
       <h1 class="m-0 flex items-center gap-2 text-title font-normal">
         <Logo />
-        <a href="/" class="inline-flex flex-col leading-[1.2]">
-          <span class="tracking-[-0.02em]">
+        <a href="/" class="inline-flex flex-col leading-tight">
+          <span class="tracking-tight">
             <Brand />
             {import.meta.env.DEV && <span class="font-bold text-(--dev-badge)"> (dev)</span>}
           </span>
-          <span class="hidden text-badge font-normal tracking-[0.03em] text-muted md:inline">
+          <span class="hidden text-badge font-normal tracking-wide text-muted md:inline">
             {s.puzzleList.subtitle}
           </span>
         </a>
@@ -353,7 +353,7 @@ export function AppHeader({
               {themeOptions && (
                 // Under their disclosure, indented.
                 <div class="md:hidden" role="group" aria-label={s.header.themeOptions}>
-                  <ThemeOptions theme={theme} itemClass="pl-[1.6rem]" />
+                  <ThemeOptions theme={theme} itemClass="pl-6.5" />
                 </div>
               )}
               <hr class="m-0 border-t md:hidden" />

@@ -49,12 +49,12 @@ export function KeyboardShortcutList() {
           <h4 class="mb-1 text-body font-bold text-default">{group.title}</h4>
           <dl class="m-0">
             {group.shortcuts.map((sc) => (
-              <div key={sc.keys[0]} class="flex items-baseline gap-3 py-[0.15rem] text-chrome">
+              <div key={sc.keys[0]} class="flex items-baseline gap-3 py-0.5 text-chrome">
                 <dt class="w-36 shrink-0 text-right">
                   {sc.keys.map((k, i) => (
                     <Fragment key={k}>
                       {i > 0 && " / "}
-                      <kbd class="rounded-sm border bg-hover px-[0.35rem] py-[0.05rem] text-chrome font-semibold font-[inherit]">
+                      <kbd class="rounded-sm border bg-hover px-1.5 text-chrome font-semibold font-[inherit]">
                         {k}
                       </kbd>
                     </Fragment>

@@ -96,7 +96,7 @@ export function NudgeCallout({
           // The coach's text, a step louder and over the board rather than
           // beside it. `transform`, not `translate`: the rise-in animates it.
           COACH_TEXT,
-          "absolute max-w-[min(16rem,80vw)] rounded-lg bg-page px-[0.9rem] py-2 text-center font-semibold text-pending transform-[translateX(-50%)]",
+          "absolute max-w-[min(16rem,80vw)] rounded-lg bg-page px-3.5 py-2 text-center font-semibold text-pending transform-[translateX(-50%)]",
           // Said its piece: the text goes and the arrow is left pointing.
           said ? "opacity-0 motion-safe:animate-nudge-said" : "motion-safe:animate-nudge-say",
         )}
@@ -120,8 +120,22 @@ export function NudgeCallout({
         {placement && (
           // Keyed on the kind, so switching nudges replays the draw-on.
           <g key={kind}>
-            <path class={COACH_ARROW_OUTLINE} d={placement.path} pathLength={100} fill="none" />
-            <path class={COACH_ARROW} d={placement.path} pathLength={100} fill="none" />
+            <path
+              class={COACH_ARROW_OUTLINE}
+              d={placement.path}
+              pathLength={100}
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+            <path
+              class={COACH_ARROW}
+              d={placement.path}
+              pathLength={100}
+              fill="none"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
           </g>
         )}
       </svg>

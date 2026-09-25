@@ -25,7 +25,7 @@ export function CoachText({
   return (
     <div
       ref={boxRef}
-      class="mb-1 flex h-17 items-center justify-center px-4 py-[0.4rem] text-center"
+      class="mb-1 flex h-17 items-center justify-center px-4 py-1.5 text-center"
       aria-live="polite"
     >
       {message && (

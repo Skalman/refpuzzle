@@ -15,7 +15,7 @@ export function PrintSheet({
   const s = t();
   return (
     <div class="hidden print:visible print:absolute print:top-0 print:left-0 print:block print:w-full print:bg-[#fff] print:p-4 print:text-[11pt] print:text-[#000] print:**:visible">
-      <h1 class="font-bold print:mb-2 print:border-b print:border-[#000] print:pb-[0.3rem] print:text-[14pt]">
+      <h1 class="font-bold print:mb-2 print:border-b print:border-[#000] print:pb-1 print:text-[14pt]">
         {s.app.title} &mdash; {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
       </h1>
       {LEVELS.map((level) => {
@@ -23,12 +23,12 @@ export function PrintSheet({
         if (!p) return null;
         return (
           <div key={level} class="print:mb-4 print:break-inside-avoid">
-            <h2 class="font-bold print:mb-[0.3rem] print:text-[12pt]">
+            <h2 class="font-bold print:mb-1 print:text-[12pt]">
               {s.difficulty[level]} ({p.questions.length} {s.puzzleList.questions})
             </h2>
             {p.questions.map((q, qi) => (
-              <div key={q.text} class="print:mb-[0.4rem]">
-                <div class="print:mb-[0.15rem] print:font-semibold">
+              <div key={q.text} class="print:mb-1.5">
+                <div class="print:mb-0.5 print:font-semibold">
                   {qi + 1}. {q.text}
                 </div>
                 <div

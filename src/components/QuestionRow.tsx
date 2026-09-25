@@ -64,7 +64,7 @@ export const QuestionRow = memo(
         data-row={index}
       >
         <div class={`row-span-full mr-2 shrink-0 self-stretch ${VALIDITY_BAR[validity]}`} />
-        <div class="col-start-2 mb-[0.3rem] flex gap-[0.4rem]">
+        <div class="col-start-2 mb-1 flex gap-1.5">
           <span class="shrink-0 text-body font-bold text-muted group-has-focus-visible:text-accent">
             {index + 1}.
           </span>
@@ -73,7 +73,7 @@ export const QuestionRow = memo(
         <div
           class={classNames(
             "col-start-2 flex self-start *:flex-1",
-            isLong ? "flex-col gap-[0.2rem] *:whitespace-normal" : "gap-1",
+            isLong ? "flex-col gap-1 *:whitespace-normal" : "gap-1",
           )}
         >
           {question.options.map((_label, oi) => (

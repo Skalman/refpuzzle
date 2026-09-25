@@ -6,7 +6,7 @@ export function HintStep({ step }: { step: ExplainStep }) {
     return (
       <div>
         {step.header}
-        <ul class="mt-[0.3rem] list-disc pl-6">
+        <ul class="mt-1 list-disc pl-6">
           {step.lines.map((line, i) => (
             // oxlint-disable-next-line react/no-array-index-key
             <li key={i}>{line}</li>

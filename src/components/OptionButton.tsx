@@ -17,7 +17,7 @@ interface Props {
   onClick: () => void;
 }
 
-const CELL = tw`inline-flex items-center gap-[0.45em] rounded-md border px-[0.3rem] py-[0.35rem] text-left text-option whitespace-nowrap text-default transition-[background,border-color,opacity] duration-100 hover:not-disabled:bg-hover focus-visible:z-1 focus-visible:-outline-offset-1 disabled:cursor-not-allowed`;
+const CELL = tw`inline-flex items-center gap-[0.45em] rounded-md border px-1 py-1.5 text-left text-option whitespace-nowrap text-default transition-[background,border-color,opacity] duration-100 hover:not-disabled:bg-hover focus-visible:z-1 focus-visible:-outline-offset-1 disabled:cursor-not-allowed`;
 
 /**
  * The checkpointed sweep, in the pin's green: one diagonal wave over the cells

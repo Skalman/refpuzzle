@@ -12,7 +12,7 @@ import { tw } from "../lib/classNames.ts";
 const TAB_ICON = tw`mr-[0.25em] inline-flex align-middle`;
 
 /** A tab: underlined in its level's color, raised while selected. */
-const TAB = tw`flex-[1_0_auto] cursor-pointer rounded-t-md border-0 border-b-2 border-solid border-b-[color-mix(in_srgb,var(--level-color)_75%,transparent)] bg-transparent px-[0.7rem] py-[0.4rem] text-center text-chrome whitespace-nowrap text-muted transition-all duration-150 first:rounded-bl-md last:rounded-br-md hover:bg-hover aria-selected:border-b-(--level-color) aria-selected:bg-surface aria-selected:font-semibold aria-selected:text-(--level-color) aria-selected:shadow-raised md:flex-1 md:px-2`;
+const TAB = tw`flex-[1_0_auto] cursor-pointer rounded-t-md border-0 border-b-2 border-solid border-b-[color-mix(in_srgb,var(--level-color)_75%,transparent)] bg-transparent px-2.5 py-1.5 text-center text-chrome whitespace-nowrap text-muted transition-all duration-150 first:rounded-bl-md last:rounded-br-md hover:bg-hover aria-selected:border-b-(--level-color) aria-selected:bg-surface aria-selected:font-semibold aria-selected:text-(--level-color) aria-selected:shadow-raised md:flex-1`;
 
 /** The icon ahead of a level's name: needing a recheck, solved, or begun. */
 function TabStatus({ progress }: { progress: LevelProgress }) {

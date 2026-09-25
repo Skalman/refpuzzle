@@ -134,7 +134,7 @@ export function SyncDialog({
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              class="flex-1 rounded-md border bg-surface px-[0.6rem] py-[0.4rem] text-center text-section tracking-[0.15em] text-default"
+              class="flex-1 rounded-md border bg-surface px-2.5 py-1.5 text-center text-section tracking-[0.15em] text-default"
               maxLength={6}
               placeholder={s.sync.codePlaceholder}
               value={inputCode}

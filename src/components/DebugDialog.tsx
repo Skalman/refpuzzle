@@ -5,7 +5,7 @@ import { debugEnabled, nudgeSeconds, setDebugEnabled, setNudgeSeconds } from "..
 import { tw } from "../lib/classNames.ts";
 
 /** One switch per row, ruled off from the one above. */
-const ROW = tw`m-0 flex items-start gap-[0.6rem] border-0 border-t py-[0.6rem] text-chrome`;
+const ROW = tw`m-0 flex items-start gap-2.5 border-0 border-t py-2.5 text-chrome`;
 /** The line under a switch's name saying what it does. */
 const NOTE = tw`block text-caption text-muted`;
 

@@ -1,9 +1,19 @@
 import type { ComponentChildren } from "preact";
 
 /** A page holding one centered notice — a heading, a line, a way back. */
-export function NoticePage({ children }: { children: ComponentChildren }) {
+export function NoticePage({
+  title,
+  message,
+  children,
+}: {
+  title?: string;
+  message?: string;
+  children?: ComponentChildren;
+}) {
   return (
-    <div class="pt-16 text-center [&>h1]:text-hero [&>h1]:font-bold [&>h1]:opacity-20 [&>p]:my-4 [&>p]:text-muted">
+    <div class="pt-16 text-center">
+      {title && <h1 class="text-hero font-bold opacity-20">{title}</h1>}
+      {message && <p class="my-4 text-muted">{message}</p>}
       {children}
     </div>
   );

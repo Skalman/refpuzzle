@@ -95,8 +95,8 @@ interface StepState {
 function stepClass(state: StepState): string {
   const pill = state.collapsed || state.replay;
   return classNames(
-    "inline-flex cursor-pointer items-center gap-[0.25em] border py-[0.1rem] text-chip leading-(--strip-line) whitespace-nowrap disabled:cursor-default",
-    pill ? "px-2" : "px-[0.4rem]",
+    "inline-flex cursor-pointer items-center gap-[0.25em] border py-0.5 text-chip leading-(--strip-line) whitespace-nowrap disabled:cursor-default",
+    pill ? "px-2" : "px-1.5",
     state.collapsed && state.joined
       ? "-mr-0.5 rounded-l-full rounded-r-none border-r-0"
       : pill
@@ -175,8 +175,8 @@ function badgeClass(folded: boolean | undefined, fail: boolean): string {
   return classNames(
     "inline-flex items-center leading-(--strip-line)",
     folded
-      ? "ml-[0.15em] border-0 bg-transparent p-0 [font-size:inherit] [&_svg]:size-[1.2em]"
-      : "rounded-sm border bg-surface px-1 py-[0.1rem] text-badge",
+      ? "ml-[0.15em] border-0 bg-transparent p-0"
+      : "rounded-sm border bg-surface px-1 py-0.5 text-badge",
     fail ? "border-invalid text-invalid" : "opacity-70",
   );
 }
@@ -197,7 +197,7 @@ function HintBadge({ value, folded }: { value: number | undefined; folded?: bool
   if (!value) return null;
   return (
     <span class={badgeClass(folded, false)} data-testid="history-hint">
-      <IconHint size="1.5em" strokeWidth={3} class="text-pending" />
+      <IconHint size={folded ? "1.2em" : "1.5em"} strokeWidth={3} class="text-pending" />
       {value}
     </span>
   );
@@ -208,7 +208,7 @@ function FailBadge({ count, folded }: { count: number; folded?: boolean }) {
   if (count <= 0) return null;
   return (
     <span class={badgeClass(folded, true)} title={t().puzzle.checkpointFailsTitle(count)}>
-      <IconAlert size="1.5em" strokeWidth={4} class="text-invalid" />
+      <IconAlert size={folded ? "1.2em" : "1.5em"} strokeWidth={4} class="text-invalid" />
       {count}
     </span>
   );
@@ -342,7 +342,7 @@ export function HistoryStrip({
   return (
     <div
       ref={containerRef}
-      class="flex flex-auto flex-wrap gap-0.5 self-start pt-[calc((3rem-var(--strip-line)-0.2rem)/2)] pb-[0.4rem] [--strip-line:1rem]"
+      class="flex flex-auto flex-wrap gap-0.5 self-start pt-[calc((3rem-var(--strip-line)-0.25rem)/2)] pb-1.5 [--strip-line:1rem]"
       role="toolbar"
       onKeyDown={arrowNavHandler(ENABLED_HISTORY_STEP)}
     >

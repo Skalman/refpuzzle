@@ -88,8 +88,8 @@ export function ErrorOverlay() {
       role="alert"
     >
       <div class="w-full max-w-md rounded-xl border border-strong bg-surface px-6 py-5 shadow-dialog">
-        <h2 class="mb-[0.6rem] text-dialog font-bold">Something went wrong</h2>
-        <p class="mt-[0.4rem] mb-[0.8rem] rounded-md bg-[color-mix(in_srgb,var(--bg-surface),var(--text)_6%)] px-[0.7rem] py-2 text-body font-[ui-monospace,SFMono-Regular,Menlo,monospace] [word-break:break-word]">
+        <h2 class="mb-2.5 text-dialog font-bold">Something went wrong</h2>
+        <p class="mt-1.5 mb-3 rounded-md bg-[color-mix(in_srgb,var(--bg-surface),var(--text)_6%)] px-3 py-2 text-body font-mono wrap-break-word">
           {message}
         </p>
         <p>

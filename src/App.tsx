@@ -209,9 +209,7 @@ function DayRoute() {
   const level = Number(parts[1]) || undefined;
   if (!dateStr || !isValidDate(dateStr)) {
     return (
-      <NoticePage>
-        <h1>{s.notFound.noPuzzle}</h1>
-        <p>{s.app.noPuzzle}</p>
+      <NoticePage title={s.notFound.noPuzzle} message={s.app.noPuzzle}>
         <Link href="/">{s.notFound.backToToday}</Link>
       </NoticePage>
     );
@@ -243,14 +241,9 @@ function SyncRoute() {
   }, [code]);
 
   return (
-    <NoticePage>
+    <NoticePage title={status === "error" ? s.sync.expired : undefined}>
       {status === "joining" && <Loading />}
-      {status === "error" && (
-        <>
-          <h1>{s.sync.expired}</h1>
-          <Link href="/">{s.notFound.backToPuzzles}</Link>
-        </>
-      )}
+      {status === "error" && <Link href="/">{s.notFound.backToPuzzles}</Link>}
       {importPlan && (
         <ImportPreview
           plan={importPlan}
@@ -315,9 +308,7 @@ function PlaygroundRoute() {
 function NotFound() {
   const s = t();
   return (
-    <NoticePage>
-      <h1>{s.notFound.title}</h1>
-      <p>{s.notFound.pageNotFound}</p>
+    <NoticePage title={s.notFound.title} message={s.notFound.pageNotFound}>
       <Link href="/">{s.notFound.backToPuzzles}</Link>
     </NoticePage>
   );

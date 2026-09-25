@@ -54,7 +54,7 @@ function formatDay(dateStr: string): string {
 }
 
 /** Seven weekday columns, for the headings and the days alike. */
-const WEEK_GRID = tw`grid grid-cols-7 gap-1 sm:gap-[0.4rem]`;
+const WEEK_GRID = tw`grid grid-cols-7 gap-1 sm:gap-1.5`;
 
 /**
  * A day's coarse done-ness as its background: partial in the one hue no level
@@ -90,7 +90,7 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
       href={`/${dateStr}/${target}`}
       class={classNames(
         // Hover moves the border, not the background: the tint is the whole point.
-        "flex flex-col items-center justify-center gap-[0.35rem] rounded-lg border py-[0.4rem] text-default transition-[background] duration-150 hover:border-accent",
+        "flex flex-col items-center justify-center gap-1.5 rounded-lg border py-1.5 text-default transition-colors duration-150 hover:border-accent",
         TINT[tint],
         // Today is doubled by an inset ring rather than a 2px border, which would
         // make its row taller than the rest.
@@ -147,7 +147,7 @@ function ArchiveMonth({ ym, today }: { ym: string; today: string }) {
 
   return (
     <section class="mb-6">
-      <h3 class="border-b pb-[0.4rem] text-section font-semibold">{formatMonth(year, month)}</h3>
+      <h3 class="border-b pb-1.5 text-section font-semibold">{formatMonth(year, month)}</h3>
       <div class={`${WEEK_GRID} pt-2 pb-1 text-center text-caption text-muted`} aria-hidden="true">
         {WEEKDAYS.map((name) => (
           <span key={name}>{name}</span>

@@ -43,7 +43,7 @@ export function Dialog({
         if (e.target === ref.current) onClose();
       }}
     >
-      <div class="p-safe-dialog leading-[1.6] text-muted">
+      <div class="p-safe-dialog leading-relaxed text-muted">
         <div class="mb-4 flex items-center justify-between">
           <h3 id={titleId} class={classNames("text-dialog font-bold", titleClass)}>
             {title}

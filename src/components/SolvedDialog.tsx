@@ -59,9 +59,9 @@ function splitSquareLines(outcomes: QuestionOutcome[]): QuestionOutcome[][] {
 
 /** Each outcome's square in the result. */
 const OUTCOME_SQUARE: Record<QuestionOutcome, string> = {
-  clean: tw`inline-block size-[1.1rem] rounded-sm bg-valid`,
-  hinted: tw`inline-block size-[1.1rem] rounded-sm bg-pending`,
-  caught: tw`inline-block size-[1.1rem] rounded-sm bg-invalid`,
+  clean: tw`inline-block size-4.5 rounded-sm bg-valid`,
+  hinted: tw`inline-block size-4.5 rounded-sm bg-pending`,
+  caught: tw`inline-block size-4.5 rounded-sm bg-invalid`,
 };
 
 /**
@@ -88,7 +88,7 @@ function ResultCard({
   const s = t();
   return (
     <div
-      class="rounded-lg border bg-[linear-gradient(135deg,var(--accent-soft),var(--bg-surface)_55%,var(--valid-soft))] px-[0.9rem] py-3 text-center leading-[1.3] text-default"
+      class="rounded-lg border bg-[linear-gradient(135deg,var(--accent-soft),var(--bg-surface)_55%,var(--valid-soft))] px-3.5 py-3 text-center leading-tight text-default"
       aria-hidden="true"
     >
       <div class="mb-3 flex items-baseline justify-between gap-2 text-caption text-muted">
@@ -101,13 +101,13 @@ function ResultCard({
       {time && (
         <>
           <div class="text-caption text-muted">{s.puzzle.solvedIn}</div>
-          <div class="mb-[0.6rem] text-title font-bold tabular-nums">{time}</div>
+          <div class="mb-2.5 text-title font-bold tabular-nums">{time}</div>
         </>
       )}
-      <div class="mb-3 flex flex-col items-center gap-[0.2rem]">
+      <div class="mb-3 flex flex-col items-center gap-1">
         {squareLines.map((line, li) => (
           // oxlint-disable-next-line react/no-array-index-key
-          <div key={li} class="flex gap-[0.2rem]">
+          <div key={li} class="flex gap-1">
             {line.map((outcome, oi) => (
               // oxlint-disable-next-line react/no-array-index-key
               <span key={oi} class={OUTCOME_SQUARE[outcome]} />
@@ -214,9 +214,9 @@ export function SolvedDialog({
       titleClass="text-valid"
       onClose={onClose}
     >
-      <ul class="mb-3 ml-5 flex list-none flex-col gap-[0.45rem] p-0 text-left text-body text-muted">
+      <ul class="mb-3 ml-5 flex list-none flex-col gap-2 p-0 text-left text-body text-muted">
         {lines.map((line) => (
-          <li key={line.label} class="flex items-start gap-[0.6rem]">
+          <li key={line.label} class="flex items-start gap-2.5">
             <span class="inline-flex h-lh flex-none items-center text-section">{line.icon}</span>
             <span>
               <strong class="text-default">{line.label}</strong>
