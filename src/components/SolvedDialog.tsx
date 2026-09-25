@@ -4,13 +4,13 @@ import { t } from "../i18n/index.ts";
 import { confetti } from "../lib/confetti.ts";
 import { useShareable } from "../lib/hooks.ts";
 import { hostOf } from "../lib/share.ts";
-import { Modal } from "./ui/Modal.tsx";
+import { Dialog } from "./ui/Dialog.tsx";
 import { Button, ButtonLink } from "./ui/Button.tsx";
 import { dayNumber } from "../puzzles/daily.ts";
-import { classNames } from "../lib/classNames.ts";
 import type { QuestionOutcome, SolveStats } from "../lib/solve-summary.ts";
 import { IconAlert, IconClock, IconHint, IconPin, IconShare, IconUndo } from "./Icons.tsx";
 import { Brand } from "./Brand.tsx";
+import { tw } from "../lib/classNames.ts";
 
 type TimeBand = "hot" | "speedy" | "smooth" | "deliberate";
 
@@ -57,6 +57,13 @@ function splitSquareLines(outcomes: QuestionOutcome[]): QuestionOutcome[][] {
   );
 }
 
+/** Each outcome's square in the result. */
+const OUTCOME_SQUARE: Record<QuestionOutcome, string> = {
+  clean: tw`inline-block size-[1.1rem] rounded-sm bg-valid`,
+  hinted: tw`inline-block size-[1.1rem] rounded-sm bg-pending`,
+  caught: tw`inline-block size-[1.1rem] rounded-sm bg-invalid`,
+};
+
 /**
  * The shareable picture of a solve: level, day, time, and one square per
  * question colored by how it went.
@@ -80,33 +87,36 @@ function ResultCard({
 }) {
   const s = t();
   return (
-    <div class="result-card" aria-hidden="true">
-      <div class="result-card-top">
-        <span class="result-card-brand">
+    <div
+      class="rounded-lg border bg-[linear-gradient(135deg,var(--accent-soft),var(--bg-surface)_55%,var(--valid-soft))] px-[0.9rem] py-3 text-center leading-[1.3] text-default"
+      aria-hidden="true"
+    >
+      <div class="mb-3 flex items-baseline justify-between gap-2 text-caption text-muted">
+        <span class="font-bold text-default">
           <Brand />
         </span>
         <span>{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
       </div>
-      <div class="result-card-level">{s.difficulty[level]}</div>
+      <div class="text-section font-bold">{s.difficulty[level]}</div>
       {time && (
         <>
-          <div class="result-card-caption">{s.puzzle.solvedIn}</div>
-          <div class="result-card-time">{time}</div>
+          <div class="text-caption text-muted">{s.puzzle.solvedIn}</div>
+          <div class="mb-[0.6rem] text-title font-bold tabular-nums">{time}</div>
         </>
       )}
-      <div class="result-card-squares">
+      <div class="mb-3 flex flex-col items-center gap-[0.2rem]">
         {squareLines.map((line, li) => (
           // oxlint-disable-next-line react/no-array-index-key
-          <div key={li} class="result-card-line">
+          <div key={li} class="flex gap-[0.2rem]">
             {line.map((outcome, oi) => (
               // oxlint-disable-next-line react/no-array-index-key
-              <span key={oi} class={classNames("result-card-square", outcome)} />
+              <span key={oi} class={OUTCOME_SQUARE[outcome]} />
             ))}
           </div>
         ))}
-        {perfect && <div class="result-card-perfect">{s.share.perfectCaption}</div>}
+        {perfect && <div class="text-caption text-muted">{s.share.perfectCaption}</div>}
       </div>
-      <div class="result-card-host">{host}</div>
+      <div class="text-caption text-muted">{host}</div>
     </div>
   );
 }
@@ -173,17 +183,17 @@ export function SolvedDialog({
     });
   }
   lines.push({
-    icon: <IconHint class="icon-hint" />,
+    icon: <IconHint class="text-pending" />,
     ...(stats.hints ? solvedLines.peeker(stats.hints) : solvedLines.pathfinder),
   });
   lines.push(
     stats.checkpointFails
       ? {
-          icon: <IconAlert strokeWidth={3} class="icon-error" />,
+          icon: <IconAlert strokeWidth={3} class="text-invalid" />,
           ...solvedLines.oopsie(stats.checkpointFails, pressed),
         }
       : {
-          icon: <IconPin class="icon-checkpoint" />,
+          icon: <IconPin class="text-valid" />,
           ...(stats.checkpoints
             ? solvedLines.doubleChecker(stats.checkpoints)
             : solvedLines.freeSpirit),
@@ -199,17 +209,17 @@ export function SolvedDialog({
   }
 
   return (
-    <Modal
+    <Dialog
       title={perfect ? s.puzzle.solvedPerfect : s.puzzle.solved}
-      class="solved-dialog"
+      titleClass="text-valid"
       onClose={onClose}
     >
-      <ul class="solved-lines">
+      <ul class="mb-3 ml-5 flex list-none flex-col gap-[0.45rem] p-0 text-left text-body text-muted">
         {lines.map((line) => (
-          <li key={line.label}>
-            <span class="solved-line-icon">{line.icon}</span>
+          <li key={line.label} class="flex items-start gap-[0.6rem]">
+            <span class="inline-flex h-lh flex-none items-center text-section">{line.icon}</span>
             <span>
-              <strong>{line.label}</strong>
+              <strong class="text-default">{line.label}</strong>
               {line.detail && ` — ${line.detail}`}
             </span>
           </li>
@@ -223,32 +233,44 @@ export function SolvedDialog({
         perfect={perfect}
         host={hostOf(shareUrl)}
       />
-      <div class="solved-share">
+      <div class="mt-3 mb-5 flex items-center justify-center gap-2">
         {shareable.canShare && (
-          <Button variant="outline" onClick={shareable.share}>
-            <IconShare size="0.9em" /> {s.share.share}
+          <Button variant="outline" icon={<IconShare />} onClick={shareable.share}>
+            {s.share.share}
           </Button>
         )}
         <Button variant="outline" onClick={shareable.copy}>
           {shareable.copied ? s.share.copied : s.share.copyText}
         </Button>
       </div>
-      <div class="solved-actions">
+      <div class="flex flex-col items-center gap-2">
         {hasNext && (
-          <Button variant="next" class="solved-primary" onClick={onNext} autofocus>
+          <Button
+            variant="next"
+            size="lg"
+            class="w-full shadow-[0_0_12px_var(--valid-soft)]"
+            onClick={onNext}
+            autofocus
+          >
             {s.puzzle.nextPuzzle} &rarr;
           </Button>
         )}
         {hasNext ? (
-          <ButtonLink variant="text" href="/archive">
+          <ButtonLink variant="ghost" href="/archive">
             {s.daily.archive}
           </ButtonLink>
         ) : (
-          <ButtonLink variant="primary" class="solved-primary" href="/archive" autofocus>
+          <ButtonLink
+            variant="primary"
+            size="lg"
+            class="w-full shadow-[0_0_12px_var(--accent-soft)]"
+            href="/archive"
+            autofocus
+          >
             {s.daily.archive} &rarr;
           </ButtonLink>
         )}
       </div>
-    </Modal>
+    </Dialog>
   );
 }

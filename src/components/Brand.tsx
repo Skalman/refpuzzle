@@ -2,7 +2,7 @@
 export function Brand() {
   return (
     <>
-      <span class="app-title-ref">Ref</span>puzzle
+      <span class="font-extrabold text-accent">Ref</span>puzzle
     </>
   );
 }

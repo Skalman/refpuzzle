@@ -1,8 +1,6 @@
 /* ── Theme variables ──
- * Colors are redefined per theme below; sizes are theme-independent and live
- * only in :root. Sizes are in rem so they follow the root font-size ladder in
- * responsive.css — the exceptions are borders and the level rail, which need
- * whole pixels to stay exact at every breakpoint.
+ * Colors are redefined per theme below; index.css exposes them to Tailwind.
+ * The type scale and radii are theme-independent and live in index.css.
  */
 :root {
   color-scheme: light dark;
@@ -40,49 +38,21 @@
   /* Violet is the one hue no level owns, so a partial day can't be read as a
      track color. */
   --partial-tint: #8b5cf6;
+  /* The per-theme source behind the `shadow-dropdown` utility; named apart from
+     it, since the utility maps this variable. */
   --dropdown-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
-  --tab-intro: #94a3b8;
-  --tab-beginner: #22c55e;
-  --tab-easy: #60a5fa;
-  --tab-medium: #eab308;
-  --tab-hard: #e85d04;
-  --tab-expert: #d42a4a;
+  --level-color-intro: #94a3b8;
+  --level-color-beginner: #22c55e;
+  --level-color-easy: #60a5fa;
+  --level-color-medium: #eab308;
+  --level-color-hard: #e85d04;
+  --level-color-expert: #d42a4a;
 
-  /* Scrims and shadows read the same over either theme's surfaces, so they are
-     not redefined below. */
+  /* The scrim behind every dialog; the dark themes deepen it, since their
+     page is already near-black. */
   --backdrop: rgba(0, 0, 0, 0.4);
-  --backdrop-strong: rgba(0, 0, 0, 0.55);
-  --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-floating: 0 1px 4px rgba(0, 0, 0, 0.12);
-  --shadow-modal: 0 10px 40px rgba(0, 0, 0, 0.25);
   /* Scanners need a light quiet zone, so this stays white in dark mode too. */
   --qr-bg: #ffffff;
-
-  /* ── Type scale ── */
-  --text-badge: 0.55rem;
-  --text-chip: 0.65rem;
-  --text-caption: 0.75rem;
-  /* Chrome: controls, menus, toolbars. */
-  --text-chrome: 0.8rem;
-  /* The option cell only. Tuned against the root font-size ladder: labels are
-     nowrap in equal-width flex cells, so this is the largest size that still
-     fits at the 13px root. Do not fold it into --text-body. */
-  --text-option: 0.82rem;
-  /* Content prose. --coach-text-height below is derived from this. */
-  --text-body: 0.85rem;
-  --text-section: 0.9rem;
-  --text-dialog: 1.1rem;
-  --text-title: 1.5rem;
-  --text-display: 2rem;
-  --text-hero: 3rem;
-
-  /* ── Radii ── */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.375rem;
-  --radius-lg: 0.5rem;
-  --radius-xl: 0.75rem;
-  --radius-pill: 999px;
-  --radius-circle: 50%;
 }
 
 [data-theme="dark"] {
@@ -106,7 +76,8 @@
     drop-shadow(0 0 5px color-mix(in srgb, var(--coach-arrow) 55%, transparent));
   --neutral-bar: #4b5563;
   --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --tab-intro: #cbd5e1;
+  --backdrop: rgba(0, 0, 0, 0.6);
+  --level-color-intro: #cbd5e1;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -131,32 +102,7 @@
       drop-shadow(0 0 5px color-mix(in srgb, var(--coach-arrow) 55%, transparent));
     --neutral-bar: #4b5563;
     --dropdown-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-    --tab-intro: #cbd5e1;
+    --backdrop: rgba(0, 0, 0, 0.6);
+    --level-color-intro: #cbd5e1;
   }
-}
-
-/* ── Shared icon colors ── */
-.icon-correct {
-  color: var(--valid);
-}
-.icon-incorrect {
-  color: var(--invalid);
-}
-.icon-neutral {
-  color: var(--neutral-bar);
-}
-.icon-checkpoint {
-  color: var(--valid);
-}
-.icon-hint {
-  color: var(--pending);
-}
-.icon-error {
-  color: var(--invalid);
-}
-
-/* A disabled icon goes with its label, except where the icon is the mark. */
-button:disabled:not(.option-btn, .history-step)
-  :is(.icon-correct, .icon-incorrect, .icon-neutral, .icon-checkpoint, .icon-hint, .icon-error) {
-  color: inherit;
 }

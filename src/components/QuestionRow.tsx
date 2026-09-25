@@ -3,7 +3,7 @@ import type { RenderedQuestion, Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { Validity } from "../engine/state.ts";
 import { OptionButton } from "./OptionButton.tsx";
-import { classNames } from "../lib/classNames.ts";
+import { classNames, tw } from "../lib/classNames.ts";
 
 interface Props {
   index: number;
@@ -21,6 +21,20 @@ interface Props {
 }
 
 const LONG_THRESHOLD = 12;
+
+/**
+ * The bar down a question's left edge, in styles that read without color.
+ * Widths stay in px: the pending and invalid states are dotted and double
+ * borders, which need whole pixels to render as two lines rather than
+ * collapsing to solid at the smaller root font sizes.
+ */
+const VALIDITY_BAR: Record<Validity, string> = {
+  neutral: tw`relative w-[4px] before:absolute before:inset-y-0 before:right-px before:left-0 before:rounded-full before:bg-neutral-bar`,
+  valid: tw`w-[4px] rounded-full bg-valid`,
+  consistent: tw`w-[4px] rounded-full bg-valid`,
+  pending: tw`w-0 border-0 border-l-4 border-dotted border-pending`,
+  invalid: tw`w-0 border-0 border-l-4 border-double border-invalid`,
+};
 
 function marksEqual(a: Marks, b: Marks): boolean {
   for (let i = 0; i < 5; i++) if (a[i] !== b[i]) return false;
@@ -45,13 +59,23 @@ export const QuestionRow = memo(
     const hasCorrect = marks.indexOf("correct") >= 0;
 
     return (
-      <div class="question-row" data-row={index}>
-        <div class={`validity-bar ${validity}`} />
-        <div class="question-header">
-          <span class="question-num">{index + 1}.</span>
-          <span class="question-text">{question.text}</span>
+      <div
+        class="group grid scroll-mb-20 grid-cols-[auto_1fr] grid-rows-[auto_auto] border-b py-2 lg:row-span-2 lg:grid-rows-subgrid"
+        data-row={index}
+      >
+        <div class={`row-span-full mr-2 shrink-0 self-stretch ${VALIDITY_BAR[validity]}`} />
+        <div class="col-start-2 mb-[0.3rem] flex gap-[0.4rem]">
+          <span class="shrink-0 text-body font-bold text-muted group-has-focus-visible:text-accent">
+            {index + 1}.
+          </span>
+          <span class="text-body group-has-focus-visible:text-accent">{question.text}</span>
         </div>
-        <div class={classNames("question-options", isLong && "options-vertical")}>
+        <div
+          class={classNames(
+            "col-start-2 flex self-start *:flex-1",
+            isLong ? "flex-col gap-[0.2rem] *:whitespace-normal" : "gap-1",
+          )}
+        >
           {question.options.map((_label, oi) => (
             <OptionButton
               key={LETTERS[oi]}

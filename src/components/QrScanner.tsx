@@ -1,4 +1,5 @@
 import jsQR from "jsqr";
+import { tw } from "../lib/classNames.ts";
 
 export default function startScanner(
   container: HTMLElement,
@@ -7,7 +8,7 @@ export default function startScanner(
 ): () => void {
   const video = document.createElement("video");
   video.setAttribute("playsinline", "");
-  video.className = "qr-scanner-video";
+  video.className = tw`block w-full rounded-lg`;
   container.appendChild(video);
 
   const canvas = document.createElement("canvas");

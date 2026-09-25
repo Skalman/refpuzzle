@@ -64,12 +64,91 @@ export function describeDiff(prev: QuestionState[], next: QuestionState[]): Move
 /** The strip's pills a press can land on, for its arrow keys and tab stop. */
 export const ENABLED_HISTORY_STEP = "[data-history-step]:not(:disabled)";
 
+/** How one pill of the strip stands; everything unset is a plain step. */
+interface StepState {
+  /** The settled range folded into one pill. */
+  collapsed?: boolean;
+  /** The folded pill once the board is solved: it carries the verdict. */
+  solved?: boolean;
+  /** Butted against its neighbor, so the folded pill and the pin read as one control. */
+  joined?: boolean;
+  /** Play again, pill-shaped like its Solved neighbor but the quieter of the two. */
+  replay?: boolean;
+  /** Replay's first press landed: the next one throws the solve away. */
+  armed?: boolean;
+  current?: boolean;
+  /** Past the cursor. */
+  future?: boolean;
+  /** The checkpoint a rewind would land on. */
+  checkpoint?: boolean;
+  /** Any older checkpoint. */
+  checkpointOld?: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * A pill's classes, one value per property; where states compete the order
+ * below decides. A flex container, so the icon is an item rather than an
+ * inline box: aligned middle in a line box it would push the step half a pixel
+ * taller than the pills, and the whole line stretches to the tallest step.
+ */
+function stepClass(state: StepState): string {
+  const pill = state.collapsed || state.replay;
+  return classNames(
+    "inline-flex cursor-pointer items-center gap-[0.25em] border py-[0.1rem] text-chip leading-(--strip-line) whitespace-nowrap disabled:cursor-default",
+    pill ? "px-2" : "px-[0.4rem]",
+    state.collapsed && state.joined
+      ? "-mr-0.5 rounded-l-full rounded-r-none border-r-0"
+      : pill
+        ? "rounded-full"
+        : state.joined
+          ? "rounded-l-none rounded-r-sm"
+          : "rounded-sm",
+    state.collapsed && state.solved
+      ? "border-valid"
+      : state.armed
+        ? "border-invalid"
+        : state.collapsed
+          ? "border-muted"
+          : state.checkpoint
+            ? "border-valid"
+            : // An older checkpoint keeps the plain border, even under the cursor.
+              state.checkpointOld
+              ? undefined
+              : state.current
+                ? "border-accent"
+                : undefined,
+    state.armed
+      ? "bg-invalid-soft"
+      : state.current
+        ? "bg-accent-soft hover:not-disabled:bg-hover"
+        : state.collapsed
+          ? "bg-hover"
+          : "bg-surface hover:not-disabled:bg-hover",
+    state.collapsed && state.solved
+      ? "text-valid"
+      : state.armed
+        ? "text-invalid"
+        : state.current
+          ? "text-accent"
+          : "text-muted",
+    ((state.collapsed && state.solved) || state.armed || state.current) && "font-semibold",
+    state.future ? "opacity-35" : state.disabled && "opacity-70",
+  );
+}
+
 /** One pill of the strip: a step, Start, the folded range, or Replay. */
 function HistoryStepButton({
-  class: extraClass,
+  state,
   ...rest
-}: Omit<ButtonHTMLAttributes, "class" | "className"> & { class?: string }) {
-  return <button data-history-step class={classNames("history-step", extraClass)} {...rest} />;
+}: Omit<ButtonHTMLAttributes, "class" | "className"> & { state: StepState }) {
+  return (
+    <button
+      data-history-step
+      class={stepClass({ ...state, disabled: rest.disabled === true })}
+      {...rest}
+    />
+  );
 }
 
 /** The icon slot leading a history pill. */
@@ -80,37 +159,56 @@ function HistoryIcon({
   class?: string;
   children: ComponentChildren;
 }) {
-  return <span class={classNames("history-icon", extraClass)}>{children}</span>;
+  return (
+    <span class={classNames("inline-flex h-(--strip-line) items-center", extraClass)}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * A marker badge beside a step, or inside the folded pill as plain text: no
+ * box, so content on the label's line can't change the pill's height, and
+ * icons at the chevron's scale so they read as line content.
+ */
+function badgeClass(folded: boolean | undefined, fail: boolean): string {
+  return classNames(
+    "inline-flex items-center leading-(--strip-line)",
+    folded
+      ? "ml-[0.15em] border-0 bg-transparent p-0 [font-size:inherit] [&_svg]:size-[1.2em]"
+      : "rounded-sm border bg-surface px-1 py-[0.1rem] text-badge",
+    fail ? "border-invalid text-invalid" : "opacity-70",
+  );
 }
 
 /** Each kind of step's icon: an answer, an elimination, a cleared cell, a checkpoint. */
 const MOVE_ICONS: Record<MoveInfo["icon"], { class?: string; icon: ComponentChildren }> = {
-  ok: { class: "icon-correct", icon: <IconCheck size="1.5em" strokeWidth={3} /> },
-  no: { class: "icon-incorrect", icon: <IconX size="1.5em" strokeWidth={3} /> },
+  ok: { class: "text-valid", icon: <IconCheck size="1.5em" strokeWidth={3} /> },
+  no: { class: "text-invalid", icon: <IconX size="1.5em" strokeWidth={3} /> },
   un: { icon: <IconUndo size="1.5em" strokeWidth={3} /> },
-  pin: { class: "icon-checkpoint", icon: <IconPin size="1.1em" /> },
+  pin: { class: "text-valid", icon: <IconPin size="1.1em" /> },
 };
 
 /**
  * Hint marker: the escalation level reached at one step, or the number of markers
  * folded into the pill. Same badge either way. Renders nothing at zero or absent.
  */
-function HintBadge({ value }: { value: number | undefined }) {
+function HintBadge({ value, folded }: { value: number | undefined; folded?: boolean }) {
   if (!value) return null;
   return (
-    <span class="history-hint" data-testid="history-hint">
-      <IconHint size="1.5em" strokeWidth={3} class="icon-hint" />
+    <span class={badgeClass(folded, false)} data-testid="history-hint">
+      <IconHint size="1.5em" strokeWidth={3} class="text-pending" />
       {value}
     </span>
   );
 }
 
 /** Refused checkpoint presses at one step. Renders nothing at zero. */
-function FailBadge({ count }: { count: number }) {
+function FailBadge({ count, folded }: { count: number; folded?: boolean }) {
   if (count <= 0) return null;
   return (
-    <span class="history-fail" title={t().puzzle.checkpointFailsTitle(count)}>
-      <IconAlert size="1.5em" strokeWidth={4} class="icon-error" />
+    <span class={badgeClass(folded, true)} title={t().puzzle.checkpointFailsTitle(count)}>
+      <IconAlert size="1.5em" strokeWidth={4} class="text-invalid" />
       {count}
     </span>
   );
@@ -132,7 +230,7 @@ function ReplayButton({ onPlayAgain }: { onPlayAgain: () => void }) {
   }, [armed]);
   return (
     <HistoryStepButton
-      class={classNames("history-replay", armed && "armed")}
+      state={{ replay: true, armed }}
       onClick={() => {
         if (!armed) {
           setArmed(true);
@@ -237,10 +335,14 @@ export function HistoryStrip({
   }
   const answered = answeredCount(history[Math.min(foldTo, history.length - 1)]);
 
+  // --strip-line: one content line shared by every control in the strip, so
+  // steps, the pill and the badges come out exactly equal whatever their icon
+  // sizes; it must fit the largest icon. The top padding centers the first row
+  // on the dock's 3rem buttons.
   return (
     <div
       ref={containerRef}
-      class="history-strip"
+      class="flex flex-auto flex-wrap gap-0.5 self-start pt-[calc((3rem-var(--strip-line)-0.2rem)/2)] pb-[0.4rem] [--strip-line:1rem]"
       role="toolbar"
       onKeyDown={arrowNavHandler(ENABLED_HISTORY_STEP)}
     >
@@ -249,17 +351,14 @@ export function HistoryStrip({
       {completed && <ReplayButton onPlayAgain={onPlayAgain} />}
       {collapsible && (
         <HistoryStepButton
-          class={classNames(
-            "history-collapsed",
-            showAll && "expanded",
-            !showAll && !completed && "joined",
-            completed && "solved",
-          )}
+          state={{ collapsed: true, joined: !showAll && !completed, solved: completed }}
           aria-expanded={showAll}
           title={s.puzzle.verifiedTitle(answered, history[0].length)}
           onClick={() => setExpandedFold(expanded ? null : foldId)}
         >
-          <HistoryIcon>
+          <HistoryIcon
+            class={classNames("transition-transform duration-150", showAll && "rotate-180")}
+          >
             <IconChevronDown size="1.2em" />
           </HistoryIcon>
           {completed ? s.puzzle.solvedBadge : s.puzzle.verifiedMarks(verifiedCount)}
@@ -267,16 +366,16 @@ export function HistoryStrip({
               their own markers in place and the summary would double them. */}
           {!showAll && (
             <>
-              <HintBadge value={hiddenHints} />
-              <FailBadge count={hiddenFails} />
+              <HintBadge value={hiddenHints} folded />
+              <FailBadge count={hiddenFails} folded />
             </>
           )}
         </HistoryStepButton>
       )}
       {showAll && (
-        <span class="history-entry">
+        <span class="inline-flex items-center gap-0.5">
           <HistoryStepButton
-            class={classNames(currentIdx === 0 && "current")}
+            state={{ current: currentIdx === 0 }}
             onClick={completed ? undefined : () => onJump(0)}
             disabled={completed}
           >
@@ -299,14 +398,15 @@ export function HistoryStrip({
         const joined = !showAll && stepIdx === foldTo;
         return (
           // oxlint-disable-next-line react/no-array-index-key
-          <span key={i} class="history-entry">
+          <span key={i} class="inline-flex items-center gap-0.5">
             <HistoryStepButton
-              class={classNames(
-                joined && "joined",
-                !completed && stepIdx === currentIdx && "current",
-                stepIdx > currentIdx && "future",
-                isCheckpoint && (isLastCp ? "checkpoint" : "checkpoint-old"),
-              )}
+              state={{
+                joined,
+                current: !completed && stepIdx === currentIdx,
+                future: stepIdx > currentIdx,
+                checkpoint: isCheckpoint && isLastCp,
+                checkpointOld: isCheckpoint && !isLastCp,
+              }}
               onClick={completed ? undefined : () => onJump(stepIdx)}
               disabled={completed}
               title={move.text}

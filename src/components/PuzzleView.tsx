@@ -10,7 +10,6 @@ import { loadState, saveState, loadMeta, cloneStates } from "../lib/store.ts";
 import type { FailMarker, HintMarker, QuestionState } from "../lib/store.ts";
 import { decodeShareHash, getPuzzleUrl } from "../lib/share.ts";
 import { guarded, initRovingTabindex } from "../lib/keyboard.ts";
-import { classNames } from "../lib/classNames.ts";
 import { debugEnabled } from "../lib/debug.ts";
 import { track, getClientInfo } from "../lib/analytics.ts";
 import { t } from "../i18n/index.ts";
@@ -909,12 +908,17 @@ export function PuzzleView({
 
   return (
     <>
-      <div class="puzzle-view">
+      <div class="relative">
         {coachEnabled && !completed && <CoachText message={coach.message} boxRef={coachTextRef} />}
         {/* Questions */}
         <div
           ref={gridRef}
-          class={classNames("questions-grid", puzzle.questions.length <= 3 && "single-col")}
+          class={
+            // Short boards get air on both ends; the dock's own border closes the grid.
+            puzzle.questions.length <= 3
+              ? "mx-auto py-4 *:last:border-b-0 lg:grid lg:max-w-[min(50%,25rem)] lg:grid-flow-row lg:grid-cols-1 lg:gap-x-6 lg:gap-y-0"
+              : "lg:grid lg:grid-flow-col lg:grid-cols-2 lg:gap-x-6 lg:gap-y-0"
+          }
           style={{
             gridTemplateRows: `repeat(${Math.ceil(puzzle.questions.length / 2) * 2}, auto)`,
           }}
@@ -963,7 +967,10 @@ export function PuzzleView({
           />
         )}
 
-        <div class="puzzle-dock">
+        {/* Stuck to the viewport's bottom while the board's tail is below it; z-index
+            clears the coach overlay. The negative top margin lays its border over the
+            last row's own; the bottom padding covers the safe-area inset only while stuck. */}
+        <div class="sticky bottom-0 z-6 -mt-px -mb-(--safe-area-inset-bottom) border-t bg-page pb-(--safe-area-inset-bottom)">
           {/* Hint display */}
           {!completed && debugMode && hints.debugHints && (
             <DebugHintPanel steps={hints.debugHints} />
@@ -982,7 +989,7 @@ export function PuzzleView({
           {/* Controls and the history track share a line while the track is
               short; a long track wraps onto its own. Solved, the controls go
               and the completion bar stands at the row's end instead. */}
-          <div class="puzzle-dock-row">
+          <div class="flex flex-wrap items-center gap-x-3">
             {!completed && (
               <PuzzleControls
                 toolbarRef={controlsRef}

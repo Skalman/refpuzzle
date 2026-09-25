@@ -11,10 +11,11 @@ import { Brand } from "./Brand.tsx";
 import { Logo } from "./Logo.tsx";
 import { ShareDialog } from "./ShareDialog.tsx";
 import { SplitMenu } from "./SplitMenu.tsx";
+import { MenuItem, MenuLink, MenuPopover } from "./ui/Menu.tsx";
+import { Button, ButtonLink, buttonClass } from "./ui/Button.tsx";
 import { t } from "../i18n/index.ts";
 import { arrowNavHandler, menuNavHandler } from "../lib/keyboard.ts";
-import { classNames } from "../lib/classNames.ts";
-import type { ComponentChildren } from "preact";
+import { classNames, tw } from "../lib/classNames.ts";
 
 if (import.meta.env.DEV) document.title = `(dev) ${document.title}`;
 
@@ -95,29 +96,25 @@ export function useTheme() {
 /**
  * The explicit Auto / Light / Dark choice, revealed by a disclosure: the
  * header's split-button popup and the ⋯ menu's expanded block both render it.
- * `itemClass` styles the rows to match whichever host they sit in.
+ * `itemClass` adds to the rows, for how the host sets them apart.
  */
 function ThemeOptions({
   theme,
   itemClass,
-  menuItem,
   onPick,
 }: {
   theme: ReturnType<typeof useTheme>;
-  itemClass: string;
-  /** Rows of the ⋯ menu, walked by its arrow keys. */
-  menuItem?: boolean;
+  itemClass?: string;
   onPick?: () => void;
 }) {
   const s = t();
   return (
     <>
       {THEME_MODES.map((choice) => (
-        <button
+        <MenuItem
           key={choice}
-          class={itemClass}
+          class={classNames(THEME_ROW, itemClass)}
           role="menuitemradio"
-          data-menu-item={menuItem || undefined}
           aria-checked={theme.mode === choice}
           onClick={(e) => {
             e.stopPropagation();
@@ -125,32 +122,19 @@ function ThemeOptions({
             onPick?.();
           }}
         >
-          <IconCheck size="0.9em" class="theme-option-check" />
+          <IconCheck
+            size="0.9em"
+            class="invisible flex-none text-accent group-aria-checked:visible"
+          />
           {s.header.themeModes[choice]}
-        </button>
+        </MenuItem>
       ))}
     </>
   );
 }
 
-/** A row of the ⋯ menu. */
-const MENU_ITEM = "more-menu-item";
-
-function MenuItem({
-  class: extra,
-  onClick,
-  children,
-}: {
-  class?: string;
-  onClick: () => void;
-  children: ComponentChildren;
-}) {
-  return (
-    <button class={classNames(MENU_ITEM, extra)} role="menuitem" onClick={onClick} data-menu-item>
-      {children}
-    </button>
-  );
-}
+/** A theme choice's row: the check shows on the chosen one. */
+const THEME_ROW = tw`group aria-checked:font-semibold aria-checked:text-accent`;
 
 type InstallState =
   | { type: "native"; fire: () => void }
@@ -264,46 +248,69 @@ export function AppHeader({
   };
 
   return (
-    <header class="app-header">
-      <h1>
+    <header class="relative mb-4 flex items-center justify-between">
+      <h1 class="m-0 flex items-center gap-2 text-title font-normal">
         <Logo />
-        <a href="/" class="app-title-link">
-          <span class="app-title">
+        <a href="/" class="inline-flex flex-col leading-[1.2]">
+          <span class="tracking-[-0.02em]">
             <Brand />
-            {import.meta.env.DEV && <span class="dev-badge"> (dev)</span>}
+            {import.meta.env.DEV && <span class="font-bold text-(--dev-badge)"> (dev)</span>}
           </span>
-          <span class="app-tagline hide-mobile">{s.puzzleList.subtitle}</span>
+          <span class="hidden text-badge font-normal tracking-[0.03em] text-muted md:inline">
+            {s.puzzleList.subtitle}
+          </span>
         </a>
       </h1>
-      <div class="header-actions" role="toolbar" onKeyDown={arrowNavHandler("[data-toolbar-item]")}>
-        <a href="/archive" class="header-btn hide-mobile" tabIndex={0} data-toolbar-item>
-          <IconCalendar /> {s.daily.archive}
-        </a>
-        <span class="split-btn hide-mobile">
-          <button
+      <div
+        class="flex items-center gap-2"
+        role="toolbar"
+        onKeyDown={arrowNavHandler("[data-toolbar-item]")}
+      >
+        <span class="hidden md:inline-flex">
+          <ButtonLink
+            variant="ghost"
+            size="md-compact"
+            href="/archive"
+            tabIndex={0}
+            icon={<IconCalendar />}
             data-toolbar-item
-            class="header-btn"
+          >
+            {s.daily.archive}
+          </ButtonLink>
+        </span>
+        <span class="hidden items-stretch md:inline-flex">
+          <Button
+            variant="ghost"
+            size="md-compact"
+            class="rounded-r-none"
+            data-toolbar-item
             tabIndex={-1}
             onClick={theme.toggle}
             aria-label={theme.toggleLabel}
             title={theme.toggleLabel}
+            icon={theme.modeIcon}
           >
-            {theme.modeIcon} {s.header.theme}
-          </button>
+            {s.header.theme}
+          </Button>
           <SplitMenu
-            buttonClass="header-btn"
+            buttonClass={buttonClass({
+              variant: "ghost",
+              size: "md-compact",
+              class: "self-stretch rounded-l-none border-l",
+            })}
             tabIndex={-1}
             toolbarItem
             label={s.header.themeOptions}
           >
-            {(close) => <ThemeOptions theme={theme} itemClass="theme-option" onPick={close} />}
+            {(close) => <ThemeOptions theme={theme} onPick={close} />}
           </SplitMenu>
         </span>
-        <span class="more-menu-wrapper">
-          <button
+        <span class="relative">
+          <Button
             ref={moreBtnRef}
+            variant="outline-muted"
+            class="font-bold tracking-widest"
             data-toolbar-item
-            class="header-btn more-btn"
             tabIndex={-1}
             onClick={(e) => {
               e.stopPropagation();
@@ -314,9 +321,9 @@ export function AppHeader({
             aria-expanded={moreMenu}
           >
             ⋯
-          </button>
+          </Button>
           {moreMenu && (
-            <div ref={moreMenuRef} class="more-menu" role="menu" onKeyDown={handleMoreMenuKeyDown}>
+            <MenuPopover ref={moreMenuRef} onKeyDown={handleMoreMenuKeyDown}>
               {/* Installed, the share dialog's App mode offers this link. */}
               {!(isInstalled && onShare) && (
                 <MenuItem onClick={pick(() => setShowInstallInfo(true))}>
@@ -324,46 +331,40 @@ export function AppHeader({
                 </MenuItem>
               )}
               {onShare && <MenuItem onClick={pick(onShare)}>{s.share.share}</MenuItem>}
-              <a
-                href="/archive"
-                class={classNames(MENU_ITEM, "show-mobile")}
-                role="menuitem"
-                data-menu-item
-                onClick={() => setMoreMenu(false)}
-              >
+              <MenuLink mobileOnly href="/archive" onClick={() => setMoreMenu(false)}>
                 {s.daily.archive}
-              </a>
-              <button
+              </MenuLink>
+              <MenuItem
                 ref={themeOptionsBtnRef}
-                class={classNames(MENU_ITEM, "show-mobile")}
-                role="menuitem"
-                data-menu-item
+                mobileOnly
+                class="group"
                 aria-expanded={themeOptions}
                 onClick={(e) => {
                   e.stopPropagation();
                   setThemeOptions((v) => !v);
                 }}
               >
-                <IconChevronDown size="0.9em" class="disclosure-chevron" /> {s.header.theme}
-              </button>
+                <IconChevronDown
+                  size="0.9em"
+                  class="transition-transform duration-150 group-aria-[expanded=false]:-rotate-90"
+                />
+                {s.header.theme}
+              </MenuItem>
               {themeOptions && (
-                <div class="show-mobile" role="group" aria-label={s.header.themeOptions}>
-                  <ThemeOptions
-                    theme={theme}
-                    itemClass={classNames(MENU_ITEM, "theme-option")}
-                    menuItem
-                  />
+                // Under their disclosure, indented.
+                <div class="md:hidden" role="group" aria-label={s.header.themeOptions}>
+                  <ThemeOptions theme={theme} itemClass="pl-[1.6rem]" />
                 </div>
               )}
-              <hr class="more-menu-divider show-mobile" />
+              <hr class="m-0 border-t md:hidden" />
               {onKeyboardHelp && (
-                <MenuItem class="hide-mobile" onClick={pick(onKeyboardHelp)}>
+                <MenuItem desktopOnly onClick={pick(onKeyboardHelp)}>
                   {s.keyboard.title}
                 </MenuItem>
               )}
               {onPrint && <MenuItem onClick={pick(onPrint)}>{s.daily.printAll}</MenuItem>}
               <MenuItem onClick={pick(onBackup)}>{s.backup.button}</MenuItem>
-            </div>
+            </MenuPopover>
           )}
         </span>
       </div>

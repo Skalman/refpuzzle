@@ -1,7 +1,7 @@
 import { AppHeader } from "./AppHeader.tsx";
 import { LevelRail } from "./LevelRail.tsx";
 import { useBackupFlow, BackupDialogs } from "./BackupFlow.tsx";
-import { classNames } from "../lib/classNames.ts";
+import { classNames, tw } from "../lib/classNames.ts";
 import { useRevalidated } from "../lib/hooks.ts";
 import { useToday } from "../lib/today.ts";
 import { LEVELS, dateStrFromOffset, isValidDate } from "../puzzles/daily.ts";
@@ -53,6 +53,20 @@ function formatDay(dateStr: string): string {
   });
 }
 
+/** Seven weekday columns, for the headings and the days alike. */
+const WEEK_GRID = tw`grid grid-cols-7 gap-1 sm:gap-[0.4rem]`;
+
+/**
+ * A day's coarse done-ness as its background: partial in the one hue no level
+ * owns, so it can't be read as a level's color.
+ */
+const TINT = {
+  stale: tw`bg-[color-mix(in_srgb,var(--invalid)_12%,var(--bg-surface))]`,
+  done: tw`bg-[color-mix(in_srgb,var(--valid)_12%,var(--bg-surface))]`,
+  partial: tw`bg-[color-mix(in_srgb,var(--partial-tint)_8%,var(--bg-surface))]`,
+  "": tw`bg-surface`,
+};
+
 /** One day of the archive: its date, a six-level rail, and a done-ness tint. */
 function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; isToday: boolean }) {
   const s = t();
@@ -74,11 +88,30 @@ function ArchiveDay({ dateStr, day, isToday }: { dateStr: string; day: number; i
   return (
     <a
       href={`/${dateStr}/${target}`}
-      class={classNames("archive-day", tint, isToday && "today")}
+      class={classNames(
+        // Hover moves the border, not the background: the tint is the whole point.
+        "flex flex-col items-center justify-center gap-[0.35rem] rounded-lg border py-[0.4rem] text-default transition-[background] duration-150 hover:border-accent",
+        TINT[tint],
+        // Today is doubled by an inset ring rather than a 2px border, which would
+        // make its row taller than the rest.
+        isToday && "border-accent ring-1 ring-accent ring-inset",
+      )}
       aria-label={label}
     >
-      <span class="archive-daynum">{day}</span>
-      <LevelRail states={states} />
+      <span
+        class={classNames(
+          "text-body leading-none tabular-nums",
+          isToday && "font-bold text-accent",
+        )}
+      >
+        {day}
+      </span>
+      <LevelRail
+        states={states}
+        // Wide enough that even the thickest segment stays wider than it is tall: a
+        // square segment reads as a tile, not a rail.
+        class="w-9/10 sm:[--level-solved:7px] sm:[--level-strength:100%]"
+      />
     </a>
   );
 }
@@ -113,14 +146,14 @@ function ArchiveMonth({ ym, today }: { ym: string; today: string }) {
   weeks.reverse();
 
   return (
-    <section class="archive-month">
-      <h3 class="archive-month-title">{formatMonth(year, month)}</h3>
-      <div class="archive-weekdays" aria-hidden="true">
+    <section class="mb-6">
+      <h3 class="border-b pb-[0.4rem] text-section font-semibold">{formatMonth(year, month)}</h3>
+      <div class={`${WEEK_GRID} pt-2 pb-1 text-center text-caption text-muted`} aria-hidden="true">
         {WEEKDAYS.map((name) => (
           <span key={name}>{name}</span>
         ))}
       </div>
-      <div class="archive-grid">
+      <div class={WEEK_GRID}>
         {weeks.flat().map((dateStr, i) =>
           dateStr === null ? (
             // oxlint-disable-next-line react/no-array-index-key
@@ -158,8 +191,8 @@ export function ArchivePage() {
     <>
       <AppHeader onBackup={backup.openBackup} />
 
-      <div class="archive-page">
-        <h2>{s.daily.archive}</h2>
+      <div class="mx-auto max-w-150 p-2 sm:p-4">
+        <h2 class="mb-4 text-[1.5em] font-bold">{s.daily.archive}</h2>
         {months.map((ym) => (
           <ArchiveMonth key={ym} ym={ym} today={today} />
         ))}

@@ -3,6 +3,7 @@ import type { Marks } from "../engine/types.ts";
 import { LETTERS } from "../engine/types.ts";
 import type { CoachMessage } from "../engine/coach-types.ts";
 import { arcPath } from "../lib/arcPath.ts";
+import { COACH_ARROW, COACH_ARROW_OUTLINE, COACH_SVG } from "./coachStyles.ts";
 
 interface Props {
   message: CoachMessage | null;
@@ -85,8 +86,9 @@ export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: P
   }, [svg, message, marks, optionCount, gridRef, textRef, viewport]);
 
   // Only resize can reflow the board and change the arrows' geometry. Scroll
-  // can't: the overlay and the rows share `.puzzle-view`, so their relative
-  // (svg-local) positions are scroll-invariant — no recompute needed.
+  // can't: the overlay and the rows share the puzzle view as their box, so
+  // their relative (svg-local) positions are scroll-invariant — no recompute
+  // needed.
   useEffect(() => {
     const onResize = () => setViewport((v) => v + 1);
     window.addEventListener("resize", onResize);
@@ -94,15 +96,18 @@ export function CoachArrows({ message, gridRef, textRef, marks, optionCount }: P
   }, []);
 
   return (
-    <div class="coach-overlay" aria-hidden="true">
-      <svg ref={setSvg} class="coach-svg">
+    <div class="pointer-events-none absolute inset-0 z-5" aria-hidden="true">
+      <svg ref={setSvg} class={COACH_SVG}>
         {geom?.shapes.map((s, i) => renderShape(s, i, geom.seq))}
       </svg>
       {geom?.tally && (
-        <div class="coach-tally" style={{ left: `${geom.tally.x}px`, top: `${geom.tally.y}px` }}>
+        <div
+          class="absolute flex gap-[0.4rem] rounded-full border border-[color-mix(in_srgb,var(--accent)_45%,transparent)] bg-surface px-[0.45rem] py-[0.2rem] text-caption text-default shadow-floating"
+          style={{ left: `${geom.tally.x}px`, top: `${geom.tally.y}px` }}
+        >
           {geom.tally.counts.map((c) => (
-            <span key={c.letter} class="coach-tally-item">
-              <span class="coach-tally-letter">{c.letter}</span>
+            <span key={c.letter} class="inline-flex items-baseline gap-[0.2rem]">
+              <span class="font-bold text-accent">{c.letter}</span>
               {c.n}
             </span>
           ))}
@@ -117,10 +122,11 @@ function renderShape(s: Shape, i: number, seq: number) {
   // but stay mounted across viewport/board recomputes of the same message.
   const key = `${seq}-${i}`;
   if (s.t === "halo") {
+    // A soft ring around what the coach points at; a moved halo slides rather than redraws.
     return (
       <rect
         key={key}
-        class="coach-halo"
+        class="fill-accent-soft stroke-[color-mix(in_srgb,var(--accent)_45%,transparent)] stroke-1 motion-safe:origin-center motion-safe:animate-coach-pulse motion-safe:transition-[x,y,width,height] motion-safe:duration-400 motion-safe:transform-fill"
         x={s.rect.x}
         y={s.rect.y}
         width={s.rect.w}
@@ -130,16 +136,25 @@ function renderShape(s: Shape, i: number, seq: number) {
     );
   }
   if (s.t === "boundary") {
-    return <line key={key} class="coach-boundary" x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y1} />;
+    return (
+      <line
+        key={key}
+        class="stroke-[color-mix(in_srgb,var(--accent)_55%,transparent)] stroke-[1.5] [stroke-dasharray:4_3]"
+        x1={s.x1}
+        y1={s.y1}
+        x2={s.x2}
+        y2={s.y1}
+      />
+    );
   }
   // Slight arc (quadratic bézier). `pathLength` normalizes the draw-on dash so
   // it covers the whole curve regardless of length. A wider under-stroke gives a
-  // crisp outline (light mode); both are themed via coach.css.
+  // crisp outline (light mode).
   const d = arcPath(s.x1, s.y1, s.x2, s.y2, s.head);
   return (
     <g key={key}>
-      <path class="coach-arrow-outline" d={d} pathLength={100} fill="none" />
-      <path class="coach-arrow" d={d} pathLength={100} fill="none" />
+      <path class={COACH_ARROW_OUTLINE} d={d} pathLength={100} fill="none" />
+      <path class={COACH_ARROW} d={d} pathLength={100} fill="none" />
     </g>
   );
 }

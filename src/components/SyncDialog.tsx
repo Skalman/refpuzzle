@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from "preact/hooks";
 import { t } from "../i18n/index.ts";
 import { startSync, pollSync, joinSync } from "../lib/sync.ts";
 import { IconScan } from "./Icons.tsx";
-import { Modal } from "./ui/Modal.tsx";
+import { Dialog } from "./ui/Dialog.tsx";
 import { Button } from "./ui/Button.tsx";
 import { QrImage } from "./ui/QrImage.tsx";
 
@@ -111,26 +111,30 @@ export function SyncDialog({
   }, [scanning]);
 
   return (
-    <Modal title={s.sync.title} class="sync-dialog" onClose={onClose}>
-      <p>{s.sync.description}</p>
+    <Dialog title={s.sync.title} widthClass="max-w-88" onClose={onClose}>
+      <p class="mb-2">{s.sync.description}</p>
 
       {!code && !scanning && (
         <>
-          <Button variant="primary" class="sync-start-btn" onClick={handleStart} disabled={busy}>
+          <Button variant="primary" size="lg" class="w-full" onClick={handleStart} disabled={busy}>
             {s.sync.start}
           </Button>
-          {error && <p class="sync-error">{error}</p>}
+          {error && (
+            <p class="my-2 rounded-md bg-invalid-soft px-3 py-2 text-center text-body text-invalid">
+              {error}
+            </p>
+          )}
 
-          <div class="sync-divider">
+          <div class="my-4 flex items-center gap-3 text-chrome text-muted before:flex-1 before:border-t after:flex-1 after:border-t">
             <span>{s.sync.enterCode}</span>
           </div>
 
-          <div class="sync-join">
+          <div class="flex gap-2">
             <input
               type="text"
               inputMode="numeric"
               pattern="[0-9]*"
-              class="sync-code-input"
+              class="flex-1 rounded-md border bg-surface px-[0.6rem] py-[0.4rem] text-center text-section tracking-[0.15em] text-default"
               maxLength={6}
               placeholder={s.sync.codePlaceholder}
               value={inputCode}
@@ -155,28 +159,33 @@ export function SyncDialog({
             </Button>
           </div>
 
-          <button class="sync-scan-btn" onClick={() => setScanning(true)}>
-            <IconScan size="1em" /> {s.sync.scanQr}
-          </button>
+          <Button
+            variant="outline-muted"
+            class="mt-1 w-full"
+            icon={<IconScan />}
+            onClick={() => setScanning(true)}
+          >
+            {s.sync.scanQr}
+          </Button>
         </>
       )}
 
       {!code && scanning && (
         <>
-          <div ref={scanBoxRef} class="qr-scanner" />
-          <button class="sync-scan-btn" onClick={() => setScanning(false)}>
+          <div ref={scanBoxRef} class="mb-2 w-full overflow-hidden rounded-lg" />
+          <Button variant="outline-muted" class="mt-1 w-full" onClick={() => setScanning(false)}>
             {s.sync.enterCode}
-          </button>
+          </Button>
         </>
       )}
 
       {code && (
-        <div class="sync-waiting">
-          <QrImage value={syncUrl(code)} class="qr-image" />
-          <div class="sync-code-display">{code}</div>
-          <p class="sync-waiting-text">{s.sync.waiting}</p>
+        <div class="py-2 text-center">
+          <QrImage value={syncUrl(code)} class="mx-auto size-30 rounded-sm bg-qr-bg" />
+          <div class="py-3 text-display font-bold tracking-[0.25em] tabular-nums">{code}</div>
+          <p class="mb-2 text-body text-muted">{s.sync.waiting}</p>
         </div>
       )}
-    </Modal>
+    </Dialog>
   );
 }

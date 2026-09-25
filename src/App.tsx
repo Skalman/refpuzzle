@@ -35,6 +35,7 @@ import { PrintSheet } from "./components/PrintSheet.tsx";
 import { PageFooter } from "./components/PageFooter.tsx";
 import { Loading } from "./components/ui/Loading.tsx";
 import { NoticePage } from "./components/ui/NoticePage.tsx";
+import { Link } from "./components/ui/Link.tsx";
 import { adoptDebugParam } from "./lib/debug.ts";
 
 adoptDebugParam();
@@ -150,13 +151,15 @@ function DayView({ dateStr, initialLevel }: { dateStr: string; initialLevel?: nu
         onShare={currentPuzzle ? () => shareRef.current?.open() : undefined}
         onBackup={backup.openBackup}
       />
-      <div class="daily-header">
+      <div class="flex items-center gap-4 px-4 py-2 text-section text-muted">
         {!isToday && (
-          <a href="/archive" class="back-link">
+          <Link href="/archive" class="text-body">
             &larr; {s.daily.archive}
-          </a>
+          </Link>
         )}
-        <span class="daily-date">{s.daily.dayLabel(dayNumber(dateStr), dateStr)}</span>
+        <span class="font-semibold text-default">
+          {s.daily.dayLabel(dayNumber(dateStr), dateStr)}
+        </span>
       </div>
 
       <DifficultyTabs dateStr={dateStr} activeLevel={activeLevel} onSelect={selectLevel} />
@@ -209,7 +212,7 @@ function DayRoute() {
       <NoticePage>
         <h1>{s.notFound.noPuzzle}</h1>
         <p>{s.app.noPuzzle}</p>
-        <a href="/">{s.notFound.backToToday}</a>
+        <Link href="/">{s.notFound.backToToday}</Link>
       </NoticePage>
     );
   }
@@ -245,7 +248,7 @@ function SyncRoute() {
       {status === "error" && (
         <>
           <h1>{s.sync.expired}</h1>
-          <a href="/">{s.notFound.backToPuzzles}</a>
+          <Link href="/">{s.notFound.backToPuzzles}</Link>
         </>
       )}
       {importPlan && (
@@ -315,7 +318,7 @@ function NotFound() {
     <NoticePage>
       <h1>{s.notFound.title}</h1>
       <p>{s.notFound.pageNotFound}</p>
-      <a href="/">{s.notFound.backToPuzzles}</a>
+      <Link href="/">{s.notFound.backToPuzzles}</Link>
     </NoticePage>
   );
 }
@@ -323,7 +326,7 @@ function NotFound() {
 export function App() {
   return (
     <LocationProvider>
-      <div class="page">
+      <div class="mx-auto max-w-272 p-safe-4">
         <ErrorOverlay />
         <Router>
           <Route path="/" component={DailyPage} />

@@ -43,22 +43,24 @@ export function KeyboardShortcutList() {
   const s = t();
   const groups = shortcutGroups(s);
   return (
-    <div class="keyboard-shortcut-list">
+    <div>
       {groups.map((group) => (
         <div key={group.title}>
-          <h4>{group.title}</h4>
-          <dl class="shortcut-dl">
+          <h4 class="mb-1 text-body font-bold text-default">{group.title}</h4>
+          <dl class="m-0">
             {group.shortcuts.map((sc) => (
-              <div key={sc.keys[0]} class="shortcut-row">
-                <dt>
+              <div key={sc.keys[0]} class="flex items-baseline gap-3 py-[0.15rem] text-chrome">
+                <dt class="w-36 shrink-0 text-right">
                   {sc.keys.map((k, i) => (
                     <Fragment key={k}>
                       {i > 0 && " / "}
-                      <kbd>{k}</kbd>
+                      <kbd class="rounded-sm border bg-hover px-[0.35rem] py-[0.05rem] text-chrome font-semibold font-[inherit]">
+                        {k}
+                      </kbd>
                     </Fragment>
                   ))}
                 </dt>
-                <dd>{sc.desc}</dd>
+                <dd class="m-0 text-muted">{sc.desc}</dd>
               </div>
             ))}
           </dl>
@@ -71,10 +73,17 @@ export function KeyboardShortcutList() {
 export function KeyboardHelp({ onClose }: { onClose: () => void }) {
   const s = t();
   return (
-    <div class="keyboard-help" onClick={onClose}>
-      <div class="keyboard-help-inner" onClick={(e) => e.stopPropagation()}>
-        <div class="keyboard-help-header">
-          <strong>{s.keyboard.title}</strong>
+    <div
+      class="fixed inset-0 z-1000 flex items-center justify-center bg-backdrop p-safe-4"
+      onClick={onClose}
+    >
+      <div
+        // 100% is the backdrop's content box, which already excludes the safe areas.
+        class="max-h-[min(80vh,100%)] w-9/10 max-w-96 overflow-y-auto rounded-xl border bg-surface p-5 text-default shadow-dialog"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div class="mb-3 flex items-center justify-between">
+          <strong class="text-dialog">{s.keyboard.title}</strong>
           <CloseButton onClick={onClose} />
         </div>
         <KeyboardShortcutList />

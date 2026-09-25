@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "preact/hooks";
 import { arcPath } from "../lib/arcPath.ts";
 import { classNames } from "../lib/classNames.ts";
+import { COACH_ARROW, COACH_ARROW_OUTLINE, COACH_SVG, COACH_TEXT } from "./coachStyles.ts";
 
 /** Gap between the text's underside and the button it names. */
 const GAP = 44;
@@ -88,10 +89,17 @@ export function NudgeCallout({
   }, []);
 
   return (
-    <div ref={hostRef} class="nudge-callout">
+    <div ref={hostRef} class="pointer-events-none absolute inset-0 z-7">
       <p
         ref={textRef}
-        class={classNames("coach-message", "coach-alert", "nudge-text", said && "nudge-text-said")}
+        class={classNames(
+          // The coach's text, a step louder and over the board rather than
+          // beside it. `transform`, not `translate`: the rise-in animates it.
+          COACH_TEXT,
+          "absolute max-w-[min(16rem,80vw)] rounded-lg bg-page px-[0.9rem] py-2 text-center font-semibold text-pending transform-[translateX(-50%)]",
+          // Said its piece: the text goes and the arrow is left pointing.
+          said ? "opacity-0 motion-safe:animate-nudge-said" : "motion-safe:animate-nudge-say",
+        )}
         role="status"
         style={
           placement
@@ -101,12 +109,19 @@ export function NudgeCallout({
       >
         {text}
       </p>
-      <svg class={classNames("coach-svg", going && "nudge-arrow-going")} aria-hidden="true">
+      <svg
+        class={classNames(
+          COACH_SVG,
+          // Fades out just ahead of the nudge retiring.
+          going && "opacity-0 motion-safe:transition-opacity motion-safe:duration-700",
+        )}
+        aria-hidden="true"
+      >
         {placement && (
           // Keyed on the kind, so switching nudges replays the draw-on.
           <g key={kind}>
-            <path class="coach-arrow-outline" d={placement.path} pathLength={100} fill="none" />
-            <path class="coach-arrow" d={placement.path} pathLength={100} fill="none" />
+            <path class={COACH_ARROW_OUTLINE} d={placement.path} pathLength={100} fill="none" />
+            <path class={COACH_ARROW} d={placement.path} pathLength={100} fill="none" />
           </g>
         )}
       </svg>

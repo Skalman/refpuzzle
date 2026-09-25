@@ -1,5 +1,6 @@
 import { defineConfig, minifySync } from "vite";
 import { preact } from "@preact/preset-vite";
+import tailwindcss from "@tailwindcss/vite";
 import wasm from "vite-plugin-wasm";
 import { minify as minifyHtml } from "html-minifier-terser";
 import { brotliCompressSync, constants } from "node:zlib";
@@ -133,6 +134,7 @@ function htmlMinifyPlugin(): Plugin {
 export default defineConfig({
   plugins: [
     preact(),
+    tailwindcss(),
     wasm(),
     versionPlugin(),
     wasmPreloadPlugin(),

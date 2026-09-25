@@ -2,14 +2,16 @@ import { useState, useRef, useEffect } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { IconChevronDown } from "./Icons.tsx";
 import { menuNavHandler } from "../lib/keyboard.ts";
+import { MenuPopover } from "./ui/Menu.tsx";
 
 /**
- * The chevron half of a split button — put it and the primary action inside a
- * `.split-btn` element. Opening from the keyboard focuses the first item;
- * Escape closes and hands focus back; arrow keys stay inside the popup rather
- * than walking the surrounding toolbar.
+ * The chevron half of a split button; the host lays it out beside the primary
+ * action and styles the chevron through `buttonClass`. Opening from the
+ * keyboard focuses the first item; Escape closes and hands focus back; arrow
+ * keys stay inside the popup rather than walking the surrounding toolbar.
  *
- * `children` receives a `close` callback for items that should dismiss on pick.
+ * `children` renders the menu's rows (`MenuItem`s) and receives a `close`
+ * callback for items that should dismiss on pick.
  */
 export function SplitMenu({
   buttonClass,
@@ -37,7 +39,7 @@ export function SplitMenu({
   }, [open]);
 
   function items() {
-    return Array.from(menuRef.current?.querySelectorAll("button") ?? []);
+    return Array.from(menuRef.current?.querySelectorAll<HTMLElement>("[data-menu-item]") ?? []);
   }
 
   function handleDropKeyDown(e: KeyboardEvent) {
@@ -59,10 +61,10 @@ export function SplitMenu({
   });
 
   return (
-    <span class="split-btn-wrapper">
+    <span class="relative flex">
       <button
         ref={dropRef}
-        class={`${buttonClass} split-btn-drop`}
+        class={buttonClass}
         data-toolbar-item={toolbarItem || undefined}
         tabIndex={tabIndex}
         aria-label={label}
@@ -74,18 +76,12 @@ export function SplitMenu({
         }}
         onKeyDown={handleDropKeyDown}
       >
-        <IconChevronDown size="1em" />
+        <IconChevronDown />
       </button>
       {open && (
-        <div
-          ref={menuRef}
-          class="split-btn-menu"
-          role="menu"
-          aria-label={label}
-          onKeyDown={handleMenuKeyDown}
-        >
+        <MenuPopover ref={menuRef} aria-label={label} onKeyDown={handleMenuKeyDown}>
           {children(() => setOpen(false))}
-        </div>
+        </MenuPopover>
       )}
     </span>
   );

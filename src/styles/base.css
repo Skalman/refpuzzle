@@ -1,49 +1,4 @@
-.nowrap {
-  white-space: nowrap;
-}
-.nowrap svg {
-  vertical-align: -0.125em;
-}
-
-.loading {
-  display: flex;
-  justify-content: center;
-  padding: 2rem;
-}
-
-.spinner {
-  width: 1.5rem;
-  height: 1.5rem;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  border-radius: var(--radius-circle);
-  animation:
-    spin 0.6s linear infinite,
-    fade-in 0s 0.4s both;
-  opacity: 0;
-}
-
-@keyframes fade-in {
-  to {
-    opacity: 1;
-  }
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-/* ── Reset ── */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+/* Page defaults on top of Tailwind's preflight reset. */
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
@@ -53,7 +8,25 @@
   outline: none;
 }
 
-/* ── Base ── */
+/* Borders draw in the standard border color unless a class says otherwise. */
+*,
+::before,
+::after {
+  border-color: var(--border);
+}
+
+/* Controls keep the browser's line height, which their sizes are tuned to. */
+button,
+input {
+  line-height: normal;
+}
+
+/* Every svg here is an icon in a line of text, so it sits in the line. */
+svg {
+  display: inline;
+  vertical-align: baseline;
+}
+
 html {
   font-family:
     system-ui,
@@ -70,17 +43,47 @@ body {
   font-size: var(--text-body);
 }
 
-.page {
-  max-width: 68rem;
-  margin: 0 auto;
-  padding: max(var(--safe-area-inset-top), 1rem) max(var(--safe-area-inset-right), 1rem)
-    max(var(--safe-area-inset-bottom), 1rem) max(var(--safe-area-inset-left), 1rem);
+/* ── Root font-size ladder ──
+ * Every rem-based size follows the root, so small phones get a smaller one;
+ * borders and the level rail stay in whole pixels to stay exact at each step.
+ * The layout breakpoints live in index.css.
+ *
+ * > 360px   14px
+ * > 390px   15px
+ * > 420px   browser default (16px)
+ * ≥ 1200px  18px
+ */
+:root {
+  font-size: 13px;
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-  &:hover {
-    text-decoration: underline;
+@media (width > 360px) {
+  :root {
+    font-size: 14px;
+  }
+}
+
+@media (width > 390px) {
+  :root {
+    font-size: 15px;
+  }
+}
+
+@media (width > 420px) {
+  :root {
+    font-size: medium;
+  }
+}
+
+@media (width >= 1200px) {
+  :root {
+    font-size: 18px;
+  }
+}
+
+/* ── Print ── Only the print sheet shows; it makes itself visible. */
+@media print {
+  body * {
+    visibility: hidden;
   }
 }

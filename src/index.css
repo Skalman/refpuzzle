@@ -1,12 +1,198 @@
-@import "./styles/theme.css";
-@import "./styles/base.css";
-@import "./styles/layout.css";
-@import "./styles/controls.css";
-@import "./styles/puzzle.css";
-@import "./styles/history.css";
-@import "./styles/level-rail.css";
-@import "./styles/archive.css";
-@import "./styles/overlays.css";
-@import "./styles/print.css";
-@import "./styles/coach.css";
-@import "./styles/responsive.css";
+/* Tailwind's preflight reset, then the project's theme variables
+   (styles/theme.css) and page defaults (styles/base.css), under the utilities. */
+@layer theme, base, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@import "tailwindcss/preflight.css" layer(base);
+@import "./styles/theme.css" layer(base);
+@import "./styles/base.css" layer(base);
+
+/* The project's own breakpoints, each strictly wider (exactly 768px is still
+   the narrow layout). sm: the archive loosens up. md: the header's controls
+   leave the ⋯ menu. lg: the board goes two columns — a column must fit five
+   nowrap option cells. The root font-size ladder lives in styles/base.css. */
+@custom-variant sm (@media (width > 480px));
+@custom-variant md (@media (width > 768px));
+@custom-variant lg (@media (width > 840px));
+
+/* Only the project's own tokens become utilities. Colors resolve through the
+   theme variables in styles/theme.css, which flip per light/dark theme. */
+@theme {
+  --color-*: initial;
+  --text-*: initial;
+  --radius-*: initial;
+  --shadow-*: initial;
+
+  /* The easing CSS transitions default to, which the stylesheets always had. */
+  --default-transition-timing-function: ease;
+}
+
+/* Shadows that read the same over either theme; the dropdown's differs per
+   theme, so it maps a theme variable below. */
+@theme {
+  --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-floating: 0 1px 4px rgba(0, 0, 0, 0.12);
+  /* Every dialog and overlay card, over the backdrop. */
+  --shadow-dialog: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+/* Static: styles/base.css reads the body size straight off the variable. */
+@theme static {
+  --text-badge: 0.55rem;
+  --text-chip: 0.65rem;
+  --text-caption: 0.75rem;
+  /* Chrome: controls, menus, toolbars. */
+  --text-chrome: 0.8rem;
+  /* The option cell only. Tuned against the root font-size ladder: labels are
+     nowrap in equal-width flex cells, so this is the largest size that still
+     fits at the 13px root. Do not fold it into --text-body. */
+  --text-option: 0.82rem;
+  /* Content prose. The coach line's fixed height is derived from this. */
+  --text-body: 0.85rem;
+  --text-section: 0.9rem;
+  --text-dialog: 1.1rem;
+  --text-title: 1.5rem;
+  --text-display: 2rem;
+  --text-hero: 3rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+@theme {
+  /* Spins from the start but only shows after a beat, so a quick load never flashes it. */
+  --animate-spinner: spin 0.6s linear infinite, fade-in 0s 0.4s both;
+
+  /* The image's left edge at t puts the wave's leading edge at x + y = 3 span + t:
+     the origin corner at t = -3 span; the tail clears x + y = span at -0.2 span. */
+  --animate-checkpoint-sweep: checkpoint-sweep 0.85s linear both;
+
+  @keyframes checkpoint-sweep {
+    from {
+      background-position-x: calc(-3 * var(--sweep-span) - var(--sweep-d, 0px));
+    }
+    to {
+      background-position-x: calc(-0.2 * var(--sweep-span) - var(--sweep-d, 0px));
+    }
+  }
+  /* The coach: its line fades in, a halo pulses, an arrow draws on. The nudge
+     rises into place with a small overshoot, to catch an eye that is elsewhere,
+     then goes as it said its piece. */
+  --animate-coach-fade-in: coach-fade-in 1.2s ease;
+  --animate-coach-pulse: coach-pulse 2.2s ease-in-out infinite;
+  --animate-coach-draw: coach-draw 0.7s ease forwards;
+  --animate-nudge-say: nudge-say 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  --animate-nudge-said: nudge-said 0.3s ease forwards;
+
+  @keyframes coach-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  @keyframes coach-pulse {
+    0%,
+    100% {
+      opacity: 0.65;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+  @keyframes coach-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes nudge-say {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(0.5rem) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+  }
+  @keyframes nudge-said {
+    from {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-50%) translateY(-0.4rem) scale(0.96);
+    }
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @keyframes fade-in {
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* Colors scoped to one utility, named without repeating it: `bg-page`,
+   `text-muted`, `border-strong`. Every border takes the standard color by
+   default (styles/base.css), so `border` alone draws it. */
+@theme inline {
+  --background-color-page: var(--bg);
+  --background-color-surface: var(--bg-surface);
+  --background-color-hover: var(--bg-hover);
+
+  --text-color-default: var(--text);
+  --text-color-muted: var(--text-muted);
+
+  --border-color-default: var(--border);
+  --border-color-muted: var(--border-muted);
+  /* The edge of a raised surface: dialogs, menus, the error card. */
+  --border-color-strong: color-mix(in srgb, var(--border), var(--text) 20%);
+}
+
+/* Colors used on any property. */
+@theme inline {
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-valid: var(--valid);
+  --color-valid-soft: var(--valid-soft);
+  --color-valid-fill: var(--valid-fill);
+  --color-invalid: var(--invalid);
+  --color-invalid-soft: var(--invalid-soft);
+  --color-pending: var(--pending);
+  --color-neutral-bar: var(--neutral-bar);
+  --color-backdrop: var(--backdrop);
+  --color-qr-bg: var(--qr-bg);
+
+  --shadow-dropdown: var(--dropdown-shadow);
+}
+
+/* Padding that clears the device's safe-area insets, never less than the
+   given spacing step: p-safe-4 is max(inset, 1rem) on each side. */
+@utility p-safe-* {
+  padding-top: max(var(--safe-area-inset-top), --spacing(--value(integer)));
+  padding-right: max(var(--safe-area-inset-right), --spacing(--value(integer)));
+  padding-bottom: max(var(--safe-area-inset-bottom), --spacing(--value(integer)));
+  padding-left: max(var(--safe-area-inset-left), --spacing(--value(integer)));
+}
+
+/* A centered dialog's content padding. The box may bleed into the unsafe area;
+   only its content must clear it. Each side pads by the inset minus the box's
+   guaranteed gap to the viewport edge, and at least 1.5rem: (100vw - 100%) / 2
+   is the side gap, 10vh follows from the box's 80vh max height. */
+@utility p-safe-dialog {
+  padding-top: max(1.5rem, calc(var(--safe-area-inset-top) - 10vh));
+  padding-right: max(1.5rem, calc(var(--safe-area-inset-right) - (100vw - 100%) / 2));
+  padding-bottom: max(1.5rem, calc(var(--safe-area-inset-bottom) - 10vh));
+  padding-left: max(1.5rem, calc(var(--safe-area-inset-left) - (100vw - 100%) / 2));
+}

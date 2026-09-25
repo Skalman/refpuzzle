@@ -34,7 +34,7 @@ export function Logo() {
   return (
     <span
       ref={ref}
-      class="app-logo"
+      class="inline-block size-[1.4em] cursor-pointer [&_svg]:size-full [&_svg]:rounded-sm"
       tabIndex={0}
       role="img"
       aria-label={s.aria.logo}

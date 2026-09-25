@@ -1,13 +1,17 @@
 import { useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
-import { Modal } from "./ui/Modal.tsx";
+import { Dialog } from "./ui/Dialog.tsx";
+import { Link } from "./ui/Link.tsx";
 import { DebugDialog } from "./DebugDialog.tsx";
 import { contactAddress } from "../lib/contact.ts";
 import { t } from "../i18n/index.ts";
 
 function FooterLink({ onClick, children }: { onClick: () => void; children: ComponentChildren }) {
   return (
-    <button class="footer-link" onClick={onClick}>
+    <button
+      class="cursor-pointer border-none bg-transparent px-2 py-1 text-muted [font:inherit] hover:text-default hover:underline"
+      onClick={onClick}
+    >
       {children}
     </button>
   );
@@ -15,7 +19,7 @@ function FooterLink({ onClick, children }: { onClick: () => void; children: Comp
 
 function FooterSeparator() {
   return (
-    <span class="footer-separator" aria-hidden="true">
+    <span class="text-muted" aria-hidden="true">
       ·
     </span>
   );
@@ -26,8 +30,9 @@ export function PageFooter() {
   const [openNote, setOpenNote] = useState<"privacy" | "contact" | "debug" | null>(null);
   const contact = contactAddress();
   const close = () => setOpenNote(null);
+  // Centered by flex rather than text-align, so the dialog it hosts keeps its text left-aligned.
   return (
-    <footer class="page-footer">
+    <footer class="mt-8 flex items-center justify-center text-chrome">
       <FooterLink onClick={() => setOpenNote("privacy")}>{s.privacy.link}</FooterLink>
       {/* No address configured for this build: nothing to offer. */}
       {contact && (
@@ -44,27 +49,29 @@ export function PageFooter() {
         </>
       )}
       {(openNote === "privacy" || openNote === "contact") && (
-        <Modal title={s[openNote].title} onClose={close}>
+        <Dialog title={s[openNote].title} onClose={close}>
           {openNote === "privacy" ? (
             <>
               {s.privacy.paragraphs.map((x) => (
-                <p key={x}>{x}</p>
+                <p key={x} class="mb-2">
+                  {x}
+                </p>
               ))}
               {contact && (
-                <p>
-                  {s.privacy.contactPrompt} <a href={`mailto:${contact}`}>{contact}</a>
+                <p class="mb-2">
+                  {s.privacy.contactPrompt} <Link href={`mailto:${contact}`}>{contact}</Link>
                 </p>
               )}
             </>
           ) : (
             <>
-              <p>{s.contact.body}</p>
-              <p>
-                <a href={`mailto:${contact}`}>{contact}</a>
+              <p class="mb-2">{s.contact.body}</p>
+              <p class="mb-2">
+                <Link href={`mailto:${contact}`}>{contact}</Link>
               </p>
             </>
           )}
-        </Modal>
+        </Dialog>
       )}
     </footer>
   );

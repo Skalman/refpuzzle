@@ -1,4 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
+import { Button } from "./ui/Button.tsx";
 
 // Catches uncaught errors and unhandled rejections so the user can recover
 // from a poisoned service-worker cache (e.g. after a wire-format change) by
@@ -82,19 +83,27 @@ export function ErrorOverlay() {
   if (!message) return null;
 
   return (
-    <div class="error-overlay" role="alert">
-      <div class="error-overlay-card">
-        <h2>Something went wrong</h2>
-        <p class="error-overlay-message">{message}</p>
+    <div
+      class="fixed inset-0 z-9999 flex items-center justify-center bg-backdrop p-safe-4"
+      role="alert"
+    >
+      <div class="w-full max-w-md rounded-xl border border-strong bg-surface px-6 py-5 shadow-dialog">
+        <h2 class="mb-[0.6rem] text-dialog font-bold">Something went wrong</h2>
+        <p class="mt-[0.4rem] mb-[0.8rem] rounded-md bg-[color-mix(in_srgb,var(--bg-surface),var(--text)_6%)] px-[0.7rem] py-2 text-body font-[ui-monospace,SFMono-Regular,Menlo,monospace] [word-break:break-word]">
+          {message}
+        </p>
         <p>
           This often clears up after a cache reset — usually needed once after the app updates its
           data format.
         </p>
-        <div class="error-overlay-actions">
-          <button class="error-overlay-primary" onClick={resetAndReload}>
+        <div class="mt-4 flex justify-end gap-2">
+          {/* The border keeps it level with Dismiss's. */}
+          <Button variant="primary" class="border border-accent" onClick={resetAndReload}>
             Reset cache &amp; reload
-          </button>
-          <button onClick={() => setMessage(null)}>Dismiss</button>
+          </Button>
+          <Button variant="outline-muted" onClick={() => setMessage(null)}>
+            Dismiss
+          </Button>
         </div>
       </div>
     </div>
