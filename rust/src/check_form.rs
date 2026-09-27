@@ -292,11 +292,12 @@ pub fn check_form(fp: &FlatPuzzle) -> Vec<FormError> {
     let n = fp.n;
     let oc = fp.option_count;
 
-    // option_count must be 3..=5; the per-question checks below assume a valid count.
-    if !(3..=5).contains(&oc) {
+    // option_count must be 2..=5; the per-question checks below assume a valid
+    // count. Generated boards are 3 wide and up; 2 is for hand-built boards.
+    if !(2..=5).contains(&oc) {
         errors.push(FormError {
             qi: 0,
-            message: format!("option count {oc} is not 3, 4, or 5"),
+            message: format!("option count {oc} is not 2 to 5"),
             severity: Severity::Error,
         });
         return errors;
@@ -489,19 +490,44 @@ mod tests {
     }
 
     #[test]
-    fn option_count_must_be_3_to_5() {
-        // oc=2 is what a ragged first option row can yield; parse never validates it.
+    fn option_count_must_be_2_to_5() {
+        // oc=1 is what a ragged first option row can yield; parse never validates it.
         let fp = flat(
             &[QuestionType::AnswerIsSelf],
             &[[OptionValue::UNUSED; 5]],
+            None,
+            1,
+        );
+        let errs = check_form(&fp);
+        assert!(
+            errs.iter()
+                .any(|e| e.severity == Severity::Error && e.message.contains("option count 1")),
+            "oc=1 should be a fatal form error: {errs:?}"
+        );
+    }
+
+    #[test]
+    fn two_options_are_well_formed() {
+        let ident = [
+            OptionValue::num(0),
+            OptionValue::num(1),
+            OptionValue::UNUSED,
+            OptionValue::UNUSED,
+            OptionValue::UNUSED,
+        ];
+        let fp = flat(
+            &[
+                QuestionType::AnswerIsSelf,
+                QuestionType::AnswerOf { question_index: 0 },
+            ],
+            &[ident, ident],
             None,
             2,
         );
         let errs = check_form(&fp);
         assert!(
-            errs.iter()
-                .any(|e| e.severity == Severity::Error && e.message.contains("option count 2")),
-            "oc=2 should be a fatal form error: {errs:?}"
+            errs.iter().all(|e| e.severity != Severity::Error),
+            "a two-option board should pass: {errs:?}"
         );
     }
 

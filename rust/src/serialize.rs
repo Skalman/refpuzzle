@@ -79,7 +79,7 @@ pub fn parse_puzzle(v: &Value) -> Option<FlatPuzzle> {
     };
 
     // Every row must be an array of the same length, and that length is the
-    // board's option count. `check_form` rejects counts outside 3..=5; bound it
+    // board's option count. `check_form` rejects counts outside 2..=5; bound it
     // here too, since the option arrays are fixed at five wide.
     if option_count > 5 {
         return None;
